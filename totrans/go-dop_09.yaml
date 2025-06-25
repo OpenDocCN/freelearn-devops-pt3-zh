@@ -1,87 +1,123 @@
 - en: 'Chapter 8: Automating Command-Line Tasks'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 第8章：自动化命令行任务
 - en: Most jobs start out as some type of manual operation that an engineer performs.
     Over time, these should become documented procedures that have the best practice
     for doing some operation, and finally, that job should become the work of software
     that takes those best practices and runs them with the efficiency that only a
     machine can provide.
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 大多数工作最初都是由工程师执行的某种手动操作。随着时间的推移，这些操作应成为已记录的程序，并且具有最佳实践，最终，这项工作应该由软件来完成，软件可以根据最佳实践高效地执行，而这种效率只有机器才能提供。
 - en: One of the core missions of a **development-operations** (**DevOps**) engineer
     is automating these tasks. This can be from the mundane, such as running a few
     commands, to changing the configuration on thousands of machines.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: '**开发运维**（**DevOps**）工程师的核心任务之一是自动化这些任务。任务可能从简单的运行几条命令到在成千上万台机器上更改配置。'
 - en: Automating systems often requires manipulating a system via its command line
     and calling other tools native to the **operating system** (**OS**). This can
     include using **RPM Package Manager** (**RPM**)/**Debian Package** (**dpkg**)
     for installing packages, grabbing stats for a system using common utilities, or
     configuring network routers.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 自动化系统通常需要通过命令行操作系统并调用其他本地工具（**操作系统**（**OS**））。这可能包括使用**RPM包管理器**（**RPM**）/**Debian包**（**dpkg**）安装软件包，使用常见工具获取系统统计信息，或配置网络路由器。
 - en: A DevOps engineer may want to do this locally to automate a series of steps
     normally done manually (such as automating Kubernetes's `kubectl` tool) or remotely
     execute commands on hundreds of machines at the same time. This chapter will cover
     how these can be accomplished using Go.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 一名DevOps工程师可能希望在本地自动化通常手动执行的一系列步骤（例如，自动化Kubernetes的`kubectl`工具），或者远程在数百台机器上同时执行命令。本章将讨论如何使用Go完成这些任务。
 - en: In this chapter, you will learn how to execute command-line tools on the local
     machine to accomplish automation goals. To access a remote machine, we will learn
     about how to use **Secure Shell** (**SSH**) and Expect packages. But knowing how
     to call executables on machines is just one part of the skillset. We will also
     talk about the anatomy of a change and how to do concurrent changes safely.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，您将学习如何在本地机器上执行命令行工具以实现自动化目标。要访问远程机器，我们将学习如何使用**安全外壳**（**SSH**）和Expect包。但了解如何调用机器上的可执行文件只是技能的一部分。我们还将讨论更改的结构以及如何安全地进行并发更改。
 - en: 'We will cover the following topics in this chapter:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将涵盖以下主题：
 - en: Using `os/exec` to automate local changes
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`os/exec`来自动化本地更改
 - en: Using SSH in Go to automate remote changes
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在Go中使用SSH自动化远程更改
 - en: Designing safe, concurrent change automations
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设计安全的并发更改自动化
 - en: Writing a system agent
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 编写系统代理
 - en: Technical requirements
+  id: totrans-11
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: This chapter requires that you have the latest Go tooling installed and access
     to a Linux system for running any service binaries we create. All tooling in this
     chapter will be geared toward controlling a Linux system, as this is the most
     popular cloud computing platform.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章要求您安装最新的Go工具，并可以访问Linux系统以运行我们创建的任何服务二进制文件。本章中的所有工具都将面向控制Linux系统，因为它是最受欢迎的云计算平台。
 - en: For the remote machine access requirements, the remote Linux system will need
     to be running SSH to allow for remote connectivity.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于远程机器访问要求，远程Linux系统需要运行SSH，以允许远程连接。
 - en: To use the system agent in the final part of this chapter, you will also need
     to use a Linux distribution that has `systemd` installed. Most modern distributions
     use `systemd`.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在本章的最后部分使用系统代理，您还需要使用已安装`systemd`的Linux发行版。大多数现代发行版使用`systemd`。
 - en: 'Code written in this chapter can be found here:'
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章中编写的代码可以在这里找到：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8)'
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8)'
 - en: Using os/exec to automate local changes
+  id: totrans-17
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用`os/exec`来自动化本地更改
 - en: Automating the execution of tools that are local to the machine can provide
     a series of benefits to end users. The first of these is that it can reduce the
     toil that your team experiences. One of the primary goals for DevOps and **Site
@@ -92,179 +128,263 @@
     paste something incorrectly. And finally, it is the core underpinning of operating
     at scale. Automating locally can be combined with other techniques detailed in
     the book to make changes at a large scale.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 自动化执行本地机器上的工具可以为最终用户提供一系列好处。其中第一个是它可以减少团队的繁琐工作。DevOps 和 **站点可靠性工程师** (**SRE**)
+    的主要目标之一是消除重复的手动过程。那段时间可以用来读一本好书（比如这本），整理袜子抽屉，或者处理下一个问题。第二个好处是可以消除过程中的人为错误。打错字或复制粘贴错误都很容易发生。最后，它是大规模运营的核心基础。通过本地自动化结合书中详细描述的其他技术，可以在大规模上进行变更。
 - en: 'The automation life cycle generally comes in three stages, moving from manually
     doing work to automation, as follows:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 自动化生命周期通常分为三个阶段，从手动工作到自动化，如下所示：
 - en: The first stage revolves around the manual execution of commands by an experienced
     engineer. While this is not automation itself, this starts a cycle that ends with
     some type of automation.
+  id: totrans-20
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 第一阶段涉及由经验丰富的工程师手动执行命令。虽然这本身不是自动化，但它启动了一个以某种形式的自动化结束的循环。
 - en: The second stage usually revolves around writing those stages down in order
     to document the procedure, to allow more than one person to share the workload.
     This might be a `git` repository.
+  id: totrans-21
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 第二阶段通常涉及将这些步骤记录下来，以便文档化过程，允许多人分担工作。这可能是一个 `git` 仓库。
 - en: The third stage is usually a script to make the task repeatable.
+  id: totrans-22
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 第三阶段通常是编写脚本使任务可重复执行。
 - en: Once a company gets larger, these stages are usually condensed into developing
     a service to handle the task in a fully automated way when a need for it is identified.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦公司变得更大，这些阶段通常会合并为开发一个服务，在识别到需要时以完全自动化的方式处理任务。
 - en: A good example of this might be deploying pods on a Kubernetes cluster or adding
     a new pod configuration to your Kubernetes config. These are driven by calling
     command-line applications such as `kubectl` and `git`. These types of jobs start
     manually; eventually, they are documented and finally automated in some way. At
     some point, this might move into a **continuous integration/continuous deployment**
     (**CI/CD**) system that handles this for you.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个很好的例子可能是在 Kubernetes 集群上部署 pods 或向 Kubernetes 配置中添加新的 pod 配置。这些操作是通过调用命令行应用程序如
+    `kubectl` 和 `git` 来驱动的。这些类型的工作一开始是手动的；最终，它们会被文档化，并最终以某种方式实现自动化。某个时候，这可能会转移到 **持续集成/持续部署**
+    (**CI/CD**) 系统中，由其为你处理这些任务。
 - en: The key to automating tooling locally is the `os/exec` package. This package
     allows for the execution of other tools and control of their `STDIN`/`STDOUT`/`STDERR`
     streams.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本地自动化工具的关键是 `os/exec` 包。该包允许执行其他工具并控制它们的 `STDIN` / `STDOUT` / `STDERR` 流。
 - en: Let's take a closer look.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们更仔细地看一下。
 - en: Determining the availability of essential tools
+  id: totrans-27
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 确定必需工具的可用性
 - en: When writing an application that calls other applications on a system, it is
     critical to determine if the tools needed are available on the system before you
     start executing commands. Nothing is worse than being partway through a procedure
     to find that a critical tool is missing.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 在编写调用系统上其他应用程序的应用程序时，关键是要在开始执行命令之前，确定所需的工具是否在系统中可用。没有什么比在执行过程中发现缺少关键工具更糟糕的了。
 - en: The `exec` package provides the `LookPath()` function to help determine if a
     binary exists. If only the name of the binary is provided, the `PATH` environmental
     variable is consulted and those paths will be searched for the binary. If a `/`
     is in the name, only that path will be consulted.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: '`exec` 包提供了 `LookPath()` 函数来帮助确定一个二进制文件是否存在。如果只提供了二进制文件的名称，则会查阅 `PATH` 环境变量，并在这些路径中搜索该二进制文件。如果名称中包含
+    `/`，则仅查阅该路径。'
 - en: 'Let''s say we are writing a tool that needs both `kubectl` and `git` to be
     installed in order to work. We can test if those tools are available in our `PATH`
     variable by executing the following code:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设我们正在编写一个工具，需要安装 `kubectl` 和 `git` 才能正常工作。我们可以通过执行以下代码来测试这些工具是否在我们的 `PATH`
+    变量中可用：
 - en: '[PRE0]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'This code does the following:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Defines constants for our binary names
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为我们的二进制文件名称定义常量
 - en: Uses `LookPath()` to determine if these binaries exist in our PATH variable
+  id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 `LookPath()` 来判断这些二进制文件是否存在于我们的 PATH 变量中
 - en: In this code, we simply return an error if we do not find the tool. There are
     other options, such as attempting to install these tools with the local package
     manager. Depending on the makeup of our fleet, we might want to test which version
     is deployed and only proceed if we are at a compatible version.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这段代码中，如果我们找不到工具，就直接返回一个错误。还有其他选择，比如尝试通过本地包管理器安装这些工具。根据我们的环境配置，我们可能希望测试部署的版本，并且仅在版本兼容时才继续。
 - en: Let's look at using the `exec.CommandContext` type to call binaries.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们来看一下如何使用 `exec.CommandContext` 类型来调用二进制文件。
 - en: Executing binaries with the exec package
+  id: totrans-37
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 使用 `exec` 包执行二进制文件
 - en: 'The `exec` package allows us to execute a binary using the `exec.Cmd` type.
     To create one of these, we can use the `exec.CommandContext()` constructor. This
     takes in the name of the binary to execute and the arguments to the binary, as
     illustrated in the following code snippet:'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: '`exec` 包允许我们使用 `exec.Cmd` 类型执行二进制文件。要创建其中一个，我们可以使用 `exec.CommandContext()`
+    构造函数。它接收要执行的二进制文件名称和传递给二进制文件的参数，如下面的代码片段所示：'
 - en: '[PRE1]'
+  id: totrans-39
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: This creates a command that will run the `kubectl` tool's `apply` function and
     tell it to apply the configuration at the path stored in the `config` variable.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 这创建了一个命令，将运行 `kubectl` 工具的 `apply` 函数，并指示它应用存储在 `config` 变量中的路径上的配置。
 - en: Does this command seem to have a familiar syntax? It should! `kubectl` is written
     using Cobra from our last chapter!
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个命令的语法是不是很熟悉？它应该是！`kubectl` 是使用我们上一章介绍的 Cobra 编写的！
 - en: 'We could execute this command using several different methods on `cmd`, as
     follows:'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以通过多种方法执行 `cmd` 上的这个命令，如下所示：
 - en: '`.CombinedOutput()`: Runs the command and returns the combined output of `STDOUT`/`STDERR`.'
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`.CombinedOutput()`：运行命令并返回 `STDOUT` 和 `STDERR` 的合并输出。'
 - en: '`.Output()`: Runs the command and returns the output of `STDOUT`.'
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`.Output()`：运行命令并返回 `STDOUT` 的输出。'
 - en: '`.Run()`: Runs the program and waits for it to exit. It returns an error on
     any issues.'
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`.Run()`：运行程序并等待其退出。若有问题，则返回错误。'
 - en: '`.Start()`: Runs the command but doesn''t block. Used when you want to interact
     with the command as it runs.'
+  id: totrans-46
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`.Start()`：运行命令但不阻塞。用于你希望在命令运行时与其交互的场景。'
 - en: '`.CombinedOuput()` and `.Output()` are the most common ways to start a program.
     The output that a user sees in the terminal can often be both from `STDOUT` and
     `STDERR`. Choosing which one of these to use depends on how you want to respond
     to the program''s output.'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: '`.CombinedOuput()` 和 `.Output()` 是启动程序最常见的方法。用户在终端中看到的输出通常来自 `STDOUT` 和 `STDERR`。选择使用哪一个取决于你希望如何响应程序的输出。'
 - en: '`.Run()` is used when you only need to know the exit status and do not require
     any of the output.'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: '`.Run()` 用于当你只需要知道退出状态而不需要任何输出时。'
 - en: 'There are two main reasons to use `.Start()`, as outlined here:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 `.Start()` 有两个主要原因，如下所述：
 - en: There is a need to respond on `STDIN` to output on `STDOUT`.
+  id: totrans-50
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 需要在 `STDIN` 上对 `STDOUT` 的输出做出响应。
 - en: The program execution takes a while, and you want to output its content to your
     screen, instead of waiting for the program to complete.
+  id: totrans-51
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 程序执行需要一段时间，你希望将其内容输出到屏幕上，而不是等待程序完成。
 - en: If you need to respond on `STDIN` to a program's output, using Google's `goexpect`
     package ([https://github.com/google/goexpect](https://github.com/google/goexpect))
     or Netflix's `go-expect` package ([https://github.com/Netflix/go-expect](https://github.com/Netflix/go-expect))
     is probably a better choice. These packages continue the proud tradition of porting
     the abilities of the **Tool Command Language** (**TCL**) Expect extension ([https://en.wikipedia.org/wiki/Expect](https://en.wikipedia.org/wiki/Expect))
     to other languages.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你需要对程序的输出在 `STDIN` 上做出响应，使用 Google 的 `goexpect` 包（[https://github.com/google/goexpect](https://github.com/google/goexpect)）或
+    Netflix 的 `go-expect` 包（[https://github.com/Netflix/go-expect](https://github.com/Netflix/go-expect)）可能是更好的选择。这些包延续了**工具命令语言**（**TCL**）Expect
+    扩展的光荣传统（[https://en.wikipedia.org/wiki/Expect](https://en.wikipedia.org/wiki/Expect)），并将其移植到其他语言中。
 - en: 'Let''s write a simple program that tests our ability to log in to hosts on
     a subnet. We will use the `ping` utility and the `ssh` client programs to test
     connectivity. We will be relying on your host to recognize your SSH key (we are
     not using password authentication here, as that is more complicated). Finally,
     we will use `uname` on the remote machine to determine the OS. The code is illustrated
     in the following snippet:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们编写一个简单的程序，测试我们在子网内登录主机的能力。我们将使用`ping`工具和`ssh`客户端程序来测试连通性。我们将依赖你的主机识别你的SSH密钥（这里不使用密码认证，因为那更复杂）。最后，我们将在远程机器上使用`uname`来确定操作系统。代码在以下片段中有所展示：
 - en: '[PRE2]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Note
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: '`uname` is a program found on Unix-like systems that will display information
     about the current OS and the hardware it runs on. Only Linux and Darwin machines
     are likely to have `uname`. As SSH is just a connection protocol, we may just
@@ -275,1528 +395,2238 @@
     the same tasks. If you are trying to support all platforms with a tool that uses
     `exec`, you will need either build constraints ([https://pkg.go.dev/cmd/go#hdr-Build_constraints](https://pkg.go.dev/cmd/go#hdr-Build_constraints))
     or to use the `runtime` package to run different utilities on different platforms.'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: '`uname`是一个在类Unix系统中可用的程序，用于显示当前操作系统及其运行硬件的信息。只有Linux和Darwin机器可能拥有`uname`。由于SSH只是一个连接协议，我们可能会得到一个错误。此外，某些Linux发行版可能没有安装`uname`。不同版本的常见工具在类似平台上可能有细微差别。Linux的`ping`和OS
+    X的`ping`工具共享一些标志，但也有不同的标志。Windows通常有完全不同的工具来完成相同的任务。如果你想通过一个使用`exec`的工具支持所有平台，你需要使用构建约束（[https://pkg.go.dev/cmd/go#hdr-Build_constraints](https://pkg.go.dev/cmd/go#hdr-Build_constraints)）或使用`runtime`包来在不同的平台上运行不同的工具。'
 - en: 'This code does the following:'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行了以下操作：
 - en: Creates a `*Cmd` that pings a host
+  id: totrans-58
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`*Cmd`来对主机进行ping操作
 - en: '`-c 1` sends a single `-t 2` causes a timeout after 2 seconds.'
+  id: totrans-59
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`-c 1`发送一个单独的`-t 2`会在2秒后超时。'
 - en: Runs the command
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行命令
 - en: If there is an error, the ping was unsuccessful.
+  id: totrans-61
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果出错，则说明ping操作失败。
 - en: Otherwise, the host responded to the ping.
+  id: totrans-62
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 否则，主机响应了ping请求。
 - en: 'Let''s now use the `ssh` utility to send a command to be run on the remote
     machine, as follows:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们使用`ssh`工具向远程机器发送一个命令，如下所示：
 - en: '[PRE3]'
+  id: totrans-64
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'This code does the following:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行了以下操作：
 - en: Sets a timeout of 5 seconds, if `ctx` has none
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`ctx`没有设置，设置5秒的超时
 - en: Creates a `user@host` login line
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`user@host`的登录行
 - en: 'Creates a *`CMD` that issues the command: `ssh user@host` "`uname -a`"'
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个*`CMD`，发出命令：`ssh user@host` "`uname -a`"
 - en: The `StrictHostKeyChecking` option automatically adds host keys.
+  id: totrans-69
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`StrictHostKeyChecking`选项会自动添加主机密钥。'
 - en: The `BatchMode` option prevents asking for passwords.
+  id: totrans-70
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`BatchMode`选项防止提示输入密码。'
 - en: Runs the command and captures the output from `STDOUT`
+  id: totrans-71
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行命令并捕获来自`STDOUT`的输出
 - en: If successful, it runs `uname -a` and returns the output.
+  id: totrans-72
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果成功，它会运行`uname -a`并返回输出。
 - en: The host must have the user's SSH key for this to work.
+  id: totrans-73
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 主机必须拥有用户的SSH密钥才能正常工作。
 - en: Password authentication requires either the `sshpass` utility or an Expect package.
+  id: totrans-74
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 密码认证需要`sshpass`工具或Expect包。
 - en: 'We need a type to store the data we gather. Let''s create that, as follows:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要一个类型来存储我们收集的数据。让我们创建它，如下所示：
 - en: '[PRE4]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'Now, we need some code to take a channel containing **Internet Protocol** (**IP**)
     addresses that need to be scanned. We want to do this in parallel, so we will
     be using goroutines, as illustrated in the following code snippet:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要一些代码来接收一个包含**互联网协议**（**IP**）地址的通道，这些地址需要扫描。我们希望并行执行，因此我们将使用goroutines，如下片段所示：
 - en: '[PRE5]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'This code does the following:'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行了以下操作：
 - en: Takes in a channel of `net.IP`
+  id: totrans-80
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 接收一个`net.IP`类型的通道
 - en: Creates a channel to put records on
+  id: totrans-81
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个通道来放置记录
 - en: Spins off a goroutine to do all the scanning
+  id: totrans-82
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启动一个goroutine来执行所有扫描操作
 - en: Defers closure of our output channel
+  id: totrans-83
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 延迟关闭我们的输出通道
 - en: Loops through all IPs on the incoming channel
+  id: totrans-84
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 遍历所有进入通道的IP地址
 - en: Uses the `limit` channel to limit 100 pings concurrently
+  id: totrans-85
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`limit`通道限制最多并发100个ping操作
 - en: Spins a goroutine for each ping
+  id: totrans-86
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为每个ping操作启动一个goroutine
 - en: Decrements the limiter when we finish
+  id: totrans-87
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 完成后减少限流器的数量
 - en: Makes a timeout of 2 seconds for our ping
+  id: totrans-88
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为我们的ping操作设置2秒的超时时间
 - en: Calls our `hostAlive()` function
+  id: totrans-89
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 调用我们的`hostAlive()`函数
 - en: Outputs the result on our `ch` output channel
+  id: totrans-90
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将结果输出到我们的`ch`输出通道
 - en: Waits for all pings to finish with `WaitGroup`
+  id: totrans-91
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 等待所有的ping命令完成，使用`WaitGroup`
 - en: Returns the channel
+  id: totrans-92
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 返回通道
 - en: We now have a function that will asynchronously ping hosts in parallel and put
     the result on a channel.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有了一个异步并行ping主机并将结果放入通道的函数。
 - en: 'Our `ssh` function has a similar function signature to `scanPrefixes`, as we
     can see here:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的`ssh`函数的函数签名与`scanPrefixes`相似，如下所示：
 - en: '[PRE6]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: For brevity, we are not going to include the code here, but you can see it in
     the repository linked at the end of the exercise.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了简洁起见，我们不会在这里包含代码，但你可以在练习结束时提供的代码库中查看它。
 - en: 'These are the big differences between `scanPrefixes()` and `unamePrefixes()`:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些是`scanPrefixes()`和`unamePrefixes()`之间的主要区别：
 - en: We receive a channel of `record`, the output of `scanPrefixes()`.
+  id: totrans-98
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们接收到一个`record`的通道，这是`scanPrefixes()`的输出。
 - en: If `rec.Reachable` is `false`, we simply put `rec` on the output channel without
     adding OS information to the fields.
+  id: totrans-99
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`rec.Reachable`为`false`，我们会将`rec`直接放入输出通道，而不将操作系统信息添加到字段中。
 - en: Otherwise, we call `runUname()` instead of `hostAlive()`.
+  id: totrans-100
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 否则，我们调用`runUname()`而不是`hostAlive()`。
 - en: 'Now, let''s set up our `main()` function, as follows:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们设置`main()`函数，具体如下：
 - en: '[PRE7]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'This code does the following:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码做了以下几件事：
 - en: Checks that our binaries exist in the path
+  id: totrans-104
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检查我们的二进制文件是否存在于路径中
 - en: Checks we have the correct number of arguments, which is `1`
+  id: totrans-105
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检查我们是否有正确数量的参数，即`1`
 - en: We check that `len(os.Args) == 2` because the first argument is the binary name.
+  id: totrans-106
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们检查`len(os.Args) == 2`，因为第一个参数是二进制文件名。
 - en: Retrieves a channel of IPs in the network passed in the argument
+  id: totrans-107
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检索传递给参数的网络中IP的通道
 - en: The implementation of the `hosts()` function is not detailed here, but you will
     find it in the repository.
+  id: totrans-108
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`hosts()`函数的实现没有在这里详细说明，但你可以在代码库中找到它。'
 - en: Gets the current user's login name
+  id: totrans-109
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取当前用户的登录名
 - en: 'Now, we need to scan our prefixes and concurrently process the results by doing
     a login and retrieving the `uname` output, as follows:'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要扫描我们的前缀并通过进行登录并获取`uname`输出来并行处理结果，具体如下：
 - en: '[PRE8]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'This code does the following:'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码做了以下几件事：
 - en: Sends `scanPrefixes()` a channel of IPs
+  id: totrans-113
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 发送IP的通道到`scanPrefixes()`
 - en: Receives the results on `scanResults`
+  id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在`scanResults`上接收结果
 - en: Sends the channel of results to `unamePrefixes()`
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将结果通道发送到`unamePrefixes()`中
 - en: Prints the `STDOUT`
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 打印`STDOUT`
 - en: The key to this code is the channel read in the `for range` loops in `scanPrefixes()`
     and `unamePrefixes()`. When all IPs have been sent, `ipCh` will be closed. That
     will stop our `for range` loop in `scanPrefixes()`, which will cause its output
     channel to close. That causes `unamePrefixes` to see the closure and close its
     output channel. This will in turn close our `for rec := range unameResults` loop
     and stop printing.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码的关键在于在`scanPrefixes()`和`unamePrefixes()`中的`for range`循环中读取通道。当所有的IP都已发送，`ipCh`将被关闭。那将停止`scanPrefixes()`中的`for
+    range`循环，进而关闭它的输出通道。这会导致`unamePrefixes`看到关闭并关闭它的输出通道。这又会关闭`for rec := range unameResults`循环并停止打印。
 - en: Using this chaining concurrency model, we will be scanning up to 100 IPs while
     SSHing into a maximum of 100 hosts and printing the results to the screen, all
     at the same time.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用这种链式并发模型，我们将同时扫描最多100个IP，通过SSH连接最多100个主机，并将结果同时打印到屏幕上。
 - en: We have stored the output of `uname -a` in our `record` variable but in an unparsed
     format. We could use a lexer/parser or `struct`. If you need to use the output
     of an executed binary, we recommend finding tools that can output in a structured
     format such as JSON instead of parsing it yourself.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经将`uname -a`的输出存储在我们的`record`变量中，但它是未经解析的格式。我们可以使用词法分析器/解析器或`struct`。如果你需要使用执行的二进制文件的输出，建议寻找可以输出结构化格式（如JSON）的工具，而不是自己进行解析。
 - en: 'You can see this code at the following link:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在以下链接中查看这段代码：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner)'
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner)'
 - en: Notes on using the exec package
+  id: totrans-122
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 使用exec包的注意事项
 - en: There are some things you should look out for when using `exec`. One of the
     big ones is if the binary being invoked takes control of the terminal. `ssh` does
     this, for example, to get a password from the user. We suppressed this in our
     example, but when this happens, it bypasses the normal STDOUT you are reading.
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`exec`时需要注意一些问题。一个主要的问题是，如果被调用的二进制文件控制了终端。例如，`ssh`会这么做，从用户那里获取密码。我们在示例中抑制了这一行为，但发生这种情况时，它会绕过你正在读取的正常STDOUT。
 - en: This happens when someone uses terminal mode. In those cases, you will want
     to use `goexpect` or `go-expect` if you must deal with it. Generally, this is
     something where you want to find alternatives. However, some software and various
     routing equipment will implement menu-driven systems and use terminal modes that
     cannot be avoided.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种情况发生在有人使用终端模式时。在这些情况下，如果必须处理这种情况，你将需要使用 `goexpect` 或 `go-expect`。通常来说，这是一个你希望找到替代方案的地方。然而，一些软件和各种路由设备会实现基于菜单的系统，并使用无法避免的终端模式。
 - en: In this section, we have talked about automating the command line with the `exec`
     package. You now have the skills to check for binaries on the system and execute
     those binaries. You can check the error condition and retrieve the output.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们讨论了如何使用 `exec` 包自动化命令行。现在你已经掌握了检查系统中二进制文件并执行这些二进制文件的技能。你可以检查错误条件并获取输出。
 - en: In the next section, we will talk about the basics of SSH in Go. While in this
     section, we showed how you could use the `ssh` binary, in the next, we will talk
     about using the `ssh` package to use SSH without the SSH library. This is faster
     and also provides benefits over calling the binary.
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一节中，我们将讨论 Go 中 SSH 的基础知识。虽然在本节中，我们展示了如何使用 `ssh` 二进制文件，接下来我们将讨论如何使用 `ssh` 包来使用
+    SSH 而不依赖 SSH 库。这种方法更快，并且相较于调用二进制文件，具有一定的优势。
 - en: Note
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: In general, always use a package instead of a binary when available. This keeps
     system dependencies low and makes code more portable.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 一般来说，始终使用包而不是二进制文件，特别是在有可用包的情况下。这可以保持系统依赖性较低，并使代码更具可移植性。
 - en: Using SSH in Go to automate remote changes
+  id: totrans-129
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用 Go 中的 SSH 自动化远程更改
 - en: SSH is simply a network protocol that can be used to secure communication between
     two hosts.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: SSH 只是一个网络协议，可用于保障两台主机之间的通信安全。
 - en: While most people think that the `ssh` binary allows you to connect from a terminal
     on one host to a terminal on another host, that is only one use. SSH can be used
     to secure connections for services such as **Google Remote Procedure Call** (**gRPC**)
     or to tunnel graphical interfaces such as the **X Window System** (**X11**).
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然大多数人认为 `ssh` 二进制文件允许你从一个主机的终端连接到另一个主机的终端，但这只是其中的一种用法。SSH 还可以用于保护如**Google
+    远程过程调用**（**gRPC**）这样的服务的连接，或者用于隧道化图形界面，如**X 窗口系统**（**X11**）。
 - en: In this section, we will talk about how you can use the SSH package ([https://pkg.go.dev/golang.org/x/crypto/ssh](https://pkg.go.dev/golang.org/x/crypto/ssh))
     for creating clients and servers.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将讨论如何使用 SSH 包（[https://pkg.go.dev/golang.org/x/crypto/ssh](https://pkg.go.dev/golang.org/x/crypto/ssh)）来创建客户端和服务器。
 - en: Connecting to another system
+  id: totrans-133
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 连接到另一台系统
 - en: The most basic use of SSH is to connect to another system and either send a
     single command or invoke a shell and issue commands. SSH is simply a transport
     mechanism, so there are many other uses of SSH such as connection tunneling or
     wrapping **remote procedure calls** (**RPCs**). We will not cover those here,
     as they are outside the use cases for general DevOps work.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: SSH 的最基本用法是连接到另一台系统，并发送一个命令或调用一个 shell 并执行命令。SSH 只是一个传输机制，因此 SSH 还有很多其他用途，如连接隧道或封装**远程过程调用**（**RPCs**）。我们不会在这里讨论这些内容，因为它们超出了常规
+    DevOps 工作的使用范围。
 - en: 'As with most connection technologies, the hardest part of connecting to systems
     with an SSH client is resolving authentication. The most common forms of SSH authentication
     are outlined here:'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 和大多数连接技术一样，使用 SSH 客户端连接系统时，最难的部分是解决身份验证问题。最常见的 SSH 身份验证方式在这里进行了概述：
 - en: '**Username/password**: Username/password is the most popular implementation.
     It''s the default and therefore the one that people tend to use. With network
     equipment, sometimes this is the only way. With this method, the password database
     may be on the local system, or the system may pass the password hash to another
     system to validate.'
+  id: totrans-136
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**用户名/密码**：用户名/密码是最常见的实现方式。它是默认选项，因此人们往往会选择使用它。在网络设备中，有时这是唯一的方式。使用此方法时，密码数据库可能存储在本地系统中，或者系统会将密码哈希传递到另一个系统进行验证。'
 - en: '**Public key authentication**: Public key authentication is where a user creates
     a public/private key on their machine with an optional passphrase. The server
     has the public key installed for a user and your SSH client is set up to use the
     private key.'
+  id: totrans-137
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**公钥认证**：公钥认证是用户在自己的机器上创建一对公钥/私钥，并可以选择设置密码短语。服务器为用户安装了公钥，而你的 SSH 客户端则配置为使用私钥。'
 - en: '**Challenge-response authentication**: There are varying types of challenge-response
     authentication for SSH. This is commonly used to allow **two-factor authentication**
     (**2FA**) through devices such as Yubikeys.'
+  id: totrans-138
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**挑战-响应认证**：SSH有多种类型的挑战-响应认证。这通常用于通过设备（如Yubikey）实现**二因素认证**（**2FA**）。'
 - en: We will concentrate on using the first two methods and will assume that the
     remote end will be using OpenSSH. While installations should move to using 2FA,
     that setup is beyond what we can cover here.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将专注于使用前两种方法，并假设远程端会使用OpenSSH。虽然安装应该转向使用二次身份验证(2FA)，但这个设置超出了我们这里的讨论范围。
 - en: 'We will be using Go''s excellent SSH package: [http://golang.org/x/crypto/ssh](http://golang.org/x/crypto/ssh).'
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将使用Go的优秀SSH包：[http://golang.org/x/crypto/ssh](http://golang.org/x/crypto/ssh)。
 - en: 'The first thing that will be required is to set up our authentication method.
     The initial method I will show here is username/password, as follows:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先需要做的是设置我们的认证方式。我这里将展示的初始方法是使用用户名/密码，如下所示：
 - en: '[PRE9]'
+  id: totrans-142
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: That was simple enough.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 这已经足够简单了。
 - en: Note
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'If you are writing a command-line application, it is not safe to retrieve a
     password using flags or arguments. You also do not want to echo a password to
     the screen. The password needs to come from a file only the current user has access
     to or by controlling the terminal. The SSH package has a terminal package ([http://golang.org/x/crypto/ssh/terminal](http://golang.org/x/crypto/ssh/terminal))
     that can help:'
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你正在编写一个命令行应用程序，使用标志或参数来获取密码是不安全的。你也不希望将密码回显到屏幕上。密码应该来自一个只有当前用户可以访问的文件，或者通过控制终端。SSH包有一个终端包([http://golang.org/x/crypto/ssh/terminal](http://golang.org/x/crypto/ssh/terminal))，它可以提供帮助：
 - en: '`fmt.Printf("SSH Passsword: ")`'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: '`fmt.Printf("SSH 密码: ")`'
 - en: '`password, err := terminal.ReadPassword(int(os.Stdin.Fd()))`'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: '`password, err := terminal.ReadPassword(int(os.Stdin.Fd()))`'
 - en: 'For the public key, it is only slightly more complicated, as illustrated here:'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于公钥，稍微复杂一点，如下所示：
 - en: '[PRE10]'
+  id: totrans-149
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'This code does the following:'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Reads our private key file
+  id: totrans-151
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 读取我们的私钥文件
 - en: Parses our private key
+  id: totrans-152
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 解析我们的私钥
 - en: Returns a public key authorization implementation of `ssh.AuthMethod`
+  id: totrans-153
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 返回一个公钥授权实现的`ssh.AuthMethod`
 - en: We can now authorize by simply providing our private key to our program. Many
     times your key is not stored locally but in a cloud service, such as Microsoft
     Azure's Key Vault. In that case, you simply need to change `os.ReadFile()` to
     use the cloud service.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们只需将我们的私钥提供给程序即可进行授权。许多时候，你的密钥并不是本地存储的，而是存储在云服务中，如Microsoft Azure的Key Vault。在这种情况下，你只需更改`os.ReadFile()`以使用云服务。
 - en: 'Now that we have our authorization sorted out, let''s create an SSH config,
     as follows:'
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 既然我们的授权已经解决了，接下来让我们创建一个SSH配置，如下所示：
 - en: '[PRE11]'
+  id: totrans-156
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'This code does the following:'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Creates a new `*ssh.ClientConfig` config
+  id: totrans-158
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个新的`*ssh.ClientConfig`配置
 - en: Uses the username is stored in the `user` variable
+  id: totrans-159
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用存储在`user`变量中的用户名
 - en: Supplies one `AuthMethod`, but you can use multiple `AuthMethod`(s)
+  id: totrans-160
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供一个`AuthMethod`，但你可以使用多个`AuthMethod`(s)
 - en: Ignores the host key
+  id: totrans-161
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 忽略主机密钥
 - en: Sets a dial timeout of 5 seconds
+  id: totrans-162
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置5秒的拨号超时
 - en: Important Note
+  id: totrans-163
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 重要提示
 - en: Ignoring a host key with `ssh.InsecureIgnoreHostKey()` is not secure. This can
     lead to a typo where you are sending information to a system outside your control.
     That system could be masquerading as one of your systems in the hope of getting
     you to type something in the terminal, such as a password. When working in a production
     environment, it is critical not to ignore the host key and store a valid list
     of host keys that can be checked.
+  id: totrans-164
   prefs:
   - PREF_IND
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 使用`ssh.InsecureIgnoreHostKey()`来忽略主机密钥是不安全的。这可能导致你错误地将信息发送到一个你无法控制的系统。这个系统可能伪装成你的一台设备，试图让你在终端中输入某些内容，比如密码。在生产环境中，至关重要的是不要忽略主机密钥，并存储一个有效的主机密钥列表以供验证。
 - en: 'Let''s make a connection to a host, as follows:'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们连接到主机，如下所示：
 - en: '[PRE12]'
+  id: totrans-166
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'Now that we have established an SSH connection, let''s build a function to
     run a simple command, as follows:'
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经建立了一个SSH连接，接下来让我们创建一个函数来运行一个简单的命令，如下所示：
 - en: '[PRE13]'
+  id: totrans-168
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'This code does the following:'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Creates an SSH session
+  id: totrans-170
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个SSH会话
 - en: One session per command is required
+  id: totrans-171
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每个命令需要一个会话
 - en: Runs the command in the session and returns the output
+  id: totrans-172
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在会话中运行命令并返回输出
 - en: This gets the STDOUT and STDERR in a single output
+  id: totrans-173
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这会将STDOUT和STDERR合并为一个输出
 - en: This code will let you issue commands against systems that are using OpenSSH
     or similar SSH implementations. It is best practice to hold the `conn` object
     open until you have issued all of the commands for a device.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 此代码将允许您针对使用OpenSSH或类似SSH实现的系统发出命令。最佳实践是在为设备发出所有命令之前保持`conn`对象的打开状态。
 - en: 'You can see this code here:'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以在此处查看此代码：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go)'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go)'
 - en: This is great for cases when you can simply issue a command to the far end and
     let it run. But what if the program requires some level of interaction? When interfacing
     with routing platforms over SSH, you often require more interaction.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 在可以简单地向远端发出命令并让其运行的情况下非常有用。但是如果程序需要一定程度的交互怎么办？在通过SSH与路由平台交互时，通常需要更多的交互。
 - en: When that need arises, Expect libraries are there to help. So, let's have a
     look at one of the more popular ones, up next.
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 当这种需求出现时，Expect库可以提供帮助。接下来，让我们看看其中一个比较流行的库。
 - en: Using Expect for complicated interactions
+  id: totrans-179
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 用于复杂交互的Expect
 - en: '`expect` packages provide the ability to deal with output from a command, such
     as the following: `would you like to continue[y/n]`.'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: '`expect`包提供处理命令输出的能力，例如以下内容：`would you like to continue[y/n]`。'
 - en: 'The most popular package for using `expect` comes from Google. You can find
     it here: [https://github.com/google/goexpect](https://github.com/google/goexpect).'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`expect`的最流行的包来自Google。您可以在这里找到：[https://github.com/google/goexpect](https://github.com/google/goexpect)。
 - en: Here's an example of an `expect` script to install the original TCL `expect`
     tools on an Ubuntu host using the **Advanced Packaging Tool** (**APT**) package
     manager. Note that this is not the best way to do this, but simply gives an uncomplicated
     example.
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个`expect`脚本示例，用于在Ubuntu主机上使用**高级包装工具**（**APT**）包管理器安装原始的TCL `expect`工具。请注意，这不是最佳实践，只是一个简单的示例。
 - en: 'Let''s start by configuring our `expect` client to use the SSH client, as follows:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们首先配置我们的`expect`客户端以使用SSH客户端，如下所示：
 - en: '[PRE14]'
+  id: totrans-184
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'This code does the following:'
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 此代码执行以下操作：
 - en: Sets up an `*ssh.ClientConfig` config
+  id: totrans-186
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置一个`*ssh.ClientConfig`配置
 - en: Uses it to make a connection
+  id: totrans-187
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用它建立连接
 - en: Passes that connection to an `expect` client
+  id: totrans-188
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将连接传递给`expect`客户端
 - en: 'Now we have an `expect` client logged in via SSH, let''s make sure we have
     a prompt, as follows:'
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经通过SSH登录了一个`expect`客户端，请确保我们有一个提示符，如下所示：
 - en: '[PRE15]'
+  id: totrans-190
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'This code does the following:'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 此代码执行以下操作：
 - en: Compiles a `$` regex to expect our prompt
+  id: totrans-192
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 编译`$`正则表达式以期望我们的提示符
 - en: Calls `Expect()` to wait for the prompt for up to 10 seconds
+  id: totrans-193
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 调用`Expect()`等待最多10秒的提示符
 - en: 'Now, let''s send our command to install `expect` via the `apt-get` tool. We
     will be using `sudo` to issue this command with root privileges. The code is illustrated
     in the following snippet:'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们发送我们的命令通过`apt-get`工具安装`expect`。我们将使用`sudo`以root权限执行此命令。代码如下所示：
 - en: '[PRE16]'
+  id: totrans-195
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: '`apt-get` will either prompt us if it is OK to install or tell us it is already
     installed. Let''s handle those two cases, as follows:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: '`apt-get`将提示我们是否可以安装或告诉我们它已经安装。让我们处理这两种情况，如下所示：'
 - en: '[PRE17]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'This code does the following:'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 此代码执行以下操作：
 - en: 'Waits for either of these to be displayed:'
+  id: totrans-199
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 等待显示以下内容之一：
 - en: '`Do you want to continue\? [Y/n]`'
+  id: totrans-200
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Do you want to continue\? [Y/n]`'
 - en: '`is already the newest`'
+  id: totrans-201
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`is already the newest`'
 - en: If neither happens, it gives an error
+  id: totrans-202
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果两者都没有发生，它将给出一个错误
 - en: '`ecase` will contain the `case` type detailing which condition occurred'
+  id: totrans-203
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ecase`将包含详细说明发生的条件的`case`类型'
 - en: 'If we get the continue prompt, we need to send `Y` to the terminal by executing
     the following code:'
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们得到继续提示，我们需要发送`Y`到终端，执行以下代码：
 - en: '[PRE18]'
+  id: totrans-205
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'Finally, we need to just make sure we received the prompt again by executing
     the following code:'
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们只需确保通过执行以下代码再次收到提示：
 - en: '[PRE19]'
+  id: totrans-207
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'You can see this code with a debug mode here:'
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以在调试模式下查看此代码：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go)'
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go)'
 - en: This section has shown how you can spawn an SSH session in pure Go, use it to
     send commands, and then retrieve the output. Finally, we looked at how you can
     interact with an application using `goexpect`.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节展示了如何在纯 Go 中启动一个 SSH 会话，使用它发送命令，然后获取输出。最后，我们还探讨了如何使用 `goexpect` 与应用程序进行交互。
 - en: Now, we will show how you can use this knowledge to write tooling that runs
     commands on multiple systems.
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们将展示如何利用这些知识编写工具，以便在多个系统上运行命令。
 - en: Designing safe, concurrent change automations
+  id: totrans-212
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 设计安全的并发变更自动化
 - en: So far, we have shown how to execute commands locally or remotely.
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，我们已经展示了如何在本地或远程执行命令。
 - en: In the modern day, we often need to run sets of commands across multiple systems
     to achieve some end state. Depending on your scale, you may want to run a system
     such as Ansible or Jenkins to attempt to automate these processes.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 在现代，我们经常需要在多个系统上运行一组命令，以实现某个最终状态。根据规模的不同，你可能希望运行诸如 Ansible 或 Jenkins 这样的系统来尝试自动化这些过程。
 - en: For some work, it is simpler to use Go directly to execute changes across a
     set of systems. This allows the DevOps group to simply understand the Go language
     and a small bit of code versus understanding the complexities of a workflow system
     such as Ansible, which requires its own skillset, system updates, and so on.
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于某些工作，直接使用 Go 在一组系统上执行更改会更简单。这使得 DevOps 团队只需理解 Go 语言和少量代码，而无需理解像 Ansible 这样的工作流系统的复杂性，后者需要自己的技能集、系统更新等。
 - en: In this section, we are going to talk about the components of changing a set
     of systems, a framework for achieving this, and an example application to apply
     a set of changes.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将讨论如何更改一组系统的组成部分，达成这一目标的框架，以及一个示例应用程序来应用一组更改。
 - en: Components of a change
+  id: totrans-217
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 更改的组成部分
 - en: 'When writing a system that makes a change, there are several types of actions
     that must be dealt with. In broad terms, I define these as the following:'
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 在编写一个进行更改的系统时，必须处理几种类型的操作。广义上来说，我将它们定义为以下几种：
 - en: '**Global preconditions**: Global preconditions are a set of conditions that
     need to be true to move forward. When doing network automation, this would be
     things such as the packet loss on the network being under a certain threshold.
     For devices, this might be that your services are in a green state before proceeding.
     No one wants to push changes during a problem.'
+  id: totrans-219
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**全局前提条件**：全局前提条件是一组必须为真的条件才能继续前进。在进行网络自动化时，这可能是网络丢包率低于某个阈值。对于设备来说，这可能意味着在继续操作之前，服务处于绿色状态。没有人愿意在出现问题时推送更改。'
 - en: '**Local preconditions**: Local preconditions are the state of the individual
     work unit (say, a server) that needs to be in a certain state to proceed.'
+  id: totrans-220
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**本地前提条件**：本地前提条件是指单个工作单元（例如服务器）必须处于某种状态才能继续。'
 - en: '**Actions**: Actions are operations that will mutate the state of a work unit.'
+  id: totrans-221
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**操作**：操作是将改变工作单元状态的操作。'
 - en: '**Action validations**: Checks that are done to validate an action was successful.'
+  id: totrans-222
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**操作验证**：用于验证操作是否成功的检查。'
 - en: '**Local postconditions**: Local postconditions are checks that the work unit
     is both in the configuration state you want and meets some state. This might be
     that it is still reachable, possibly serving traffic or not serving traffic, whatever
     the end state should be.'
+  id: totrans-223
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**本地后置条件**：本地后置条件是检查工作单元是否处于所需的配置状态并满足某些条件。这可能是它仍然可达，可能正在处理流量或没有处理流量，无论最终状态应该是什么。'
 - en: '**Global postconditions**: Global postconditions are the state of conditions
     after execution, usually similar to global preconditions.'
+  id: totrans-224
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**全局后置条件**：全局后置条件是在执行后条件的状态，通常类似于全局前提条件。'
 - en: Not every set of changes on multiple systems requires all these, but they will
     at least need a subset of them.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 并非每一组跨多个系统的更改都需要这些所有条件，但至少需要其中的一部分。
 - en: Let's take a look at doing a rollout of jobs on a set of **virtual machines**
     (**VMs**) in a single data center. For small shops that have a limited number
     of machines, a setup such as this can be sufficient when you aren't large enough
     to use something such as Kubernetes but can't fit in the limitations of services
     such as Azure Functions or Amazon's **Elastic Container Service** (**ECS**). Or,
     it could be that you are running on your own machines and not in a cloud provider.
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下如何在单一数据中心的一组 **虚拟机** (**VMs**) 上进行作业的部署。对于机器数量有限的小型公司来说，当你没有足够大到可以使用像
+    Kubernetes 这样的工具，但又无法满足像 Azure Functions 或亚马逊的 **弹性容器服务** (**ECS**) 的限制时，这样的设置可能就足够了。或者，也可能是你在自己的机器上运行，而不是使用云服务提供商。
 - en: Writing a concurrent job
+  id: totrans-227
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 编写一个并发任务
 - en: 'Let''s tackle the actions we want to perform. We want to do the following:'
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来处理我们想要执行的操作。我们想要做以下操作：
 - en: Remove our job from a load balancer
+  id: totrans-229
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从负载均衡器中移除我们的任务
 - en: Kill the job on the VM or server
+  id: totrans-230
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 杀死虚拟机或服务器上的任务
 - en: Copy our new software to the server
+  id: totrans-231
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将新的软件复制到服务器
 - en: Start our service
+  id: totrans-232
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启动我们的服务
 - en: Check the service is reachable
+  id: totrans-233
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检查服务是否可达
 - en: Add the job back to the load balancer
+  id: totrans-234
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将任务重新添加到负载均衡器
 - en: In essence, this is what Kubernetes does for large-scale installations of microservices.
     We will be talking about this in an upcoming chapter. But at a small scale, it
     is seldom the best choice to take on the complexity of running a Kubernetes cluster,
     even when the infrastructure is managed by a cloud provider.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 从本质上讲，这正是Kubernetes在大规模微服务安装中的作用。我们将在即将到来的章节中讨论这一点。但在小规模应用中，即使基础设施由云服务提供商管理，运行Kubernetes集群的复杂性通常也不是最好的选择。
 - en: 'Let''s define the overall structure of the code that executes our actions,
     as follows:'
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义执行我们操作的代码的总体结构，如下所示：
 - en: '[PRE20]'
+  id: totrans-237
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: Note
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: Much of this is just a skeleton—we will implement these methods in a moment.
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
+  zh: 这一部分大多是骨架代码—我们稍后将实现这些方法。
 - en: 'This code does the following:'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Defines a `stateFn` type
+  id: totrans-241
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义一个`stateFn`类型
 - en: If it returns an error, stop processing.
+  id: totrans-242
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果返回错误，停止处理。
 - en: If it doesn't and returns a non-nil `stateFn` type, execute it.
+  id: totrans-243
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果没有并且返回一个非空的`stateFn`类型，执行它。
 - en: If it returns a nil `stateFn` type and no error, we are done.
+  id: totrans-244
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果返回一个空的`stateFn`类型并且没有错误，我们就完成了。
 - en: Defines an `actions` type
+  id: totrans-245
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义一个`actions`类型
 - en: This is a state machine for actions on a server
+  id: totrans-246
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这是一个用于服务器操作的状态机
 - en: 'Calling `run()` does the following:'
+  id: totrans-247
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 调用`run()`会执行以下操作：
 - en: Executes one `stateFn` type at a time until an error or `stateFn == nil`
+  id: totrans-248
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一次执行一个`stateFn`类型，直到出现错误或`stateFn == nil`
 - en: '`rmBackend()`, `jobKill()`, `cp()`, and the rest are `stateFn` types we will
     define.'
+  id: totrans-249
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`rmBackend()`、`jobKill()`、`cp()`以及其他将定义的都是`stateFn`类型。'
 - en: '`.failedState` is there to allow retrying a failed state when using `.run()`
     more than once.'
+  id: totrans-250
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`.failedState`用于允许在多次调用`.run()`时重试失败的状态。'
 - en: What we have is a simple state machine that will execute actions. This moves
     us through all the states that are required to do this type of action on a system.
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们有一个简单的状态机，将执行操作。这将使我们完成系统上执行此类操作所需的所有状态。
 - en: 'Let''s look at what a few of these `stateFn` types would look like when implemented,
     as follows:'
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看看在实现时，几个`stateFn`类型会是什么样子，如下所示：
 - en: '[PRE21]'
+  id: totrans-253
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'This code does the following:'
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Calls a client to our network load balancer to remove our server endpoint
+  id: totrans-255
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 调用客户端的网络负载均衡器以移除我们的服务器端点
 - en: If successful, sends back `jobKill` as the next state to execute
+  id: totrans-256
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果成功，返回`jobKill`作为下一个要执行的状态
 - en: If not successful, returns our error
+  id: totrans-257
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果不成功，返回我们的错误
 - en: '`s.lb.RemoveBackend()` in the cloud might talk to a **REST** service that informs
     it to remove our service endpoint. Or, in your own data center, it might be a
     network load balancer that you log in to via an SSH client and issue commands.'
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: '`s.lb.RemoveBackend()`在云端可能会调用**REST**服务，通知它移除我们的服务端点。或者，在你自己的数据中心，它可能是一个网络负载均衡器，你通过SSH客户端登录并发出命令。'
 - en: 'Once this completes, it tells `run()` to execute `jobKill()`. Let''s explore
     what that would look like, as follows:'
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦完成，它会告诉`run()`执行`jobKill()`。让我们看看实现后的样子，如下所示：
 - en: '[PRE22]'
+  id: totrans-260
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'This code does the following:'
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Executes `findPIDs()`
+  id: totrans-262
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行`findPIDs()`函数
 - en: This logs on to a machine via SSH and runs the `pidof` binary
+  id: totrans-263
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这通过 SSH 登录到一台机器并运行`pidof`二进制文件
 - en: Executes `killPIDs()`
+  id: totrans-264
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行`killPIDs()`函数
 - en: This uses SSH to execute `kill` against our process
+  id: totrans-265
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这使用 SSH 执行`kill`命令来终止我们的进程
 - en: Uses signal 15 or `TERM` as a soft kill
+  id: totrans-266
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用信号 15 或`TERM`作为软终止
 - en: Executes `waitForDeath()`
+  id: totrans-267
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行`waitForDeath()`函数
 - en: This uses SSH to wait for the `cp`
+  id: totrans-268
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这使用 SSH 等待`cp`操作
 - en: If not, execute `killPIDs()`with signal 9 or `KILL` and execute `waitForDeath()`
     again
+  id: totrans-269
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果没有，执行带信号 9 或`KILL`的`killPIDs()`，并再次执行`waitForDeath()`函数
 - en: If it fails, it returns an error
+  id: totrans-270
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果失败，返回一个错误
 - en: If successful, we return our next state, `cp`
+  id: totrans-271
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果成功，我们返回下一个状态，`cp`
 - en: This code is simply killing our jobs on the server before we copy our new binary
     and start it.
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码实际上是在我们复制新的二进制文件并启动它之前，先杀死服务器上的任务。
 - en: The rest of the code will be in our repository (link provided further on in
     this section). For now, assume we have written out the rest of these actions for
     our state machine.
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
+  zh: 其余的代码将在我们的代码库中（稍后将在本节提供链接）。现在，假设我们已经为我们的状态机编写了其余的操作。
 - en: 'We now need something to run all our actions. We will create a `workflow` struct
     with this basic structure:'
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们需要执行所有操作。我们将创建一个具有基本结构的`workflow`结构体：
 - en: '[PRE23]'
+  id: totrans-275
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'This code does the following:'
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Has `*config` that will detail the settings for our rollout
+  id: totrans-277
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 有`*config`，将详细描述我们的发布设置
 - en: Creates a connection to our load balancer
+  id: totrans-278
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建与负载均衡器的连接
 - en: Tracks the number of failures we have had
+  id: totrans-279
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 跟踪我们遇到的失败次数
 - en: Outputs the final end state, which is an enumerator in the file
+  id: totrans-280
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 输出最终的结束状态，这是文件中的一个枚举值
 - en: Creates a list of all our actions
+  id: totrans-281
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建所有操作的列表
 - en: 'There are two phases to a typical rollout, as follows:'
+  id: totrans-282
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个典型的发布过程有两个阶段，如下所示：
 - en: '**Canary**: The canary stage is where you test a few samples to make sure the
     rollout is working. You want to do this one sample at a time and wait some amount
     of time before continuing to the next canary. This allows administrators to have
     some time to stop potential problems that the rollout hasn''t detected.'
+  id: totrans-283
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**金丝雀**：金丝雀阶段是测试少量样本，以确保发布过程正常工作。在此阶段，您需要一次测试一个样本，并在继续下一个金丝雀测试之前等待一段时间。这为管理员提供了时间，以防发布过程未能检测到潜在问题。'
 - en: '**General**: The general rollout occurs after the canary stage. This usually
     sets some amount of concurrency and a maximum number of failures. Depending on
     the size of your environment, failures may be common due to an ever-changing environment.
     This may mean you tolerate a certain number of failures and continue to retry
     those failures until you have success, but if the failures reach some maximum
     level, you stop.'
+  id: totrans-284
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**一般发布**：一般发布发生在金丝雀阶段之后。通常会设置一定的并发数和最大失败次数。根据环境的大小，失败可能很常见，因为环境在不断变化。这可能意味着您会容忍一定数量的失败，并继续重试这些失败，直到成功，但如果失败次数达到某个最大值，则停止。'
 - en: Note
+  id: totrans-285
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 注意
 - en: Depending on the environment, you can have more sophisticated staging, but for
     smaller environments, this usually suffices. When doing concurrent rollouts, failures
     can exceed your maximum failure setting by large amounts, depending on the setting.
     If we have a maximum of failures and our concurrency is set to 5, it is possible
     to have between 5 and 9 failures happen. Keep this in mind when you deal with
     concurrent rollouts.
+  id: totrans-286
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 根据环境的不同，您可以使用更复杂的部署方案，但对于较小的环境，这通常已经足够。在进行并发发布时，失败的次数可能会超过您的最大失败设置，这取决于设置的具体情况。如果我们设置了最大失败次数，并且并发数设置为5，那么可能会发生5到9次的失败。在处理并发发布时，请记住这一点。
 - en: 'The main method on the workflow that handles the rollouts is called `run()`.
     Its job is to run our pre-checks, then run our canaries, and finally run the main
     jobs at some concurrency level. We should exit if we have too many problems. Let''s
     have a look, as follows:'
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
+  zh: 处理发布过程的工作流中的主要方法叫做`run()`。它的任务是运行我们的前置检查，然后运行我们的金丝雀测试，最后以某种并发级别运行主要任务。如果问题太多，我们应该退出。我们来看一下，具体如下：
 - en: '[PRE24]'
+  id: totrans-288
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'This part of the code does the following:'
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
+  zh: 这部分代码执行以下操作：
 - en: Runs our `checkLBState()` precondition code
+  id: totrans-290
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行我们的`checkLBState()`前置条件代码
 - en: If it fails, records an `esPreconditionFailure` end state
+  id: totrans-291
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果失败，记录一个`esPreconditionFailure`结束状态
 - en: Note
+  id: totrans-292
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 注意
 - en: You may notice a `cancel()` function that is created when we create a `Context`
     object with a timeout. This can be used to cancel our `Context` object at any
     time. It is best practice to cancel a `Context` object that has a timeout immediately
     after use to exit a Go routine that is running in the background, counting down
     to the timeout.
+  id: totrans-293
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 您可能会注意到在创建带有超时的`Context`对象时，会创建一个`cancel()`函数。这个函数可以在任何时候取消我们的`Context`对象。最佳实践是在使用后立即取消带有超时的`Context`对象，以退出正在后台运行并倒计时到超时的Go例程。
 - en: This is run before we make any changes to the system. We don't want to make
     changes when things are already unhealthy.
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是在我们对系统进行任何更改之前运行的。我们不希望在系统已经不健康时进行更改。
 - en: 'Next, we need to run our canaries, as follows:'
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们需要运行我们的金丝雀测试，如下所示：
 - en: '[PRE25]'
+  id: totrans-296
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'This code does the following:'
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Runs some defined number of canaries
+  id: totrans-298
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行若干个金丝雀测试
 - en: Runs them one at a time
+  id: totrans-299
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一次执行一个操作
 - en: Sleeps for 1 minute in between
+  id: totrans-300
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每次等待1分钟
 - en: These settings would be configurable in the config file that will be defined.
     The sleep time could be made configurable to what makes sense for the service,
     to allow you to respond in case of problems that aren't detected in the workflow.
     You could even define a sleep time between all canaries and general rollout.
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些设置将在定义的配置文件中进行配置。休眠时间可以根据服务的需求进行配置，以便在工作流未检测到问题时能作出响应。您甚至可以定义在所有金丝雀测试和一般发布之间的休眠时间。
 - en: 'Now, we need to roll out at some concurrency level while checking for some
     maximum number of failures. Let''s check that out, as follows:'
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要在一定的并发水平下进行发布，同时检查失败的最大数量。让我们按照以下方式查看这一点：
 - en: '[PRE26]'
+  id: totrans-303
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'This code does the following:'
+  id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码完成了以下操作：
 - en: Spins off goroutines running our actions.
+  id: totrans-305
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启动运行我们操作的 goroutine。
 - en: Concurrency is limited by our `limit` channel.
+  id: totrans-306
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 并发通过我们的 `limit` 通道进行限制。
 - en: Failures are limited by our `.failures` attribute check.
+  id: totrans-307
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 失败情况由我们的 `.failures` 属性检查进行限制。
 - en: This is the first time we have shown the `atomic` package. `atomic` is a sub-package
     of `sync` that allows us to do thread-safe operations on numbers without using
     `sync.Mutex`. This is great for counters as it is `sync.Mutex` for this particular
     type of operation.
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是我们第一次展示 `atomic` 包。`atomic` 是 `sync` 的一个子包，它允许我们在不使用 `sync.Mutex` 的情况下进行线程安全的数字操作。这对于计数器非常有用，因为它为这种特定类型的操作提供了类似
+    `sync.Mutex` 的功能。
 - en: We have now shown the basics of `.run()` for our `workflow` struct. You can
     find the complete code for this rollout application at [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout).
+  id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在展示了 `workflow` 结构体的 `.run()` 基本用法。您可以在 [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout)
+    找到这个版本应用的完整代码。
 - en: 'The code for the application simply needs your SSH key, a file describing the
     rollout, and the binary to roll out to the server. That file would look like this:'
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个应用的代码只需要您的 SSH 密钥、描述发布的文件和要发布到服务器的二进制文件。该文件看起来应该是这样的：
 - en: '[PRE27]'
+  id: totrans-311
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: This describes everything the application needs to do a simple rollout.
+  id: totrans-312
   prefs: []
   type: TYPE_NORMAL
+  zh: 这描述了应用程序进行简单发布所需做的一切。
 - en: Of course, we can make this application more general, have it record its running
     state and final states to storage, add flags to ignore beginning states so that
     we can do a rollback, put this behind a gRPC service, and so on…
+  id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: 当然，我们可以使这个应用更具通用性，让它记录运行状态和最终状态到存储中，添加标志来忽略初始状态，以便我们可以进行回滚，将其放到 gRPC 服务后面，等等……
 - en: In fewer than 1,000 lines of code, we have a simple alternative to systems such
     as Kubernetes when they aren't available or your scale doesn't justify them.
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: 在不到 1,000 行代码的情况下，我们提供了一个简单的替代方案，用于当 Kubernetes 等系统不可用或您的规模不足以支持它们时的选择。
 - en: Note
+  id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: This doesn't address the need for binary restarts if your program crashes, such
     as restarts achieved through software such as `systemd`. In those cases, it may
     be better to create an agent that runs on the device and provides RPCs to control
     local services, such as `systemd`.
+  id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 这并没有解决程序崩溃时需要重新启动二进制文件的问题，比如通过 `systemd` 等软件实现的重启。在这种情况下，最好是创建一个代理程序，运行在设备上并提供
+    RPC 来控制本地服务，比如 `systemd`。
 - en: Case study – Network rollouts
+  id: totrans-317
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 案例研究——网络发布
 - en: The principles laid out here have been the essence of rollouts of network device
     configuration on Google's B2 backbone for a decade.
+  id: totrans-318
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里阐述的原则已经成为谷歌 B2 骨干网络上网络设备配置发布的核心，已有十年之久。
 - en: Prior to this, we simply had scripts that took hand-crafted configuration or
     generated configurations and applied them to the network while an operator watched
     the progress and dealt with issues that might arise.
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: 在此之前，我们仅仅是用脚本处理手工配置或生成的配置，将它们应用到网络上，同时操作员观察进度并处理可能出现的问题。
 - en: At scale, this became an issue. SRE service teams had been moving away from
     similar models as their complexity tended to grow faster than the networks.
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 在大规模应用中，这成为了一个问题。SRE 服务团队开始远离类似的模型，因为它们的复杂性往往比网络增长得更快。
 - en: Network engineering moved toward a more formalized system to centralize the
     execution of work on the backbone, giving us a single place to monitor and a central
     place to stop rollouts in case of emergencies.
+  id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 网络工程逐渐转向一个更为正式化的系统，以集中执行骨干网中的工作，为我们提供一个监控的地方，并在紧急情况下有一个中央位置来停止发布操作。
 - en: In addition, there was a need to formalize any set of rollouts so that they
     were always executed the same way with the same automated checks, instead of relying
     on humans to do the right things.
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，还需要对所有发布操作进行正式化，以确保它们总是以相同的方式执行，并且具有相同的自动化检查，而不是依赖人工来做正确的操作。
 - en: The orchestration system I led the design and implementation on is simply a
     more complex and pluggable version of what is presented here. Teams built their
     actions into the system, and that system executed those actions based on arguments
     sent to perform some set of jobs.
+  id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: 我主导设计和实现的编排系统，实际上是一个更复杂且可插拔的版本，类似于这里所展示的内容。各个团队将它们的操作集成到系统中，而该系统则根据传递的参数执行这些操作，完成一系列任务。
 - en: At the time of my departure from Google, using this methodology had led to zero
     outages from automation (which is not the same as having zero rollout failures).
     My understanding is that as I am writing this, your cat videos are still in safe
     hands on this system.
+  id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我离开 Google 时，采用这种方法已经实现了自动化零故障（这与零发布失败不同）。据我了解，当我写这篇文章时，你的猫咪视频仍然在这个系统上得到安全保存。
 - en: In this section, we have learned about the components of change and what that
     might look like using Go, and we have written an example rollout application that
     uses these principles.
+  id: totrans-325
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们了解了变更的组件以及使用 Go 实现这些变更的方式，并编写了一个示例发布应用程序，应用了这些原则。
 - en: Next, we will talk about writing a system agent that can be deployed on systems
     to allow everything from system monitoring to controlling a local rollout.
+  id: totrans-326
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将讨论编写一个系统代理，该代理可以部署在系统上，从而允许进行系统监控到控制本地发布的所有操作。
 - en: Writing a system agent
+  id: totrans-327
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 编写系统代理
 - en: So far, when we have automated operations on a device, we have either done it
     from an application that executes locally or through a command we run remotely
     with SSH.
+  id: totrans-328
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，当我们在设备上进行自动化操作时，我们要么是在本地执行的应用程序中做，要么是通过 SSH 远程运行命令。
 - en: But if we look toward managing a small fleet of machines, it can be more practical
     to write a service that runs on the device that we connect to via RPCs. Using
     knowledge of the gRPC services we discussed in previous chapters, we can combine
     these concepts to allow control of our machines in a more uniform way.
+  id: totrans-329
   prefs: []
   type: TYPE_NORMAL
+  zh: 但如果我们考虑管理一小部分机器集群，编写一个在设备上运行的服务，通过 RPC 连接进行控制可能会更为实际。利用我们在前面章节中讨论的 gRPC 服务知识，我们可以将这些概念结合起来，以更统一的方式控制我们的机器。
 - en: 'Here are a few things we can use system agents for:'
+  id: totrans-330
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是我们可以使用系统代理的一些用途：
 - en: Installing and running services
+  id: totrans-331
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 安装和运行服务
 - en: Gathering machine running stats
+  id: totrans-332
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 收集机器运行状态
 - en: Gathering machine inventory information
+  id: totrans-333
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 收集机器库存信息
 - en: Some of these are the kinds of things Kubernetes does with its system agents.
     Others, such as inventory information, can be vital in running a healthy fleet
     of machines, often overlooked in smaller settings. Even in a Kubernetes environment,
     there may be advantages to running your own agent for certain tasks.
+  id: totrans-334
   prefs: []
   type: TYPE_NORMAL
+  zh: 其中一些是 Kubernetes 使用其系统代理所做的事情。其他的，比如库存信息，对于运行健康的机器集群至关重要，尤其是在较小的环境中经常被忽视。即使在
+    Kubernetes 环境中，为某些任务运行自己的代理也可能带来优势。
 - en: A system agent can provide several advantages. If we define one **application
     programming interface** (**API**) using gRPC, we can have multiple OSs with different
     agents implementing the same RPCs, allowing us to control our fleet in the same
     uniform way, regardless of the OS. And because Go will pretty much run on anything,
     you can write different agents using the same language.
+  id: totrans-335
   prefs: []
   type: TYPE_NORMAL
+  zh: 系统代理可以提供多个优势。如果我们使用 gRPC 定义一个 **应用程序编程接口** (**API**)，我们可以让多个操作系统和不同的代理实现相同的
+    RPC，从而以统一的方式控制我们的机器集群，而不管操作系统是什么。而且因为 Go 几乎可以在任何平台上运行，你可以使用相同的语言编写不同的代理。
 - en: Designing a system agent
+  id: totrans-336
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 设计系统代理
 - en: 'For our example system agent, we are going to target Linux specifically, but
     we will make our API generic to allow implementation for other OSs to use the
     same API. Let''s talk about a few things we might be interested in. We could consider
     the following:'
+  id: totrans-337
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的示例系统代理，我们将特别针对 Linux，但我们会使我们的 API 通用，以便其他操作系统也能实现相同的 API。我们来谈谈一些可能感兴趣的内容。我们可以考虑以下内容：
 - en: Installing/removing binaries using `systemd`
+  id: totrans-338
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 `systemd` 安装/移除二进制文件
 - en: Exporting both system and installed binary performance data
+  id: totrans-339
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 导出系统和已安装二进制文件的性能数据
 - en: Allowing the pulling of application logs
+  id: totrans-340
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 允许拉取应用程序日志
 - en: Containerizing our application
+  id: totrans-341
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将我们的应用程序容器化
 - en: For those of you not familiar with `systemd`, it is a Linux daemon that runs
     software services in the background. Taking advantage of `systemd` allows us to
     have automatic restarts of failed applications and automatic log rotation with
     `journald`.
+  id: totrans-342
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于不熟悉 `systemd` 的朋友，它是一个在后台运行软件服务的 Linux 守护进程。利用 `systemd` 可以实现应用程序失败后的自动重启，并通过
+    `journald` 实现日志轮转。
 - en: Containerization, for those not familiar with the concept, executes an application
     within its own self-contained space with access to only the parts of the OS you
     want. This is a similar concept to what is called sandboxing. Containerization
     has been made popular by software such as Docker and has led to container formats
     that look like VMs with entire OS images within a container. However, these container
     formats and tooling are not required to containerize an application on Linux.
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
+  zh: 容器化，简单来说，是在一个自包含的空间内执行应用程序，只访问你希望其访问的操作系统部分。这与所谓的沙盒化（sandboxing）概念相似。容器化已经被Docker等软件所流行，并且催生了类似虚拟机的容器格式，这些容器内包含了整个操作系统镜像。然而，要在Linux上容器化一个应用程序，并不需要这些容器格式和工具。
 - en: As we are going to use `systemd` to control our process execution, we will use
     the `Service` directives of `systemd` to provide containerization. These details
     can be seen in our repository in the file [https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go)
+  id: totrans-344
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们将使用`systemd`来控制进程执行，我们将使用`systemd`的`Service`指令来提供容器化。这些细节可以在我们的代码库中的文件[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go)中查看。
 - en: For exporting stats, we will use the `expvar` Go standard library package. This
     package allows us to publish stats on a `expvar` stats are a JSON object with
     string keys that map to values representing our stats or information. There are
     built-in stats automatically provided, along with ones we will define.
+  id: totrans-345
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了导出统计数据，我们将使用`expvar` Go标准库包。这个包允许我们发布统计数据，`expvar`的统计数据是一个JSON对象，具有映射到代表我们的统计信息或数据的值的字符串键。系统内置的统计数据将自动提供，同时我们也会定义一些新的统计数据。
 - en: This allows you to quickly gather stat data using a collector or by simply querying
     it with a web browser or command-line tool such as `wget`.
+  id: totrans-346
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使得你可以通过收集器或简单地使用网页浏览器或命令行工具（如`wget`）快速收集统计数据。
 - en: 'An example `expvar` page that is output might return the following:'
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出的一个`expvar`页面可能返回以下内容：
 - en: '[PRE28]'
+  id: totrans-348
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: For the book portion of our example, we are going to concentrate on *installing
     and removing binaries* and *exporting system performance data* to show how we
     can use our RPC service for interactive calls and HTTP for read-only information.
     The version in our repository will implement more features than we can cover in
     the book.
+  id: totrans-349
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们示例中的书籍部分，我们将重点介绍*安装和移除二进制文件*和*导出系统性能数据*，以展示我们如何使用RPC服务进行交互调用，以及使用HTTP获取只读信息。我们代码库中的版本将实现比书中所能涵盖的更多功能。
 - en: 'Now that we''ve talked about what we want the system agent to do, let''s design
     our proto for our service, as follows:'
+  id: totrans-350
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经讨论了系统代理要做的事情，接下来让我们为我们的服务设计proto，具体如下：
 - en: '[PRE29]'
+  id: totrans-351
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: We now have a general framework for our RPCs, so let's look at implementing
     a method for our `Install` RPC.
+  id: totrans-352
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经有了RPC的通用框架，接下来我们来看一下如何为我们的`Install` RPC实现一个方法。
 - en: Implementing Install
+  id: totrans-353
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 实现安装功能
 - en: Implementing installations on Linux will require a multi-step process. First,
     we are going to install the package under `sa/packages/[InstallReq.Name]` in the
     agent's user home directory. `InstallReq.Name` will need to be a single name,
     containing only letters and numbers. If that name already exists, we will turn
     down the existing job and install this in its place. `InstallReq.Package` on Linux
     will be a ZIP file that will be unpacked in that directory.
+  id: totrans-354
   prefs: []
   type: TYPE_NORMAL
+  zh: 在Linux上实现安装将需要一个多步骤的过程。首先，我们将在代理的用户主目录下的`sa/packages/[InstallReq.Name]`目录中安装该包。`InstallReq.Name`需要是一个包含字母和数字的单一名称。如果该名称已经存在，我们将关闭现有的工作并在其位置安装新的包。Linux上的`InstallReq.Package`将是一个ZIP文件，该文件将在该目录中解压。
 - en: '`InstallReq.Binary` is the name of the binary in the root directory to execute.
     `InstallReq.Args` is a list of arguments to pass to the binary.'
+  id: totrans-355
   prefs: []
   type: TYPE_NORMAL
+  zh: '`InstallReq.Binary`是根目录中要执行的二进制文件的名称。`InstallReq.Args`是要传递给二进制文件的参数列表。'
 - en: 'We will be using a third-party package to access `systemd`. You can find the
     package here: [https://github.com/coreos/go-systemd/tree/main/dbus](https://github.com/coreos/go-systemd/tree/main/dbus).'
+  id: totrans-356
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将使用一个第三方包来访问`systemd`。你可以在这里找到该包：[https://github.com/coreos/go-systemd/tree/main/dbus](https://github.com/coreos/go-systemd/tree/main/dbus)。
 - en: 'Let''s look at the implementation here:'
+  id: totrans-357
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下这部分的实现：
 - en: '[PRE30]'
+  id: totrans-358
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: 'This code does the following:'
+  id: totrans-359
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Validates our incoming request to ensure it is valid
+  id: totrans-360
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 验证我们传入的请求以确保其有效
 - en: Implementation is in the repository code
+  id: totrans-361
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现代码位于代码库中
 - en: Takes a lock for this specific install name
+  id: totrans-362
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为这个特定的安装名称加锁
 - en: This prevents multiple installs with the same name at the same time
+  id: totrans-363
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这可以防止多个相同名称的安装同时进行
 - en: Implementation is in the repository code
+  id: totrans-364
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现代码在仓库中
 - en: Unpacks our ZIP file into a temporary directory
+  id: totrans-365
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将我们的ZIP文件解压到临时目录
 - en: Returns the location of the temporary directory
+  id: totrans-366
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 返回临时目录的位置
 - en: Validates that our `req.Binary` binary exists
+  id: totrans-367
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 验证我们的`req.Binary`二进制文件是否存在
 - en: Implementation is in the repository code
+  id: totrans-368
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现代码在仓库中
 - en: Migrates our temporary directory to our `req.Name` location
+  id: totrans-369
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将我们的临时目录迁移到`req.Name`位置
 - en: If a `systemd` unit already exists, it is turned down
+  id: totrans-370
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`systemd`单元已存在，则将其关闭
 - en: Creates a `systemd` unit file under `/home/[user]/.config/systemd/user/`
+  id: totrans-371
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在`/home/[user]/.config/systemd/user/`下创建一个`systemd`单元文件
 - en: If the final path already exists, deletes it
+  id: totrans-372
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果最终路径已存在，则删除它
 - en: Moves the temporary directory to the final location
+  id: totrans-373
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将临时目录移动到最终位置
 - en: Implementation is in the repository code
+  id: totrans-374
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现代码在仓库中
 - en: Starts our binary
+  id: totrans-375
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启动我们的二进制文件
 - en: Makes sure it is up and running for 30 seconds
+  id: totrans-376
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保它已启动并运行30秒
 - en: This is a simple example of the setup for our gRPC service to set up and run
     a service with `systemd`. We are skipping various implementation details, but
     you can find them inside the repository listed toward the end of the chapter.
+  id: totrans-377
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是设置我们gRPC服务的一个简单示例，用于设置和运行一个`systemd`服务。我们跳过了各种实现细节，但你可以在本章末尾列出的仓库中找到它们。
 - en: Now that we have `Install` done, let's work on implementing `SystemPerf`.
+  id: totrans-378
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们完成了`Install`，接下来让我们实现`SystemPerf`。
 - en: Implementing SystemPerf
+  id: totrans-379
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 实现SystemPerf
 - en: 'To gather our system information, we will be using the `goprocinfo` package,
     which you can find here: [https://github.com/c9s/goprocinfo/tree/master/linux](https://github.com/c9s/goprocinfo/tree/master/linux).'
+  id: totrans-380
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了收集我们的系统信息，我们将使用`goprocinfo`包，您可以在这里找到它：[https://github.com/c9s/goprocinfo/tree/master/linux](https://github.com/c9s/goprocinfo/tree/master/linux)。
 - en: We want this to update us about every 10 seconds, so we will implement our gathering
     in a loop where all callers read from the same data.
+  id: totrans-381
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们希望每10秒更新一次，因此我们将在一个循环中实现数据收集，所有调用者都从相同的数据中读取。
 - en: 'Let''s start by collecting our **central processing unit** (**CPU**) data for
     our system, as follows:'
+  id: totrans-382
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们首先收集系统的**中央处理单元**（**CPU**）数据，如下所示：
 - en: '[PRE31]'
+  id: totrans-383
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: 'This code does the following:'
+  id: totrans-384
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Reads our CPU state data
+  id: totrans-385
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 读取我们的CPU状态数据
 - en: Writes it to a protocol buffer
+  id: totrans-386
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将其写入协议缓冲区
 - en: Stores the data in `.cpuData`
+  id: totrans-387
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将数据存储在`.cpuData`中
 - en: '`.cpuData` will be of the `atomic.Value` type. This type is useful when you
     wish to synchronize an entire value, not mutate the value. Every time we update
     `a.cpuData`, we put a new value into it. If you store a `struct`, `map`, or `slice`
     in an `atomic.Value`, you cannot change a key/field—you *MUST* make a new copy
     with all keys/indexes/fields and store it, instead of changing a single key/field.'
+  id: totrans-388
   prefs: []
   type: TYPE_NORMAL
+  zh: '`.cpuData`将是`atomic.Value`类型。当你希望同步整个值，而不是修改值时，这种类型非常有用。每次我们更新`a.cpuData`时，我们都会把一个新值放入其中。如果你在`atomic.Value`中存储`struct`、`map`或`slice`，你不能修改键/字段——你*必须*制作一个包含所有键/索引/字段的新副本并存储，而不是修改单个键/字段。'
 - en: This is much faster for reading than using a mutex when values are small, which
     is perfect when storing a small set of counters.
+  id: totrans-389
   prefs: []
   type: TYPE_NORMAL
+  zh: 当值较小时，这比使用互斥锁更适合读取，当存储少量计数器时非常完美。
 - en: The `collectMem` memory collector is similar to `collectCPU` and is detailed
     in the repository code.
+  id: totrans-390
   prefs: []
   type: TYPE_NORMAL
+  zh: '`collectMem`内存收集器类似于`collectCPU`，并在仓库代码中有详细说明。'
 - en: 'Let''s have a look at the loop that will be started in our `New()` constructor
     for gathering perf data, as follows:'
+  id: totrans-391
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看看在`New()`构造函数中启动的用于收集性能数据的循环，如下所示：
 - en: '[PRE32]'
+  id: totrans-392
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 'This code does the following:'
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Collects our initial CPU stats
+  id: totrans-394
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 收集我们初始的CPU统计信息
 - en: Publishes an `expvar.Var` type for `system-cpu`
+  id: totrans-395
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 发布`system-cpu`的`expvar.Var`类型
 - en: Our variable type is `func() interface{}`, which implements `expvar.Func`
+  id: totrans-396
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们的变量类型是`func() interface{}`，它实现了`expvar.Func`
 - en: This simply reads our `atomic.Value` set by our `collectCPU()` function
+  id: totrans-397
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这只是读取由`collectCPU()`函数设置的`atomic.Value`
 - en: A read occurs when someone queries our web page at `/debug/vars`
+  id: totrans-398
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当有人查询我们位于`/debug/vars`的网页时，会发生读取操作
 - en: Refreshes our collections every 10 seconds
+  id: totrans-399
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每10秒刷新我们的数据收集
 - en: '`expvar` defines other simpler types such as `String`, `Float`, `Map`, and
     so on. However, I prefer using protocol buffers over `Map` for grouping content
     in a single, sharable message type that can be used in any language. Because a
     proto is JSON-serializable, it can be used as the return value for an `expvar.Func`
     with a little help from the `protojson` package. In the repository, that helper
     code is in `agent/proto/extra.go`.'
+  id: totrans-400
   prefs: []
   type: TYPE_NORMAL
+  zh: '`expvar`定义了其他一些简单的类型，例如`String`、`Float`、`Map`等。然而，我更喜欢使用协议缓冲区（proto）而不是`Map`来将内容分组到一个单一的、可共享的消息类型中，这种消息类型可以在任何语言中使用。因为proto是JSON可序列化的，它可以在`expvar.Func`的返回值中使用，只需借助`protojson`包即可。在代码库中，那个辅助代码位于`agent/proto/extra.go`。'
 - en: This code only shares the latest data collection. It is important to not directly
     read from stat files on each call, as your system can be easily overloaded.
+  id: totrans-401
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码仅共享最新的数据收集。重要的是不要在每次调用时直接从统计文件中读取数据，因为这可能会轻易导致系统过载。
 - en: 'When you go to the `/debug/vars` web endpoint, you can now see the following:'
+  id: totrans-402
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你访问`/debug/vars`的Web端点时，现在可以看到以下内容：
 - en: '[PRE33]'
+  id: totrans-403
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: There will be other stats there that are for the system agent itself, which
     can be useful in debugging the agent. These are automatically exported by `expvar`.
     By using a collector that connects and reads these stats, it is possible to see
     trends for these stats over time.
+  id: totrans-404
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有一些其他的统计信息是针对系统代理本身的，这些在调试代理时可能会有用。这些是由`expvar`自动导出的。通过使用连接并读取这些统计信息的收集器，可以查看这些统计数据随时间的趋势。
 - en: We now have an agent that is getting perf data every 10 seconds, giving us a
     functioning system agent. It is worth noting that we have shied away from talking
     about **authentication, authorization, and accounting** (**AAA**) when talking
@@ -1804,42 +2634,58 @@
     to both secure the transport and allow for mutual TLS. You can also implement
     a user/password, **Open Authorization** (**OAuth**), or any other AAA system you
     are interested in.
+  id: totrans-405
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有一个每10秒获取一次性能数据的代理，这为我们提供了一个有效的系统代理。值得注意的是，我们在讨论RPC系统时避免谈论**认证、授权和计账**（**AAA**）。gRPC支持**传输层安全**（**TLS**），既可以保护传输过程，也可以实现互信TLS。你还可以实现用户/密码、**开放授权**（**OAuth**）或任何你感兴趣的AAA系统。
 - en: Web services can implement their own security for things such as `expvar`. `expvar`
     publishes its stats on `/debug/vars`, and it is a good idea not to expose these
     to the outside world. Either prevent the export on all load balancers or implement
     some type of security on the endpoint.
+  id: totrans-406
   prefs: []
   type: TYPE_NORMAL
+  zh: Web服务可以为类似`expvar`的内容实现自己的安全性。`expvar`会在`/debug/vars`上发布它的统计信息，因此最好不要将这些信息暴露给外部世界。可以通过防止所有负载均衡器导出，或者在端点上实现某种类型的安全措施来保护这些信息。
 - en: 'You can find the complete code for our system agent here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent).'
+  id: totrans-407
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在这里找到我们系统代理的完整代码：[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent)。
 - en: In our completed code, we have decided to implement our system agent over SSH.
     This allows us to use an authorization system we already have with strong transport
     security. In addition, the gRPC service is exporting services over a private Unix
     domain socket, so local services that are not `root` cannot access the service.
+  id: totrans-408
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的完整代码中，我们决定通过SSH实现我们的系统代理。这使我们可以使用已经存在的授权系统，并提供强大的传输安全性。此外，gRPC服务通过私有Unix域套接字导出服务，因此非`root`的本地服务无法访问该服务。
 - en: You will also find code that containerizes the applications we install via `systemd`
     directives. This provides native isolation to help protect the system.
+  id: totrans-409
   prefs: []
   type: TYPE_NORMAL
+  zh: 你还会发现代码会将我们通过`systemd`指令安装的应用容器化。这提供了本地隔离，有助于保护系统。
 - en: In this section, we have learned the possible uses of a system agent, a basic
     design guide to building one, and finally walked through the implementation of
     a basic agent on Linux. We also discussed how our gRPC interface is designed to
     be generic, to allow for the implementation of the agent for other OSs.
+  id: totrans-410
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们学习了系统代理的可能用途，构建系统代理的基本设计指南，并最终介绍了如何在Linux上实现一个基本的代理。我们还讨论了我们的gRPC接口是如何被设计成通用的，以便可以实现其他操作系统的代理。
 - en: As part of building the agent, we have given a brief introduction to exporting
     variables with `expvar`. In the next chapter, we will talk about the big brother
     of `expvar`—the Prometheus package.
+  id: totrans-411
   prefs: []
   type: TYPE_NORMAL
+  zh: 在构建代理的过程中，我们简要介绍了如何使用`expvar`导出变量。在下一章中，我们将讨论`expvar`的“大哥”——Prometheus包。
 - en: Summary
+  id: totrans-412
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: This chapter has been an introduction to automating the command line. We have
     seen how to use the `exec` package to execute commands locally on a device. This
     can be useful when needing to string together a set of already made tools. We
@@ -1851,17 +2697,23 @@
     agent that runs on a device to allow us to gather vital data and export it. We
     also have refined our ability to install programs by using the agent to control
     `systemd` on Linux devices.
+  id: totrans-413
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章是对自动化命令行的介绍。我们已经展示了如何使用`exec`包在设备上本地执行命令。当需要将一组已有工具串联起来时，这非常有用。我们还展示了如何使用`ssh`包在远程系统上运行命令，或使用`ssh`和`goexpect`包与复杂的程序进行交互。我们将这部分与前几章的Go知识结合，实施了一个基本的工作流应用程序，该程序能够并行且安全地在多个系统上升级二进制文件。最后，在本章中，我们学习了如何创建一个在设备上运行的系统代理，使我们能够收集重要数据并将其导出。我们还通过使用该代理控制Linux设备上的`systemd`，进一步提高了安装程序的能力。
 - en: This chapter has now given you new skills that will allow you to control local
     command-line applications, execute remote applications on any number of machines,
     and deal with interactive applications. You have also gained a basic understanding
     of building a workflow application, developing RPC services that can control a
     local machine, and how to export stats using Go's `expvar` package.
+  id: totrans-414
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章已经为你提供了新的技能，使你能够控制本地命令行应用程序，在任意数量的机器上执行远程应用程序，并处理交互式应用程序。你还获得了构建工作流应用程序的基本理解，学习了如何开发可以控制本地机器的RPC服务，以及如何使用Go的`expvar`包导出统计数据。
 - en: In our next chapter, we will be talking about how we can observe running software
     to detect issues before they become a problem and diagnose issues when an incident
     occurs.
+  id: totrans-415
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一章中，我们将讨论如何观察正在运行的软件，以便在问题变成故障之前及时检测，并在事件发生时进行故障诊断。
