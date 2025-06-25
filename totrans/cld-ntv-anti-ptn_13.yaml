@@ -1,92 +1,132 @@
 - en: '13'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '13'
 - en: How Do You Know It All Works?
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 你怎么知道一切都能正常工作？
 - en: Testing our code is how we ensure that our changes are both fit for purpose
     and that they don’t regress any existing functionality. In a cloud native environment,
     our complexity increasingly lives in areas beyond the scope of our code, so testing
     our application in a meaningful way can become complex. Let’s explore how we can
     test cloud native code in ways that are both time-efficient and meaningful while
     avoiding some common anti-patterns.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 测试我们的代码是确保我们的更改既符合预期功能，又不会回归已有功能的方式。在云原生环境中，我们的复杂性越来越多地存在于超出我们代码范围的区域，因此以有意义的方式测试我们的应用程序变得复杂。让我们探讨如何以既高效又有意义的方式测试云原生代码，同时避免一些常见的反模式。
 - en: 'In this chapter, we’re going to cover the following main topics:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将讨论以下主要内容：
 - en: General testing anti-patterns
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 常见的测试反模式
 - en: Lack of contract testing
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 缺乏契约测试
 - en: Manual testing
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 手动测试
 - en: Trying to recreate the cloud
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 试图重现云环境
 - en: Poorly structured code
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 结构不良的代码
 - en: General testing anti-patterns
+  id: totrans-9
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 常见的测试反模式
 - en: Before we explore the types of tests commonly used in cloud native applications,
     we must first explore some general testing anti-patterns that we must avoid. These
     anti-patterns typically result from the evolution of the application’s testing
     strategy as it is migrated to the cloud. While most of these anti-patterns apply
     to unit tests, it’s essential to be mindful of them when testing other patterns
     as well.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们探讨云原生应用程序中常用的测试类型之前，我们首先需要了解一些我们必须避免的常见测试反模式。这些反模式通常是由于应用程序的测试策略在迁移到云端时演变而来。虽然大多数这些反模式适用于单元测试，但在测试其他模式时，也需要注意它们。
 - en: 'First, we will look at some testing anti-patterns and how they surface in a
     cloud native environment. The specific anti-patterns we will explore are the following:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们将看看一些测试反模式，以及它们如何在云原生环境中显现。我们将探讨的具体反模式如下：
 - en: Tests that have never failed
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从未失败的测试
 - en: Coverage badge tests
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 覆盖率徽章测试
 - en: Testing implementation details
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 测试实现细节
 - en: Tests that intermittently fail
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 间歇性失败的测试
 - en: Tests with side effects or coupled tests
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 具有副作用的测试或耦合测试
 - en: Multi-stage tests
+  id: totrans-17
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 多阶段测试
 - en: Tests that have never failed
+  id: totrans-18
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 从未失败的测试
 - en: When we think about testing, we might think that a test that has never failed
     is good. That means our code and changes have always complied with our expected
     behavior, right? Without the test failing, how can we be sure that the test fails
     when its contract is breached?
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们考虑测试时，可能会认为从未失败的测试是好的。这意味着我们的代码和更改一直符合我们的预期行为，对吧？如果没有失败的测试，我们怎么能确保当合同被违反时，测试会失败呢？
 - en: To illustrate this situation, I will use my experience with some of our teams
     in a previous role. The teams had just finished writing their functionality and
     were in the process of writing tests. They were working with an asynchronous code
@@ -99,44 +139,56 @@
     appears to test the functionality expected. However, in practice, the test is
     useless. Unsurprisingly, many tests started failing when we sprinkled in some
     `async` and `await` syntactic sugar.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了说明这种情况，我将用我在之前角色中与一些团队的经验。那些团队刚刚完成了功能的编写，并且正在编写测试。他们在一个基于 Node.js 的异步代码库中工作，而
+    Node.js 中异步编程的一个特点是，当调用一个异步函数并且其中包含异步代码时，如果在测试中的函数调用上没有顶层的 `await`，测试将在异步代码执行之前退出。这意味着异步代码中的任何断言都只会在测试后抛出错误，因为在测试执行过程中没有抛出断言，所以测试通过。从一个未经训练的角度看，测试似乎验证了预期的功能。然而，实际上，测试是无效的。毫不奇怪，当我们加入了一些
+    `async` 和 `await` 的语法糖后，许多测试开始失败。
 - en: In this example, a lack of understanding of asynchronous programming principles
     contributed to functionally useless tests that gave the impression everything
     was okay.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个例子中，缺乏对异步编程原则的理解导致了功能上无用的测试，这些测试给人一种一切正常的假象。
 - en: 'This anti-pattern is an easy trap to fall into in cloud computing. As systems
     become asynchronous, decoupled, and eventually consistent, our testing strategy
     must match the system’s complexity. You will notice that the entire situation
     could have been avoided had the team followed **test-driven development** (**TDD**).
     The common TDD approach I like to utilize is *Red*, *Green*, and *Refactor*:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
 - en: '**Red**: First, create the minimum structure required to support your test.
     This might be an empty function block, method, or object. Second, write a test
     (or tests) that you believe tests your expected behavior. When you run your tests,
     they should fail, showing red.'
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Green**: Fill out your empty placeholder with the logic to make your test
     pass, showing green.'
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Refactor**: Create new tests and functionality to handle edge cases. In these
     scenarios, it is best to create positive and negative test cases and purposefully
     break the test a few times to ensure it behaves as expected.'
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: In the cloud native world, typically, these tests would form part of our automated
     integration pipeline, such as in AWS CodePipeline, GCP Cloud Build, or Azure DevOps
     Pipelines.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: Coverage badge tests
+  id: totrans-27
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -146,6 +198,7 @@
     is completely untested in this scenario. We haven’t guaranteed that any future
     changes won’t result in unexpected behaviors, just that they will return a status
     code of `200`.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
 - en: Incentivizing code coverage in isolation will not give you greater certainty
@@ -154,9 +207,11 @@
     the system. A simple litmus test for good testing practice is whether the test
     ensures that the emergent behavior of the system more closely aligns with the
     behavior in our mental model of the system.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
 - en: Testing implementation details
+  id: totrans-30
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -168,55 +223,67 @@
     and technological patterns. For example, if we need to sort an array, we might
     first check that the input is an array of numbers, then call a bubble sort function
     if it is. Let’s say we write two tests here:'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
 - en: Check that the bubble sort function is not called when the array is not an array
     of numbers and the result is an error
+  id: totrans-32
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Check that the bubble sort function is called when the array is an array of
     numbers and the result is a sorted array
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Later, someone removes the initial check to see whether the array is an array
     of numbers and replaces the bubble sort with a merge sort function that already
     has built-in type checking. This is what happens to our test:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: Our first test passes, even though we now call the sort function on every execution
     because our merge sort function differs from our bubble sort function
+  id: totrans-35
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Our second test fails because we did not call the bubble sort function
+  id: totrans-36
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'In this case, we have not changed the emergent behavior of the system; we have
     only changed the implementation details. Instead, we could design our test to
     look like this:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
 - en: Check that we get an error on anything other than an array of numbers
+  id: totrans-38
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Check that we correctly sort an array of numbers
+  id: totrans-39
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: These tests check solely the exhibited behavior, not how we achieved it. Under
     this new testing framework, both tests will pass when we perform our refactor.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
 - en: Intermittently failing tests
+  id: totrans-41
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: I have often asked clients about a failing test pipeline only to be told, “*Yeah,
     it does that sometimes. Just rerun it.*” Intermittently failing tests breed ambiguity.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
 - en: When a test pipeline fails, our first instinct is to rerun it. This ambiguity
@@ -224,12 +291,14 @@
     roof, as we don’t know whether the culprit is a failing test or whether the pipeline
     is just acting up. It is essential to be not only confident in the success of
     your passing tests but also in your failing tests.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
 - en: Let us imagine a hypothetical intermittently failing series of tests. These
     tests would block production deployments, PR reviews, and local testing. It always
     seems to sort itself by the next run, it only happens a few times a year, and
     it’s an infrequently updated micro-frontend, so why bother fixing it?
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
 - en: 'After triaging the issue, we found the culprit pretty quickly: someone asserted
@@ -241,6 +310,7 @@
     pipeline failed after working locally; they decided to rerun it, and it passed.
     It became known that that particular pipeline was flaky and we could fix it with
     a rerun. What effect do you think that has on developers?'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: When I ran into this situation in my work, we found that the number of failed
@@ -248,20 +318,24 @@
     of confidence in the failures of the underlying pipeline. Cloud native delivery
     allows us to push incremental changes to our code base rapidly. This process means
     that a high-performing team will run these pipelines multiple times daily.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
 - en: Therefore, in a cloud native environment, having faith in your pipelines, both
     in success and failure, is imperative. Another common way that tests become flaky
     is by relying on test side effects or coupled tests.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
 - en: Tests with side effects or coupled tests
+  id: totrans-48
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: Relying on side effects or coupling tests is an easy trap, especially as we
     refactor code and add existing tests, as other tests may already cause side effects
     that our new tests may unknowingly come to depend on.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
 - en: 'For illustrative purposes, let us consider tests that ensure user behavior.
@@ -272,11 +346,13 @@
     We have broken both rules here. Not only do we have a side effect by modifying
     the global state but we have also coupled two tests through that side effect.
     It’s essential to understand what we have lost here:'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
 - en: '**Isolated testing**: Because of the coupling, if we want to run only the *user
     delete* test, it will always fail because it needs to be run in concert with the
     *user create* test. We can now only run the entire test file.'
+  id: totrans-51
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -284,6 +360,7 @@
     their execution order, they will fail. This makes refactoring harder, as we now
     need to understand its coupled tests to refactor the test for the functionality
     we are interested in.'
+  id: totrans-52
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -293,6 +370,7 @@
     you to lose the deterministic execution of your test suite. This lack of determinism
     means that your tests may intermittently fail, contributing to “flaky” pipelines
     as the tests may or may not execute in the correct order.'
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -300,12 +378,14 @@
     for a single test is to run our test in isolation and check that it still passes.
     This check ensures that our test has no upstream coupling; it does not test for
     side effects or downstream coupling.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
 - en: The next step is to refactor our test files. Ideally, there should be no global
     variables. This concept can be controversial as many test implementations will
     have static data in global variables. Still, strictly controlled generated data
     will always beat static data.
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
 - en: 'The driving force behind this is simple: having generated data means that you
@@ -315,6 +395,7 @@
     data you generated to match your expected production data does not behave as expected!
     If you had used static data, you would never have found this edge case before
     production.'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
 - en: The other issue with static data is that teams tend to get lazy. The usual culprit
@@ -325,12 +406,14 @@
     decided to copy the already compliant UUID to save about 20 seconds of development
     effort. As you can imagine, saving those 20 seconds was massively outweighed by
     the impacts of the eventual downtime.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
 - en: Most testing libraries have pre-test and post-test hooks to set up your data
     and application components. A level of granularity is also usually provided. You
     can run before and after *all* tests or before and after *each* test. The deciding
     factor on when to use them is based on the application component.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
 - en: If the component has an internal state modified by tests, then that component
@@ -338,6 +421,7 @@
     local caches and persistence layers. If the component does not have an internal
     state, it is probably safe to optimize by setting it up once for all tests and
     tearing it down when all tests have finished.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
 - en: 'Examples might include authentication layers (unless you’re storing sessions
@@ -345,9 +429,11 @@
     avoiding side effects and ordering in tests, we might think of putting our entire
     flow in a single test. Then, we’re not breaking the boundaries between our tests!
     However, this leads us to our next non-functional antipattern: multistage tests.'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
 - en: Multistage tests
+  id: totrans-61
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -358,6 +444,7 @@
     look at our failure modes. When we have many atomic tests, we can easily see which
     functionality is broken. With a smaller number of multistage tests, we might cover
     the same amount of behavior, but we lose fidelity in our reporting.'
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
 - en: 'Early errors in a multistage test can also cause the test to fail early, masking
@@ -367,19 +454,23 @@
     broad. At the other extreme, where we make our tests as atomic as possible, we
     get extremely high fidelity and know precisely which units of behavior are broken.
     A pattern to follow in this area is to use **arrange, act, and** **assert** (**AAA**):'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
 - en: '**Arrange**: Set up everything required for the test to run (data, authentication,
     application instances, etc.).'
+  id: totrans-64
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Act**: Perform the behavior under test. This action might be calling an endpoint
     or method, or performing an integration flow.'
+  id: totrans-65
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Assert**: Check that the results of your behavior match what you expect.'
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -388,14 +479,17 @@
     act, assert, act, assert, act, assert. Failures in higher asserts mask all actions
     after the first assert. Therefore, our tests should have the correct level of
     atomicity to provide as much detail as possible.'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
 - en: 'So far, we have mainly focussed on unit testing, but we should not unit test
     to the exclusion of all else. Next, we will look at another critical type of testing
     to ensure semantic correctness: contract testing.'
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
 - en: Lack of contract testing
+  id: totrans-69
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -406,9 +500,11 @@
     application is no longer enough. Instead, we need to provide confidence about
     the communications between our services. This is where contract testing comes
     into play.
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
 - en: Contract testing
+  id: totrans-71
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -417,6 +513,7 @@
     and its format, and it may even make some assurances around non-functional requirements.
     This contract may exist as an OpenAPI specification, JSON Schema, Protobuf definition,
     Smithy interface, or similarly in any **interface definition** **language** (**IDL**).
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: The other piece of the data contract puzzle is that it should also give the
@@ -424,6 +521,7 @@
     with a clear definition of what to expect. Now that we have a contract, we can
     examine our application’s output and ensure it agrees with our published schema.
     In other words, we test our application against the contract.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
 - en: We can now decouple the development of different parts of our application. By
@@ -438,8 +536,10 @@
     with other parties. The iterative changes they are keeping in their head suddenly
     become impediments to the system’s progress as a whole, as these frequent changes
     need to be communicated.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在可以解耦应用程序的不同部分开发。通过提前定义我们的通信模式，并定义测试来检查我们是否遵守该模式，我们可以在达成合同一致的前提下，构建应用程序的多个部分。随着团队的扩展以及功能开发超出单个开发者的范围，这类测试变得越来越重要。如果一个开发者在处理应用功能的垂直切片时，可能会根据进度逐步设计组件间的通信模式。这允许敏捷开发；然而，当该开发者需要与其他方协作时，问题就出现了。他们在头脑中保持的迭代变化，突然成为系统整体进展的障碍，因为这些频繁的变化需要进行沟通。
 - en: While it may sound slightly waterfall-like to define your communication patterns
     up front, it’s important to note that the level of upfront planning is minimal.
     We’re operating at atomic units of functionality here, one or two API endpoints
@@ -448,26 +548,34 @@
     in the future, as rather than iterative, rapid changes to data exchange models,
     we are now only making changes to the model as functionally required by and agreed
     upon by both parties.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管提前定义通信模式可能听起来有些像瀑布式开发，但需要注意的是，前期规划的程度是最小的。我们在这里操作的是功能的最小单元，一次处理一两个 API 端点，而不是系统的整体定义。提前投入时间建立共享的通信模型理解，将在未来带来回报，因为与其进行数据交换模型的迭代性快速变更，我们现在只会根据双方的功能需求和协议对模型进行必要的修改。
 - en: Beyond the initial contract
+  id: totrans-76
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 超越初步合同
 - en: As we build out these contracts for data exchange methods, we can start publishing
     these artifacts for other parties to consume. By ensuring that we remain faithful
     to our data contracts through contract testing, we ensure that our current and
     future consumers can enjoy the continued operation of their dependencies. New
     users can easily onboard as consumers of the system as it is documented.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们为数据交换方法构建这些合同时，我们可以开始发布这些文档供其他方使用。通过合同测试确保我们始终遵循数据合同，我们确保当前和未来的消费者可以继续享受其依赖项的稳定运行。新用户可以轻松地作为系统的消费者加入，因为系统已经有了文档说明。
 - en: The question then becomes, what happens when we need to change a contract? This
     is where two other anti-patterns present themselves. The first anti-pattern is
     not maintaining a service dependency map. A service dependency map tells us exactly
     which services consume functionality from the service we have built to the contract
     specification.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 那么问题来了，当我们需要更改合同时，会发生什么？这时，另外两种反模式就会出现。第一个反模式是没有维护服务依赖图。服务依赖图准确地告诉我们哪些服务从我们构建的服务中消费功能，并遵循合同规范。
 - en: This allows us to assess the blast radius of the service we are making a contract
     change to and ensure that any changes we make to the contract are compatible with
     other services that consume it. Many cloud service providers will have distributed
@@ -476,26 +584,36 @@
     service. Without a service dependency map, we don’t have any visibility into the
     blast radius of changes we plan on making. Let’s look at an example of a simple
     service diagram.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使我们能够评估我们正在对其进行合同更改的服务的影响范围，并确保我们对合同所做的任何更改与其他使用该服务的服务兼容。许多云服务提供商通过内置的可观察工具提供分布式事务追踪，或者我们可以通过任何提供类似服务的第三方工具来构建一个。如果没有服务依赖图，我们就无法了解我们计划做出的更改的影响范围。让我们来看一个简单的服务图示例。
 - en: '![](img/B22364_13_1.jpg)'
+  id: totrans-80
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/B22364_13_1.jpg)'
 - en: Figure 13.1 - A simple example of a user service, exposed through an API gateway,
     called by two upstream services
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 13.1 - 一个简单的用户服务示例，通过 API 网关暴露，并被两个上游服务调用
 - en: In this example, we have a user endpoint called by both the messaging service
     and the backend for frontend services.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个例子中，我们有一个用户端点，同时被消息服务和前端后端服务调用。
 - en: From the preceding example, we can see that a change to the contract of `/user`
     on the user service will impact two upstream services that may also have to be
     updated to ensure continuity of service. When we define the new contract, we can
     use it to test the upstream services and, if they all pass, safely make the change.
     How can we make contracts that don’t break upstream services when we change them?
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 从前面的例子中，我们可以看到，用户服务的`/user`契约的更改将影响到两个上游服务，它们可能也需要更新，以确保服务的连续性。当我们定义新的契约时，可以用它来测试上游服务，如果它们都通过了，就可以安全地进行更改。那么，当我们更改契约时，如何避免破坏上游服务呢？
 - en: This brings us to our second anti-pattern, which directly manipulates the existing
     data contract. We can extend the data contract to include new functionality instead
     of modifying the semantic meaning of existing fields or functionality. Consider
@@ -509,8 +627,11 @@
     for frontend** (**BFF**) service gets information about multiple users and sorts
     their names alphabetically. Now, we sort by salutation instead of name. We have
     unintentionally modified behavior by changing the semantic meaning.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 这引出了我们的第二个反模式，它直接操作现有的数据契约。我们可以扩展数据契约来包括新的功能，而不是修改现有字段或功能的语义含义。考虑一个由前述消息服务使用的对象，该对象从`/user`端点返回一个`name`字段。我们的数据契约规定该字段表示人的名字，例如`Alice`。消息服务可能还想提供一个称呼，例如`Ms.
+    Alice`。在不修改消息服务的情况下，我们可以改变`/user`端点数据契约的语义，使得*name*现在表示*称呼加名字*。然而，这可能会对服务的其他消费者产生意想不到的影响。假设**前端后端**（**BFF**）服务获取多个用户的信息并按字母顺序排序他们的名字。现在，我们按称呼排序，而不是按名字排序。通过改变语义含义，我们无意中修改了行为。
 - en: 'This contrived example may seem easy to avoid; however, even simple changes
     to data contracts can have unintended consequences. There are two options here:
     either we change the data contract and deal with the fallout (usually hard to
@@ -520,8 +641,10 @@
     field, we add a new field called `salutation`. The messaging service can consume
     this field to provide the required functionality, and the BFF service can continue
     using the `name` field as expected, ignoring the `salutation` field.'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个牵强的例子看起来似乎很容易避免；然而，即使是对数据契约的小变动，也可能会带来意想不到的后果。这里有两种选择：要么我们修改数据契约并处理后果（通常很难预测、发现和修复），要么我们扩展数据契约。当我们扩展数据契约时，我们依赖那些未参与变更的服务忽略这些扩展。例如，我们可以不改变`name`字段的语义含义，而是新增一个叫做`salutation`的字段。消息服务可以使用这个字段来提供所需的功能，而BFF服务则可以继续使用`name`字段，忽略`salutation`字段。
 - en: If we really must change the underlying semantics of the data contract, then
     we can still follow our principle of not modifying the behavior expected by other
     systems. This may seem counter-intuitive. However, by utilizing API versioning,
@@ -534,9 +657,11 @@
     of data contracts from the adoption of the new data contracts, which, in turn,
     changes a highly synchronous deployment exercise and likely downtime into an asynchronous
     process that can be undertaken as the business needs arise.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: Contract enforcement
+  id: totrans-87
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -548,11 +673,13 @@
     option of contract expansion, as we discussed earlier. Contract validation at
     runtime can save us from unexpected data behaviors and alert us to mismatches
     between contracts.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
 - en: A good practice here is to complement our contract testing with fuzzing, injecting
     corrupted or invalid data to ensure our application rejects it. In the cloud environment,
     rejecting the wrong data is just as important as accepting the right data!
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
 - en: To provide a good user experience, enforcing our data contract at the application
@@ -560,6 +687,7 @@
     faster feedback to the users but every error we catch in the application is a
     request we don’t need to serve, reducing the load on the underlying resources.
     The cheapest computer you can use is usually at the closest edge to the user.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: On the flip side, though, we want to validate our data when we receive it for
@@ -567,9 +695,11 @@
     our endpoints, and it is our responsibility to work out what to do with it. If
     we enforce contracts on both the backend and frontend, though, we require our
     data contract to be portable.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
 - en: Portability
+  id: totrans-92
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -583,6 +713,7 @@
     they access contracts and ensure data integrity? Hence, the requirements for portability,
     which are a feature of all formats mentioned earlier in the chapter, should always
     be at the forefront of the mind.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
 - en: A mature standard (if you are using JSON, which feels like the de facto cloud
@@ -595,9 +726,11 @@
     the interface definition through a standard such as OpenAPI or AsyncAPI. If the
     schema is the definition of the data, the interface definition is the metastructure
     that defines the relationships between our schemas and service endpoints.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: Code generation
+  id: totrans-95
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -605,10 +738,12 @@
     there exist multiple open source projects that allow for this information to be
     used to generate code. Typically, this code generation consists of three discrete
     components:'
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
 - en: '**Type generation**: Generating types from our schemas for consumption in our
     code. This generation is typically a prerequisite for the other two types.'
+  id: totrans-97
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -616,12 +751,14 @@
     we can automatically build SDKs to interact with our services, without having
     to worry about needing to make API requests, marshal and unmarshal data, and so
     on.'
+  id: totrans-98
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Server stub generation**: From our interface definition, we can generate
     server stubs that allow us to conform to our interface definition, only requiring
     us to build out the business logic.'
+  id: totrans-99
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -633,15 +770,18 @@
     which can encode in both JSON or a custom and compact binary format. By using
     code generation, they can make a change to the underlying contract and apply it
     across all their subsequent client SDKs by regenerating them.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
 - en: 'So, contract testing ensures we don’t break functionality and semantics for
     upstream services and ensures we have confidence in calling our downstream services.
     But how do we ensure continuity in our user interface? This is where an anti-pattern
     is so prevalent that it deserves its own section: manual testing.'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
 - en: Manual testing
+  id: totrans-102
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -654,15 +794,18 @@
     This section will look at the case for transitioning to test automation in a cloud
     native environment and the practices you can use to migrate your manual testing
     processes to automated tests.'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: Typical company testing archetypes
+  id: totrans-104
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: Usually, companies are convinced that unit testing will provide tangible benefits
     and agree that these can be automated. If you are a company that manually performs
     unit testing, your engineers must have unlimited patience.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
 - en: Integration tests form the middle ground, and companies approach this differently.
@@ -670,6 +813,7 @@
     unit tests (more on that in the next section). Some companies have some integration
     tests, but they don’t form part of the deployment pipeline or are only run manually
     once in a blue moon.
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
 - en: Finally, we have the companies that have integration tests, have them automated,
@@ -681,46 +825,57 @@
     in the form of a dedicated QA function, clicking through user interfaces, following
     steps in a spreadsheet or document, and then reporting back on the result, either
     pre- or post-deployment.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
 - en: 'So, at the crux, we are looking at three separate kinds of tests:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: '**Unit tests**: Testing atomic units of functionality within a single service
     or component'
+  id: totrans-109
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Integration tests**: Testing the interactions between components'
+  id: totrans-110
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**End-to-end tests**: Testing the system’s functionality from the end user’s
     context'
+  id: totrans-111
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The case for test automation
+  id: totrans-112
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: 'With these three forms of test in mind, I would also like to call back to the
     top of your working memory the DORA metrics:'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: Deployment frequency
+  id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Lead time for changes
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Change failure rate
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Time to restore service
+  id: totrans-117
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -728,6 +883,7 @@
     we do before we deploy a change, the lower our change failure rate. Note that
     this eliminates an entire swath of the testing archetypes we discussed earlier
     in this subsection.'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: If your testing does not occur on your deployment path, you are not protecting
@@ -737,6 +893,7 @@
     deployed architecture). So, we have established the requirement that for tests
     to have a meaningful impact on the performance of your software teams, they need
     to be on the critical path for deployment to production.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: When we have manual processes, we end up batching together our changes so that
@@ -745,6 +902,7 @@
     our change failure rate because the chances of any of the changes we have batched
     together negatively impacting the application significantly increased compared
     to if we deploy those changes individually.
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
 - en: Let’s say 5 of our changes fail if we deploy 100 changes individually. Then,
@@ -756,6 +914,7 @@
     one significant change, then what ends up happening is every change has a failure.
     It’s just a matter of magnitude, so batching things together, even though tests
     are on our critical path, can still cause issues with our change failure rate.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
 - en: 'So, we have established that batches are bad for our change failure rate. Let’s
@@ -766,6 +925,7 @@
     changes; instead, they are more likely to batch together changes, leading to the
     same problem we discussed before batching together changes for testing. This impacts
     our deployment frequency.'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
 - en: Our other metric, lead time for changes, is a function of all the linear steps
@@ -780,6 +940,7 @@
     so changes that are hotfixes or are intended to be fixes for urgent issues in
     production tend not to be as rigorously tested as of the code that initially caused
     the problem in the first place.
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
 - en: So, if we follow our process to the letter, we will see that we negatively impact
@@ -787,6 +948,7 @@
     only through workarounds and avenues outside of our standard operating procedures.
     This negates any benefit that might be achieved through the earlier detection
     of issues through testing production or outside the critical deployment path.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
 - en: As soon as we introduce humans into our process, we introduce variability. Humans
@@ -803,6 +965,7 @@
     that the changes we are applying will not cause failures but also to have all
     of our developers empowered to perform adequate testing on all of the code they
     push into a production environment.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now, this may sound like humans don’t add value to the testing process in any
@@ -818,9 +981,11 @@
     won’t tell you to make your entire testing team redundant. This section tells
     you to put your testing team to the best use possible by allowing them to exercise
     their creativity.'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
 - en: Migrating manual testing processes
+  id: totrans-127
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -832,17 +997,21 @@
     migrate. Our testing function may not have coding skills. However, that does not
     mean we must revamp our entire testing department. Instead, we can perform three
     key actions:'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: Lean on our development function
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Utilize tooling to accelerate the migration
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Upskill our testing teams
+  id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -854,6 +1023,7 @@
     we change a button in our interface to a hyperlink but keep the same styling,
     the tester is unlikely to register a change. Still, this is a significant change
     for an automated test suite looking for a button element.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: Therefore, our development function needs to improve its working methods to
@@ -866,6 +1036,7 @@
     likely well versed in adding tests to the pipeline to production. So, we can lean
     on our development teams to help integrate this new test suite into the path to
     production, removing the requirement for this capability within our testing teams.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: We still need help writing the tests. However, it’s unlikely that our development
@@ -877,6 +1048,7 @@
     record tests directly from the browser. Using this functionality, we can do one
     last manual run of our tests, record them, and then save them for use in our automated
     testing framework.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: Our source of truth is no longer copious pieces of documentation but codified
@@ -885,6 +1057,7 @@
     interfacing with the development team may be beneficial in getting the project
     off the ground. However, in the long run, the testing team must complete this
     process autonomously.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: We must upskill our testing teams in the framework that we use for creating
@@ -895,6 +1068,7 @@
     the structure of our teams. The one case in which I recommend changing the structure
     of your teams is to shift toward the structure we mentioned earlier in the book
     that allows teams to be self-sufficient.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: If your testing function is a standalone unit of your business, consider integrating
@@ -904,9 +1078,11 @@
     delivery of the team’s outcomes. This closer alignment means that testers can
     lean upon the development resources within their teams as they upskill to become
     fully self-sufficient.
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: Trying to recreate the cloud
+  id: totrans-138
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -917,6 +1093,7 @@
     of the environment in which it runs. The anti-pattern we typically see in this
     space is that people try to recreate the cloud on their local environment through
     third-party tooling, extensive mocking, or some other method.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
 - en: To dissect this anti-pattern, we will look at the traditional testing paradigm,
@@ -924,9 +1101,11 @@
     cloud services to test our code. Previously, we focused on end-to-end, contract,
     and unit tests, so it should be no surprise that this section will focus heavily
     on integration tests.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: The traditional testing paradigm
+  id: totrans-141
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -935,12 +1114,15 @@
     bit harder to write and a little bit harder to run, and just a couple of end-to-end
     tests because, as discussed previously, this is often a manual function. This
     typically gives us a pattern referred to as the testing pyramid.
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/B22364_13_2.jpg)'
+  id: totrans-143
   prefs: []
   type: TYPE_IMG
 - en: Figure 13.2 - The testing pyramid
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: 'In the initial premise for this section, I mentioned that our unit test should
@@ -954,6 +1136,7 @@
     see eight or more cloud services mocked out to test a piece of business logic.
     Third-party tools have also sprung up and promise to provide cloud-like functionality
     inside your test pipelines or local environment.'
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
 - en: 'If we continue in our traditional mindset of unit tests first, then these all
@@ -965,9 +1148,11 @@
     the producers of a popular nature documentary, we want to observe the behavior
     of our system in its natural habitat. In our case, its natural habitat just happens
     to be the cloud.'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: The testing honeycomb
+  id: totrans-147
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -979,12 +1164,15 @@
     services. However, we believe that end-to-end tests can still produce value even
     if they span numerous services. They should not be taken as an indication of an
     individual service’s health but as an overall system health check before deployment.'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/B22364_13_3.jpg)'
+  id: totrans-149
   prefs: []
   type: TYPE_IMG
 - en: Figure 13.3 - The testing honeycomb
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: Using integration tests, we more accurately represent the real-world deployed
@@ -992,6 +1180,7 @@
     cloud, we deploy our services to the cloud and then test them in their natural
     habitat. This was fine in the traditional model, where a large amount of our functionality
     existed within the context of our application.
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
 - en: However, as we have said, more of the common parts of our application are being
@@ -999,9 +1188,11 @@
     tight coupling between cloud services and the logic we want to test. In the next
     section, we will go into more detail on structuring our code, but for now, let’s
     focus on integration testing.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: Testing in the cloud versus testing for the cloud
+  id: totrans-153
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1014,24 +1205,29 @@
     code against our mental model of the cloud. When we use actual cloud services,
     there is no transitive mental model that our code needs to pass through to be
     tested.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
 - en: 'There are some core concepts that we need to have implemented to be able to
     test our code in ephemeral environments:'
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: We must have solid **infrastructure as code** (**IaC**) foundations to spin
     up and tear down environments as required
+  id: totrans-156
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: We need to understand which parts of our infrastructure take longer to provision
     and supply pre-provisioned resources for testing purposes to keep cycle times
     low
+  id: totrans-157
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Our testing pipeline must have access to a cloud environment
+  id: totrans-158
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1043,6 +1239,7 @@
     components. For more information on providing firm boundaries between application
     components and strong cohesion within application components, we recommend reviewing
     the *Tight coupling, low* *cohesion* section.
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
 - en: The other interesting part of IaC that is typically exposed through this practice
@@ -1052,6 +1249,7 @@
     that have solidified around a single deployment. Hence, testing this way can also
     highlight gaps in our resiliency plan and ability to bring up new application
     instances.
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: Some parts of IaC configurations can be provisioned very quickly. Things such
@@ -1067,6 +1265,7 @@
     unique to the test suite execution. This process ensures that we keep our cycle
     times low and provide fast feedback to our developers while also allowing us to
     maintain a high deployment frequency and low lead time for changes.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
 - en: Fundamental to all of this is that our testing environment needs to be a real
@@ -1081,34 +1280,41 @@
     tests in this environment but also gain increased certainty in the tests we run,
     avoiding the issues of flaky pipelines, long pipeline runtimes, and long lead
     times for changes.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: Testing non-functional requirements
+  id: totrans-163
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: 'Now that we are testing in a real cloud environment and have mature integration
     tests, we can also test for properties that were previously unfeasible. Some of
     the key properties that are great to test for in this space include the following:'
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: '**Latency**: This ensures our requests are completed in a reasonable amount
     of time'
+  id: totrans-165
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Consistency**: Many cloud systems operate on the principle of eventual consistency,
     but we might have non-functional requirements regarding time to consistency'
+  id: totrans-166
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Scalability**: We might want to perform load testing to ensure that our services
     can handle the expected traffic shapes'
+  id: totrans-167
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Resilience**: Assuming we have resiliency strategies, we will want to test
     them based on the reasons we discussed earlier in the book'
+  id: totrans-168
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1120,6 +1326,7 @@
     Typically, these tests are used to test for regression from previous executions.
     We can also apply the same rigor of checking for regressions of non-functional
     requirements on our other tests.
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
 - en: We can certainly check test execution times for regressions on the critical
@@ -1128,14 +1335,17 @@
     times, which, in the subsequent investigation, revealed a complex multi-year-long
     plot to backdoor the utility. The full story sounds like the plot of a spy movie
     and is worth additional research by any interested readers.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
 - en: Even though these were manually discovered regressions, had they not been found,
     they could have had potentially catastrophic effects for many projects built on
     these tools.
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: Poorly structured code
+  id: totrans-172
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1148,14 +1358,17 @@
     code. Therefore, in this section, we will explore some common anti-patterns that
     can arise when writing cloud native software and how that impacts our ability
     to test.
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
 - en: Key terms
+  id: totrans-174
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: 'Before we discuss code structure, we need to define some key terms to understand
     the topic at hand:'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
 - en: '**Business logic** is anything our application does that transforms the information
@@ -1169,6 +1382,7 @@
     and fulfillment. But, in a software sense, the codifying and repeatability of
     processes through business logic is usually one of the core elements through which
     we derive value.'
+  id: totrans-176
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1179,10 +1393,12 @@
     based on its arguments is a side effect. Side effects are not inherently wrong.
     Instead, they are an essential part of our application, allowing us to perform
     actions such as persistence, evolution, and eventing.'
+  id: totrans-177
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The monolith
+  id: totrans-178
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1194,6 +1410,7 @@
     has no side effects and relies solely on its arguments to produce a return value.
     To maintain the results of this function, we must rely on side effects to communicate
     with other parts of our system, such as our database.
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
 - en: This is where we can once again fall into the monolithic trap. It can be tempting
@@ -1205,6 +1422,7 @@
     logic. The rules that define how we operate should be written as pure functions.
     They shouldn’t have any side effects, making our company’s unique value proposition
     directly testable.
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: When we start introducing side effects directly alongside our business logic,
@@ -1220,6 +1438,7 @@
     only our business logic to ensure correctness against our business rules and expectations.
     Then, when we want to test our system’s side effects, we can begin integration
     testing against the deployed service.
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: So, now we’ve managed to separate the concerns of our business logic from the
@@ -1228,9 +1447,11 @@
     testing, other alternatives allow us to increase our code coverage without replicating
     the cloud in our unit tests. This is advantageous because unit tests have lower
     complexity, faster execution, and faster feedback cycles than integration tests.
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
 - en: Hexagonal architecture
+  id: totrans-183
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1238,12 +1459,15 @@
     Broadly speaking, hexagonal architecture provides a methodology for decoupling
     the implementation of our side effects from their usage. I’ll provide a diagram
     for hexagonal architecture and then we can go into it in more detail.
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/B22364_13_4.jpg)'
+  id: totrans-185
   prefs: []
   type: TYPE_IMG
 - en: Figure 13.4 - Conceptual diagram of the hexagonal architecture model
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
 - en: At the core of our application, we have our application code that glues our
@@ -1259,6 +1483,7 @@
     What’s important is that it exposes the functionality expected by the entity and
     defined in the port. Likewise, our notification port could use SMS email push
     notifications or carrier pigeons; it doesn’t matter to the entity.
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: 'Similarly, we have ports driven by external adapters for incoming traffic to
@@ -1267,6 +1492,7 @@
     and then adapters that connect those ports to our entity. This is a crucial distinction:
     we have driving ports, external forces that act upon our entity, and driven ports,
     which our entity uses to act on external systems.'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
 - en: This might seem unrelated to testing; however, one of the key benefits of this
@@ -1278,6 +1504,7 @@
     native services. This also prevents us from tying our unit testing and application
     code to specific libraries or SDKs, as all of that is taken care of in our adapters
     and will eventually be tested through our integration tests.
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
 - en: 'So, here, we not only get a benefit in the testability of our code but we also
@@ -1288,9 +1515,11 @@
     we can ensure the code we are writing is agnostic of where it’s being run, increasing
     the portion of our code base that will be utilized if we decide to migrate cloud
     providers.'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: Structuring your code correctly from day one
+  id: totrans-191
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1300,6 +1529,7 @@
     this outcome. If the first thing we write in our code base for new functionality
     is a test, then, by default, the code we write to fulfill this test will be testable
     implicitly.
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: I will use Java to paint a picture of testable versus untestable code, as it
@@ -1310,6 +1540,7 @@
     as a public method. If we’re already following some of the practices in this section,
     we might also mark our private business logic method as static to indicate that
     it doesn’t rely on this class’s internal state.
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
 - en: Now, it comes time to test our code; of course, the main function we want to
@@ -1317,17 +1548,21 @@
     in the code are correctly implemented. However, due to the structure of our class,
     this is one of the least testable parts of our code because it’s private and only
     exposed to our class’s internals.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: 'What can happen in this scenario is that the developer can be tempted to do
     one of the following:'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
 - en: Make the method public
+  id: totrans-196
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Test the application code in a way that tests all bounds of business logic
+  id: totrans-197
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1335,12 +1570,14 @@
     class internals specifically for testing purposes. Other people relying on this
     business logic may call it directly from this class, which is not its primary
     purpose, violating the single responsibility principle.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: The second is not preferable because we are testing the code through a proxy,
     which makes the test brittle to application changes. It also causes us more work
     on the testing side as we have to mock out everything required for the application
     code to run.
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: Now, consider if we had written a test that expected a method that would implement
@@ -1352,15 +1589,18 @@
     we instead produce a static class that solely implements our business logic, is
     directly testable, has a single responsibility, and is consumable within our application
     code.
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: Therefore, TDD is not only a tool for writing productive tests but also for
     helping drive well-structured code. This doesn’t mean you need to write every
     test before starting to write code, just that you define the core behavior that
     you want to achieve in advance.
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-202
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1373,5 +1613,6 @@
     you will be well on your way to deploying quickly and with confidence. We have
     covered a lot so far. Next up, we will look at how to get started on your cloud
     native journey.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
