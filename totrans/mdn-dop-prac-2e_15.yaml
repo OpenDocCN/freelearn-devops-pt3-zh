@@ -1746,6 +1746,8 @@
   id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种方法在安全性和兼容性之间取得了平衡，允许逐步过渡到完全加密的通信模型。随着时间的推移，随着更多服务注入了边车代理，微服务应用程序的整体安全态势将得到改善。然而，由于我们是从头开始，强制执行严格的
+    TLS 来保护我们的 Blog 应用程序是有意义的。所以，让我们这样做。
 - en: 'To enable strict TLS on a workload, namespace, or the entire cluster, Istio
     provides peer authentication policies using the `PeerAuthentication` resource.
     As we only need to implement strict TLS on the Blog App, enabling it at the namespace
@@ -1754,6 +1756,8 @@
   id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在工作负载、命名空间或整个集群启用严格的 TLS，Istio 提供了使用 `PeerAuthentication` 资源的对等身份验证策略。由于我们只需要在
+    Blog 应用程序上实现严格的 TLS，因此在命名空间级别启用它是有意义的。为此，我们将使用以下 `PeerAuthentication` 资源：
 - en: '[PRE35]'
   id: totrans-245
   prefs: []
@@ -1763,6 +1767,7 @@
   id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们使用以下命令应用此配置：
 - en: '[PRE36]'
   id: totrans-247
   prefs: []
@@ -1774,6 +1779,8 @@
   id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦我们推送更改，Argo CD 应该会接收新配置并应用严格的 TLS 策略。等待 Argo CD 同步处于干净状态，并运行以下命令检查严格的 TLS
+    是否工作：
 - en: '[PRE37]'
   id: totrans-249
   prefs: []
@@ -1785,42 +1792,50 @@
   id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，请求已被拒绝，因为它是明文请求，后台将只允许 TLS。这表明严格的 TLS 工作正常。现在，让我们继续并进一步增强服务的安全性。
 - en: 'From our design, we know how services interact with each other:'
   id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 从我们的设计中，我们知道服务如何相互交互：
 - en: The `frontend` microservice can only connect to the `posts`, `reviews`, and
     `users` microservices
   id: totrans-252
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`frontend` 微服务只能连接到 `posts`、`reviews` 和 `users` 微服务。'
 - en: Only the `reviews` microservice can connect to the `ratings` microservice.
   id: totrans-253
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 只有 `reviews` 微服务可以连接到 `ratings` 微服务。
 - en: Only the `posts`, `reviews`, `users`, and `ratings` microservices can connect
     to the `mongodb` database
   id: totrans-254
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 只有 `posts`、`reviews`、`users` 和 `ratings` 微服务可以连接到 `mongodb` 数据库
 - en: Therefore, we can define these interactions and only allow these connections
     explicitly. Therefore, the `frontend` microservice will not be able to connect
     with the `mongodb` database directly, even if it tries to.
   id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，我们可以定义这些交互，并仅显式允许这些连接。因此，`frontend` 微服务将无法直接连接到 `mongodb` 数据库，即使它尝试这样做。
 - en: Istio provides the `AuthorizationPolicy` resource to manage this. Let’s implement
     the preceding scenario using that.
   id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: Istio 提供了 `AuthorizationPolicy` 资源来管理这个问题。让我们使用它来实现上述场景。
 - en: 'Let’s start with the `posts` microservice:'
   id: totrans-257
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们从 `posts` 微服务开始：
 - en: '[PRE38]'
   id: totrans-258
   prefs: []
@@ -1839,11 +1854,17 @@
   id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: '`AuthorizationPolicy` 有多个部分。它从 `name` 和 `namespace` 开始，分别为 `posts` 和 `blog-app`。`spec`
+    部分包含 `selector`，在这里我们指定需要将此策略应用于所有具有 `app: posts` 标签的 pod。我们为此使用 `ALLOW` 动作。请注意，Istio
+    对所有匹配选择器的 pod 有一个隐式的 `deny-all` 策略，任何 `ALLOW` 规则都将在此基础上应用。任何不匹配 `ALLOW` 规则的流量将默认被拒绝。我们有规则来定义允许哪些流量；在这里，我们使用
+    `from` > `source` > `principals`，并将 `frontend` 服务帐户设置在此。因此，总结起来，这条规则将应用于 `posts`
+    微服务，并仅允许来自 `frontend` 微服务的流量。'
 - en: 'Similarly, we will apply the same policy to the `reviews` microservice, as
     follows:'
   id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样，我们将对 `reviews` 微服务应用相同的策略，如下所示：
 - en: '[PRE39]'
   id: totrans-261
   prefs: []
@@ -1854,6 +1875,7 @@
   id: totrans-262
   prefs: []
   type: TYPE_NORMAL
+  zh: '`users` 微服务也只需要接受来自 `frontend` 微服务的流量：'
 - en: '[PRE40]'
   id: totrans-263
   prefs: []
@@ -1864,6 +1886,7 @@
   id: totrans-264
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ratings` 微服务应该仅接受来自 `reviews` 微服务的流量，因此我们将对主体部分进行一些小的修改，如下所示：'
 - en: '[PRE41]'
   id: totrans-265
   prefs: []
@@ -1874,6 +1897,7 @@
   id: totrans-266
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，`mongodb` 服务需要来自所有微服务的连接，除了 `frontend`，因此我们必须在主体部分指定多个条目：
 - en: '[PRE42]'
   id: totrans-267
   prefs: []
@@ -1886,6 +1910,7 @@
   id: totrans-268
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们使用了服务帐户来了解请求的来源，因此我们还必须为相应的服务创建并分配服务帐户。所以，我们将修改 `blog-app.yaml` 文件，并为每个服务添加服务帐户，类似于以下内容：
 - en: '[PRE43]'
   id: totrans-269
   prefs: []
@@ -1896,6 +1921,7 @@
   id: totrans-270
   prefs: []
   type: TYPE_NORMAL
+  zh: 我已经在新的 `blog-app.yaml` 文件中复制了相同的设置。让我们提交更改并推送到 GitHub，以便我们可以将其应用到集群中：
 - en: '[PRE44]'
   id: totrans-271
   prefs: []
@@ -1910,6 +1936,8 @@
   id: totrans-272
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们必须等待同步完成，然后验证设置。首先，我们将获取 `frontend` pod 的 shell，并尝试使用 `wget` 连接后端微服务。我们将尝试与每个微服务连接，看看结果。如果返回
+    `HTTP 200` 或 `404`，则表示后端允许连接；如果返回 `HTTP 403` 或 `Error`，则表示后端正在阻止连接。运行以下命令进行操作：
 - en: '[PRE45]'
   id: totrans-273
   prefs: []
@@ -1922,10 +1950,13 @@
   id: totrans-274
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，`posts`、`reviews` 和 `users` 微服务返回了 `HTTP 404` 响应。`ratings` 微服务返回了 `403
+    Forbidden` 响应，而 `mongodb` 服务报告资源不可用。这意味着我们的设置工作正常。
 - en: 'Let’s try the same with the `posts` microservice:'
   id: totrans-275
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们来试试 `posts` 微服务：
 - en: '[PRE46]'
   id: totrans-276
   prefs: []
@@ -1937,6 +1968,8 @@
   id: totrans-277
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，`posts` 微服务可以成功与 `mongodb` 通信，但其他微服务返回 `403 Forbidden`。这正是我们预期的结果。现在，我们来试试
+    `reviews` 微服务：
 - en: '[PRE47]'
   id: totrans-278
   prefs: []
@@ -1948,6 +1981,8 @@
   id: totrans-279
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，`reviews` 微服务能够成功地与 `ratings` 微服务和 `mongodb` 连接，同时从其他微服务获得 `403` 响应。这正是我们预期的结果。现在，我们来检查
+    `ratings` 微服务：
 - en: '[PRE48]'
   id: totrans-280
   prefs: []
@@ -1958,17 +1993,20 @@
   id: totrans-281
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，`ratings` 微服务只能成功连接到 `mongodb` 数据库，并且对其他服务返回 `403` 响应。
 - en: Now that we’ve tested all the services, the setup is working fine. We’ve secured
     our microservices to a great extent! Now, let’s look at another aspect of managing
     microservices with Istio – traffic management.
   id: totrans-282
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经测试了所有服务，设置正常工作。我们的微服务已经得到了极大程度的安全保护！接下来，让我们看看使用 Istio 管理微服务的另一个方面——流量管理。
 - en: Managing traffic with Istio
   id: totrans-283
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用 Istio 管理流量
 - en: Istio offers robust traffic management capabilities that form a core part of
     its functionality. When leveraging Istio for microservice management within your
     Kubernetes environment, you gain precise control over how these services communicate
@@ -1977,45 +2015,54 @@
   id: totrans-284
   prefs: []
   type: TYPE_NORMAL
+  zh: Istio 提供了强大的流量管理功能，构成了其核心功能的一部分。当您在 Kubernetes 环境中使用 Istio 进行微服务管理时，您可以精确控制这些服务之间的通信方式。这使您能够在服务网格中精确地定义流量路径。
 - en: 'Some of the traffic management features at your disposal are as follows:'
   id: totrans-285
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是您可以使用的一些流量管理功能：
 - en: Request routing
   id: totrans-286
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 请求路由
 - en: Fault injection
   id: totrans-287
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 故障注入
 - en: Traffic shifting
   id: totrans-288
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 流量切换
 - en: TCP traffic shifting
   id: totrans-289
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: TCP 流量切换
 - en: Request timeouts
   id: totrans-290
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 请求超时
 - en: Circuit breaking
   id: totrans-291
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 电路断路
 - en: Mirroring
   id: totrans-292
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 镜像
 - en: The previous section employed an ingress gateway to enable traffic entry into
     our mesh and used a virtual service to distribute traffic to the services. With
     virtual services, the traffic distribution happens in a round-robin fashion by
@@ -2025,6 +2072,8 @@
   id: totrans-293
   prefs: []
   type: TYPE_NORMAL
+  zh: 前一节使用了入口网关来启用流量进入我们的服务网格，并使用虚拟服务将流量分配到各个服务。在虚拟服务的情况下，流量分配默认是轮询方式。然而，我们可以通过目的地规则来更改这一点。这些规则为我们提供了对服务网格行为的精细控制，允许我们在
+    Istio 生态系统中更细粒度地管理流量。
 - en: 'Before we delve into that, we need to update our Blog App so that it includes
     a new version of the `ratings` service deployed as `ratings-v2`, which will return
     black stars instead of orange stars. I’ve already updated the manifest for that
@@ -2033,6 +2082,8 @@
   id: totrans-294
   prefs: []
   type: TYPE_NORMAL
+  zh: 在深入讨论之前，我们需要更新我们的博客应用程序，使其包含一个作为 `ratings-v2` 部署的新版本的 `ratings` 服务，该服务将返回黑色星星而不是橙色星星。我已经在代码库中更新了该清单。因此，我们只需要将其复制到
+    `mdo-environments` 仓库，提交并通过以下命令推送到远程：
 - en: '[PRE49]'
   id: totrans-295
   prefs: []
@@ -2042,43 +2093,51 @@
   id: totrans-296
   prefs: []
   type: TYPE_NORMAL
+  zh: 等待应用程序同步。完成后，我们需要做以下几件事：
 - en: Go to the Blog App home page > **Sign In** > **Not a User? Create an account**
     and create a new account.
   id: totrans-297
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 转到博客应用主页 > **登录** > **还不是用户？创建帐户**，然后创建一个新帐户。
 - en: Click on the **Actions** tab > **Add a Post**, add a new post with a title and
     content of your choice, and click **Submit**.
   id: totrans-298
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 点击 **操作** 标签 > **添加帖子**，添加一个新帖子，选择标题和内容，然后点击**提交**。
 - en: Use the **Add a Review** text field to add a review, provide a rating, and click
     **Submit**.
   id: totrans-299
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用**添加评论**文本框添加评论，提供评分，并点击**提交**。
 - en: Click on **Posts** again and access the post that we had created.
   id: totrans-300
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 再次点击**帖子**并访问我们创建的帖子。
 - en: 'Now, keep refreshing the page. We will see that we get orange stars half the
     time and black stars for the rest. Traffic is splitting equally across `v1` and
     `v2` (that is, the orange and black stars):'
   id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，继续刷新页面。我们会看到，流量一半时间会得到橙色星星，另一半时间则是黑色星星。流量在 `v1` 和 `v2` 之间平分（即橙色和黑色星星）：
 - en: '![Figure 15.6 – Round robin routing](img/B19877_15_6.jpg)'
   id: totrans-302
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.6 – 循环路由](img/B19877_15_6.jpg)'
 - en: Figure 15.6 – Round robin routing
   id: totrans-303
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.6 – 循环路由
 - en: This occurs due to the absence of destination rules, which leaves Istio unaware
     of the distinctions between `v1` and `v2`. Let’s define destination rules for
     our microservices to rectify this, clearly informing Istio of these versions.
@@ -2087,10 +2146,13 @@
   id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: 之所以发生这种情况，是因为缺少目的地规则，导致 Istio 无法区分 `v1` 和 `v2`。让我们为我们的微服务定义目的地规则，以此纠正问题，清楚地告诉
+    Istio 这些版本的区别。在我们的例子中，每个微服务有一个版本，除了 `ratings` 微服务，因此我们将相应地定义以下目的地规则。
 - en: 'Let’s start by defining the destination rule of the `frontend` microservice:'
   id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们从定义 `frontend` 微服务的目的地规则开始：
 - en: '[PRE50]'
   id: totrans-306
   prefs: []
@@ -2105,12 +2167,16 @@
   id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: '提供的 YAML 清单在 `blog-app` 命名空间内引入了一个名为 `frontend` 的 `DestinationRule` 资源。这个资源与名为
+    `frontend` 的主机相关联。随后，我们定义了标记为 `v1` 的子集，目标是带有 `version: v1` 标签的 pods。因此，配置我们的虚拟服务将流量定向到
+    `v1` 目的地时，将请求路由到带有 `version:` `v1` 标签的 pods。'
 - en: 'This same configuration approach can be replicated for the `posts`, `users`,
     and `reviews` microservices. However, the `ratings` microservice requires a slightly
     different configuration due to the deployment of two versions, as follows:'
   id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: 同样的配置方式可以复制到 `posts`、`users` 和 `reviews` 微服务。但是，由于部署了两个版本，`ratings` 微服务需要稍微不同的配置，如下所示：
 - en: '[PRE51]'
   id: totrans-309
   prefs: []
@@ -2122,18 +2188,23 @@
   id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ratings` 微服务的 YAML 清单与其他微服务非常相似，唯一显著的区别是：它包含一个标记为 `v2` 的第二子集，对应着带有 `version:`
+    `v2` 标签的 pods。'
 - en: 'Consequently, requests routed to the `v1` destination target all pods with
     the `version: v1` label, while requests routed to the `v2` destination are directed
     to pods labeled `version: v2`.'
   id: totrans-311
   prefs: []
   type: TYPE_NORMAL
+  zh: '因此，路由到 `v1` 目标的请求会定向到所有具有 `version: v1` 标签的 Pod，而路由到 `v2` 目标的请求则会定向到标记为 `version:
+    v2` 的 Pod。'
 - en: 'To illustrate this in a practical context, we will proceed to define virtual
     services for each microservice. Our starting point will be defining the virtual
     service for the `frontend` microservice, as illustrated in the following manifest:'
   id: totrans-312
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了在实际应用中说明这一点，我们将继续为每个微服务定义虚拟服务。我们的起点是定义 `frontend` 微服务的虚拟服务，如以下清单所示：
 - en: '[PRE52]'
   id: totrans-313
   prefs: []
@@ -2147,6 +2218,9 @@
   id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: 提供的 YAML 清单描述了一个名为 `frontend` 的 `VirtualService` 资源，位于 `blog-app` 命名空间内。该资源将主机
+    `frontend` 配置为具有 HTTP 路由目标，所有流量都被导向 `frontend` 主机，并指定了 `v1` 子集。因此，所有面向 `frontend`
+    主机的请求都会路由到我们之前定义的 `v1` 目标。
 - en: We will replicate this configuration approach for the `posts`, `reviews`, and
     `users` microservices, creating corresponding `VirtualService` resources. In the
     case of the `ratings` microservice, the decision is made to route all traffic
@@ -2155,11 +2229,14 @@
   id: totrans-315
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将为 `posts`、`reviews` 和 `users` 微服务复制这种配置方式，创建相应的 `VirtualService` 资源。对于 `ratings`
+    微服务，决定将所有流量路由到 `v1`（橙色星标）版本。因此，我们也为 `ratings` 微服务应用类似的 `VirtualService` 资源。
 - en: 'Now, let’s copy the manifests to the `mdo-environments` repository and commit
     and push the code to the remote repository using the following commands:'
   id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们将清单复制到 `mdo-environments` 仓库，并使用以下命令提交并推送代码到远程仓库：
 - en: '[PRE53]'
   id: totrans-317
   prefs: []
@@ -2171,23 +2248,28 @@
   id: totrans-318
   prefs: []
   type: TYPE_NORMAL
+  zh: 等待 Argo CD 同步更改。现在，所有请求都将路由到 `v1`。因此，您将只看到评论中的橙色星标，如下图所示：
 - en: '![Figure 15.7 – Route to v1](img/B19877_15_7.jpg)'
   id: totrans-319
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.7 – 路由到 v1](img/B19877_15_7.jpg)'
 - en: Figure 15.7 – Route to v1
   id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.7 – 路由到 v1
 - en: Now, let’s try to roll out `v2` using a canary rollout approach.
   id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们尝试通过金丝雀发布方法发布 `v2`。
 - en: Traffic shifting and canary rollouts
   id: totrans-322
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 流量切换和金丝雀发布
 - en: Consider a scenario where you’ve developed a new version of your microservice
     and are eager to introduce it to your user base. However, you’re understandably
     cautious about the potential impact on the entire service. In such cases, you
@@ -2196,6 +2278,7 @@
   id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: 假设你已经开发了一个新的微服务版本，并迫切希望将其推向用户群。然而，你显然会对其对整个服务的潜在影响感到谨慎。在这种情况下，你可以选择一种名为**金丝雀发布**（也称为**蓝绿部署**）的部署策略。
 - en: 'The essence of a canary rollout lies in its incremental approach. Instead of
     an abrupt transition, you methodically shift traffic from the previous version
     (referred to as **Blue**) to the new version (**Green**). This gradual migration
@@ -2207,24 +2290,29 @@
   id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: 金丝雀发布的本质在于其渐进式方法。与其进行突兀的版本过渡，不如通过有条不紊地将流量从先前版本（称为**蓝色**）转移到新版本（**绿色**）。这种渐进的迁移方式允许你在将其应用到整个用户群体之前，先在有限的用户子集上彻底测试新版本的功能性和可靠性。这种方法能够最大程度地减少发布新特性或更新时的风险，并确保发布过程更加可控和安全。下图形象地展示了这一过程：
 - en: '![Figure 15.8 – Canary rollouts](img/B19877_15_8.jpg)'
   id: totrans-325
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.8 – 金丝雀发布](img/B19877_15_8.jpg)'
 - en: Figure 15.8 – Canary rollouts
   id: totrans-326
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.8 – 金丝雀发布
 - en: 'Here’s how a *canary rollout* strategy works:'
   id: totrans-327
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是*金丝雀发布*策略的工作原理：
 - en: '**Initial release**: The existing version (referred to as the *baseline* or
     *current version*) continues to serve the majority of users.'
   id: totrans-328
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**初始发布**：现有版本（称为*基准*或*当前版本*）继续服务大多数用户。'
 - en: '**Early access**: A small group of users or systems, typically selected as
     a representative sample, is identified as the *canary group*. They receive the
     new version.'
@@ -2232,6 +2320,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**早期访问**：一个小的用户或系统组，通常选定为具有代表性的样本，被认定为*金丝雀组*。他们将接收到新版本。'
 - en: '**Monitoring and evaluation**: The software’s performance and behavior in the
     canary group are closely monitored. Metrics, logs, and user feedback are collected
     to identify issues or anomalies.'
@@ -2239,6 +2328,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**监控与评估**：金丝雀组中软件的性能和行为会被密切监控。通过收集度量、日志和用户反馈，及时发现问题或异常。'
 - en: '**Gradual expansion**: If the new version proves stable and performs as expected
     in the canary group, its exposure is incrementally expanded to a broader user
     base. This expansion can occur in stages, with a small percentage of users being
@@ -2247,6 +2337,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**逐步扩展**：如果新版本在金丝雀组中表现稳定且符合预期，其曝光度将逐步扩展到更广泛的用户群体。此扩展可以分阶段进行，每个阶段将“晋升”一定百分比的用户使用新版本。'
 - en: '**Continuous monitoring**: Throughout the rollout, continuous monitoring and
     analysis are critical to identify and address any emerging issues promptly. If
     problems are detected, the rollout can be halted or reversed to protect the majority
@@ -2255,6 +2346,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**持续监控**：在发布过程中，持续的监控和分析至关重要，以便及时识别并解决任何新出现的问题。如果发现问题，可以暂停或回滚发布，以保护大多数用户。'
 - en: '**Full deployment**: Once the new version has been successfully validated through
     the canary rollout stages, it is eventually made available to the entire user
     base.'
@@ -2262,11 +2354,13 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '**完全部署**：一旦新版本通过金丝雀发布阶段成功验证，它将最终对所有用户开放。'
 - en: 'So, let’s roll out the `ratings-v2` service to `20%` of our users. For that,
     we’ll use the following `VirtualService` resource:'
   id: totrans-334
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，让我们将`ratings-v2`服务推送到`20%`的用户中。为此，我们将使用以下`VirtualService`资源：
 - en: '[PRE54]'
   id: totrans-335
   prefs: []
@@ -2282,11 +2376,13 @@
   id: totrans-336
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们所看到的，我们已修改了`ratings`虚拟服务，引入了指向`v2`子集的第二个目标。在此配置中一个值得注意的新增项是引入了`weight`属性。对于`v1`目标，我们分配了`80`的权重，而`v2`目标的权重为`20`。这意味着`20%`的流量将被引导到`ratings`微服务的`v2`版本，从而提供了两版本之间的流量控制和可调分配。
 - en: 'Let’s copy the manifest and then commit and push the changes to the remote
     repository using the following commands:'
   id: totrans-337
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们复制清单，然后使用以下命令将更改提交并推送到远程仓库：
 - en: '[PRE55]'
   id: totrans-338
   prefs: []
@@ -2301,6 +2397,7 @@
   id: totrans-339
   prefs: []
   type: TYPE_NORMAL
+  zh: 完成 Argo CD 同步后，如果你刷新页面 10 次，你会观察到在其中的 10 次中，黑色星星会出现两次。这是金丝雀发布实践的一个典型例子。你可以继续监控应用程序，并逐步调整权重，将流量转向`v2`。金丝雀发布有效地降低了生产发布过程中的风险，提供了一种应对未知风险的方法，尤其是在实施重大变更时。
 - en: However, another approach exists to test your code in a production environment
     that involves using live traffic without exposing your application to end users.
     This method is known as traffic mirroring. We’ll delve into it in the following
@@ -2308,17 +2405,20 @@
   id: totrans-340
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，还有一种方法可以在生产环境中测试你的代码，这种方法涉及使用实时流量，但不会将应用程序暴露给最终用户。这种方法称为流量镜像。我们将在接下来的讨论中深入探讨它。
 - en: Traffic mirroring
   id: totrans-341
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 流量镜像
 - en: '**Traffic mirroring**, also called shadowing, is a concept that has recently
     gained traction. It is a powerful approach that allows you to assess your releases
     in a production environment without posing any risk to your end users.'
   id: totrans-342
   prefs: []
   type: TYPE_NORMAL
+  zh: '**流量镜像**，也称为影像，是一种最近受到关注的概念。它是一种强大的方法，允许你在生产环境中评估发布，而不对最终用户造成任何风险。'
 - en: Traditionally, many enterprises maintained a staging environment that closely
     mimicked the production setup. The Ops team deployed new releases to the staging
     environment in this setup while testers generated synthetic traffic to simulate
@@ -2333,57 +2433,68 @@
   id: totrans-343
   prefs: []
   type: TYPE_NORMAL
+  zh: 传统上，许多企业维持了一个与生产环境高度相似的暂存环境。在这种设置中，运维团队将新版本发布到暂存环境，而测试人员生成合成流量来模拟真实世界的使用。这种方法为团队提供了一种评估代码在生产环境中表现的方式，评估其功能性和非功能性方面，在推广到生产环境之前。暂存环境充当性能、体量和操作验收测试的基础。虽然这种方法有其优点，但也并非没有挑战。维持静态测试环境是其中之一，这需要大量的成本和资源。创建和维护一个生产环境的副本需要一支工程师团队，从而导致高额的开销。
 - en: Moreover, synthetic traffic often deviated from real live traffic since the
     former relied on historical data, while the latter reflected current user interactions.
     This discrepancy occasionally led to overlooked scenarios.
   id: totrans-344
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，合成流量通常偏离真实的实时流量，因为前者依赖于历史数据，而后者反映的是当前用户的交互。这种差异偶尔会导致某些场景被忽视。
 - en: On the other hand, traffic mirroring offers a solution that similarly enables
     operational acceptance testing while going a step further. It allows you to conduct
     this testing using live, real-time traffic without any impact on end users.
   id: totrans-345
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，流量镜像提供了一种解决方案，它同样使得操作验收测试成为可能，同时更进一步。它允许你使用实时流量进行测试，而不会对终端用户产生任何影响。
 - en: 'Here’s how traffic mirroring operates:'
   id: totrans-346
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是流量镜像的工作原理：
 - en: Deploy a new version of the application and activate traffic mirroring.
   id: totrans-347
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 部署应用程序的新版本并激活流量镜像。
 - en: The old version continues to respond to requests as usual but concurrently sends
     an asynchronous copy of the traffic to the new version.
   id: totrans-348
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 旧版本继续照常响应请求，同时将流量的异步副本发送到新版本。
 - en: The new version processes the mirrored traffic but refrains from responding
     to end users.
   id: totrans-349
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 新版本处理镜像流量，但不会对终端用户做出响应。
 - en: The ops team monitors the behavior of the new version and reports any issues
     to the development team.
   id: totrans-350
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 运维团队监控新版本的行为，并将任何问题报告给开发团队。
 - en: 'This process is depicted in the following figure:'
   id: totrans-351
   prefs: []
   type: TYPE_NORMAL
+  zh: 该过程如以下图所示：
 - en: '![Figure 15.9 – Traffic mirroring](img/B19877_15_9.jpg)'
   id: totrans-352
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.9 – 流量镜像](img/B19877_15_9.jpg)'
 - en: Figure 15.9 – Traffic mirroring
   id: totrans-353
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.9 – 流量镜像
 - en: Traffic mirroring revolutionizes the testing process by enabling teams to uncover
     issues that might remain hidden in a traditional staging environment. Additionally,
     you can utilize monitoring tools such as Prometheus and Grafana to record and
@@ -2392,12 +2503,14 @@
   id: totrans-354
   prefs: []
   type: TYPE_NORMAL
+  zh: 流量镜像通过使团队能够发现传统暂存环境中可能隐藏的问题，彻底改变了测试过程。此外，你可以利用诸如 Prometheus 和 Grafana 等监控工具来记录和监控测试结果，提升发布的整体质量和可靠性。
 - en: 'Now, without further ado, let’s configure traffic mirroring for our `ratings`
     service. Traffic mirroring is managed through the `VirtualService` resource, so
     let’s modify the `ratings` virtual service to the following:'
   id: totrans-355
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，废话不多说，让我们为我们的`ratings`服务配置流量镜像。流量镜像通过`VirtualService`资源进行管理，因此让我们将`ratings`虚拟服务修改为以下内容：
 - en: '[PRE56]'
   id: totrans-356
   prefs: []
@@ -2411,11 +2524,13 @@
   id: totrans-357
   prefs: []
   type: TYPE_NORMAL
+  zh: 在此配置中，我们设置了一个单一的`destination`，目标为`v1`，`weight`值为`100`。此外，我们定义了一个`mirror`部分，将流量引导到`ratings:v2`，并设置`mirror_percent`为100。这意味着，所有最初路由到`ratings:v1`的流量都被镜像并同时发送到`v2`。
 - en: 'Let’s commit the changes and push them to the remote repository using the following
     commands:'
   id: totrans-358
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们使用以下命令提交更改并将其推送到远程仓库：
 - en: '[PRE57]'
   id: totrans-359
   prefs: []
@@ -2427,6 +2542,7 @@
   id: totrans-360
   prefs: []
   type: TYPE_NORMAL
+  zh: 在完成Argo CD同步过程后，我们将刷新页面五次。随后，我们可以使用以下命令检查`ratings:v1`服务的日志：
 - en: '[PRE58]'
   id: totrans-361
   prefs: []
@@ -2439,6 +2555,7 @@
   id: totrans-362
   prefs: []
   type: TYPE_NORMAL
+  zh: 在启用流量镜像后，预计在`ratings:v1`服务中观察到的相同日志集也会被镜像到`ratings:v2`服务中。为了确认这一点，我们可以使用以下命令列出`ratings:v2`服务的日志：
 - en: '[PRE59]'
   id: totrans-363
   prefs: []
@@ -2451,6 +2568,7 @@
   id: totrans-364
   prefs: []
   type: TYPE_NORMAL
+  zh: 确实，日志和时间戳完全匹配，提供了`ratings:v1`和`ratings:v2`中并发日志条目的清晰证据。这一观察有效地展示了镜像功能的运作，展示了如何在两个版本中复制流量以进行实时监控和分析。
 - en: Traffic mirroring is a highly effective method for identifying issues that often
     elude detection within traditional infrastructure setups. It is a potent approach
     for conducting operational acceptance testing of your software releases. This
@@ -2459,12 +2577,14 @@
   id: totrans-365
   prefs: []
   type: TYPE_NORMAL
+  zh: 流量镜像是一种非常有效的方法，用于识别传统基础设施设置中常常难以发现的问题。它是一种强大的方法，用于对软件版本进行操作验收测试。这种做法简化了测试并防范了潜在的客户事件和操作挑战。
 - en: 'There are other aspects of traffic management that Istio provides, but covering
     all of them is beyond the scope of this chapter. Please feel free to explore other
     aspects of it by visiting the Istio documentation: [https://istio.io/latest/docs/tasks/traffic-management/](https://istio.io/latest/docs/tasks/traffic-management/).'
   id: totrans-366
   prefs: []
   type: TYPE_NORMAL
+  zh: Istio提供了其他流量管理方面的功能，但本章无法涵盖所有内容。请随时访问Istio文档，探索它的其他功能：[https://istio.io/latest/docs/tasks/traffic-management/](https://istio.io/latest/docs/tasks/traffic-management/)。
 - en: As we already know, Istio leverages envoy proxies as sidecar components alongside
     your microservice containers. Given that these proxies play a central role in
     directing and managing the traffic within your service mesh, they also collect
@@ -2472,6 +2592,7 @@
   id: totrans-367
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所知，Istio利用envoy代理作为边车组件，配合你的微服务容器。鉴于这些代理在流量的引导和管理中发挥着核心作用，它们还会收集宝贵的遥测数据。
 - en: This telemetry data is subsequently transmitted to Prometheus, a monitoring
     and alerting tool, where it can be stored and effectively visualized. Tools such
     as Grafana are often employed in conjunction with Prometheus to provide insightful
@@ -2481,11 +2602,13 @@
   id: totrans-368
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些遥测数据随后被传输到Prometheus，一个监控和告警工具，在那里它可以被存储并有效地可视化。Grafana等工具通常与Prometheus一起使用，为这些遥测数据提供深刻且易于访问的可视化，帮助你有效地监控和管理服务网格。因此，我们将在下一节中进一步探讨Istio的可观察性部分。
 - en: Observing traffic and alerting with Istio
   id: totrans-369
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用Istio观察流量并发出警报
 - en: Istio provides several tools to visualize traffic through our mesh through Istio
     add-ons. While **Prometheus** is the central telemetry data collection, storage,
     and query layer, **Grafana** and **Kiali** provide us with interactive graphical
@@ -2493,11 +2616,13 @@
   id: totrans-370
   prefs: []
   type: TYPE_NORMAL
+  zh: Istio提供了多种工具，通过Istio附加组件来可视化流经我们网格的流量。**Prometheus**是遥测数据收集、存储和查询的核心层，**Grafana**和**Kiali**为我们提供了互动的图形工具，帮助我们与这些数据进行交互。
 - en: 'Let’s start this section by installing the observability add-ons using the
     following commands:'
   id: totrans-371
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们通过以下命令安装可观察性附加组件来开始这一节：
 - en: '[PRE60]'
   id: totrans-372
   prefs: []
@@ -2509,22 +2634,26 @@
   id: totrans-373
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦我们推送代码，Argo CD应该会创建一个新的`istio-system`命名空间并安装附加组件。安装完成后，我们可以从访问Kiali仪表盘开始。
 - en: Accessing the Kiali dashboard
   id: totrans-374
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 访问Kiali仪表盘
 - en: '**Kiali** is a powerful observability and visualization tool for microservices
     and service mesh management. It offers real-time insights into the behavior of
     your service mesh, helping you monitor and troubleshoot issues efficiently.'
   id: totrans-375
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Kiali** 是一个强大的可观察性和可视化工具，专门用于微服务和服务网格管理。它提供了有关你的服务网格行为的实时洞察，帮助你高效地监控和故障排除问题。'
 - en: 'As the Kiali service is deployed on a cluster IP and hence not exposed externally,
     let’s do a port forward to access the Kiali dashboard using the following command:'
   id: totrans-376
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于Kiali服务部署在集群IP上，因此不对外暴露，我们需要做一个端口转发，以便使用以下命令访问Kiali仪表板：
 - en: '[PRE61]'
   id: totrans-377
   prefs: []
@@ -2537,14 +2666,17 @@
   id: totrans-378
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦端口转发会话开始，点击Google Cloud Shell的网页预览图标，选择**更改端口为20001**，然后点击**预览**。你将看到以下仪表板。该仪表板为我们提供了有关在服务网格中运行的应用程序的宝贵见解：
 - en: '![Figure 15.10 – Kiali dashboard](img/B19877_15_10.jpg)'
   id: totrans-379
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.10 – Kiali 仪表板](img/B19877_15_10.jpg)'
 - en: Figure 15.10 – Kiali dashboard
   id: totrans-380
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.10 – Kiali 仪表板
 - en: 'To visualize service interactions, we can switch to the graph view by clicking
     on the `blog-app` namespace. We will see the following dashboard, which provides
     an accurate view of how traffic flows, the percentage of successful traffic, and
@@ -2552,25 +2684,30 @@
   id: totrans-381
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了可视化服务之间的交互，我们可以通过点击`blog-app`命名空间切换到图形视图。我们将看到以下仪表板，该仪表板提供了流量流动情况、成功流量百分比以及其他指标的准确视图：
 - en: '![Figure 15.11 – Kiali service interaction graph](img/B19877_15_11.jpg)'
   id: totrans-382
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.11 – Kiali 服务交互图](img/B19877_15_11.jpg)'
 - en: Figure 15.11 – Kiali service interaction graph
   id: totrans-383
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.11 – Kiali 服务交互图
 - en: While Kiali dashboards provide valuable insights regarding our mesh and help
     us observe service interactions in real time, they lack the capability of providing
     us with advanced monitoring and alerting capabilities. For that, we can use Grafana.
   id: totrans-384
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然Kiali仪表板提供了有关我们的服务网格的宝贵见解，并帮助我们实时观察服务交互，但它缺乏提供高级监控和告警功能的能力。为此，我们可以使用Grafana。
 - en: Monitoring and alerting with Grafana
   id: totrans-385
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用Grafana进行监控和告警
 - en: '**Grafana** is a leading open source platform for observability and monitoring,
     offering dynamic dashboards and robust alerting capabilities. It enables users
     to visualize data from diverse sources while setting up alerts for proactive issue
@@ -2578,6 +2715,7 @@
   id: totrans-386
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Grafana** 是一个领先的开源平台，用于可观察性和监控，提供动态仪表板和强大的告警功能。它使用户能够可视化来自不同来源的数据，同时设置告警以主动检测问题。'
 - en: 'As we’ve already installed Grafana with the necessary add-ons, let’s access
     it by opening a port forward session. Ensure you terminate the existing Kiali
     port-forwarding session or use a different port. Run the following command to
@@ -2585,6 +2723,7 @@
   id: totrans-387
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们已经安装了带有必要插件的Grafana，让我们通过打开一个端口转发会话来访问它。确保终止现有的Kiali端口转发会话，或者使用不同的端口。运行以下命令来实现：
 - en: '[PRE62]'
   id: totrans-388
   prefs: []
@@ -2596,14 +2735,18 @@
   id: totrans-389
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦端口转发会话开始，就像我们对Kiali所做的那样访问Grafana页面，然后进入**首页** > **仪表板** > **Istio** > **Istio
+    服务仪表板**。我们应该能看到类似于以下的仪表板：
 - en: '![Figure 15.12 – Istio service dashboard ](img/B19877_15_12.jpg)'
   id: totrans-390
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.12 – Istio 服务仪表板 ](img/B19877_15_12.jpg)'
 - en: Figure 15.12 – Istio service dashboard
   id: totrans-391
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.12 – Istio 服务仪表板
 - en: This dashboard provides rich visualizations regarding some standard SLIs we
     may want to monitor, such as the request’s *success rate*, *duration*, *size*,
     *volume*, and *latency*. It helps you observe your mesh meticulously, and you
@@ -2612,16 +2755,19 @@
   id: totrans-392
   prefs: []
   type: TYPE_NORMAL
+  zh: 该仪表板提供了有关我们可能想要监控的一些标准SLI（服务级指标）的丰富可视化，例如请求的*成功率*、*持续时间*、*大小*、*流量*和*延迟*。它帮助你细致地观察你的服务网格，并且你还可以通过使用**Prometheus查询语言**（**PromQL**）构建额外的可视化，PromQL学习和应用起来都很简单。
 - en: However, monitoring and visualization must be complemented by alerting for complete
     reliability. So, let’s delve into that.
   id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，监控和可视化必须与告警相结合，才能确保完整的可靠性。所以，让我们深入探讨一下。
 - en: Alerting with Grafana
   id: totrans-394
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 使用Grafana进行告警
 - en: To initiate the alerting process, it’s crucial to establish clear criteria.
     Given the limited volume at hand, simulating an accurate SLO breach can be challenging.
     For simplicity, our alerting criteria will trigger when traffic volume surpasses
@@ -2629,11 +2775,13 @@
   id: totrans-395
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了启动告警过程，建立清晰的标准至关重要。鉴于目前的流量较低，模拟准确的 SLO 违约可能具有挑战性。为简化起见，我们的告警标准将在流量超过每秒一个事务时触发。
 - en: 'The initial phase of this process involves crafting the query to retrieve the
     necessary metrics. We will employ the following query to achieve this objective:'
   id: totrans-396
   prefs: []
   type: TYPE_NORMAL
+  zh: 该过程的初始阶段涉及编写查询以获取必要的度量指标。我们将使用以下查询来实现这一目标：
 - en: '[PRE63]'
   id: totrans-397
   prefs: []
@@ -2644,20 +2792,24 @@
   id: totrans-398
   prefs: []
   type: TYPE_NORMAL
+  zh: 提供的查询确定了通过 Istio 入口网关传递到`frontend`微服务的所有事务的流量速率。
 - en: 'The next step involves creating the alert rules with the query in place. To
     do this, navigate to **Home** > **Alerting** > **Alert rules**. Then, fill in
     the form, as illustrated in the following screenshot:'
   id: totrans-399
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一步是创建警报规则并应用查询。为此，导航至**首页** > **告警** > **告警规则**。然后，填写表单，如下方截图所示：
 - en: '![Figure 15.13 – Defining alert rules](img/B19877_15_13.jpg)'
   id: totrans-400
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.13 – 定义警报规则](img/B19877_15_13.jpg)'
 - en: Figure 15.13 – Defining alert rules
   id: totrans-401
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.13 – 定义警报规则
 - en: The alert rule is configured to monitor for violations at a 1-minute interval
     for 2 consecutive minutes. Once the alert rule has been established, triggering
     the alert is as simple as refreshing the Blog App home page about 15–20 times
@@ -2669,6 +2821,9 @@
   id: totrans-402
   prefs: []
   type: TYPE_NORMAL
+  zh: 警报规则配置为在 1 分钟的间隔内监控违反情况，持续 2 分钟。一旦设置了警报规则，触发警报就非常简单，只需每 1 到 2 分钟快速刷新博客应用首页 15
+    到 20 次即可。这一操作应该会激活警报。要观察此过程，导航至**首页** > **告警** > **告警规则**。你会发现警报在第一分钟内处于**待处理**状态。这意味着它已经在其中一次检查中检测到违反情况，并将在
+    2 分钟内等待另一次违反情况，之后触发警报。
 - en: 'In a production environment, setting longer check intervals, typically around
     5 minutes, with alerting intervals of 15 minutes is typical. This approach helps
     avoid excessive alerting for self-resolving transient issues, ensuring the SRE
@@ -2678,14 +2833,18 @@
   id: totrans-403
   prefs: []
   type: TYPE_NORMAL
+  zh: 在生产环境中，通常会设置较长的检查间隔，通常为 5 分钟，并设置 15 分钟的告警间隔。这种做法有助于避免对自我解决的短暂问题发出过多警报，从而确保 SRE
+    团队不会被虚假警报淹没。目标是保持平衡，避免团队将每个警报都视为潜在的虚假警报。以下截图显示了一个待处理的警报：
 - en: '![Figure 15.14 – Alert pending](img/B19877_15_15.jpg)'
   id: totrans-404
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.14 – 警报待处理](img/B19877_15_15.jpg)'
 - en: Figure 15.14 – Alert pending
   id: totrans-405
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.14 – 警报待处理
 - en: 'After the 2-minute monitoring period, you should observe the alert being triggered,
     as depicted in the following screenshot. This indicates that the alert rule has
     successfully identified a sustained violation of the defined criteria and is now
@@ -2693,14 +2852,17 @@
   id: totrans-406
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 2 分钟的监控期结束后，你应该观察到警报被触发，如下方截图所示。这表示警报规则已经成功识别出持续违反定义标准的情况，并正在积极通知相关方或系统：
 - en: '![Figure 15.15 – Alert firing](img/B19877_15_16.jpg)'
   id: totrans-407
   prefs: []
   type: TYPE_IMG
+  zh: '![图 15.15 – 警报触发](img/B19877_15_16.jpg)'
 - en: Figure 15.15 – Alert firing
   id: totrans-408
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 15.15 – 警报触发
 - en: Since no specific alert channels have been configured in this context, the fired
     alerts will be visible within the Grafana dashboard only. It is highly advisable
     to set up a designated alert destination for sending alerts to your designated
@@ -2711,11 +2873,13 @@
   id: totrans-409
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于在此上下文中未配置特定的警报通道，触发的警报将仅在 Grafana 仪表盘中可见。强烈建议设置专门的警报目标，将警报发送到指定的通道，使用如**PagerDuty**之类的工具通知值班工程师，或通过**Slack**通知你的值班团队。合适的警报通道确保相关个人或团队能及时收到关键问题通知，从而快速响应并解决问题。
 - en: Summary
   id: totrans-410
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: As we conclude this chapter and wrap up this book, our journey has taken us
     through an array of diverse concepts and functionalities. While we’ve covered
     substantial ground in this chapter, it’s essential to recognize that Istio is
@@ -2724,6 +2888,7 @@
   id: totrans-411
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着我们结束本章并总结本书，我们的旅程带领我们走过了各种各样的概念和功能。虽然本章我们已覆盖了大量内容，但必须认识到 Istio 是一项丰富而多面的技术，很难在一章内涵盖其所有复杂性。
 - en: This chapter marked our initiation into the world of service mesh, shedding
     light on its particular advantages in the context of microservices. Our exploration
     extended to various dimensions of Istio, beginning with installing Istio and extending
@@ -2734,6 +2899,8 @@
   id: totrans-412
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章标志着我们进入了服务网格的世界，阐明了它在微服务环境中的独特优势。我们的探索涉及 Istio 的各个方面，从安装 Istio 开始，到通过自动 sidecar
+    注入扩展我们的示例博客应用。随后，我们进入了安全部分，深入探讨了如何使用 mTLS 加强入口网关的安全性，强制微服务间使用严格的 mTLS，并利用授权策略来管理流量。
 - en: Our journey then led us to traffic management, where we introduced essential
     concepts such as destination rules and virtual services. These enabled us to carry
     out canary rollouts and traffic mirroring, demonstrating the power of controlled
@@ -2743,6 +2910,8 @@
   id: totrans-413
   prefs: []
   type: TYPE_NORMAL
+  zh: 接着我们的旅程带领我们进入流量管理，我们介绍了诸如目标规则和虚拟服务等基本概念。这些概念使我们能够执行金丝雀发布和流量镜像，展示了受控部署和实时流量分析的强大功能。我们的探索最终进入了可观察性，我们利用
+    Kiali 仪表盘可视化服务交互，并深入探讨了使用 Grafana 进行高级监控和告警功能。
 - en: As we end this remarkable journey, I want to extend my heartfelt gratitude to
     you for choosing this book and accompanying me through its pages. I trust you’ve
     found every part of this book enjoyable and enlightening. I hope this book has
@@ -2751,216 +2920,259 @@
   id: totrans-414
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着我们结束这段精彩的旅程，我想对你表达衷心的感谢，感谢你选择了这本书并陪伴我走过它的每一页。我相信你已经从书中的每个部分获得了愉悦和启发。我希望这本书能为你提供必要的技能，让你在不断发展的现代
+    DevOps 领域中脱颖而出。祝愿你在当前和未来的所有努力中取得最大的成功。
 - en: Questions
   id: totrans-415
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 问题
 - en: 'Answer the following questions to test your knowledge of this chapter:'
   id: totrans-416
   prefs: []
   type: TYPE_NORMAL
+  zh: 回答以下问题以测试你对本章的理解：
 - en: Which approach would you use to install Istio among the available options using
     GitOps methodology?
   id: totrans-417
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在使用 GitOps 方法的可选选项中，你会选择哪种方式来安装 Istio？
 - en: A. Istioctl
   id: totrans-418
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: A. Istioctl
 - en: B. Helm charts
   id: totrans-419
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: B. Helm charts
 - en: C. Kustomize
   id: totrans-420
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: C. Kustomize
 - en: D. Manifest bundle
   id: totrans-421
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: D. Manifest bundle
 - en: What configuration is necessary for Istio to inject sidecars into your workloads
     automatically?
   id: totrans-422
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 要让 Istio 自动将 sidecar 注入到你的工作负载中，必须进行哪些配置？
 - en: 'A. Apply the `istio-injection-enabled: true` label to the namespace'
   id: totrans-423
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 'A. 将 `istio-injection-enabled: true` 标签应用到命名空间'
 - en: B. No configuration is needed – Istio automatically injects sidecars into all
     pods
   id: totrans-424
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: B. 不需要配置 — Istio 会自动将 sidecar 注入所有 pod
 - en: C. Modify the manifests so that they include the Istio sidecars and redeploy
     them
   id: totrans-425
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: C. 修改清单以包含 Istio sidecar 并重新部署
 - en: Istio sidecars automatically communicate with each other using mTLS. (True/False)
   id: totrans-426
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: Istio sidecar 会自动使用 mTLS 进行相互通信。（正确/错误）
 - en: Which resource enforces policies that dictate which services are permitted to
     communicate with each other?
   id: totrans-427
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 哪种资源强制执行指定哪些服务可以相互通信的策略？
 - en: A. `AuthenticationPolicy`
   id: totrans-428
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: A. `AuthenticationPolicy`
 - en: B. `AuthorizationPolicy`
   id: totrans-429
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: B. `AuthorizationPolicy`
 - en: C. `PeerAuthentication`
   id: totrans-430
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: C. `PeerAuthentication`
 - en: Which of the following resources would you use for canary rollouts? (Choose
     two)
   id: totrans-431
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 以下哪项资源适用于金丝雀发布？（选择两项）
 - en: A. `VirtualService`
   id: totrans-432
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: A. `VirtualService`
 - en: B. `IngressGateway`
   id: totrans-433
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: B. `IngressGateway`
 - en: C. `DestinationRule`
   id: totrans-434
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: C. `DestinationRule`
 - en: D. `Egress Gateway`
   id: totrans-435
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: D. `Egress Gateway`
 - en: Why would you use traffic mirroring in production? (Choose three)
   id: totrans-436
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 为什么在生产环境中使用流量镜像？（选择三项）
 - en: A. Real-time monitoring for production performance and behavior analysis
   id: totrans-437
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: A. 实时监控生产环境性能和行为分析
 - en: B. To route traffic to a new version to duplicate traffic to test the performance
     of your backend service
   id: totrans-438
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: B. 将流量路由到新版本并复制流量以测试后端服务的性能
 - en: C. Safe testing of changes or updates without risking production disruptions
   id: totrans-439
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: C. 在不冒生产中断风险的情况下安全地测试更改或更新
 - en: D. Streamlined troubleshooting and debugging for issue identification and resolution
   id: totrans-440
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: D. 简化故障排除和调试，以便识别和解决问题
 - en: Which observability tool would you use to visualize real-time service interactions?
   id: totrans-441
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 你会使用哪种可观察性工具来可视化实时服务交互？
 - en: A. Prometheus
   id: totrans-442
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: A. Prometheus
 - en: B. Grafana
   id: totrans-443
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: B. Grafana
 - en: C. Kiali
   id: totrans-444
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: C. Kiali
 - en: D. Loki
   id: totrans-445
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: D. Loki
 - en: Answers
   id: totrans-446
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 答案
 - en: 'Here are the answers to this chapter’s questions:'
   id: totrans-447
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是本章问题的答案：
 - en: B
   id: totrans-448
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: B
 - en: A
   id: totrans-449
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: A
 - en: 'True'
   id: totrans-450
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 正确
 - en: B
   id: totrans-451
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: B
 - en: A and C
   id: totrans-452
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: A 和 C
 - en: A, C, and D
   id: totrans-453
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: A、C 和 D
 - en: C
   id: totrans-454
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: C
 - en: 'Appendix: The Role of AI in DevOps'
   id: totrans-455
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 附录：AI 在 DevOps 中的角色
 - en: The recent developments in **artificial intelligence** (**AI**) with the launch
     of generative AI using ChatGPT have taken the tech industry by storm. It has made
     many existing AI players pivot, and most companies are now looking at the best
@@ -2971,25 +3183,32 @@
   id: totrans-456
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着 ChatGPT 推出的生成性 AI，**人工智能**（**AI**）的最新发展震动了科技行业。许多现有的 AI 参与者纷纷转型，且大多数公司现在都在寻找最佳方式将其应用到产品中。自然，DevOps
+    及其相关工具也不例外，AI 正在慢慢地在这一领域站稳脚跟，而这个领域历史上更多依赖传统的自动化方法。在我们深入探讨 AI 如何改变 DevOps 之前，让我们先了解什么是
+    AI。
 - en: 'This appendix will cover the following topics:'
   id: totrans-457
   prefs: []
   type: TYPE_NORMAL
+  zh: 本附录将涵盖以下主题：
 - en: What is AI?
   id: totrans-458
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 什么是 AI？
 - en: The role of AI in the DevOps infinity loop
   id: totrans-459
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: AI 在 DevOps 无限循环中的角色
 - en: What is AI?
   id: totrans-460
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 什么是 AI？
 - en: AI emulates human intelligence in computing. You know how our computers do fantastic
     things, but they need to be told everything to do? Well, AI doesn’t work like
     that. It learns a ton from looking at lots of information, like how we learn from
@@ -2999,6 +3218,8 @@
   id: totrans-461
   prefs: []
   type: TYPE_NORMAL
+  zh: AI 模拟计算中的人类智能。你知道我们的计算机能做出惊人的事情，但它们需要告诉每一步该做什么，对吧？而 AI 不需要那样，它通过大量的信息学习，就像我们从经验中学习一样。这样，它就能独立发现模式，并做出决策，而不需要每次都有人告诉它该做什么。这使得
+    AI 变得智能，因为它能够不断学习新事物，并在其执行的任务中不断变得更好。
 - en: Imagine if your computer could learn from everything it sees, just like you
     remember from everything around you. That’s how AI works—it’s a computer’s way
     of getting more intelligent. Instead of needing step-by-step instructions, AI
@@ -3008,25 +3229,31 @@
   id: totrans-462
   prefs: []
   type: TYPE_NORMAL
+  zh: 想象一下，如果你的计算机能够从它所看到的每一件事中学习，就像你从周围的一切中记住一样。这就是 AI 的工作原理——它是计算机变得更智能的一种方式。AI
+    不再需要逐步指令，它可以从大量信息中学习。这使得它非常擅长在数据中发现模式并做出决策。而在 DevOps 中，AI 可以提供极大的帮助！我们接下来来看一下。
 - en: The role of AI in the DevOps infinity loop
   id: totrans-463
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: AI 在 DevOps 无限循环中的角色
 - en: 'As we are already aware, instead of following a linear path of software delivery,
     DevOps practices generally follow an infinity loop, as shown in the following
     figure:'
   id: totrans-464
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们已经知道的那样，DevOps 实践通常遵循一个无限循环，而不是传统的线性软件交付路径，如下图所示：
 - en: '![](img/B19877_Appendix_1.jpg)'
   id: totrans-465
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/B19877_Appendix_1.jpg)'
 - en: Figure A.1 – DevOps infinity loop
   id: totrans-466
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 A.1 – DevOps 无限循环
 - en: DevOps practices heavily emphasize automation to ensure that this infinity loop
     operates smoothly, and we need tools. Most of these tools help build, deploy,
     and operate your software. You will typically start writing code in an **integrated
@@ -3038,6 +3265,8 @@
   id: totrans-467
   prefs: []
   type: TYPE_NORMAL
+  zh: DevOps 实践极大地强调自动化，以确保这个无限循环顺利运行，我们需要工具。大多数这些工具帮助构建、部署和运营软件。通常，你会在**集成开发环境**（**IDE**）中开始编写代码，然后将代码提交到如
+    Git 这样的中央源代码仓库。会有一个持续集成流水线，它从你的 Git 仓库构建代码并将其推送到制品仓库。你的 QA 团队可能会编写自动化测试，以确保在使用持续部署流水线将制品部署到更高环境之前进行测试。
 - en: Before the advent of AI, setting up all of the toolchains and operating them
     relied on traditional coding methods; that is, you would still write code to automate
     the processes, and the automation would behave more predictably and do what it
@@ -3045,6 +3274,7 @@
   id: totrans-468
   prefs: []
   type: TYPE_NORMAL
+  zh: 在AI出现之前，设置所有工具链并操作它们依赖于传统的编码方法；也就是说，你仍然需要编写代码来自动化过程，而自动化会更可预测地按照指令执行。然而，随着AI的出现，事情正在发生变化。
 - en: AI is transforming DevOps by automating tasks, predicting failures, and optimizing
     performance. In other words, by leveraging AI’s capabilities, DevOps teams can
     achieve greater efficiency, reduce errors, and deliver software faster and more
@@ -3052,10 +3282,12 @@
   id: totrans-469
   prefs: []
   type: TYPE_NORMAL
+  zh: AI正在通过自动化任务、预测故障和优化性能来改变DevOps。换句话说，通过利用AI的能力，DevOps团队可以实现更高的效率，减少错误，并更快、更可靠地交付软件。
 - en: 'Here are some key roles of AI in DevOps:'
   id: totrans-470
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是AI在DevOps中的一些关键角色：
 - en: '**Automating Repetitive Tasks**: AI can automate repetitive and tedious tasks,
     such as code testing, deployment, and infrastructure provisioning. This frees
     up DevOps engineers to focus on more strategic and creative work, such as developing
@@ -3064,6 +3296,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**自动化重复任务**：AI可以自动化重复且乏味的任务，如代码测试、部署和基础设施供应。这让DevOps工程师能够专注于更具战略性和创造性的工作，如开发新特性和改进应用性能。'
 - en: '**Predicting and Preventing Failures**: AI can analyze vast amounts of data,
     including logs, performance metrics, and user feedback, to identify patterns and
     predict potential failures. This proactive approach allows DevOps teams to address
@@ -3072,6 +3305,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**预测和防止故障**：AI可以分析大量数据，包括日志、性能指标和用户反馈，以识别模式并预测潜在故障。这种主动的方式使DevOps团队能够在问题影响用户或导致重大中断之前就进行处理。'
 - en: '**Optimizing Resource Utilization**: AI can analyze resource usage data to
     optimize infrastructure allocation and prevent resource bottlenecks. This ensures
     that applications have the resources they need to perform optimally, minimizing
@@ -3080,6 +3314,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**优化资源利用率**：AI可以分析资源使用数据，优化基础设施分配并防止资源瓶颈。这确保了应用程序能够获得所需的资源以实现最佳性能，从而减少停机时间并提高整体系统效率。'
 - en: '**Enhancing Security**: AI can be used to detect and prevent security threats
     by analyzing network traffic, identifying anomalous behavior, and flagging suspicious
     activity. This helps DevOps teams maintain a robust security posture and protect
@@ -3088,6 +3323,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**增强安全性**：AI可以通过分析网络流量、识别异常行为并标记可疑活动来检测和防止安全威胁。这帮助DevOps团队保持强大的安全态势并保护敏感数据。'
 - en: '**Improving Collaboration and Communication**: AI can facilitate collaboration
     and communication among DevOps teams by providing real-time insights, automating
     workflows, and enabling seamless communication channels. This breaks down silos
@@ -3096,15 +3332,18 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**改善协作与沟通**：AI可以通过提供实时见解、自动化工作流和启用无缝沟通渠道来促进DevOps团队之间的协作与沟通。这打破了信息孤岛，促进了更具凝聚力的DevOps文化。'
 - en: Let’s look at the areas of the DevOps infinity loop and see how AI impacts them.
   id: totrans-476
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看看DevOps无限循环的各个领域，看看AI如何影响它们。
 - en: Code development
   id: totrans-477
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 代码开发
 - en: This area is where we see the most significant impact of generative AI and other
     AI technologies. AI revolutionizes code development by automating tasks such as
     code generation, bug detection, optimization, and testing. Through autocomplete
@@ -3117,11 +3356,13 @@
   id: totrans-478
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个领域，我们看到了生成式AI和其他AI技术的最大影响。AI通过自动化任务如代码生成、错误检测、优化和测试，彻底改变了代码开发。通过自动完成功能、错误检测算法和预测分析，AI加速了编码过程，提升了代码质量，并确保了更好的性能，同时帮助文档编写和代码安全分析。它的角色贯穿于从辅助编写代码到预测问题，最终简化软件开发生命周期，赋能开发者创造更高效、更可靠和更安全的应用程序。
 - en: Many tools employ AI in code development, and one of the most popular tools
     in this area is **GitHub Copilot**.
   id: totrans-479
   prefs: []
   type: TYPE_NORMAL
+  zh: 许多工具在代码开发中应用了AI，其中最受欢迎的工具之一是**GitHub Copilot**。
 - en: GitHub Copilot is a collaborative effort between **GitHub** and **OpenAI**,
     introducing a code completion feature that utilizes OpenAI’s **Codex**. Codex,
     trained on vast code repositories from GitHub, quickly generates code based on
@@ -3132,6 +3373,10 @@
   id: totrans-480
   prefs: []
   type: TYPE_NORMAL
+  zh: GitHub Copilot 是 **GitHub** 和 **OpenAI** 的合作成果，推出了一项代码补全功能，利用 OpenAI 的 **Codex**。Codex
+    在 GitHub 上大量的代码库中进行训练，能够根据当前文件的内容和光标位置快速生成代码。它兼容流行的代码编辑器，如 **Visual Studio Code**、**Visual
+    Studio**、**Neovim** 和 **JetBrains IDEs**，并支持 **Python**、**JavaScript**、**TypeScript**、**Ruby**
+    和 **Go** 等语言。
 - en: Praised by GitHub and users alike, Copilot generates entire code lines, functions,
     tests, and documentation. Its functionality relied on the context provided and
     the extensive code contributions by developers on GitHub, regardless of their
@@ -3141,6 +3386,8 @@
   id: totrans-481
   prefs: []
   type: TYPE_NORMAL
+  zh: 受到 GitHub 和用户们的共同赞誉，Copilot 能生成完整的代码行、函数、测试和文档。其功能依赖于所提供的上下文以及 GitHub 上开发者的广泛代码贡献，无论其软件许可如何。被**微软**称为世界上首个
+    AI 配对程序员，它是一个付费工具，提供 60 天试用期后，每位用户每月收取 10 美元或每年 100 美元的订阅费。
 - en: With Copilot, you can start by writing comments on what you intend to do, and
     it will generate the required code for you. This speeds up development many times,
     and most of the time, you just need to review and test your code to see whether
@@ -3150,6 +3397,7 @@
   id: totrans-482
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 Copilot，你可以通过先写下你打算做的事情的注释来开始，它会为你生成所需的代码。这大大加快了开发速度，大多数时候，你只需要审查和测试你的代码，看看它是否按预期运行。的确是一股强大的力量！它能够优化现有代码并通过生成代码片段提供反馈。它还可以扫描你的代码，查找安全漏洞，并建议替代方案。
 - en: If you don’t want to pay that $10, you can also look at free alternatives such
     as **Tabnine**, **Captain Stack**, **GPT-Code Clippy**, **Second Mate**, and **Intellicode**.
     Paid alternatives include Amazon’s **Code Whisperer** and Google’s **ML-enhanced**
@@ -3157,16 +3405,20 @@
   id: totrans-483
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你不想支付那 10 美元，你也可以选择一些免费的替代工具，如 **Tabnine**、**Captain Stack**、**GPT-Code Clippy**、**Second
+    Mate** 和 **Intellicode**。付费替代工具包括亚马逊的 **Code Whisperer** 和谷歌的 **基于 ML 的** **代码补全**。
 - en: AI tools not only help enhance the development workflow but also help in software
     testing and quality assurance. Let’s look at that next.
   id: totrans-484
   prefs: []
   type: TYPE_NORMAL
+  zh: AI 工具不仅有助于增强开发工作流，还能帮助软件测试和质量保证。接下来我们来看看这一点。
 - en: Software testing and quality assurance
   id: totrans-485
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 软件测试与质量保证
 - en: Traditionally, software testing has taken more of a manual approach because
     most developers don’t want software testing as a full-time profession. Though
     automation testing has gained ground recently, the knowledge gap has hindered
@@ -3175,11 +3427,14 @@
   id: totrans-486
   prefs: []
   type: TYPE_NORMAL
+  zh: 传统上，软件测试更倾向于手动方式，因为大多数开发者并不希望将软件测试作为全职职业。尽管自动化测试近年来逐渐普及，但知识差距仍然制约着大多数组织的这一进程。因此，AI
+    将对测试功能产生重大影响，因为它弥补了人类与机器之间的差距。
 - en: 'AI-integrated testing techniques revolutionize every stage of the **software
     testing life cycle** (**STLC**); some of them are as follows:'
   id: totrans-487
   prefs: []
   type: TYPE_NORMAL
+  zh: 集成 AI 的测试技术正在革新 **软件测试生命周期**（**STLC**）的每个阶段，其中一些如下：
 - en: '**Test script generation**: Traditionally, creating test scripts was time-consuming,
     involving deep system understanding. AI and **machine learning** (**ML**) now
     expedite this process by analyzing requirements, existing test cases, and application
@@ -3191,6 +3446,8 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**测试脚本生成**：传统上，创建测试脚本是一个耗时的过程，需要对系统有深入的理解。现在，AI 和 **机器学习**（**ML**）通过分析需求、现有测试用例和应用行为，快速生成更优化的测试脚本，提供可直接使用的模板，内含预配置的代码片段和详尽的注释，并使用
+    **自然语言处理**（**NLP**）技术将简单语言指令转化为完整的测试脚本。'
 - en: '**Test data generation**: AI-equipped testing tools provide detailed and ample
     test data for comprehensive coverage. They achieve this by generating synthetic
     data from existing sets for specific test objectives, transforming data to create
@@ -3200,6 +3457,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**测试数据生成**：AI装备的测试工具提供详细且丰富的测试数据，以实现全面覆盖。它们通过从现有数据集中生成合成数据来针对特定测试目标，转换数据以创建多样的测试场景，优化现有数据以提高精度和相关性，以及扫描大规模代码库以理解上下文。'
 - en: '**Intelligent test execution**: AI alleviates test execution challenges by
     automatically categorizing and organizing test cases, efficiently selecting tests
     for various devices, operating systems, and configurations, and smartly executing
@@ -3208,6 +3466,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**智能测试执行**：AI通过自动分类和组织测试用例，针对不同设备、操作系统和配置智能地选择测试，并巧妙地执行关键功能的回归测试，从而缓解了测试执行的挑战。'
 - en: '**Intelligent test maintenance**: AI/ML minimizes test maintenance challenges
     by implementing self-healing mechanisms to handle broken selectors and analyzing
     UI and code change relationships to identify affected areas.'
@@ -3215,6 +3474,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**智能测试维护**：AI/机器学习通过实施自我修复机制处理选择器故障，并分析UI和代码变更关系，以识别受影响的区域，从而最大限度减少测试维护的挑战。'
 - en: '**Root cause analysis**: AI aids in understanding and rectifying issues by
     analyzing logs, performance metrics, and anomalies to pinpoint impact areas, tracing
     issues back to affected user stories and feature requirements, and utilizing knowledge
@@ -3223,11 +3483,13 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**根本原因分析**：AI通过分析日志、性能指标和异常来帮助理解和修复问题，准确找出影响区域，追溯问题到受影响的用户故事和功能需求，并利用知识库进行全面的根本原因分析。'
 - en: 'Multiple tools in the market help you achieve all of it; some of the most popular
     ones are the following:'
   id: totrans-493
   prefs: []
   type: TYPE_NORMAL
+  zh: 市场上有多个工具可以帮助你实现这一切，其中一些最流行的工具如下：
 - en: '**Katalon platform**: A comprehensive quality management tool that simplifies
     test creation, execution, and maintenance across various applications and environments.
     It boasts AI features such as **TrueTest**, **StudioAssist**, **self-healing**,
@@ -3236,6 +3498,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Katalon平台**：一款全面的质量管理工具，简化了跨多个应用和环境的测试创建、执行和维护。它拥有AI功能，如**TrueTest**、**StudioAssist**、**自我修复**、**视觉测试**和**AI驱动的测试失败分析**。'
 - en: '**TestCraft**: Built on **Selenium**, TestCraft offers both manual and automated
     testing capabilities with a user-friendly interface and AI-driven element identification,
     allowing tests to run across multiple browsers in parallel.'
@@ -3243,6 +3506,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**TestCraft**：基于**Selenium**构建，TestCraft提供了手动和自动化测试功能，具有用户友好的界面和AI驱动的元素识别，支持多浏览器并行运行测试。'
 - en: '**Applitools**: Known for its AI-based visual testing, Applitools efficiently
     identifies visual bugs, monitors app visual aspects, and provides accurate visual
     test analytics using AI and ML.'
@@ -3250,6 +3514,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Applitools**：以其基于AI的视觉测试而闻名，Applitools高效地识别视觉缺陷，监控应用程序的视觉方面，并使用AI和机器学习提供准确的视觉测试分析。'
 - en: '**Function**: Utilizes AI/ML for functional, performance, and load testing
     with simplicity, allowing test creation through plain English input, self-healing,
     test analytics, and multi-browser support.'
@@ -3257,6 +3522,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**功能**：利用AI/机器学习进行功能、性能和负载测试，简单易用，支持通过简单的英语输入创建测试、自动修复、测试分析和多浏览器支持。'
 - en: '**Mabl**: An AI-powered tool offering low-code testing, intuitive intelligence,
     data-driven capabilities, end-to-end testing, and valuable insights generation,
     promoting team collaboration.'
@@ -3264,6 +3530,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Mabl**：一款AI驱动的工具，提供低代码测试、直观智能、数据驱动功能、端到端测试以及有价值的洞察生成，促进团队协作。'
 - en: '**AccelQ**: Automates test designs, plans, and execution across the UI, mobile,
     API, and PC software, featuring **automated test generation**, **predictive analysis**,
     and comprehensive test management.'
@@ -3271,6 +3538,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**AccelQ**：自动化UI、移动端、API和PC软件的测试设计、计划和执行，具备**自动化测试生成**、**预测分析**和全面的测试管理功能。'
 - en: '**Testim**: Uses ML to expedite test creation and maintenance, allowing for
     quick end-to-end test creation, smart locators for resilient tests, and a blend
     of recording functions and coding for robust test creation.'
@@ -3278,16 +3546,19 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Testim**：通过机器学习加速测试创建和维护，允许快速的端到端测试创建、智能定位器用于可靠测试，并结合录制功能和编码来创建强大的测试。'
 - en: As we’ve already seen the benefits of AI in development and testing, let’s move
     on to software delivery.
   id: totrans-501
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们已经看到的，AI在开发和测试中的好处，我们接下来看看软件交付。
 - en: Continuous integration and delivery
   id: totrans-502
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 持续集成和交付
 - en: In **continuous integration** (**CI**) and **continuous delivery** (**CD**),
     AI brings a transformative edge by optimizing and automating various stages of
     the software development pipeline. AI augments CI by automating code analysis,
@@ -3299,6 +3570,7 @@
   id: totrans-503
   prefs: []
   type: TYPE_NORMAL
+  zh: 在**持续集成**（**CI**）和**持续交付**（**CD**）中，人工智能通过优化和自动化软件开发流程的各个阶段，带来了变革性的优势。人工智能增强了持续集成，通过自动化代码分析、识别模式和预测潜在的集成问题。它通过分析代码变化、建议适当的测试用例并促进更快的集成周期，从而简化了流程。通过机器学习（ML），人工智能可以理解过去构建的历史数据，识别导致失败的模式，从而帮助更高效地调试和改善代码质量。
 - en: In CD, AI optimizes deployment pipelines by automating release strategies, predicting
     performance bottlenecks, and suggesting optimizations for smoother delivery. It
     analyzes deployment patterns, user feedback, and system performance data to recommend
@@ -3310,10 +3582,12 @@
   id: totrans-504
   prefs: []
   type: TYPE_NORMAL
+  zh: 在持续交付（CD）中，人工智能通过自动化发布策略、预测性能瓶颈并建议优化方案，以实现更顺畅的交付。它分析部署模式、用户反馈和系统性能数据，推荐最有效的交付路线。此外，人工智能驱动的CD工具提高了风险预测能力，帮助团队预见潜在的部署失败，并在生产环境受到影响之前做出明智决策以减轻风险。最终，人工智能在持续集成/持续交付（CI/CD）中的作用加速了开发周期，提升了软件质量，并增强了软件发布的可靠性。
 - en: 'Here are some AI-powered tools used in software release and delivery:'
   id: totrans-505
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是一些用于软件发布和交付的人工智能驱动工具：
 - en: '**Harness**: Harness utilizes AI to automate software delivery processes, including
     continuous integration, deployment, and verification. It employs ML to analyze
     patterns from deployment pipelines, predict potential issues, and optimize release
@@ -3322,6 +3596,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Harness**：Harness利用人工智能自动化软件交付流程，包括持续集成、部署和验证。它通过机器学习分析部署管道中的模式，预测潜在问题，并优化发布策略，以提高效率和可靠性。'
 - en: '**GitClear**: GitClear employs AI algorithms to analyze code repositories and
     provides insights into developer productivity, code contributions, and team performance.
     It helps understand code base changes, identify bottlenecks, and optimize development
@@ -3330,6 +3605,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**GitClear**：GitClear采用人工智能算法分析代码库，提供关于开发者生产力、代码贡献和团队表现的洞察。它帮助了解代码库变化、识别瓶颈并优化开发工作流。'
 - en: '**Jenkins**: Thanks to its plugin-based architecture, Jenkins, a widely used
     automation server, employs a lot of AI plugins and extensions to enhance its capabilities
     in CI/CD. AI-powered plugins help automate tasks, optimize build times, and predict
@@ -3338,6 +3614,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Jenkins**：得益于其插件架构，广泛使用的自动化服务器Jenkins采用了大量人工智能插件和扩展，增强了其在CI/CD中的能力。人工智能驱动的插件通过分析历史数据，帮助自动化任务、优化构建时间并预测构建失败。'
 - en: '**CircleCI**: CircleCI integrates AI and ML to optimize CI/CD workflows. It
     analyzes build logs, identifies patterns leading to failures, and provides recommendations
     to improve build performance and reliability.'
@@ -3345,21 +3622,25 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**CircleCI**：CircleCI整合了人工智能和机器学习，以优化CI/CD工作流。它分析构建日志，识别导致失败的模式，并提供改善构建性能和可靠性的建议。'
 - en: These AI-powered tools improve software release and delivery processes’ speed,
     quality, and reliability by automating tasks, optimizing workflows, predicting
     issues, and providing valuable insights for better decision-making.
   id: totrans-510
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些人工智能驱动的工具通过自动化任务、优化工作流、预测问题并提供有价值的洞察，改善了软件发布和交付过程的速度、质量和可靠性，从而帮助做出更好的决策。
 - en: Now, let’s look at the next stage in the process—software operations.
   id: totrans-511
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们看一下流程中的下一阶段——软件运维。
 - en: Software operations
   id: totrans-512
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 软件运维
 - en: AI is pivotal in modern software operations, revolutionizing how systems are
     monitored, managed, and optimized. By leveraging ML algorithms, AI helps automate
     routine tasks such as monitoring system performance, analyzing logs, and identifying
@@ -3371,6 +3652,7 @@
   id: totrans-513
   prefs: []
   type: TYPE_NORMAL
+  zh: AI在现代软件运维中至关重要，彻底改变了系统监控、管理和优化的方式。通过利用机器学习算法，AI帮助自动化日常任务，如监控系统性能、分析日志和实时识别异常。它通过检测系统故障前的模式来实现预测性维护，从而进行主动干预，防止潜在的停机。此外，AI驱动的工具通过关联警报、优先处理关键问题和提供可操作的见解来简化事件管理，增强了软件运维的整体弹性和可靠性。
 - en: Moreover, AI augments decision-making processes by analyzing vast amounts of
     data to identify trends, forecast resource requirements, and optimize infrastructure
     utilization. AI adapts to changing environments through its continuous learning
@@ -3381,10 +3663,12 @@
   id: totrans-514
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，AI通过分析大量数据来增强决策过程，识别趋势、预测资源需求，并优化基础设施利用率。AI通过其持续学习的能力适应变化的环境，使软件运维团队能够应对不断变化的挑战和复杂性。总体而言，AI在软件运维中的作用确保了更高的效率、提升的系统性能和主动的问题解决，从而显著地促进了IT基础设施的无缝运行。
 - en: 'Here are some AI-powered tools used in software operations:'
   id: totrans-515
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是一些在软件运维中使用的AI驱动工具：
 - en: '**Dynatrace**: Dynatrace utilizes AI for application performance monitoring
     and management. It employs AI algorithms to analyze vast amounts of data, providing
     real-time insights into application performance, identifying bottlenecks, and
@@ -3393,6 +3677,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Dynatrace**：Dynatrace利用AI进行应用性能监控和管理。它使用AI算法分析大量数据，提供应用性能的实时洞察，识别瓶颈，并在问题影响最终用户之前预测潜在问题。'
 - en: '**PagerDuty**: PagerDuty integrates AI-driven incident management, alerting,
     and on-call scheduling. It uses ML to correlate events and alerts, reducing noise
     and providing intelligent notifications for critical incidents.'
@@ -3400,6 +3685,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**PagerDuty**：PagerDuty集成了AI驱动的事件管理、警报和值班调度。它使用机器学习关联事件和警报，减少噪音并为关键事件提供智能通知。'
 - en: '**Opsani**: Opsani leverages AI for autonomous optimization of cloud applications.
     It analyzes application performance, dynamically adjusts configurations, and optimizes
     resources to maximize performance and cost-efficiency.'
@@ -3407,6 +3693,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Opsani**：Opsani利用AI实现云应用的自主优化。它分析应用性能，动态调整配置，并优化资源以最大化性能和成本效益。'
 - en: '**Moogsoft**: Moogsoft offers AI-driven IT operations and AIOps platforms.
     It uses ML to detect anomalies, correlate events, and automate incident resolution,
     helping teams proactively manage and resolve issues in complex IT environments.'
@@ -3414,6 +3701,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Moogsoft**：Moogsoft提供AI驱动的IT运维和AIOps平台。它使用机器学习检测异常、关联事件并自动化事件解决，帮助团队主动管理和解决复杂IT环境中的问题。'
 - en: '**Sumo Logic**: Sumo Logic employs AI for log management, monitoring, and analytics.
     It uses ML to identify patterns, anomalies, and security threats within logs and
     operational data, enabling proactive troubleshooting and security incident detection.'
@@ -3421,6 +3709,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Sumo Logic**：Sumo Logic使用AI进行日志管理、监控和分析。它利用机器学习识别日志和操作数据中的模式、异常和安全威胁，从而实现主动故障排除和安全事件检测。'
 - en: '**New Relic**: New Relic utilizes AI for application and infrastructure monitoring.
     Its AI-powered platform helps identify performance issues, predict system behavior,
     and optimize resource utilization for better application performance.'
@@ -3428,6 +3717,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**New Relic**：New Relic利用AI进行应用和基础设施监控。其AI驱动的平台有助于识别性能问题、预测系统行为，并优化资源利用，以提高应用性能。'
 - en: '**LogicMonitor**: LogicMonitor uses AI for infrastructure monitoring and observability.
     It analyzes metrics and performance data to provide insights into system health,
     predict potential issues, and optimize resource allocation in complex environments.'
@@ -3435,6 +3725,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**LogicMonitor**：LogicMonitor利用AI进行基础设施监控和可观察性分析。它分析度量数据和性能数据，提供系统健康状况的洞察，预测潜在问题，并在复杂环境中优化资源分配。'
 - en: '**OpsRamp**: OpsRamp employs AI for IT operations management, offering capabilities
     for monitoring, incident management, and automation. It uses ML to detect anomalies,
     automate routine tasks, and optimize workflows for better operational efficiency.'
@@ -3442,12 +3733,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**OpsRamp**：OpsRamp利用AI进行IT运维管理，提供监控、事件管理和自动化功能。它使用机器学习（ML）来检测异常、自动化常规任务并优化工作流，从而提高运维效率。'
 - en: These AI-powered tools assist in automating tasks, predicting and preventing
     issues, optimizing resource allocation, and enhancing overall system reliability
     in software operations.
   id: totrans-524
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些AI驱动的工具有助于自动化任务、预测和防止问题、优化资源分配，并提高软件运维中整体系统的可靠性。
 - en: The integration of AI into DevOps practices is still in its early stages, but
     its potential impact is significant. By automating tasks, optimizing processes,
     and enhancing collaboration, AI can revolutionize the way software is developed,
@@ -3456,11 +3749,13 @@
   id: totrans-525
   prefs: []
   type: TYPE_NORMAL
+  zh: AI在DevOps实践中的集成仍处于初级阶段，但其潜在影响巨大。通过自动化任务、优化流程和增强协作，AI可以彻底改变软件的开发、部署和管理方式。随着AI技术的不断发展，我们可以期待看到更多AI被用于改进DevOps过程的方式。
 - en: Summary
   id: totrans-526
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: AI revolutionizes DevOps practices by infusing intelligence into every development
     and operations cycle stage. It streamlines processes, enhances efficiency, and
     ensures smoother collaboration between development and operations teams. AI automates
@@ -3472,6 +3767,7 @@
   id: totrans-527
   prefs: []
   type: TYPE_NORMAL
+  zh: AI通过在每个开发和运维周期阶段注入智能，彻底改变了DevOps实践。它简化了流程，提高了效率，并确保开发和运维团队之间的协作更加顺畅。AI自动化常规任务，预测潜在瓶颈，优化工作流，改变了软件的构建、测试、部署和监控方式。从自动化代码分析到预测系统故障，AI通过加快决策过程、减少错误以及促进更加敏捷和响应迅速的软件开发环境，赋能DevOps。
 - en: In essence, AI acts as a silent partner, continuously learning from data, suggesting
     improvements, and helping DevOps teams foresee and address issues before they
     impact the software’s performance. It’s the catalyst that drives agility and innovation,
@@ -3481,3 +3777,4 @@
   id: totrans-528
   prefs: []
   type: TYPE_NORMAL
+  zh: 本质上，AI充当着一个无声的伙伴，持续从数据中学习，提出改进建议，并帮助DevOps团队在问题影响软件性能之前预见并解决问题。它是推动敏捷性和创新的催化剂，使DevOps从仅仅是团队之间的协作，发展为AI提升开发和运维双方能力的共生关系，为更高效、可靠的软件交付铺平道路。
