@@ -1,0 +1,639 @@
+<html><head></head><body>
+		<div id="_idContainer021">
+			<h1 id="_idParaDest-107" class="chapter-number"><a id="_idTextAnchor123"/>5</h1>
+			<h1 id="_idParaDest-108"><a id="_idTextAnchor124"/>Facts and Functions</h1>
+			<p>This chapter will cover facts. We will show you how the Facter tool gathers them to show the profile of systems, how to interact with Facter, and how to use them in Puppet code. We will also cover how custom and external facts can be added to the provided core facts, to allow for more user-specific facts to <span class="No-Break">be gathered.</span></p>
+			<p>Then, we will cover functions. We will explain what functions do and the three types of functions – statement, prefix, and chained. We will examine a selection of the core provided functions to show you their capabilities. A selection of functions will also be shown from the <strong class="source-inline">stdlib</strong> module, where we will explain the module’s approach <span class="No-Break">and uses.</span></p>
+			<p>Deferred functions, which were introduced in Puppet 6, will also be covered. Here, we will show you how deferred functions differ from normal functions, how to make a function deferred, and pitfalls to avoid while using <span class="No-Break">deferred functions.</span></p>
+			<p>In a nutshell, the following topics will be covered in <span class="No-Break">this chapter:</span></p>
+			<ul>
+				<li>Facts <span class="No-Break">and Facter</span></li>
+				<li><a id="_idTextAnchor125"/>Custom facts and <span class="No-Break">external facts</span></li>
+				<li><span class="No-Break">Functions</span></li>
+				<li>The stdlib <span class="No-Break">module functions</span></li>
+				<li><span class="No-Break">Deferred functions</span></li>
+			</ul>
+			<h1 id="_idParaDest-109"><a id="_idTextAnchor126"/>Technical requirements</h1>
+			<p>For this chapter, you will need to provision a Puppet server standard architecture with a Windows client and a Linux client by downloading the <strong class="source-inline">params.json</strong> file from <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/params.json">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/params.json</a> and then using the following command from your <span class="No-Break"><strong class="source-inline">pecdm</strong></span><span class="No-Break"> directory:</span></p>
+			<pre class="console">
+bolt --verbose plan run pecdm::provision –params @params.json</pre>
+			<h1 id="_idParaDest-110"><a id="_idTextAnchor127"/>Facts and Facter</h1>
+			<p>Facter<a id="_idIndexMarker318"/> is Puppet’s system profiler, a set of Ruby libraries that work cross-platform and gather information, known<a id="_idIndexMarker319"/> as <strong class="bold">facts</strong>, about clients. This tooling provides the necessary information to evaluate the profile of the client and allows configuration decisions to be made based on the pre-existing state of the host in <span class="No-Break">Puppet code.</span></p>
+			<p>Puppet 5 and 6 use<a id="_idIndexMarker320"/> Facter 3, while Puppet 7 uses Facter 4. Only a handful of features are available in <a id="_idIndexMarker321"/>Facter 4, which will be highlighted, and a small number of facts have changed, but most users will find no difference. These differences can be viewed by running the <strong class="source-inline">puppet facts diff</strong> command. In <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, we will highlight how module testing can ensure code is compatible across <span class="No-Break">different versions.</span></p>
+			<p>The output of Facter can be seen by running the <strong class="source-inline">facter -p</strong> or <strong class="source-inline">puppet facts</strong> command on the command line or VSCode terminal. Running either of these commands without any further options will return all the core facts. The <strong class="source-inline">-p</strong> flag ensures that Puppet-specific facts are gathered. Due to a circular dependency being created between Facter and Puppet, it had been previously planned to depreciate the <strong class="source-inline">-p</strong> flag and replace it with the <strong class="source-inline">puppet facts</strong> command. This approach was abandoned with the release of Facter 4. This book will use the <strong class="source-inline">facter</strong> command for its examples, which follows the documentation and <span class="No-Break">community practices.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">By default, the <strong class="source-inline">facter</strong> command outputs in a Puppet hash format, while <strong class="source-inline">puppet facts</strong> outputs in JSON format. Both of these commands accept options for choosing the <span class="No-Break">appropriate format.</span></p>
+			<p>We will now look at some <a id="_idIndexMarker322"/>examples of Facter output. The simplest type of fact is a simple key-value pair, such as the <strong class="source-inline">Kernel</strong> fact, which in this case tells us that the kernel <span class="No-Break">is Windows-based:</span></p>
+			<pre class="source-code">
+"Kernel": "windows"</pre>
+			<p>There are also <a id="_idIndexMarker323"/>hashes, known as structured facts, which can be broken into nested levels. The <strong class="source-inline">os</strong> fact is commonly used. The following example of a Windows 10 laptop shows the various<a id="_idIndexMarker324"/> levels that <span class="No-Break">are available:</span></p>
+			<pre class="source-code">
+os =&gt; {
+  architecture =&gt; "x64",
+  family =&gt; "windows",
+  hardware =&gt; "x86_64",
+  name =&gt; "windows",
+  release =&gt; {
+    full =&gt; "10",
+    major =&gt; "10"
+  },
+  windows =&gt; {
+    display_version =&gt; "21H2",
+    edition_id =&gt; "Core",
+    installation_type =&gt; "Client",
+    product_name =&gt; "Windows 10 Home",
+    release_id =&gt; "21H2",
+    system32 =&gt; "C:\WINDOWS\system32"
+  }
+}</pre>
+			<p>The full list of core facts<a id="_idIndexMarker325"/> can be found at <a href="https://puppet.com/docs/puppet/latest/core_facts.html">https://puppet.com/docs/puppet/latest/core_facts.html</a>; running <strong class="source-inline">facter -p</strong> on your client system and reviewing the output is recommended. An individual fact can be accessed by running the <strong class="source-inline">facter</strong> command against the fact’s name, such as <strong class="source-inline">facter -p kernel</strong>, to return the <strong class="source-inline">kernel</strong> fact. To access a specific nested level value in a structured fact, dot notation is used, which separates each key level name with dots (<strong class="source-inline">.</strong>). So, to access the <strong class="source-inline">family</strong> fact within the <strong class="source-inline">os</strong> structured fact, the <strong class="source-inline">facter -p os.family</strong> command can <span class="No-Break">be run.</span></p>
+			<p>As Facter has gone through several iterations and structured facts were not in earlier versions, Facter 3<a id="_idIndexMarker326"/> hid several legacy facts such as architecture, which was put into the <strong class="source-inline">os</strong> structured fact as <strong class="source-inline">os.structured</strong>. The <strong class="source-inline">--show-legacy</strong> flag allows these facts to be made visible in the Facter output; they are documented in the core <span class="No-Break">fact documentation.</span></p>
+			<p>When Puppet is run, either via the agent or by running <strong class="source-inline">puppet apply</strong> on the command line, Facter will run, with legacy facts, and the output will be assigned to <span class="No-Break">global variables.</span></p>
+			<p>These variables can then be accessed in Puppet manifests in two ways – either directly by the name of the fact on a global variable or via the facts array. It is strongly recommended to access facts only<a id="_idTextAnchor128"/> via the facts array since this makes it clear that facts are being accessed and not potentially other <span class="No-Break">global variables.</span></p>
+			<p>For example, in the following code, the <strong class="source-inline">notify</strong> resources would access the <strong class="source-inline">kernel</strong> and <strong class="source-inline">os family</strong> variables and print logging messages containing the <strong class="source-inline">kernel</strong> and <strong class="source-inline">os</strong> families of the host it was <span class="No-Break">run on:</span></p>
+			<pre class="source-code">
+notify { "This clients kernel is ${facts[kernel]}": }
+notify { "This client is a member of the os family ${facts[os][family]": }</pre>
+			<p>Note that not all facts<a id="_idIndexMarker327"/> will appear on all clients. Facts often have a context on which to filter themselves, such as which operating system is running or if a particular underlying hardware is<a id="_idIndexMarker328"/> <span class="No-Break">being used.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">As you’ll see in the next section, functions use dots for chained functions, so the dot-separated access syntax of the <strong class="source-inline">facter</strong> command cannot be used to call the <strong class="source-inline">facts</strong> variable directly. However, the <strong class="source-inline">getvar</strong> function can <span class="No-Break">be used.</span></p>
+			<p>Facter can be customized and tuned on a host-by-host basis by configuring a <strong class="source-inline">facter.conf</strong> file. This file is not created by default and should be created at <strong class="source-inline">/etc/puppetlabs/facter/facter.conf</strong> on Nix-based systems and <strong class="source-inline">C:\ProgramData\PuppetLabs\facter\etc\facter.conf</strong> on Windows. For testing purposes, the <strong class="source-inline">facter</strong> command can be run with the <strong class="source-inline">-c</strong> flag to select a configuration file to <span class="No-Break">be run.</span></p>
+			<p>An example <strong class="source-inline">facter.conf</strong> group <a id="_idIndexMarker329"/>looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+facts : {
+    blocklist : [ "disks", "dmi.product.serial_number", "file system" ],
+    ttls : [
+        { "processor" : 30 days },
+    ]
+}
+global : {
+    external-dir     : [ "/home/david/external1", "/home/david/external2" ],
+    custom-dir       : [ "/home/david/customtest" ],
+    no-exernal-facts : false,
+    no-custom-facts  : false,
+    no-ruby          : false
+}
+cli : {
+    debug     : false,
+    trace     : true,
+    verbose   : false,
+    log-level : "warn"
+}
+fact-groups : {
+ custom-exampleapp : ["exampleapp1", "exampleapp2"],
+}</pre>
+			<p>The first section, <strong class="source-inline">facts</strong>, includes <a id="_idIndexMarker330"/>a blocklist, which allows us to list facts and fact groups that will not be run. This can be useful in situations where calculating the fact can be computationally expensive. For example, in the preceding example, we block the <strong class="source-inline">disks</strong> and <strong class="source-inline">file system</strong> groups since, in some legacy UNIX systems, SAN storage can be configured with thousands of paths. It also disables <strong class="source-inline">dmi.product.serial_number</strong>, which might be decided as something secure that should not be visible in Puppet. To see a full list of blockable groups, you can run the <strong class="source-inline">facter --list-block-groups</strong> command, which will list the group names and a list of the facts inside it. For example, the <strong class="source-inline">disks</strong> group looks <span class="No-Break">like this:</span></p>
+			<pre class="console">
+disks
+- blockdevices
+- disks</pre>
+			<p>The other part of the facts section is <strong class="source-inline">ttls</strong>, which allows caching to be configured. Cached facts are stored as JSON in <strong class="source-inline">/opt/puppetlabs/facter/cache/cached_facts</strong> on UNIX-based systems and <strong class="source-inline">C:\ProgramData\PuppetLabs\facter\cache\cached_facts</strong> on Windows. In the preceding example, the <strong class="source-inline">processor</strong> group will only be refreshed every 30 days. To see a full list of cacheable groups, you can run the <strong class="source-inline">facter --list-<a id="_idTextAnchor129"/>cache-groups</strong> command, which will display a similar format to the <span class="No-Break">block groups.</span></p>
+			<p>The <strong class="source-inline">global</strong> section allows an array of directories to be passed to <strong class="source-inline">external-dir</strong> so that yo<a id="_idTextAnchor130"/>u can define where <strong class="source-inline">facter</strong> should look for external facts. Similarly, an array directory can be passed to <strong class="source-inline">custom-d<a id="_idTextAnchor131"/>ir</strong> to define where <strong class="source-inline">facter</strong> should look for custom facts. Custom and external facts will be covered in the <span class="No-Break">next section.</span></p>
+			<p>The <strong class="source-inline">global</strong> section has three <span class="No-Break">Boolean values:</span></p>
+			<ul>
+				<li><strong class="source-inline">no-external-facts</strong>: To disable external facts if set <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">true</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">no-custom-facts</strong>: To disable custom facts if set <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">true</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">no-ruby</strong>: To prevent Facter loading via Ruby. Any facts that use Ruby and custom facts are set <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">true</strong></span><span class="No-Break">.</span></li>
+			</ul>
+			<p>All these settings are more likely to be used for debugging and <span class="No-Break">development purposes.</span></p>
+			<p>The <strong class="source-inline">cli</strong> section sets a log level with a string of (<strong class="source-inline">none</strong>, <strong class="source-inline">trace</strong>, <strong class="source-inline">debug</strong>, <strong class="source-inline">info</strong>, <strong class="source-inline">warn</strong>, <strong class="source-inline">error</strong>, <strong class="source-inline">fatal</strong>) and has three options: <strong class="source-inline">verbose</strong>, <strong class="source-inline">trace</strong>, and <strong class="source-inline">debug</strong>. Each of these three options is enabled or disabled with a <strong class="source-inline">true</strong> or <strong class="source-inline">false</strong> Boolean. The <strong class="source-inline">trace</strong> option will show a backtrace if an exception occurs in a custom fact. This should not be confused with the trace log level; a better name for this option might have been stacktrace. The <strong class="source-inline">verbose</strong> option enables <strong class="source-inline">verbose</strong> information output from Facter, while the <strong class="source-inline">debug</strong> option enables debug-level output <span class="No-Break">from Facter.</span></p>
+			<p>The <strong class="source-inline">fact-group</strong> section is new to Facter 4 for Puppet and allows you to define custom groups for caching and blocking. Core facts and custom facts can be specified but not <span class="No-Break">external facts.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">As the <strong class="source-inline">facter.conf</strong> file uses a <a id="_idIndexMarker331"/>HOCON format, it can be easier to manage it via the HOCON module from Puppet Forge (<a href="https://forge.puppet.com/modules/puppetlabs/hocon">https://forge.puppet.com/modules/puppetlabs/hocon</a>), where it can be classified on an individual node or group of nodes basis <span class="No-Break">as required.</span></p>
+			<p>Facter 4<a id="_idIndexMarker332"/> in Puppet 7 also <a id="_idIndexMarker333"/>reintroduced benchmarking of facts, which had previously been <a id="_idTextAnchor132"/><a id="_idIndexMarker334"/>in Facter 2. To run benchmarks on a particular fact, you can run the <strong class="source-inline">facter -t &lt;fact name&gt;</strong> command. For example, running <strong class="source-inline">facter -t os</strong> will produce an output similar to <span class="No-Break">the following:</span></p>
+			<pre class="console">
+fact 'os.name', took: (0.000007) seconds
+fact 'os.family', took: (0.000006) seconds
+fact 'os.hardware', took: (0.000007) seconds</pre>
+			<p>If a structured fact is selected, it will time each part of the fact and will return it to the normal output of the facter <span class="No-Break">call after.</span></p>
+			<p>Having covered what core facts are and how to run and configure Facter to test and manage them, the next stage is adding customizations via custom and <span class="No-Break">external facts.</span></p>
+			<h1 id="_idParaDest-111"><a id="_idTextAnchor133"/>Custom facts and external facts</h1>
+			<p>In this section, you will learn how to add to the facts provided by core via custom facts. These are written in Ruby, similar to core facts or external facts, which are either hard-rigged values or client-native executable scripts. While it can be tempting to gather everything, the extra burden facts put on the Puppet infrastructure, particularly with many agents, should be considered and balanced with the need <span class="No-Break">for data.</span></p>
+			<h2 id="_idParaDest-112"><a id="_idTextAnchor134"/>External facts</h2>
+			<p>External facts are<a id="_idIndexMarker335"/> executables that can set facts based on the logic within the scripts or<a id="_idIndexMarker336"/> facts set statically by the structured data of <span class="No-Break">the file.</span></p>
+			<p>External facts can be stored in the following directories for Unix-based <span class="No-Break">operating systems:</span></p>
+			<ul>
+				<li><strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">opt/puppetlabs/facter/facts.d/</strong></span></li>
+				<li><strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">etc/puppetlabs/facter/facts.d/</strong></span></li>
+				<li><strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">etc/facter/facts.d/</strong></span></li>
+			</ul>
+			<p>For Windows systems, they can be stored <span class="No-Break">in</span><span class="No-Break"><strong class="source-inline"> C:\ProgramData\PuppetLabs\facter\facts.d\</strong></span><span class="No-Break">.</span></p>
+			<p>In <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, you will learn how external facts can be distributed to clients from modules via the plugin sync process, where facts are added from modules contained in a <strong class="source-inline">facts.d</strong> folder within <span class="No-Break">the module.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Puppet can be run as a non-root user on UNIX-based systems, while external facts can be stored in <strong class="source-inline">~/.facter/facts.d/</strong>. However, this book will not cover running as a <span class="No-Break">non-root user.</span></p>
+			<h3>Static external facts</h3>
+			<p>Static<a id="_idIndexMarker337"/> external facts must be in <a id="_idIndexMarker338"/>JSON, YAML, or TXT format. As an example, let’s set an <strong class="source-inline">Application</strong> fact to <strong class="source-inline">exampleapp</strong>, a <strong class="source-inline">Use</strong> fact to <strong class="source-inline">production</strong>, and an <strong class="source-inline">Owner</strong> fact to <strong class="source-inline">exampleorg</strong>. In a YAML file, this can be created <span class="No-Break">like so:</span></p>
+			<pre class="source-code">
+---
+Application :  exampleapp
+Use : Production
+Owner : exampleorg</pre>
+			<p>In a JSON file, they would be set <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+{ "Application": "exampleapp", "Use": "Production", "Owner": "exampleorg"}</pre>
+			<p>In a TXT file, the same facts would be set <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+Application=exampleapp
+Use=Production
+<a id="_idTextAnchor135"/>Owner=exampleorg</pre>
+			<p>For Windows, the line endings used in these files must be either LF (Line feed, Unicode character 000A) or CRLF (Carriage return and line feed, Unicode characters 000D and 000A) and the file encoding used for the files must be either ANSI or UTF8 <span class="No-Break">without BOM.</span></p>
+			<p>The examples we’ve looked at so far are all known<a id="_idIndexMarker339"/> as <strong class="bold">flat facts</strong>. However, structured facts can be returned by creating an array format. For example, in YAML, we could allow two owners by<a id="_idIndexMarker340"/> adding arrays and nested arrays to YAML. In this example, let’s <a id="_idIndexMarker341"/>assume there are multiple applications, and each application can have <span class="No-Break">joint ownership:</span></p>
+			<pre class="source-code">
+---
+Application :
+  Exampleapp
+Use : production
+Owner
+- Exampleorg
+- anotherorg
+  Anotherapp
+Use : Production
+Owner : exampleorg</pre>
+			<p>This would <a id="_idIndexMarker342"/>allow us to call <strong class="source-inline">facter application.exampleapp.owner</strong> to retrieve an array of owners or to call <strong class="source-inline">facter application.anotherapp</strong> to receive <a id="_idIndexMarker343"/>the use and owner <span class="No-Break">key pairs.</span></p>
+			<p>Note that static external facts will always return a string type in <span class="No-Break">their output.</span></p>
+			<h3>Executable external facts</h3>
+			<p>Executable <a id="_idIndexMarker344"/>external facts differ on<a id="_idIndexMarker345"/> Windows and UNIX, but both are runnable scripts that output key pairs or arrays to return facts or <span class="No-Break">structured facts.</span></p>
+			<p>On Windows, the following file types can <span class="No-Break">be used:</span></p>
+			<ul>
+				<li>Binary executables (<strong class="source-inline">.com</strong> and <strong class="source-inline">.</strong><span class="No-Break"><strong class="source-inline">exe</strong></span><span class="No-Break"> files)</span></li>
+				<li>Batch scripts (<strong class="source-inline">.bat</strong> and <strong class="source-inline">.</strong><span class="No-Break"><strong class="source-inline">cmd</strong></span><span class="No-Break"> files)</span></li>
+				<li>PowerShell scripts (<strong class="source-inline">.</strong><span class="No-Break"><strong class="source-inline">ps1</strong></span><span class="No-Break"> files)</span></li>
+			</ul>
+			<p>On UNIX platforms, any executable file with a valid shebang (<strong class="source-inline">#!</strong>) statement can be run. If the shebang statement is missing, the execution of the script <span class="No-Break">will fail.</span></p>
+			<p>For both platforms, the scripts should return text. This will be read as key pairs or as YAML or JSON, which can be parsed into a <span class="No-Break">structured fact.</span></p>
+			<p>For example, a Unix bash script that returns the PID of the <strong class="source-inline">exampleapp</strong> process as a fact, along with a fact for <strong class="source-inline">exampleapp_cpu_use</strong> and <strong class="source-inline">example_memory_use</strong>, may look <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+<strong class="bold">#!/bin/bash</strong>
+<strong class="bold">echo "exampleapp_pid = ${pidof exampleapp}"</strong>
+<strong class="bold">echo "exampleapp_cpu_use = ${ps -C exampleapp} %cpu"</strong>
+<strong class="bold">echo "exampleapp_memory_use = ${<a id="_idTextAnchor136"/>ps -C exampleapp} %mem"</strong></pre>
+			<p>For Windows, a<a id="_idIndexMarker346"/> PowerShell script to return the same facts would look <a id="_idIndexMarker347"/><span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+<strong class="bold">Write-Output "exampleapp_pid=$((Get-Process explorer).id)"</strong>
+<strong class="bold">Write-Output "exampleapp_cpu=$(Get-Process explorer).cpu)"</strong>
+<strong class="bold">Write-Output "exampleapp_mem=$(Get-Process explorer).pm)"</strong></pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">To find issues with external facts, you can run <strong class="source-inline">facter –debug</strong>. This will highlight if the fact is visible to Facter and if any output is not being parsed and <span class="No-Break">getting ignored.</span></p>
+			<h2 id="_idParaDest-113"><a id="_idTextAnchor137"/>Custom facts</h2>
+			<p>Custom facts are<a id="_idIndexMarker348"/> sections of <a id="_idIndexMarker349"/>Ruby code that can be used to set facts and expand on the core Facter facts. The main advantage of using custom facts over external facts surrounds the built-in mechanisms that are available. In this section, you will learn how the use of custom facts allows you to access the value of other facts within custom facts, how you can have multiple weighted resolutions, and how to use <strong class="source-inline">confine</strong> to ensure only certain nodes will attempt to run <span class="No-Break">the fact.</span></p>
+			<p>The main disadvantage of using custom facts is that they need to be written in Ruby, which is a learning curve. It’s beyond the scope of this book to dive deeper into the details of Ruby, but its basic structure and some of its core libraries, which work well on Windows and UNIX-based systems, will be shown to give enough you a head start so that you can research <span class="No-Break">them further.</span></p>
+			<p>Like external facts, custom facts are normally distributed by Puppet modules. However, when performing local testing, there are three ways to direct Facter to locations where we store our facts locally <span class="No-Break">while testing:</span></p>
+			<ul>
+				<li>The Ruby library <span class="No-Break">load path</span></li>
+				<li>Using the <strong class="source-inline">–custom-dir</strong> option on the Facter command (note that this can be flagged <span class="No-Break">multiple times)</span></li>
+				<li>Setting the <strong class="source-inline">FACTERLIB</strong> <span class="No-Break">environment variable</span></li>
+			</ul>
+			<p>The Ruby library load path can be checked by running <strong class="source-inline">ruby -e 'puts $LOAD_PATH'</strong>. Remember to make sure that the Ruby binary being used is the Puppet-provided version at <strong class="source-inline">C:\Program Files\Puppet Labs\Puppet\puppet\bin\ruby.exe</strong> on Windows or <strong class="source-inline">/opt/puppetlabs/puppet/bin</strong> on <span class="No-Break">UNIX-based systems.</span></p>
+			<p>Custom facts declare<a id="_idIndexMarker350"/> themselves using <strong class="source-inline">Facter.add('&lt;fact_name&gt;')</strong> and use a <strong class="source-inline">setcode</strong> statement to run a code block to resolve the fact. This is the way a fact’s value is determined. As a simple example, it is possible to run a UNIX shell or Windows<a id="_idIndexMarker351"/> terminal command directly by surrounding the command with <span class="No-Break">backticks (</span><span class="No-Break"><strong class="source-inline">`</strong></span><span class="No-Break">):</span></p>
+			<pre class="source-code">
+Facter.add('exampleapp_version') do
+  setcode do
+    `exampleapp –version`
+  end
+end</pre>
+			<p>Since there is only one command, this could also be written with a single <span class="No-Break"><strong class="source-inline">setcode</strong></span><span class="No-Break"> line:</span></p>
+			<pre class="source-code">
+Facter.add('exampleapp_version') do
+  setcode `exampleapp --version`
+end</pre>
+			<p>Both would set the <strong class="source-inline">exampleapp_version</strong> fact to the output of the <strong class="source-inline">exampleapp –</strong><span class="No-Break"><strong class="source-inline">version</strong></span><span class="No-Break"> command.</span></p>
+			<p>If your facts were more complicated and you needed to run multiple commands or manipulate the output, the command could be run using a <span class="No-Break">Ruby class.</span></p>
+			<p>In the following example, the <strong class="source-inline">Facter::Core::Execution.execute</strong> Ruby class will run a command called <strong class="source-inline">exampleapp</strong>, with a flag of <strong class="source-inline">version</strong>, and then pipe the output of the command to <strong class="source-inline">awk</strong> to print the second <span class="No-Break">returned value:</span></p>
+			<pre class="source-code">
+Facter::Core::Execution.execute('exampleapp –version' | awk '{print $2}' )</pre>
+			<p>PowerShell commands can be executed using the <strong class="source-inline">powershell</strong> command, <span class="No-Break">like so:</span></p>
+			<pre class="source-code">
+Facter::Core::Execution.execute('powershell (Get-WindowsCapability -Online -Name "Microsoft.Windows.PowerShell.ISE~~~~0.0.1.0").state')</pre>
+			<p>It can be tempting to run everything as terminal commands for familiarity, but care must be taken as not everything that can be used in a terminal will work. For example, bash-style <strong class="source-inline">if</strong> statements will not work and should be written in <span class="No-Break">Ruby code.</span></p>
+			<p>It can be useful to call<a id="_idIndexMarker352"/> the value of another fact into a variable. The following code will put<a id="_idIndexMarker353"/> the <strong class="source-inline">os arch</strong> fact into the <span class="No-Break"><strong class="source-inline">arch</strong></span><span class="No-Break"> variable:</span></p>
+			<pre class="source-code">
+arch = Facter.value('os.arch')</pre>
+			<h3>Confining custom facts</h3>
+			<p>One of the main <a id="_idIndexMarker354"/>advantages of custom facts is the ability to confine the nodes they will run on. This can be achieved with the <strong class="source-inline">confine</strong> statement and by selecting the facts and values to match for the fact to run. The <strong class="source-inline">confine</strong> functions syntax follows <span class="No-Break">this format:</span></p>
+			<pre class="console">
+confine &lt;fact_name&gt;: '&lt;fact_value&gt;'</pre>
+			<p>The fact defined after the <strong class="source-inline">confine</strong> function will only run if the conditions are met. For example, you can confine a fact to only run on nodes with <span class="No-Break">Windows-based kernels:</span></p>
+			<pre class="source-code">
+confine kernel: 'Windows'</pre>
+			<p>An array can also be used, where matching any of the values will allow the fact to run. For example, we can check if the kernel is from Linux <span class="No-Break">or Solaris:</span></p>
+			<pre class="source-code">
+confine kernel: ['Linux', 'Solaris']</pre>
+			<p>For structured facts, the <strong class="source-inline">Facter.value</strong> method can be used to access it. For example, to test that the <strong class="source-inline">os.release.major</strong> fact is equal to<a id="_idTextAnchor138"/> <strong class="source-inline">10</strong>, the following code can be used, where <strong class="source-inline">=&gt;</strong> is used instead of a colon (<strong class="source-inline">:</strong>) to match the fact to <span class="No-Break">its value:</span></p>
+			<pre class="source-code">
+confine Facter.value(:os)['release']['major'] =&gt; '10'</pre>
+			<p>In addition to facts, Ruby commands and library commands can be used to confine facts. For example, <strong class="source-inline">confine</strong> can be used with <strong class="source-inline">Facter::Core::Execution.where</strong> or <strong class="source-inline">Facter::Core::Execution.which</strong> to confirm a command exists in the path for Windows or Linux, respectively. Additionally, Ruby libraries such as File can be used to <span class="No-Break">check this.</span></p>
+			<p>For example, to confine a fact if the <strong class="source-inline">git</strong> command was found in the Windows path, the following code can <span class="No-Break">be run:</span></p>
+			<pre class="source-code">
+confine { Facter::Core::Execution.where('git') }</pre>
+			<p>The following code would confine a fact to only run if  <strong class="source-inline">/opt/app/exampleapp</strong> existed as a file or as <span class="No-Break">a directory:</span></p>
+			<pre class="source-code">
+confine { File.exist? '/opt/app/exampleapp' }</pre>
+			<p>To write a single<a id="_idIndexMarker355"/> fact that can cover multiple implementations and confine with granularity, we can use both resolutions (<strong class="source-inline">Facter.add</strong> statements) and multiple confine blocks. The following example shows a simple example of setting the Facter value of <strong class="source-inline">whoami</strong> to either <strong class="source-inline">I am windows 10</strong> if the kernel fact is Windows and <strong class="source-inline">os.release.major</strong> is <strong class="source-inline">10</strong> or to the <strong class="source-inline">I am Sparc</strong> string if the kernel <span class="No-Break">is </span><span class="No-Break"><strong class="source-inline">sparc</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+Facter.add('whoami') do
+  setcode do
+    confine kernel: 'Windows'
+    confine Facter.value(:os)['release']['major'] =&gt; '10'
+    'I am windows 10'
+  end
+end
+Facter.add('whoami') do
+  setcode do
+    confine kernel: 'Sparc'
+    'I am Sparc'
+  end
+end</pre>
+			<p>Another method of confining facts is using features. A feature is a section of Ruby code that’s added to <strong class="source-inline">lib/puppet/feature</strong> in a module. For example, the <strong class="source-inline">exampleapp</strong> module could contain an <strong class="source-inline">exampleapp.rb</strong> feature that checks whether <strong class="source-inline">exampleapp</strong> was installed on either Windows <span class="No-Break">or Linux:</span></p>
+			<pre class="source-code">
+require 'puppet/util/feature'
+Puppet.features.add(:example_app)
+do
+windows= `powershell '(Get-Command exampleapp).source'`.strip
+linux = `sh -c 'command -v exampleapp`.strip
+windows.empty? &amp;&amp; linux.empty? ? false : true end</pre>
+			<p>A custom fact could then use a <strong class="source-inline">confine</strong> statement so that only nodes with the <strong class="source-inline">exampleapp</strong> command available would run <span class="No-Break">the fact:</span></p>
+			<pre class="source-code">
+Facter.add('exampleapp) do
+setcode do
+confine { Puppet.features.example_app? }</pre>
+			<p>This removes the<a id="_idIndexMarker356"/> need to create additional facts and gather and process information not needed except for <span class="No-Break">evaluating confinement.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">It is important to perform all logical code inside the <strong class="source-inline">setcode</strong> and <strong class="source-inline">confine</strong> blocks; otherwise, when the facts are loaded, it will run this code, rather than when the fact is queried for resolution. The order in which facts will be loaded is not predictable, so if code is required by the fact but it is outside of the blocks, it can result in <span class="No-Break">ordering errors.</span></p>
+			<h3>Weighted resolutions</h3>
+			<p>Another approach<a id="_idIndexMarker357"/> to writing custom facts is to have multiple resolutions while knowing that some may return null values, but we want to work through various options. When reviewing resolutions, Facter eliminates any that are not confined. Then, it looks at the weight of each resolution. By default, this is set to <strong class="source-inline">0</strong> but it can be set using the <strong class="source-inline">has_weight</strong> function. If two resolutions have the same weight, Facter will use whichever was listed in the <span class="No-Break">code first.</span></p>
+			<p>For example, to set the <strong class="source-inline">exampleapp_version</strong> fact with multiple resolution options, in the first resolution, it will run the command with the <strong class="source-inline">version</strong> flag weighted at <strong class="source-inline">100</strong> and then try to look for the version in the config file weighted <span class="No-Break">at </span><span class="No-Break"><strong class="source-inline">50</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+Facter.add('exampleapp_version') do
+has_weight 100
+setcode do
+`exampleapp --version`
+end
+Facter.add('exampleapp_version') do
+has_weight 50
+setcode do
+`grep version /etc/exampleapp/exampleapp.conf | awk '{print $2}'`
+end</pre>
+			<p>This allows the command to <a id="_idIndexMarker358"/>fail so that it can be backed up with a <span class="No-Break">second source.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">External facts have a weight of <strong class="source-inline">1000</strong>. So, to prevent an external fact from being able to overwrite your custom fact resolutions, you can set a value higher than <strong class="source-inline">1000</strong> on the <span class="No-Break">resolution weight.</span></p>
+			<h3>Rescue blocks</h3>
+			<p>By default, Facter will error<a id="_idIndexMarker359"/> and fail to return any value if any resolution fails with an error. Using rescue blocks can allow default values to be returned as a result of failures and to opt to print warnings. This works in conjunction with weighted resolutions, where it’s common to expect failures <span class="No-Break">in resolutions.</span></p>
+			<p>A simple rescue block that returns <strong class="source-inline">nil</strong> on the failure of resolution after running the <strong class="source-inline">exampleapp –version</strong> command and logging a failure would look <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+setcode do
+`exampleapp --version`
+rescue
+  nil
+  Facter.warn("exampleapp command failed")
+end</pre>
+			<p>Using <strong class="source-inline">Facter.warn</strong> ensures this message is printed to STDERR when used via the <strong class="source-inline">Facter</strong> command. When used during the Puppet catalog application, it will ensure it is printed in Puppet’s logs. Returning <strong class="source-inline">nil</strong> would ensure other resolutions can be used if they return <span class="No-Break">non-nil </span><span class="No-Break"><a id="_idIndexMarker360"/></span><span class="No-Break">values.</span></p>
+			<h3>Timeouts</h3>
+			<p>As part of Facter 4, which was<a id="_idIndexMarker361"/> made available in Puppet 7, it is now possible to add a timeout to a resolution. This can be done by adding a comma after the fact’s name as part of the <strong class="source-inline">Facter.add</strong> resolution statement and using the <strong class="source-inline">{timeout: &lt;value in seconds&gt;}</strong> syntax, where the value in seconds can be an integer or a float. For example, to ensure a 0.2-second timeout on the <strong class="source-inline">exmpleapp_version</strong> fact, the code can be set <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+Facter.add('exampleapp_version', {timeout: 0.2}) do</pre>
+			<p>Although this is only a feature in Facter 4 and Puppet 7, in Facter 3 and Puppet 5 and higher, it is possible to put timeouts on the execution command by directly setting the <strong class="source-inline">options</strong> variable on the <strong class="source-inline">execute</strong> function. For example, the same 0.2-second timeout could be applied to the execution of the <strong class="source-inline">exampleapp –version</strong> command rather than the whole resolution by modifying the <span class="No-Break"><strong class="source-inline">execute</strong></span><span class="No-Break"> command:</span></p>
+			<pre class="source-code">
+Facter::Core::Execution.execute('exampleapp --version', options = {:timeout =&gt; 0.2})</pre>
+			<h3>Aggregate and structured facts</h3>
+			<p>Aggregate facts<a id="_idIndexMarker362"/> allow the resolutions of a fact to be broken up into chunks. These chunks can<a id="_idIndexMarker363"/> then be merged. Merging arrays or hashes creates a structured fact or performs other functions, such as adding the values of <span class="No-Break">facts together.</span></p>
+			<p>An aggregate fact still has a <strong class="source-inline">Facter.add</strong> declaration, but within <strong class="source-inline">Facter.add</strong>, it sets the type variable to <strong class="source-inline">aggregate</strong>. Then, instead of using <strong class="source-inline">setcode</strong> sections, it uses <strong class="source-inline">chunk</strong> sections for the resolutions. By default, each <strong class="source-inline">chunk</strong> will be merged unless an aggregate block is declared to perform <span class="No-Break">another function.</span></p>
+			<p>For example, the following code would create a structured fact called <strong class="source-inline">exampleapp</strong>. It would have <strong class="source-inline">exampleapp.version</strong> and <strong class="source-inline">exampleapp.fullpath</strong> containing the output of the commands in <span class="No-Break">the chunks:</span></p>
+			<pre class="source-code">
+Facter.add(:exampleapp, :type =&gt; :aggregate) do
+  Chunk(:version) do
+`exampleapp –version`
+  end
+  Chunk(:fullpath) do
+`which exampleapp`
+  end
+end</pre>
+			<p>To use an aggregate block and sum facts together, you can use the following code, which makes a fact called <strong class="source-inline">exampleapp_memory_usage</strong> that takes a chunk using a fact containing the total memory used by <strong class="source-inline">exampleapp</strong> and adds it to the memory used by <strong class="source-inline">exampleapp2</strong> to give us the total <span class="No-Break">memory usage:</span></p>
+			<pre class="source-code">
+<a id="_idTextAnchor139"/>Facter.add(: exampleapp_memory_usuage, :type =&gt; :aggregate) do
+  chunk(:exampleapp1_usage) do
+    Facter.value(:exampleapp1_usage)
+  end
+  chunk(:exampleapp2_usage) do
+    Facter.value(:exampleapp2_usage))
+  end
+  aggregate do |chunks|
+    total = 0
+    chunks.each_count do |value|
+      total += value
+    end
+    total
+  end
+end</pre>
+			<p>A new method to return<a id="_idIndexMarker364"/> structured facts<a id="_idIndexMarker365"/> is available in Puppet 7 with Facter 4. This follows the use of dot notation in the f<a id="_idTextAnchor140"/>act’s name, which allows a definition to assign different levels of a structured fact. For example, to set the <strong class="source-inline">exampleapp</strong> fact with a nested level of <strong class="source-inline">exa<a id="_idTextAnchor141"/>mpleapp.version</strong> and <strong class="source-inline">exampleapp.pid</strong>, you can use the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+Facter.add('exampleapp.version') do
+setcode do
+`exampleapp --version`
+end
+Facter.add('exampleapp.pid') do
+setcode do
+`pidof exampleapp`
+end</pre>
+			<p>This has a core advantage over using an aggregate. Unlike an aggregate, a failure of one part of the declaration will only affect that declaration; the rest will <span class="No-Break">be assigned.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">This section has tried to give you enough information to get started with custom facts. In Puppet’s documentation for custom facts and module code, you will find alternative syntax for many of the features we’ve discussed. Since it is in Ruby code, there is a greater variation of what can be declared. This book has chosen what it considers the best style and practice to follow to keep things simple and avoid listing too <span class="No-Break">many options.</span></p>
+			<p class="callout">Some modules that can be useful to follow examples further are available <span class="No-Break">on GitHub:</span></p>
+			<p class="callout"><a href="https://github.com/puppetlabs/puppetlabs-pe_status_check/blob/main/lib/facter/"><span class="No-Break">https://github.com/puppetlabs/puppetlabs-pe_status_check/blob/main/lib/facter/</span></a></p>
+			<p class="callout"><a href="https://github.com/puppetlabs/puppetlabs-stdlib/tree/main/lib/facter"><span class="No-Break">https://github.com/puppetlabs/puppetlabs-stdlib/tree/main/lib/facter</span></a></p>
+			<p class="callout"><a href="https://github.com/puppetlabs/puppetlabs-lvm/tree/master/lib/facter"><span class="No-Break">https://github.com/puppetlabs/puppetlabs-lvm/tree/master/lib/facter</span></a></p>
+			<p class="callout"><a href="https://github.com/puppetlabs/puppetlabs-java/tree/main/lib/facter"><span class="No-Break">https://github.com/puppetlabs/puppetlabs-java/tree/main/lib/facter</span></a></p>
+			<h2 id="_idParaDest-114"><a id="_idTextAnchor142"/>Lab</h2>
+			<p>For this lab, we will create a static external fact and a custom fact and distribute them with <strong class="source-inline">bolt upload</strong> before running the facts and viewing them on the console to see if they have <span class="No-Break">become visible.</span></p>
+			<p>For the static external fact, create a structure that sets <strong class="source-inline">packtlab.use</strong> equal to <strong class="source-inline">lab</strong> and <strong class="source-inline">packlab.student</strong> equal to <span class="No-Break">your name.</span></p>
+			<p>For the custom fact, a <strong class="source-inline">tmp_count</strong> fact will be created, which will count the number of files in the <strong class="source-inline">/tmp</strong> directory on Linux and <strong class="source-inline">C:\Users\admin\AppData\Local\Temp</strong> on Windows. For Linux, the first resolution with a higher weighting should be <strong class="source-inline">'find /tmp</strong><strong class="source-inline"> -type f | wc -l'</strong>, while the second with a lower weighting should be <strong class="source-inline">ls /tmp | wc -l</strong>. For Windows, the first higher-weighted resolution should be the <strong class="source-inline">(ls $env:Temp | Measure-Object -line).Lines</strong> PowerShell command and the lower weighted resolution – th<a id="_idTextAnchor143"/>at is, <strong class="source-inline">(Get-ChildItem $env:Temp | </strong><span class="No-Break"><strong class="source-inline">Measure-Object).Count</strong></span><span class="No-Break">.</span></p>
+			<p>All resolutions should return <strong class="source-inline">undef</strong> in the result of an error and should time out after <span class="No-Break">10 seconds.</span></p>
+			<p>Note that it can be useful to look at your clients’ current facts on the web console so that you know how to <span class="No-Break">confine them.</span></p>
+			<p>For each of the facts, use the <strong class="source-inline">bolt</strong> command as follows to upload them to the <span class="No-Break">correct locations:</span></p>
+			<pre class="console">
+bolt file upload path_of_your_fact /path/to/destination --targets windows_server_fqdn linux_sever_fqdn
+bolt task run facts --targets windows_server_fqdn linux_sever_fqdn</pre>
+			<p>Go to the web console and view the facts in your nodes to confirm they are on <span class="No-Break">your clients.</span></p>
+			<p>You can find the example solutions at <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/tmp_count.rb">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/tmp_count.rb</a> <span class="No-Break">and </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/packlab.yaml"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/packlab.yaml</span></a><span class="No-Break">.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">When testing custom or external facts, they can be set manually with environment variables by setting <strong class="source-inline">FACTER_&lt;fact_name&gt;</strong> in UNIX environments using <strong class="source-inline">export FACTER_exampleapp ="test"</strong> or in Windows environments by using <strong class="source-inline">env FACTER_exampleapp="test"</strong> – this would hard-set the <strong class="source-inline">exampleapp</strong> fact. This method only works with custom or external facts and not <span class="No-Break">core facts.</span></p>
+			<h1 id="_idParaDest-115"><a id="_idTextAnchor144"/>Functions</h1>
+			<p>Functions are <a id="_idIndexMarker366"/>sections of Ruby code that can be run during catalog compilation and allow you to modify the catalog or calculate and return values. Puppet has many built-in functions and more can be supplied via modules from Puppet Forge, such as <a href="https://forge.puppet.com/modules/puppetlabs/stdlib">https://forge.puppet.com/modules/puppetlabs/stdlib</a>, or custom-written functions added to modules. This book will not cover writing functions, but a complete guide can be found <span class="No-Break">at </span><a href="https://puppet.com/docs/puppet/latest/writing_custom_functions.html"><span class="No-Break">https://puppet.com/docs/puppet/latest/writing_custom_functions.html</span></a><span class="No-Break">.</span></p>
+			<p>In this section, we will cover the three different types of functions: statement, prefix, and chained. A selection of the core Puppet functions will be shown, grouped by purpose to demonstrate the most used and <span class="No-Break">useful functions.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">A lot of functions were moved from sources such as the <strong class="source-inline">stdlib</strong> module into the core Puppet function. The full list can be reviewed <span class="No-Break">at </span><a href="https://puppet.com/docs/puppet/6/release_notes_puppet.html#release_notes_puppet_x-0-0"><span class="No-Break">https://puppet.com/docs/puppet/6/release_notes_puppet.html#release_notes_puppet_x-0-0</span></a><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-116"><a id="_idTextAnchor145"/>Statement functions</h2>
+			<p>Statement functions are <a id="_idIndexMarker367"/>Puppet language-provided functions used only for their <a id="_idIndexMarker368"/>side effects, which always return <strong class="source-inline">undef</strong> values. Statement functions can omit brackets, unlike the other functions we will review in this section. You cannot add custom or Forge-provided <span class="No-Break">statement functions.</span></p>
+			<h3>Catalog statements</h3>
+			<p>Catalog statements affect <a id="_idIndexMarker369"/>the content of the catalog, allowing classes to be <a id="_idIndexMarker370"/>included, dependencies and containment to affect the order of the catalog, and tags to be applied. The following shows an example syntax of <span class="No-Break">catalog statements:</span></p>
+			<pre class="source-code">
+Include &lt;class name&gt;
+re<a id="_idTextAnchor146"/>quire &lt;class name&gt;
+contain &lt;class name&gt;
+tag &lt;tag name&gt; , *&lt;tag name&gt;</pre>
+			<p>The use of <strong class="source-inline">Include</strong> and <strong class="source-inline">tag</strong> was discussed in <a href="B18492_03.xhtml#_idTextAnchor048"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, but we didn’t look at the <strong class="source-inline">tag</strong> function in much detail. The <strong class="source-inline">tag</strong> function is used within a class to mark that class, and all contained objects with the tag or list <span class="No-Break">of tags.</span></p>
+			<p>In <a href="B18492_06.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>, we will cover the full use of <strong class="source-inline">require</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">contain</strong></span><span class="No-Break">.</span></p>
+			<h3>Logging statements</h3>
+			<p>Logging statements allow for<a id="_idIndexMarker371"/> string messages to be sent to log output on the Puppet <a id="_idIndexMarker372"/>server. In <a href="B18492_10.xhtml#_idTextAnchor252"><span class="No-Break"><em class="italic">Chapter 10</em></span></a>, server and agent logging will be reviewed in full as logging locations depend on the configuration and whether Puppet enterprise or open source is used. The <a id="_idTextAnchor147"/>syntax for a logging statement is simply <strong class="source-inline">&lt;logging </strong><span class="No-Break"><strong class="source-inline">level&gt;(&lt;string &gt;)</strong></span><span class="No-Break">.</span></p>
+			<p>The following log levels can <span class="No-Break">be applied:</span></p>
+			<ul>
+				<li><span class="No-Break"><strong class="source-inline">debug</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">info</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">notice</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">warning</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">err</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">fail</strong></span></li>
+			</ul>
+			<p>To log a warning message of <strong class="source-inline">'<a id="_idTextAnchor148"/>code unexpected'</strong>, the Puppet code would be <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+warning('code unexpected')</pre>
+			<p>The string message can include variables if they are double-quoted for interpolation. So, to pro<a id="_idTextAnchor149"/>duce an error message of <strong class="source-inline">'pa-risc is unsupported'</strong> on a pa-risc architecture system, the Facter <strong class="source-inline">os.arch</strong> fact can be used within the error <span class="No-Break">function string:</span></p>
+			<pre class="source-code">
+error("${facts['os']['arch']} is unsupported")</pre>
+			<p>This differs from the examples this book has used up till now, particularly with the <strong class="source-inline">notify</strong> resource used in the previous chapter’s examples. The <strong class="source-inline">notify</strong> resource returns to the client’s logging while the log-level functions will log to the Puppet server. As <strong class="source-inline">notify</strong> is a resource and not a function, it will result in the report showing that a resource is changed every time a <strong class="source-inline">notify</strong> resource <span class="No-Break">is called.</span></p>
+			<p><strong class="source-inline">fail</strong> differs from the <a id="_idIndexMarker373"/>other levels as calling it as a function will terminate the <a id="_idIndexMarker374"/>compilation and result in no catalog being sent to <span class="No-Break">the agent.</span></p>
+			<h2 id="_idParaDest-117"><a id="_idTextAnchor150"/>Prefix and chained functions</h2>
+			<p>Puppet functions can be called in two ways and for many functions, either can <span class="No-Break">be applicable.</span></p>
+			<p>Prefix functions<a id="_idIndexMarker375"/> are called by writing the name of the function and then providing<a id="_idIndexMarker376"/> a list of arguments <span class="No-Break">in brackets:</span></p>
+			<pre class="source-code">
+function_name(argument, *argument)</pre>
+			<p>Chained functions are <a id="_idIndexMarker377"/>created from an argument, a full stop (<strong class="source-inline">.</strong>), then the function <a id="_idIndexMarker378"/>name with brackets, and any further arguments in <span class="No-Break">those brackets:</span></p>
+			<pre class="source-code">
+argument.function_name(argument, *argument)</pre>
+			<h2 id="_idParaDest-118"><a id="_idTextAnchor151"/>A selection of built-in functions</h2>
+			<p>There are many functions available in<a id="_idIndexMarker379"/> core Puppet, and this section will group different functions to show examples of how they can be used or refer to where in this book we will cover them in more detail. The intention of this chapter is not to give the full syntax of every function but to expose a breadth of functions. You can refer to the full functions<a id="_idIndexMarker380"/> list at <a href="https://puppet.com/docs/puppet/latest/function.html">https://puppet.com/docs/puppet/latest/function.html</a>. Make sure you select the correct version of the documentation for the Puppet environment you are <span class="No-Break">working with.</span></p>
+			<h3>Comparison and sizing</h3>
+			<p>The following functions allow you to compare and measure the size of variables. They provide additional capability beyond what can directly be done with <span class="No-Break">data types.</span></p>
+			<p>The <strong class="source-inline">length</strong> and <strong class="source-inline">size</strong> functions<a id="_idIndexMarker381"/> are effectively the same and can both be used as <a id="_idIndexMarker382"/>prefixes or chained functions on arrays (number of elements), hashes (number of key-value pairs), strings (characters), or binaries (bytes) to confirm the relative size/length of the variable. For example, the following command would return <strong class="source-inline">4</strong> as the length of the string four and <strong class="source-inline">5</strong> as the siz<a id="_idTextAnchor152"/>e of <span class="No-Break">the array:</span></p>
+			<pre class="source-code">
+Stringwithfour = 'four'.length()
+Array_of_five = Size([8,4,5,7,0])</pre>
+			<p><strong class="source-inline">match</strong> is used as a chained function on a string or an array of strings with a regular expression to match patterns. It returns an array containing the string that has been matched in index 0, followed by the pattern(s) that matched. If there are no patterns in the following example, where there’s a string that must start with a lowercase letter to start, then the numbers will be <strong class="source-inline">6</strong> to <strong class="source-inline">8</strong> in length. The variabl<a id="_idTextAnchor153"/>e matches <strong class="source-inline">a<a id="_idTextAnchor154"/>123456</strong> and returns an ar<a id="_idTextAnchor155"/>ray containing <strong class="source-inline">[ <a id="_idTextAnchor156"/>'a123456', 'a' , '</strong><span class="No-Break"><strong class="source-inline">123456' ]</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$matches = "a123456".match(/([a-z]{1})([1-9]{6,8})/)</pre>
+			<p>If we tried this same regular expression on a non-matc<a id="_idTextAnchor157"/>hing string, <strong class="source-inline">1a23<a id="_idTextAnchor158"/>456</strong>, <strong class="source-inline">u<a id="_idTextAnchor159"/>ndef</strong> wil<a id="_idTextAnchor160"/>l <span class="No-Break">be returned<a id="_idTextAnchor161"/>:</span></p>
+			<pre class="source-code">
+$nomatch = "1a23456".match(/([a-z]{1})([1-9]{6,8})/)# $matches contains [abc123]</pre>
+			<p>Using an array of strings (<strong class="source-inline">'a123456'</strong>, <strong class="source-inline">'b1254678'</strong>, and <strong class="source-inline">'1a23456'</strong>) with the same regular expression results in the <strong class="source-inline">multi_match</strong> variable containing an array of arrays. This is the output if <strong class="source-inline">match</strong> had been used on each <span class="No-Break">st<a id="_idTextAnchor162"/>ring individually<a id="_idTextAnchor163"/>:</span></p>
+			<pre class="source-code">
+$mul<a id="_idTextAnchor164"/>ti_match = ['a123456','b1254678','1a23456'].match(/([a-z]{1})([1-9]{6,8})/)</pre>
+			<p>This means <strong class="source-inline">multi_match</strong> will <span class="No-Break">contain </span><span class="No-Break"><strong class="source-inline">[['a123456','a','123456'],['b1254678','b','1254678'],undef]</strong></span><span class="No-Break">.</span></p>
+			<p><strong class="source-inline">max</strong> and <strong class="source-inline">min</strong> are used as prefix functions. They take an array of strings or numeric values and return the largest and smallest values in each case. Before Puppet 6.0, there was guidance as to how it would convert and handle mixed types used in these functions. However, now that it’s<a id="_idIndexMarker383"/> deprecated, it is strongly advised that you ensure <a id="_idIndexMarker384"/>comparisons are like for like. In the following example, the variable highest number would contain <strong class="source-inline">88</strong>, while the lowest letter would <span class="No-Break">contain </span><span class="No-Break"><strong class="source-inline">'a'</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$highest_number = max( [5,3,88,46] )
+$lowest_letter = ['d','b','a'].min()</pre>
+			<p><strong class="source-inline">empty</strong> is used as a prefix or chained function to confirm if an array or hash contains no elements or if a string or binary contains no length. In the following examples, the <strong class="source-inline">empty_array</strong> and <strong class="source-inline">empty</strong> strings would contain <strong class="source-inline">true</strong>, while the <strong class="source-inline">non_empty_string</strong> variable would <span class="No-Break">contain </span><span class="No-Break"><strong class="source-inline">false</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$empty_array = [].empty
+$empty_string =empty('')
+$nonempty_string='not_empty'.empty()</pre>
+			<p><strong class="source-inline">compare</strong> is used as a <a id="_idIndexMarker385"/>prefix function that compares two values and returns <strong class="source-inline">-1</strong>, <strong class="source-inline">0</strong>, or <strong class="source-inline">1</strong> if the first value is less than, equal to, or greater than the second, respectively. The two values must be of the same type and can be numeric, strings, timespans, timestamps, or semvars. For two strings, a third argument (a Boolean) can be used to check whether the comparison should <span class="No-Break">ignore casing.</span></p>
+			<p>For example, the <strong class="source-inline">numeric_compare</strong> variable would contain <strong class="source-inline">-1</strong>, while the <strong class="source-inline">string_compare</strong> variable would contain <strong class="source-inline">1</strong> as capitals would be greater than lowercase letters and <strong class="source-inline">A</strong> would come before <strong class="source-inline">b</strong>. If the Boolean were set to <strong class="source-inline">true</strong>, it would <span class="No-Break">return </span><span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$numeric_compare = compare(5 , 6)
+$string_compare = compare('A', 'b', false)</pre>
+			<h3>Change case</h3>
+			<p>The following functions change the <a id="_idIndexMarker386"/>case of strings or arrays/hashes of strings. In the case of integers, they remain unchanged and will contain other incomputable data <span class="No-Break">type errors.</span></p>
+			<p><strong class="source-inline">capitalize</strong>, <strong class="source-inline">camelCase</strong>, <strong class="source-inline">downcase</strong>, and <strong class="source-inline">upcase</strong> are all used as prefixes or chained functions to change the capitalization of a string or a set of strings on an iterable, such as an array. <strong class="source-inline">downcase</strong> and <strong class="source-inline">upcase</strong> can also be used on an array. All can be used on a numeric but will simply return the <span class="No-Break">numeric unaffected.</span></p>
+			<p>CamelCase removes any underscores (<strong class="source-inline">_</strong>) that were used when applied. <strong class="source-inline">camelCase</strong> and <strong class="source-inline">capitalize</strong> are not recursive on an array but <strong class="source-inline">upcase</strong> and <span class="No-Break"><strong class="source-inline">downcase</strong></span><span class="No-Break"> are.</span></p>
+			<p>If <strong class="source-inline">downcase</strong> or <strong class="source-inline">upcase</strong> changes keys in an array while being used recursively and this creates duplicates, it will overwrite the key, using the last key-value pair that was updated in its place. To show some examples, the <strong class="source-inline">upper_case</strong> variable will contain a string called <strong class="source-inline">UPANDDOWN</strong> upon making the whole string upper case, while <strong class="source-inline">downcase</strong> will contain a hash of <strong class="source-inline">{'lower' =&gt; 'case2'}</strong> upon downcasing both keys and overwriting <span class="No-Break">the first:</span></p>
+			<pre class="source-code">
+$upper_case = 'UpAnDdOwN'.upcase()</pre>
+			<p>The <strong class="source-inline">capitals</strong> variable will contain an array called <strong class="source-inline">['Up, Mix']</strong> after capitalizing each string in <span class="No-Break">the array:</span></p>
+			<pre class="source-code">
+$capitals =capitalize(['down','miX'])</pre>
+			<p>The <strong class="source-inline">downcase</strong> variable will contain a hash of <strong class="source-inline">{'lower' =&gt; 'case2'}</strong> after downcasing both keys and overwriting <span class="No-Break">the first:</span></p>
+			<pre class="source-code">
+$downcase = {'lower' = &gt; 'case', 'Lower =&gt; 'Case2}.downcase()</pre>
+			<p>The <strong class="source-inline">camel</strong> variable will contain <strong class="source-inline">Word1Word2Word3</strong> after removing the underscores and setting the capitalization <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">camelCase</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$camel = camelCase('word1_word2_word3')</pre>
+			<p>If you’re using international<a id="_idIndexMarker387"/> characters, you need to review how to Ruby system locale handles these characters as it is used to handle changes <span class="No-Break">in casing.</span></p>
+			<h3>String manipulation</h3>
+			<p>The <strong class="source-inline">lstrip</strong>, <strong class="source-inline">rstrip</strong>, and <strong class="source-inline">strip</strong> functions<a id="_idIndexMarker388"/> allow spacing to be removed from strings. They are all prefixes or chained functions that are used to remove spaces from a string. <strong class="source-inline">lstrip</strong> removes leading spacing, <strong class="source-inline">rstrip</strong> removes trailing spacing, and <strong class="source-inline">strip</strong> removes both leading and trailing white spacing such as space, tab, newline, and return but not hard space. They can be used on a string or an iterable but not recursively. If used on numerics, they will return numeric unadjusted types but will result in an error on any other <span class="No-Break">unsupported type.</span></p>
+			<p>The following example, which uses all three functions, will result in the <strong class="source-inline">left</strong> variable containing <strong class="source-inline">'first second'</strong>, the <strong class="source-inline">right</strong> variable containing <strong class="source-inline">'first second'</strong>, and the <strong class="source-inline">all</strong> variable <span class="No-Break">containing </span><span class="No-Break"><strong class="source-inline">'firstsecond'</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$spaces = " first second "
+$left = $spaces.lstrip()
+$right = rstrip($spaces)
+$all = $spaces.strip()</pre>
+			<h3>Lambdas</h3>
+			<p>These functions are not lambdas<a id="_idIndexMarker389"/> themselves but are most useful when used with lambdas since they allow arrays or hashes variables to be iterated over or transformed and passed to lambdas, which are sections of Puppet code. The following functions are used on variables to define their behavior: <strong class="source-inline">all</strong>, <strong class="source-inline">any</strong>, <strong class="source-inline">break</strong>, <strong class="source-inline">each</strong>, <strong class="source-inline">filter</strong>, <strong class="source-inline">index</strong>, <strong class="source-inline">lest</strong>, <strong class="source-inline">map</strong>, <strong class="source-inline">next</strong>, <strong class="source-inline">return</strong>, <strong class="source-inline">reduce</strong>, <strong class="source-inline">reverse_each</strong>, <strong class="source-inline">step</strong>, <strong class="source-inline">then</strong>, <strong class="source-inline">tree_each</strong>, <strong class="source-inline">unique</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">with</strong></span><span class="No-Break">.</span></p>
+			<p>The syntax and behaviors of these functions will be covered in full in <a href="B18492_06.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>, but to show an example, here, we are using the <strong class="source-inline">each</strong> function and a hash containing user name keys and numbers representing their user ID. The <strong class="source-inline">each</strong> function can take each key pair as an array and allow user resources to be created with the <span class="No-Break">assigned IDs:</span></p>
+			<pre class="source-code">
+$usersids = {'admin' =&gt; 1, 'operator' =&gt; 2, 'viewer' =&gt; 3}
+$userids.each |$users| {
+  user { $users[0]:
+    id  =&gt; $users[1]
+  }
+}</pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Many functions can use lambdas for error handling, which allows you to loop through the error sections, messages, and issue codes and allows for more detailed messages or actions to be taken. This will be covered in <a href="B18492_06.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 6</em></span></a><span class="No-Break">.</span></p>
+			<h3>Templating</h3>
+			<p>Templates allow you to create <a id="_idIndexMarker390"/>complicated text with simple inputs for substitution. In <a href="B18492_06.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>, we will cover templates in full, but the <strong class="source-inline">template</strong> and <strong class="source-inline">epp</strong> functions allow the ERB and EPP formats for templates to be used via the <strong class="source-inline">content</strong> attribute of the <strong class="source-inline">file</strong> resource. An example of using the ERB format and informing the <strong class="source-inline">content</strong> attribute can be found in the <span class="No-Break"><strong class="source-inline">exampleapp</strong></span><span class="No-Break"> module:</span></p>
+			<pre class="source-code">
+file { '/etc/exampleapp.conf':
+  ensure  =&gt; file,
+  content =&gt; template(exampleapp/exampleapp.conf.erb')
+}</pre>
+			<p>The structure of modules and how to store template files will be covered in <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a><span class="No-Break">.</span></p>
+			<p>Alternatively, to use a string<a id="_idIndexMarker391"/> containing a template format and pass the value, <strong class="source-inline">inline_template</strong> and <strong class="source-inline">epp_inline</strong> can be used. For example, to use an EPP style template where it is presumed <strong class="source-inline">$exampleapp_conf_template</strong> contains a string in EPP template format, <strong class="source-inline">inline_epp</strong> will substitute the port and debug the variable values of <strong class="source-inline">exampleapp_port</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">exampleapp_debugging_enabled</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+file { '/etc/ntp.conf':
+  ensure  =&gt; file,
+  content =&gt; inline_epp($exampleapp_conf_template, {'port' =&gt; $exampleapp_port, 'debugging' =&gt; $exampleapp_debugging_enabled}),
+}</pre>
+			<h3>Hash/array</h3>
+			<p>The following functions are <a id="_idIndexMarker392"/>used to either access and manipulate hash and array data beyond the normal operators ava<a id="_idTextAnchor165"/>ilable, which were discussed in <a href="B18492_04.xhtml#_idTextAnchor078"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, or to manipulate variables into hashes <span class="No-Break">and arrays.</span></p>
+			<p>The <strong class="source-inline">dig</strong> function is used to search through a complex data structure by providing various keys or indices. It is particularly useful in situations where the structure is not well defined. For instance, suppose we have a data structure called <strong class="source-inline">exampleapp_proc</strong>, and we want to access the state of the process with ID <strong class="source-inline">124</strong>. If we tried to access it using a hash index such as <strong class="source-inline">exampleapp_proc['exampleapp_pids']['124']['state']</strong>, but the <strong class="source-inline">124</strong> key was not present in the hash, we would get an error and the catalog run would fail. However, by using the <strong class="source-inline">dig</strong> function instead, the notice will <span class="No-Break">be undefined:</span></p>
+			<pre class="source-code">
+$exampleapp_proc = { exmpleapp_pids =&gt; { 123 =&gt; { state =&gt; running , user =&gt; root } }
+notice exampleapp_proc.dig('exampleapp_pids','124','state')</pre>
+			<p>The <strong class="source-inline">getvar</strong> function is used to return parts of a structured variable using dot notation. If the variable does not exist, it will return <strong class="source-inline">undef</strong> instead of throwing an error, unlike direct access to structured variables. You can also set a default value if the value is not found; otherwise, it will <span class="No-Break">return </span><span class="No-Break"><strong class="source-inline">undef</strong></span><span class="No-Break">.</span></p>
+			<p>The first command uses <strong class="source-inline">getvar</strong> to access the <strong class="source-inline">os.release.full</strong> fact, while the second command sets the return value to <strong class="source-inline">'not_found'</strong> if the structured fact is <span class="No-Break">not found:</span></p>
+			<pre class="source-code">
+getvar('facts.os.release.full')
+getvar('facts.os.release.full','not_found')</pre>
+			<p>The <strong class="source-inline">join</strong> function is used to convert an array into a string of elements using a specified delimiter. For instance, if you have an array of data center locations such as <strong class="source-inline">dc_locations = ['london', 'falkirk', 'portland', 'belfast']</strong>, you can use the <strong class="source-inline">join</strong> function to print a colon-separated string of those locations; for example, <strong class="source-inline">notice(join(${dc_locations}, ":"))</strong> This will produce the<a id="_idTextAnchor166"/> <strong class="source-inline">"london:<a id="_idTextAnchor167"/>falkirk:po<a id="_idTextAnchor168"/>rtland:belf<a id="_idTextAnchor169"/>ast"</strong> string in <span class="No-Break">th<a id="_idTextAnchor170"/>e notice:</span></p>
+			<pre class="source-code">
+dc_locations = [ 'london','falkirk','portland','belfast']
+notice ( join(${dc_locations}, ":")</pre>
+			<p>However, if you use <strong class="source-inline">join</strong> on an<a id="_idIndexMarker393"/> array that contains a nested array, it will flatten the array, but it won’t affect hashes or arrays within hashes. For example, <strong class="source-inline">join([{London =&gt; ['bromley', 'brentford']}, 'Berlin', 'Falkirk', 'Grangemouth'], '@@')</strong> would print <strong class="source-inline">[ { London =&gt; [ 'bromley', 'brentford' ] }@@Berlin@@Falkirk@@Grangemouth ]</strong> because the first element of <a id="_idTextAnchor171"/>the array is a hash and it won’t be flattened despite it containing <span class="No-Break">a hash:</span></p>
+			<pre class="source-code">
+dr_locations = [ { London = &gt; [ 'bromley','brentford']},Berlin,['Falkirk','Grangemouth']]
+notice ( join(${dr_locations}, "@@")</pre>
+			<p>The <strong class="source-inline">keys</strong> and <strong class="source-inline">values</strong> functions take a hash and return an array of the keys in the hash it can be run as a prefix or chained function. For example, to print the list of keys of the <strong class="source-inline">offices</strong> variable, the first two <strong class="source-inline">notice</strong> functions would print an array of <strong class="source-inline">['Germany','Holland']</strong>, while the next two would print an array <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">['Berlin',Amsterdam']</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$offices = {'Germany' =&gt; 'Berlin', 'Holland' =&gt; 'Amsterdam'}
+notice(keys(${offices})
+notice($offices.keys())
+notice(values(${offices})
+notice($offices.values())</pre>
+			<p>These keys or values will be in the same order as they were declared in the hash. If the hash is empty, it will return an <span class="No-Break">empty array.</span></p>
+			<p>The <strong class="source-inline">split</strong> function takes a<a id="_idIndexMarker394"/> string and, using a pattern to represent a field separator, can break a string into an array of elements. This pattern can be a string, regexp, or regexp. The following example shows how to split using each pattern method and pick different separators or <span class="No-Break">multiple separators:</span></p>
+			<pre class="source-code">
+$exmple_split = north@south.east@west
+$split_on_at = split($example_split, /@/)
+$split_on_fullstop = split($example_split, '[.]'
+$split_on_both = split($example_split, Regexp['[.@]')</pre>
+			<p>The <strong class="source-inline">split_on_at</strong> variable would contain an array of <strong class="source-inline">['north','south.east','west']</strong>, <strong class="source-inline">split_on_fullstop</strong> would contain an array of <strong class="source-inline">['north@south ', 'east@west']</strong> and <strong class="source-inline">split_on_both</strong> would contain an array <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">['north','south,'east','west']</strong></span><span class="No-Break">.</span></p>
+			<p>The <strong class="source-inline">sort</strong> function takes an array and sorts the array numerically or by lexicographical order. It is not possible to mix these orderings and have numeric and lexigraphic values as this will result in an error and no conversion. Comparing characters is based on system locale and is case-sensitive unless <strong class="source-inline">compare</strong> and lambdas <span class="No-Break">are used.</span></p>
+			<p>In its simplest form, <strong class="source-inline">sort</strong> will sort numbers and strings in ascending order – for example, we can take an unordered array of numbers and an unordered array of strings and use <strong class="source-inline">sort</strong> as a prefix or a chained function. In this example, the code will result in ordered numbers containing <strong class="source-inline">[0,1,2,3,4,5,7,8,9]</strong> and ordered strings <span class="No-Break">containing </span><span class="No-Break"><strong class="source-inline">['a','b','c','d']</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$unordered_numbers = [7,9,8,0,2,4,3,1,5]
+$unordered_strings = ['d','c','b','a']
+$ordered_numbers = $unordered_numbers.sort()
+$ordered_strings = sort($unordered_strings)</pre>
+			<p>To specify the order explicitly, you can use the <strong class="source-inline">compare</strong> function to order the variables, highlighting if they should be ascending or descending. In the following example, the integers <a id="_idIndexMarker395"/>will be ordered <strong class="source-inline">[1950,1980,1984,1985]</strong> in the ascending variable and <strong class="source-inline">[1985,1984,1980,1950]<a id="_idTextAnchor172"/></strong> in the <span class="No-Break">descendi<a id="_idTextAnchor173"/>ng variable:</span></p>
+			<pre class="source-code">
+$ascend<a id="_idTextAnchor174"/>ing =(sort([1984,1950,1985,1980]) |$<a id="_idTextAnchor175"/>a,$b| { compare(<a id="_idTextAnchor176"/>$a, $b) })
+$descending = (sort([1984,1950,1985,1980]) |$a,$b| { compare($b, $a) })</pre>
+			<p>As we learned when we dis<a id="_idTextAnchor177"/>cussed <strong class="source-inline">compare</strong> in the <em class="italic">Comparison and sizing</em> section, a Boolean can be used on <strong class="source-inline">compare</strong> to order by capitals <span class="No-Break">or not.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Instead of using the <strong class="source-inline">compare</strong> function, other functions from the <em class="italic">Comparison and sizing</em> section such as <strong class="source-inline">max</strong> or <strong class="source-inline">min</strong> can <span class="No-Break">be used.</span></p>
+			<h3>Data handling</h3>
+			<p>There are several data-related<a id="_idIndexMarker396"/> functions for Hiera and encrypted EYAML. These will be covered in full in <a href="B18492_09.xhtml#_idTextAnchor233"><span class="No-Break"><em class="italic">Chapter 9</em></span></a>, but for reference, they are <strong class="source-inline">eyaml_look_up_key</strong>, <strong class="source-inline">lookup</strong>, and <strong class="source-inline">yaml_data</strong>. The function documentation states that a few <strong class="source-inline">hiera_&lt;type&gt;</strong> functions were depreciated for the <span class="No-Break"><strong class="source-inline">lookup</strong></span><span class="No-Break"> function.</span></p>
+			<p>The <strong class="source-inline">unwrap</strong> function was previously covered in <a href="B18492_03.xhtml#_idTextAnchor048"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, whereby the function was used to make sensitive data types visible/accessible in Puppet code, <span class="No-Break">as necessary.</span></p>
+			<h1 id="_idParaDest-119"><a id="_idTextAnchor178"/>stdlib module functions</h1>
+			<p>Modules will be <a id="_idIndexMarker397"/>discussed in full in <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, but the <strong class="source-inline">stdlib</strong> module (<a href="https://forge.puppet.com/modules/puppetlabs/stdlib">https://forge.puppet.com/modules/puppetlabs/stdlib</a>) is so widely used that it is worth highlighting some of the functions that are available from the module as virtually every install of Puppet will make <span class="No-Break">them available.</span></p>
+			<p>It is important to be aware that the functions in <strong class="source-inline">stdlib</strong> allow advanced behaviors that are not always best practice approaches to Puppet code, such as being able to read the contents of a YAML file into a string and using the <strong class="source-inline">ensure_package</strong> function, which is used to allow for multiple declarations of a package resource. They can provide useful workarounds in complex situations or when code is managed in multiple teams’ <span class="No-Break">political situations.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Many functions have been made redundant by file type conversion, which was made available in Puppet 5, as well as other new features, but those have been left for <span class="No-Break">compatibility purposes.</span></p>
+			<h3>Array and strings</h3>
+			<p>The<a id="_idIndexMarker398"/> following functions interact with strings and arrays by combining, manipulating, and producing new arrays in <span class="No-Break">several ways.</span></p>
+			<p>The <strong class="source-inline">intersection</strong> function is a chained function that, when provided with two arrays, will produce a single array of values contained in both. For example, the following code will put the <strong class="source-inline">['both']</strong> array into the <span class="No-Break"><strong class="source-inline">chained_array</strong></span><span class="No-Break"> variable:</span></p>
+			<pre class="source-code">
+$chained_array = intersection(['first','both']['second','both])</pre>
+			<p>The <strong class="source-inline">union</strong> function is a chained function that, when provided with two arrays, will produce a single array of unique values. In the following example, the <strong class="source-inline">union_array</strong> variable will contain the <strong class="source-inline">['</strong><span class="No-Break"><strong class="source-inline">first','second']</strong></span><span class="No-Break"> array:</span></p>
+			<pre class="source-code">
+$union_array = union(['first','both'],['second','both']</pre>
+			<p>The <strong class="source-inline">range</strong> function is a chained function that can be provided a start, end, or step interval (if not provided, this defaults to <strong class="source-inline">1</strong>). The start and end can be strings or numerics, while the optional step should be <span class="No-Break">an integer.</span></p>
+			<p>For example, the <strong class="source-inline">onetoten</strong> variable would contain an array of <strong class="source-inline">[1,2,3,4,5,6,7,8,9,10]</strong>, the <strong class="source-inline">etog</strong> variable would contain <strong class="source-inline">['E','F','G']</strong>, and <strong class="source-inline">good_trek</strong> would <span class="No-Break">contain </span><span class="No-Break"><strong class="source-inline">['StarTrek2','startrek4',startrek6','starttrek8']</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$onetoten = range(1,10)
+$etog = range('E','G')
+$good_trek = ('StarTrek2', 'StarTrek8', 2)</pre>
+			<p>The <strong class="source-inline">start_with</strong> and <strong class="source-inline">end_with</strong> functions are chained functions that allow you to check if a string starts or ends with a provided string or list of strings, attempting to match any string in the list. It will return <strong class="source-inline">true</strong> or <strong class="source-inline">false</strong>, depending on the match. In the following example, <strong class="source-inline">truestart</strong> will contain <strong class="source-inline">true</strong> as <strong class="source-inline">server</strong> matches the start of <strong class="source-inline">server1234</strong>, <strong class="source-inline">falseend</strong> will contain <strong class="source-inline">false</strong> as <strong class="source-inline">wales</strong> does not end in <strong class="source-inline">land</strong>, and <strong class="source-inline">trueoptions</strong> will contain <strong class="source-inline">true</strong> as <strong class="source-inline">aws104</strong> starts with <strong class="source-inline">aws</strong> and could match other strings starting <a id="_idIndexMarker399"/>with <strong class="source-inline">gcp</strong> <span class="No-Break">or </span><span class="No-Break"><strong class="source-inline">az</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+$truestart = 'server1234'.startswith('server')
+$falseend = 'wales'.endswith('land')
+$trueoptions = 'aws104'.startswith['gcp','az','aws']</pre>
+			<h3>File information</h3>
+			<p>The <strong class="source-inline">basename</strong>, <strong class="source-inline">dirname</strong>, and <strong class="source-inline">extname</strong> functions can be used either as separate functions or chained<a id="_idIndexMarker400"/> together to extract the filename, directory, or extension from a file path. Here’s <span class="No-Break">an example:</span></p>
+			<pre class="source-code">
+$full_path = 'C:\Users\david\fact.ps1'
+$file_name = basename(${full_path})
+$dir_name = dirname(${full_path})
+$ext =  ${full_path}.extname</pre>
+			<p>Note that <strong class="source-inline">extname</strong> only works with filenames in the format of <strong class="source-inline">filename.extension</strong>. If the string does not contain a dot (<strong class="source-inline">.</strong>), or if the dot appears at the beginning or end of the string, it will simply return an <span class="No-Break">empty string.</span></p>
+			<h1 id="_idParaDest-120"><a id="_idTextAnchor179"/>Lab</h1>
+			<p>Having covered a wide variety of functions, let’s practice using a handful of them. Let’s create a class called <strong class="source-inline">example_functions</strong> that takes the parameters of the user prefix as a string and several users as an integer. This class should take two parameters: a user prefix as a string, and several users as an integer. Ensure that the prefix is in lowercase. An array of usernames should be created starting from <strong class="source-inline">0</strong> up to the number of users specified. This array should then be passed to a user resource to create <span class="No-Break">the users.</span></p>
+			<p>Define your class with the <strong class="source-inline">user</strong> string and the <span class="No-Break">number </span><span class="No-Break"><strong class="source-inline">5</strong></span><span class="No-Break">.</span></p>
+			<p>The code should also log a warning message containing text with the contents of the <strong class="source-inline">os.windows.product_name</strong> fact or <strong class="source-inline">linux</strong> if you’re not using a <span class="No-Break">Windows machine.</span></p>
+			<p>Finally, the code should take the <strong class="source-inline">fact</strong> path and ensure every directory is audited. Hint: you will want to separate this path into an array and pass it to a file resource. <strong class="source-inline">windows</strong> and <strong class="source-inline">linux</strong> use different separators for path objects – that is, <strong class="source-inline">;</strong> and <strong class="source-inline">:</strong>. The following <strong class="source-inline">if</strong> statement <span class="No-Break">should help:</span></p>
+			<pre class="source-code">
+if $facts['os.family'] == 'windows' {
+}else{
+}</pre>
+			<p>You should use <strong class="source-inline">bolt</strong> to make <strong class="source-inline">stdlib</strong> available locally on <span class="No-Break">our clients:</span></p>
+			<pre class="source-code">
+<a id="_idTextAnchor180"/>bolt command run "puppet module install stdlib" -t windowsclient <a id="_idTextAnchor181"/>linuxclient</pre>
+			<p>Then, apply the <strong class="source-inline">puppet</strong> class via <strong class="source-inline">bolt</strong> with the <span class="No-Break">following command:</span></p>
+			<pre class="source-code">
+bolt puppet apply example_functions.pp -t windowsclient linuxclient</pre>
+			<p>You can find some example solutions <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/example_functions.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/example_functions.pp</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-121"><a id="_idTextAnchor182"/>Deferred functions</h1>
+			<p>A <strong class="source-inline">Deferred</strong> function (also known as an agent side function) is a function with the <strong class="source-inline">Deferred</strong> type applied to it. This<a id="_idIndexMarker401"/> causes the function to run locally on a client when the catalog is applied, rather than on a Puppet server during compilation. The catalog for a deferred function contains what to run on the client rather than the output of the function. The deferred type was introduced in Puppet 6.0 and is available in all <span class="No-Break">later versions.</span></p>
+			<p>This is typically used when the compilation server can’t access a necessary source in a function – for example, when retrieving a secret from a HashiCorp Vault server, where security is set up to only allow the client to access <span class="No-Break">a secret.</span></p>
+			<p>The syntax for applying <strong class="source-inline">Deferred</strong> is <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+Deferred( name of function, [arguments])</pre>
+			<p>The following is an example of retrieving a secret from <strong class="source-inline">vault</strong>. This can be used within a user resource for <strong class="source-inline">exampleapp</strong> to set the password from a Vault path <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">exampleapp/password</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+user { 'exampleapp':
+password =&gt; Deferred('vault_lookup::lookup', ["exampleapp/password"])
+}</pre>
+			<p>This function is from the <strong class="source-inline">vault_lookup</strong> module (<a href="https://forge.puppet.com/modules/puppet/vault_lookup">https://forge.puppet.com/modules/puppet/vault_lookup</a>) and requires an underlying vault client setup to be available, as per the instructions within the module and the guide from <span class="No-Break">Hashicorp: </span><a href="https://www.hashicorp.com/resources/agent-side-lookups-with-hashicorp-vault-puppet-6"><span class="No-Break">https://www.hashicorp.com/resources/agent-side-lookups-with-hashicorp-vault-puppet-6</span></a><span class="No-Break">.</span></p>
+			<p>It is important to understand the difference in using functions with <strong class="source-inline">Deferred</strong>. You cannot use a <strong class="source-inline">Deferred</strong> function to pass a variable to a string. This would result in the catalog creating a stringified version of the object. In the following example, which involves looking up a key value from <strong class="source-inline">vault</strong> called <strong class="source-inline">exampleapp/message</strong>, the first <strong class="source-inline">notify</strong> will return a string containing a stringified translation of the function name in the catalog, while the second <strong class="source-inline">notify</strong> will return the value of the vault <span class="No-Break">lookup itself:</span></p>
+			<pre class="source-code">
+$deferred =&gt;  Deferred('vault_lookup::lookup', ["exampleapp/message"])
+notify {'this will return the object name':
+  message =&gt; "Secret message is ${deferred"
+}
+notify {'this will return the message':
+message =&gt; $deferred
+}</pre>
+			<p>This reflects the catalog compilation calculating the string value at compilation time. This mismatch can happen in other places, such as templates, but can be overcome by ensuring any deferred values are only used in isolation or within other deferred functions. In <a href="B18492_07.xhtml#_idTextAnchor194"><span class="No-Break"><em class="italic">Chapter 7</em></span></a>, you will learn how to use a <span class="No-Break">deferred template.</span></p>
+			<p>A function can only be deferred if it uses core data types because the client only has core data types made available to it at runtime via plugin sync. In <a href="B18492_10.xhtml#_idTextAnchor252"><span class="No-Break"><em class="italic">Chapter 10</em></span></a>, you will learn how plugin sync works with <span class="No-Break">the client.</span></p>
+			<p>Also, note that it is down to the implementation of the function itself whether it returns a sensitive value, and how it fails. In the case of the <strong class="source-inline">vault_lookup</strong> function, there is no graceful failure; it will <a id="_idIndexMarker402"/>return an error, resulting in an errored <span class="No-Break">catalog run.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">As of Puppet 7.17.0, deferred functions can now be called on demand instead of being preprocessed. Using this method, the catalog can provide inputs to the deferred function. If the deferred function fails, then only the affected resource will fail, while all other resources will still be applied. To enable this behavior, set <strong class="source-inline">Puppet[:preprocess_deferred] = false</strong> or <span class="No-Break">use </span><span class="No-Break"><strong class="source-inline">--no-preprocess_deferred</strong></span><span class="No-Break">.</span></p>
+			<p>All these behaviors apply to a local <strong class="source-inline">puppet apply run</strong> since a <strong class="source-inline">puppet apply run</strong> will generate a catalog and apply <span class="No-Break">it locally.</span></p>
+			<h1 id="_idParaDest-122"><a id="_idTextAnchor183"/>Summary</h1>
+			<p>In this chapter, you learned how the Facter tool provides system profiling information with its facts and how this can be expanded using external facts and custom facts. We warned you that there is an infrastructure cost to gathering facts and that the scale it will work with should be balanced. We stated that external facts can be simple flat files of static data or executable scripts, as allowed by the operating system. Custom facts, although written in Ruby, were shown to have several advantages over external facts. Being able to confine the custom fact to only run on certain systems allows you to choose different resolutions with a weight as to which should be selected and timeouts at the resolution level in Puppet 7 or the execution level in Puppet 6 <span class="No-Break">and below.</span></p>
+			<p>Next, we reviewed functions and highlighted the vast range of tasks functions can do to manipulate the catalog or return calculated values in Puppet code. Here, we discussed catalog statements, which are used to include classes in the catalog, and logging statements, which are used to set logging messages. The other two types of functions, prefix and chained, were highlighted, along with their syntax. Then, a selection of core functions was shown, along with various categories that expose the <span class="No-Break">available functions.</span></p>
+			<p>Then, we discussed a small selection of functions from the <strong class="source-inline">stdlib</strong> module to highlight what can be provided. Note that some of the <strong class="source-inline">stdlib</strong> functions have been deprecated and are only there for backward compatibility or to be used for edge cases, which is not a <span class="No-Break">best practice.</span></p>
+			<p>Finally, we discussed deferred functions, which allow functions to run during the application of the catalog on a client. We highlighted the advantage of this for services that may only be available to the client, such as making API calls to secure services, or may be undesirable to be run on Puppet infrastructure shared with <span class="No-Break">other services.</span></p>
+			<p>In the next chapter, you will learn how relationships and dependencies work between resources and classes. We will look at how scope and containment affect resources, variables, and classes and how to structure code and necessary dependencies without encountering common pitfalls and <span class="No-Break">dependency hell.</span></p>
+		</div>
+	
+
+		<div id="_idContainer022" class="Content">
+			<h1 id="_idParaDest-123"><a id="_idTextAnchor184"/>Part 2 – Structuring, Ordering, and Managing Data in the Puppet Language</h1>
+			<p>This part will look at the more advanced Puppet language features. We will show how to manage dependencies and flow within code using iteration and conditions. We will then see how to use best practices to structure Puppet into modules using roles and profile patterns. Puppet Forge will be shown to be a useful source of pre-built modules and we will look at how to understand and review the source and content of those modules. We will then look at how to manage data with Puppet using Hiera and understand the best practices in terms of when to use separate data sources <span class="No-Break">and variables.</span></p>
+			<p>This part has the <span class="No-Break">following chapters:</span></p>
+			<ul>
+				<li><a href="B18492_06.xhtml#_idTextAnchor185"><em class="italic">Chapter 6</em></a>, <em class="italic">Relationships, Ordering, and Scope</em></li>
+				<li><a href="B18492_07.xhtml#_idTextAnchor194"><em class="italic">Chapter 7</em></a>, <em class="italic">Templating, Iterating</em><em class="italic">, and Conditionals</em></li>
+				<li><a href="B18492_08.xhtml#_idTextAnchor212"><em class="italic">Chapter 8</em></a>, <em class="italic">Developing and Managing Modules</em></li>
+				<li><a href="B18492_09.xhtml#_idTextAnchor233"><em class="italic">Chapter 9</em></a>, <em class="italic">Handling Data with Puppet</em></li>
+			</ul>
+		</div>
+		<div>
+			<div id="_idContainer023" class="Basic-Graphics-Frame">
+			</div>
+		</div>
+		<div>
+			<div id="_idContainer024">
+			</div>
+		</div>
+	</body></html>

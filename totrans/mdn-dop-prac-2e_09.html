@@ -1,0 +1,851 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer077">
+			<h1 id="_idParaDest-237" class="chapter-number"><a id="_idTextAnchor1198"/>9</h1>
+			<h1 id="_idParaDest-238"><a id="_idTextAnchor1199"/> Configuration Management with Ansible</h1>
+			<p>In the last chapter, we looked at <strong class="bold">Infrastructure as Code</strong> (<strong class="bold">IaC</strong>) with Terraform, its core concepts, IaC workflow, state, and debugging techniques. We will now delve into <strong class="bold">configuration management</strong> (<strong class="bold">CM</strong>) and <strong class="bold">Configuration as Code</strong> (<strong class="bold">CaC</strong>) with Ansible. Ansible is a CM tool that helps you to define configuration as idempotent chunks <span class="No-Break">of code.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Introduction to <span class="No-Break">configuration management</span></li>
+				<li>Setting <span class="No-Break">up Ansible</span></li>
+				<li>Introduction to <span class="No-Break">Ansible playbooks</span></li>
+				<li>Ansible playbooks <span class="No-Break">in action</span></li>
+				<li>Designing <span class="No-Break">for reusability</span></li>
+			</ul>
+			<h1 id="_idParaDest-239"><a id="_idTextAnchor1200"/><a id="_idTextAnchor1201"/>Technical requirements</h1>
+			<p>You will need an active Azure subscription to follow the exercises for this chapter. Currently, Azure is offering a free trial for 30 days with $200 worth of free credits, and you can sign up <span class="No-Break">at </span><a href="https://azure.microsoft.com/en-in/free"><span class="No-Break">https://azure.microsoft.com/en-in/free</span></a><span class="No-Break">.</span></p>
+			<p>You will also need to clone the following GitHub repository for some of <span class="No-Break">the exercises:</span></p>
+			<p><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a></p>
+			<p>Run the following command to clone the repository into your home directory, and <strong class="source-inline">cd</strong> into the <strong class="source-inline">ch9</strong> directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \ 
+modern-devops
+$ cd modern-devops/ch9</pre>			<p>You also need to install Terraform on your system. Refer to <a href="B19877_08.xhtml#_idTextAnchor1010"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, <em class="italic">Infrastructure as Code (IaC) with Terraform</em>, for more details on installing and setting <span class="No-Break">up Terraform.</span></p>
+			<h1 id="_idParaDest-240"><a id="_idTextAnchor1202"/><a id="_idTextAnchor1203"/>Introduction to configuration management</h1>
+			<p>CM, in<a id="_idIndexMarker979"/> the realm of technology and systems administration, can be compared to the role of a conductor leading an orchestra. Imagine yourself guiding a group of musicians, each playing a unique instrument. Your responsibility is to ensure that everyone is harmoniously in sync, adhering to the correct musical score, and executing their parts at precisely the <span class="No-Break">right moments.</span></p>
+			<p>In the context of technology and systems administration, CM is the practice of skilfully orchestrating and overseeing the creation, updates, and maintenance of computer systems and software, much akin to how a conductor directs musicians to produce <span class="No-Break">splendid music.</span></p>
+			<p>Here’s a breakdown of how <a id="_idIndexMarker980"/><span class="No-Break">it functions:</span></p>
+			<ul>
+				<li><strong class="bold">Standardization</strong>: As with musicians employing the same musical notes and scales, CM guarantees that all computers and software within an organization adhere to standardized configurations. This uniformity mitigates errors and bolsters <span class="No-Break">system reliability.</span></li>
+				<li><strong class="bold">Automation</strong>: In an orchestra, musicians don’t manually fine-tune their instruments during a performance. Likewise, CM tools automate the configuration and upkeep of computer systems, consistently applying configurations without the need for <span class="No-Break">manual intervention.</span></li>
+				<li><strong class="bold">Version control</strong>: Musicians follow specific sheet music, and if alterations occur, everyone receives updated sheet music. CM maintains a version history of system configurations, simplifying the tracking of changes, reverting to previous versions, and ensuring alignment across <span class="No-Break">the board.</span></li>
+				<li><strong class="bold">Efficiency</strong>: Just as a conductor synchronizes the timing of each instrument, CM optimizes system performance and resource allocation. It guarantees that software and systems operate efficiently and can scale <span class="No-Break">as required.</span></li>
+				<li><strong class="bold">Compliance and security</strong>: Analogous to a conductor enforcing performance guidelines, CM enforces adherence to security policies and best practices. It plays a crucial role in upholding a secure and compliant <span class="No-Break">IT environment.</span></li>
+				<li><strong class="bold">Troubleshooting</strong>: When issues arise during a performance, the conductor swiftly identifies and addresses them. CM tools assist in troubleshooting and rectifying configuration-related problems in <span class="No-Break">IT systems.</span></li>
+			</ul>
+			<p>To understand <a id="_idIndexMarker981"/>CM better, let’s first look at the traditional way of hosting and managing applications. We first create a <strong class="bold">virtual machine</strong> (<strong class="bold">VM</strong>) from physical infrastructure and then log in manually to VMs. We can then run a set of scripts or do the setup manually. At least, that’s what we’ve been doing till now, even in <span class="No-Break">this book.</span></p>
+			<p>There are several <a id="_idIndexMarker982"/>problems with this approach. Let’s look at some <span class="No-Break">of them:</span></p>
+			<ul>
+				<li>If we set up the server manually, the process is not repeatable. For example, if we need to build another server with a similar configuration, we must repeat the entire process to build <span class="No-Break">another server.</span></li>
+				<li>Even if we use scripts, the scripts themselves are not idempotent. This means they cannot identify and apply only the delta configuration <span class="No-Break">if needed.</span></li>
+				<li>Typical production environments consist of many servers; therefore, setting everything up manually is a labor-intensive task and adds to the toil. Software engineers should focus on novel ways of automating processes that <span class="No-Break">cause toil.</span></li>
+				<li>While you can store scripts within source control, they are <em class="italic">imperative</em>. We always encourage a <em class="italic">declarative</em> way of <span class="No-Break">managing things.</span></li>
+			</ul>
+			<p>Modern CM tools such<a id="_idIndexMarker983"/> as Ansible solve all these problems by providing the <span class="No-Break">following benefits:</span></p>
+			<ul>
+				<li>They manage configuration through a set of declarative <span class="No-Break">code pieces</span></li>
+				<li>You can store code in <span class="No-Break">version control</span></li>
+				<li>You can apply code to multiple servers from a single <span class="No-Break">control node</span></li>
+				<li>As they are idempotent, they only apply the <span class="No-Break">delta configuration</span></li>
+				<li>It is a repeatable process; you can use variables and templates to apply the same configuration to <span class="No-Break">multiple environments</span></li>
+				<li>They<a id="_idIndexMarker984"/> provide deployment orchestration and are mostly used within <span class="No-Break">CI/CD pipelines</span></li>
+			</ul>
+			<p>Although many tools available on the market<a id="_idIndexMarker985"/> provide CM, such as <strong class="bold">Ansible</strong>, <strong class="bold">Puppet</strong>, <strong class="bold">Chef</strong>, and <strong class="bold">SaltStack</strong>, Ansible <a id="_idIndexMarker986"/>is the most popular and straightforward tool <a id="_idIndexMarker987"/>used for this. It is more efficient, and its simplicity makes it less time-consuming <span class="No-Break">than others.</span></p>
+			<p>It is an open source <a id="_idIndexMarker988"/>CM tool built using Python and is owned by <strong class="bold">Red Hat</strong>. It <a id="_idIndexMarker989"/>pr<a id="_idTextAnchor1204"/>ovides the <span class="No-Break">following features:</span></p>
+			<ul>
+				<li>It helps you to automate routine tasks such as OS upgrades, patches, and backups while also creating all OS-level configurations, such as users, groups, permissions, <span class="No-Break">and others</span></li>
+				<li>The configuration is written using simple <span class="No-Break">YAML syntax</span></li>
+				<li>It<a id="_idIndexMarker990"/> uses <strong class="bold">Secure Shell</strong> (<strong class="bold">SSH</strong>) to communicate with managed nodes and <span class="No-Break">sends commands</span></li>
+				<li>The commands are executed sequentially within each node in an <span class="No-Break">idempotent manner</span></li>
+				<li>It connects to nodes parallelly to <span class="No-Break">save time</span></li>
+			</ul>
+			<p>Let’s delve into the reasons why using Ansible is a great choice for CM and automation. Here are some <span class="No-Break">compelling factors:</span></p>
+			<ul>
+				<li><strong class="bold">Simplicity and user-friendliness</strong>: Ansible boasts an uncomplicated, human-readable YAML syntax that’s easy to grasp and employ, even for those with limited <span class="No-Break">coding experience.</span></li>
+				<li><strong class="bold">Agentless approach</strong>: Ansible communicates through SSH or WinRM, eliminating the need to install agents on managed nodes. This reduces overhead and security concerns, a topic we’ll explore further when we discuss <span class="No-Break">Ansible architecture.</span></li>
+				<li><strong class="bold">Idempotent operations</strong>: Ansible ensures the desired system state is achieved, even<a id="_idIndexMarker991"/> if configurations are applied repeatedly. This minimizes the risk of <span class="No-Break">unintended changes.</span></li>
+				<li><strong class="bold">Broad adoption</strong>: With a thriving and active user community, Ansible offers extensive documentation, modules, and playbooks for various <span class="No-Break">use cases.</span></li>
+				<li><strong class="bold">Cross-platform compatibility</strong>: Ansible can handle diverse environments, managing various operating systems, cloud providers, network devices, and infrastructure components with a <span class="No-Break">single tool.</span></li>
+				<li><strong class="bold">Seamless integration</strong>: Ansible seamlessly integrates with other tools, including <strong class="bold">version control systems</strong> (<strong class="bold">VCSs</strong>), monitoring solutions, and <span class="No-Break">CI/CD pipelines.</span></li>
+				<li><strong class="bold">Scalability</strong>: Ansible scales effortlessly to handle both small and large environments, catering to both enterprises <span class="No-Break">and start-ups.</span></li>
+				<li><strong class="bold">Version control</strong>: Infrastructure configurations are stored in plain text files, simplifying change management, history tracking, and collaboration through Git or <span class="No-Break">similar VCSs.</span></li>
+				<li><strong class="bold">Automation of routine tasks</strong>: Ansible automates repetitive chores such as software installations, configuration updates, and patch management, freeing up time for <span class="No-Break">strategic tasks.</span></li>
+				<li><strong class="bold">Security and compliance</strong>: Implement security policies and compliance standards consistently across your infrastructure using Ansible’s <strong class="bold">Role-Based Access Control</strong> (<strong class="bold">RBAC</strong>) and integrated <span class="No-Break">security modules.</span></li>
+				<li><strong class="bold">Rollback and recovery</strong>: Ansible enables easy rollback to prior configurations in the case of issues, reducing downtime and minimizing the impact <span class="No-Break">of changes.</span></li>
+				<li><strong class="bold">Modularity and reusability</strong>: Ansible encourages the creation of modular, reusable playbooks and roles, fostering an organized and efficient <span class="No-Break">automation approach.</span></li>
+				<li><strong class="bold">Supportive community</strong>: Benefit <a id="_idIndexMarker992"/>from a robust Ansible community that offers support, documentation, and a repository of contributed roles <span class="No-Break">and modules.</span></li>
+				<li><strong class="bold">Cost-effective</strong>: Ansible is open source and free to use, cutting down on licensing expenses compared to other <span class="No-Break">automation tools.</span></li>
+				<li><strong class="bold">Orchestration and workflow automation</strong>: Beyond CM, Ansible can orchestrate intricate workflows, including application deployment and <span class="No-Break">infrastructure provisioning.</span></li>
+				<li><strong class="bold">Immutable infrastructure</strong>: Ansible supports the concept of immutable infrastructure, where changes involve recreating components rather than modifying them in place. This leads to more predictable and <span class="No-Break">dependable deployments.</span></li>
+				<li><strong class="bold">Real-time feedback</strong>: Ansible provides real-time feedback and reporting, simplifying the monitoring and troubleshooting of <span class="No-Break">automation tasks.</span></li>
+			</ul>
+			<p>These advantages establish Ansible as a popular choice for CM, automation, and orchestration across a wide spectrum of IT environments <span class="No-Break">and industries.</span></p>
+			<p>Ansible has a simple architecture. It has<a id="_idIndexMarker993"/> a <strong class="bold">control node</strong> that takes care of managing<a id="_idIndexMarker994"/> multiple <strong class="bold">managed nodes</strong>. All you need is a control node server to install Ansible and the nodes to manage us<a id="_idTextAnchor1205"/>ing the control node (also known as managed nodes). The managed nodes should allow an SSH connection from the Ansible control node—something like the <span class="No-Break">foll<a id="_idTextAnchor1206"/>owing diagram:</span></p>
+			<div>
+				<div id="_idContainer075" class="IMG---Figure">
+					<img src="image/B19877_09_1.jpg" alt="Figure 9.1 – Ansible architecture" width="1614" height="785"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.1 – Ansible architecture</p>
+			<p>Now, let<a id="_idTextAnchor1207"/>’s go<a id="_idIndexMarker995"/> ahead and see how we can instal<a id="_idTextAnchor1208"/>l and set up the required configuration using Ansible. Let’s look at how to install Ansible in th<a id="_idTextAnchor1209"/><a id="_idTextAnchor1210"/>e <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-241">Setting up Ansible<a id="_idTextAnchor1211"/></h1>
+			<p>We<a id="_idIndexMarker996"/> need to set up and install Ansible in the control node, but before we do that, we will have to spin three servers to start the activity—an Ansible control node and tw<a id="_idTextAnchor1212"/><a id="_idTextAnchor1213"/>o <span class="No-Break">managed nodes.</span></p>
+			<h2 id="_idParaDest-242"><a id="_idTextAnchor1214"/>Setting up inventory</h2>
+			<p>The<a id="_idIndexMarker997"/> id<a id="_idTextAnchor1215"/>ea is to set up a two-tier architecture with <strong class="bold">Apache</strong> and <strong class="bold">MySQL</strong>. So, let’s <a id="_idIndexMarker998"/>use<a id="_idIndexMarker999"/> Terraform to spin up the <span class="No-Break">three servers.</span></p>
+			<p>Let’s first <strong class="source-inline">cd</strong> into the directory where the Terraform templates are located and then edit the <strong class="source-inline">terraform.tfvars</strong> file to fill in the required details. (Please refer to <a href="B19877_08.xhtml#_idTextAnchor1010"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, <em class="italic">Infrastructure as Code (IaC) with Terraform</em>, for more details about how to get <span class="No-Break">the attributes):</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch9/setup-ansible-terraform
+$ vim terraform.tfvars</pre>			<p>Then, use the following commands to spin up the servers <span class="No-Break">using Terraform:</span></p>
+			<pre class="console">
+$ terraform init
+$ terraform plan -out ansible.tfplan
+$ terraform apply ansible.tfplan</pre>			<p>Once<a id="_idIndexMarker1000"/> the <strong class="source-inline">terraform apply</strong> command is completed successfully, we will see three servers—<strong class="source-inline">ansible-control-node</strong>, <strong class="source-inline">web</strong>, and <strong class="source-inline">db</strong>, and the associated resources created within the <strong class="source-inline">ansible-exercise</strong> <span class="No-Break">resource group.</span></p>
+			<p>The <strong class="source-inline">terraf<a id="_idTextAnchor1216"/>orm apply</strong> output also provides the public IP addresses of the Ansible control node and the <strong class="source-inline">web</strong> VM. You should see the public IP address we got in <span class="No-Break">the output.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">It might take a while for Azure to report the output, and if you did not get the IP addresses during <strong class="source-inline">terraform apply</strong>, you could subsequently run <strong class="source-inline">terraform outpu<a id="_idTextAnchor1217"/><a id="_idTextAnchor1218"/><a id="_idTextAnchor1219"/>t</strong> to get <span class="No-Break">the details.</span></p>
+			<p>Ansible requires the control node to connect with managed nodes via SSH. Now, let’s move on an<a id="_idTextAnchor1220"/>d look at how we can communic<a id="_idTextAnchor1221"/>ate with our managed nodes (also known as <span class="No-Break">inventory servers).</span></p>
+			<h2 id="_idParaDest-243"><a id="_idTextAnchor1222"/>Connecting the Ansible control node with inventory servers</h2>
+			<p>We’ve<a id="_idIndexMarker1001"/> already set up <strong class="bold">passwordless SSH</strong> between the control node and managed nodes when we provisioned the infrastructure using Terraform. Let’s look at how we did that to understand <span class="No-Break">it better.</span></p>
+			<p>We created<a id="_idIndexMarker1002"/> an <strong class="bold">Azure Virtual Network</strong> (<strong class="bold">VNet</strong>), a <strong class="bold">subnetwork</strong> (<strong class="bold">subnet</strong>), and three <strong class="bold">Azure VMs</strong> called <strong class="source-inline">control-node</strong>, <strong class="source-inline">web</strong>, and <strong class="source-inline">db</strong> within<a id="_idIndexMarker1003"/> that <a id="_idIndexMarker1004"/>subnet. If we look at the VM resource configuration, we also have a <strong class="source-inline">custom_data</strong> field that can be used to pass an initialization<a id="_idIndexMarker1005"/> script to the VM, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+resource "azurerm_virtual_machine" "control_node" {
+  name                  = "ansible-control-node"
+  ...
+  os_profile {
+   ...
+   custom_data    = base64encode(data.template_file.control_node_init.rendered)
+  }
+}
+resource "azurerm_virtual_machine" "web" {
+  name                  = "web" 
+  ...
+  os_profile {
+   ...
+   custom_data    = base64encode(data.template_file.managed_nodes_init.rendered)
+  }
+}
+resource "azurerm_virtual_machine" "db" {
+  name                  = "db"
+  ...
+  os_profile {
+   ...
+   custom_data    = base64encode(data.template_file.managed_nodes_init.rendered)
+  }
+}</pre>			<p>As <a id="_idIndexMarker1006"/>we can see, the <strong class="source-inline">control_node</strong> VM refers to a <strong class="source-inline">data.template_file.control_node_init</strong> resource, and the <strong class="source-inline">web</strong> and <strong class="source-inline">db</strong> nodes refer to a <strong class="source-inline">data.template_file.managed_nodes_init</strong> resource. These are <strong class="source-inline">template_file</strong> resources that can be used for template files. Let’s look at the resources <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+data "template_file" "managed_nodes_init" {
+  template = file("managed-nodes-user-data.sh")
+  vars = {
+    admin_password = var.admin_password
+  }
+}
+data "template_file" "control_node_init" {
+  template = file("control-node-user-data.sh")
+  vars = {
+    admin_password = var.admin_password
+  }
+}</pre>			<p>As we can see, the <strong class="source-inline">managed_nodes_init</strong> resource points to the <strong class="source-inline">managed-nodes-user-data.sh</strong> file and passes an <strong class="source-inline">admin_password</strong> variable to that file. Similarly, the <strong class="source-inline">control_node_init</strong> resource points to the <strong class="source-inline">control-node-user-data.sh</strong> file. Let’s look at the <strong class="source-inline">managed-nodes-user-data.sh</strong> <span class="No-Break">file first:</span></p>
+			<pre class="console">
+#!/bin/sh
+sudo useradd -m ansible
+echo 'ansible ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers
+sudo su - ansible &lt;&lt; EOF
+ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa
+printf "${admin_password}\n${admin_password}" | sudo passwd ansible
+EOF</pre>			<p>As we<a id="_idIndexMarker1007"/> can see, it is a shell script that does <span class="No-Break">the following:</span></p>
+			<ol>
+				<li>Creates an <span class="No-Break"><strong class="source-inline">ansible</strong></span><span class="No-Break"> user.</span></li>
+				<li>Adds the user to the <span class="No-Break"><strong class="source-inline">sudoers</strong></span><span class="No-Break"> list.</span></li>
+				<li>Generates an <strong class="source-inline">ssh</strong> key pair for <span class="No-Break">passwordless authentication.</span></li>
+				<li>Sets the password for the <span class="No-Break"><strong class="source-inline">ansible</strong></span><span class="No-Break"> user.</span></li>
+			</ol>
+			<p>As we’ve generated the <strong class="source-inline">ssh</strong> key pair, we would need to do the same within the control node with some additional configuration. Let’s look at the <strong class="source-inline">control-node-user-data.sh</strong> script, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+#!/bin/sh
+sudo useradd -m ansible
+echo 'ansible ALL=(ALL) NOPASSWD:ALL' | sudo tee -a /etc/sudoers
+sudo su - ansible &lt;&lt; EOF
+ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa
+sleep 120
+ssh-keyscan -H web &gt;&gt; ~/.ssh/known_hosts
+ssh-keyscan -H db &gt;&gt; ~/.ssh/known_hosts
+sudo apt update -y &amp;&amp; sudo apt install -y sshpass
+echo "${admin_password}" | sshpass ssh-copy-id ansible@web
+echo "${admin_password}" | sshpass ssh-copy-id ansible@db
+EOF</pre>			<p>The script does <span class="No-Break">the following:</span></p>
+			<ol>
+				<li>Creates an <span class="No-Break"><strong class="source-inline">ansible</strong></span><span class="No-Break"> user</span></li>
+				<li> Adds the user to the <span class="No-Break"><strong class="source-inline">sudoers</strong></span><span class="No-Break"> list</span></li>
+				<li> Generates an <strong class="source-inline">ssh</strong> key pair for <span class="No-Break">passwordless authentication</span></li>
+				<li> Adds the <strong class="source-inline">web</strong> and <strong class="source-inline">db</strong> VMs to the <strong class="source-inline">known_hosts</strong> file to ensure we trust <span class="No-Break">both hosts</span></li>
+				<li>Installs the <strong class="source-inline">sshpass</strong> utility to allow for sending the <strong class="source-inline">ssh</strong> public key to the <strong class="source-inline">web</strong> and <span class="No-Break"><strong class="source-inline">db</strong></span><span class="No-Break"> VMs</span></li>
+				<li>Copies the <strong class="source-inline">ssh</strong> public key to the <strong class="source-inline">web</strong> and <strong class="source-inline">db</strong> VMs for <span class="No-Break">passwordless connectivity</span></li>
+			</ol>
+			<p>These <a id="_idIndexMarker1008"/>files get executed automatically when the VMs are created; therefore, passwordless SSH should already be working. So, let’s <a id="_idIndexMarker1009"/>use an <strong class="bold">SSH client</strong> to log in to <strong class="source-inline">ansible-control-node</strong> using the IP address we got in the last step. We will use the username and password we configured in the <span class="No-Break"><strong class="source-inline">terraform.tfvars</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+$ ssh ssh_admin@104.46.61.213</pre>			<p>Once you are in the control node server, switch the user to <strong class="source-inline">ansible</strong> and try doing an SSH to the <strong class="source-inline">web</strong> server using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ sudo su - ansible
+$ ssh web</pre>			<p>And if you land on the <strong class="source-inline">web</strong> server, passwordless authentication is <span class="No-Break">working correctly.</span></p>
+			<p>Repeat the same steps to check whether you can connect with the <span class="No-Break"><strong class="source-inline">db</strong></span><span class="No-Break"> server.</span></p>
+			<p>Exit the prompts until you are in the control node. </p>
+			<p>Now, as we’re in the control node, let’s <span class="No-Break">install Ansible.</span></p>
+			<h2 id="_idParaDest-244"><a id="_idTextAnchor1223"/>Installing Ansible in the control node</h2>
+			<p>Ansible<a id="_idIndexMarker1010"/> requires a Linux/Unix machine (preferably), and you should have Python <strong class="source-inline">2.x</strong> or <span class="No-Break"><strong class="source-inline">3.x</strong></span><span class="No-Break"> installed.</span></p>
+			<p>As the Ansible control node runs on Ubuntu, Ansible provides a <strong class="bold">personal package archive</strong> (<strong class="bold">PPA</strong>) repository <a id="_idIndexMarker1011"/>that we can configure to download and install Ansible using <span class="No-Break"><strong class="source-inline">apt</strong></span><span class="No-Break"> commands.</span></p>
+			<p>Use the following commands to install Ansible on <span class="No-Break">the server:</span></p>
+			<pre class="console">
+$ sudo apt update
+$ sudo apt install software-properties-common -y
+$ sudo apt-add-repository --yes --update ppa:ansible/ansible
+$ sudo apt install ansible -y</pre>			<p>To check whether Ansible has been installed successfully, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible --version
+ansible 2.9.27</pre>			<p>And, as we see, <strong class="source-inline">ansible 2.9.27</strong> is successfully installed on your <span class="No-Break">control node.</span></p>
+			<p>Ansible uses an inventory file to manage nodes. Therefore, the next step <a id="_idTextAnchor1224"/><a id="_idTextAnchor1225"/><a id="_idTextAnchor1226"/>is to set up an <span class="No-Break">inventory file.</span></p>
+			<h2 id="_idParaDest-245">Setting up an i<a id="_idTextAnchor1227"/>nventory file</h2>
+			<p>An <a id="_idIndexMarker1012"/>inventory file within Ansible is a file that allows you to group your managed nodes according to roles. For example, you can define roles such as <strong class="source-inline">webserver</strong> and <strong class="source-inline">dbserver</strong> and group related servers together. You can use IP addresses, hostnames, or aliases <span class="No-Break">for that.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always use aliases because they provide room for IP address and <span class="No-Break">hostname changes.</span></p>
+			<p>You can run Ansible commands on hosts or a group of hosts using the role tagged to them. There is no limit to servers that can have a particular role. If your server uses a non-standard SSH port, you can also use that port within the <span class="No-Break">inventory file.</span></p>
+			<p>The <a id="_idIndexMarker1013"/>default location of the Ansible inventory file is <strong class="source-inline">/etc/ansible/hosts</strong>. If you look at the <strong class="source-inline">/etc/ansible</strong> directory ownership, it is owned by the <strong class="source-inline">root</strong> user. We want to use the <strong class="source-inline">ansible</strong> user that we created for security purposes. Therefore, we must change the <strong class="source-inline">/etc/ansible</strong> directory ownership and its subdirectories and files to <strong class="source-inline">ansible</strong>. Use the following command to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ sudo chown -R ansible:ansible /etc/ansible</pre>			<p>We can then switch the user to <strong class="source-inline">ansible</strong> and clone the Git repository that contains the required files into the control server using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ sudo su - ansible
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \ 
+modern-devops
+$ cd ~/modern-devops/ch9/ansible-exercise</pre>			<p>In our scenario, we have a web server called <strong class="source-inline">web</strong> and a database server called <strong class="source-inline">db</strong>. Therefore, if you check the host file called <strong class="source-inline">hosts</strong> within the repository, you will see <span class="No-Break">the following:</span></p>
+			<pre class="console">
+[webservers]
+web ansible_host=web
+[dbservers]
+db ansible_host=db
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3</pre>			<p>The <strong class="source-inline">[all:vars]</strong> section contains variables applicable to all groups. Here, we’re explicitly defining <strong class="source-inline">ansible_python_interpreter</strong> to <strong class="source-inline">python3</strong> so that Ansible uses <strong class="source-inline">python3</strong> instead of <strong class="source-inline">python2</strong>. As we’re using Ubuntu, <strong class="source-inline">python3</strong> comes installed as default, <a id="_idTextAnchor1228"/>and <strong class="source-inline">python2</strong> <span class="No-Break">is deprecated.</span></p>
+			<p>We also see that instead of using <strong class="source-inline">web</strong> directly, we’ve specified an <strong class="source-inline">ansible_host</strong> section. That defines <strong class="source-inline">web</strong> as an alias, pointing to a host with the hostname <strong class="source-inline">web</strong>. You can also <a id="_idIndexMarker1014"/>use the IP address instead of the hostname <span class="No-Break">if required.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always group the inventory according to the function performed. That helps us to apply a similar configuration to a large number of machines with a <span class="No-Break">similar role.</span></p>
+			<p>As we want to keep the configuration with code, we would wish to stay within the Git repository itself. So, we must tell Ansible that the inventory file is in a non-standard location. To do so, we will cre<a id="_idTextAnchor1229"/><a id="_idTextAnchor1230"/>ate an Ansible <span class="No-Break">configuration file.</span></p>
+			<h2 id="_idParaDest-246">Setting up the Ansi<a id="_idTextAnchor1231"/>ble configuration file</h2>
+			<p>The <a id="_idIndexMarker1015"/>Ansible configuration file defines global properties that are specific to our setup. The following are ways in which you can specify the Ansible configuration file, and the first method overrides the next – the settings are not merged, so keep that <span class="No-Break">in mind:</span></p>
+			<ul>
+				<li>By setting an environment variable, <strong class="source-inline">ANSIBLE_CONFIG</strong>, pointing to the Ansible <span class="No-Break">configuration file</span></li>
+				<li>By creating an <strong class="source-inline">ansible.cfg</strong> file in the <span class="No-Break">current directory</span></li>
+				<li>By creating an <strong class="source-inline">ansible.cfg</strong> file in the home directory of the <span class="No-Break">current user</span></li>
+				<li>By creating an <strong class="source-inline">ansible.cfg</strong> file in the <strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">etc/ansible</strong></span><span class="No-Break"> directory</span></li>
+			</ul>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">If you manage multiple applications, with each application in its Git repositories, having a local <strong class="source-inline">ansible.cfg</strong> file in every repository will help keep the applications decentralized. It will also enable GitOps and <a id="_idIndexMarker1016"/>make Git the <strong class="bold">single source </strong><span class="No-Break"><strong class="bold">of truth</strong></span><span class="No-Break">.</span></p>
+			<p>So, if you check the <strong class="source-inline">ansible.cfg</strong> file in the current directory, you will see <span class="No-Break">the following:</span></p>
+			<pre class="console">
+[defaults]
+inventory = ./hosts
+hos<a id="_idTextAnchor1232"/>t_key_checking = False</pre>			<p>Now, to <a id="_idIndexMarker1017"/>check whether our inventory file is correct, let’s list our inventory by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible-inventory --list -y
+all:
+  children:
+    dbservers:
+      hosts:
+        db:
+          ansible_host: db
+          ansible_python_interpreter: /usr/bin/python3
+    ungrouped: {}
+    webservers:
+      hosts:
+        web:
+          ansible_host: web
+          ansible_python_interpreter: /usr/bin/python3</pre>			<p>We see that there are two groups—<strong class="source-inline">dbservers</strong> containing <strong class="source-inline">db</strong> and <strong class="source-inline">webservers</strong> containing <strong class="source-inline">web</strong>, each using <strong class="source-inline">python3</strong> as <span class="No-Break">the </span><span class="No-Break"><strong class="source-inline">ansible_python_interpreter</strong></span><span class="No-Break">.</span></p>
+			<p>If we want to see all the hosts, we can use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible --list-hosts all
+  hosts (2):
+    web
+    db</pre>			<p>If we <a id="_idIndexMarker1018"/>want to list all hosts that have the <strong class="source-inline">webservers</strong> role, we can use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible --list-hosts webservers
+  hosts<a id="_idTextAnchor1233"/> (1):
+    web</pre>			<p>Now, let’s check whether Ansible can connect to these servers by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible all -m ping
+web | SUCCESS =&gt; {
+    "changed": false,
+    "ping": "pong"
+}
+db | SUCCESS =&gt; {
+    "changed": false,
+    "ping": "pong"
+}</pre>			<p>And, as we can observe, we get a successful response for both servers. So, we’re all set up and can start defining the configuration. Ansible offers <strong class="bold">tasks</strong> and <strong class="bold">modules</strong> to provide CM. Le<a id="_idTextAnchor1234"/><a id="_idTextAnchor1235"/>t’s look at these in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-247">Ansible tasks a<a id="_idTextAnchor1236"/>nd modules</h1>
+			<p>Ansible tasks<a id="_idIndexMarker1019"/> form the basic building block of running Ansible commands. Ansible tasks are structured in the <span class="No-Break">following format:</span></p>
+			<pre class="console">
+$ ansible &lt;options&gt; &lt;<a id="_idTextAnchor1237"/>inventory&gt;</pre>			<p>Ansible modules <a id="_idIndexMarker1020"/>are reusable code for a particular function, such as running a <strong class="source-inline">shell</strong> command or creating and managing users. You can use Ansible modules with Ansible tasks to manage configuration within managed nodes. For example, the following command will run the <strong class="source-inline">uname</strong> command on each <span class="No-Break">managed server:</span></p>
+			<pre class="console">
+$ ansible -m shell -a "uname" all
+db | CHANGED | rc=0 &gt;&gt;
+Linux
+web | CHANGED | rc=0 &gt;&gt;
+Linux</pre>			<p>So, we get a reply from the <strong class="source-inline">db</strong> server and the <strong class="source-inline">web</strong> server, each providing a return code, <strong class="source-inline">0</strong>, and an output, <strong class="source-inline">Linux</strong>. If you look at the command, you will see that we have provided the <span class="No-Break">following flags:</span></p>
+			<ul>
+				<li><strong class="source-inline">-m</strong>: The name of the module (<strong class="source-inline">shell</strong> <span class="No-Break">module here)</span></li>
+				<li><strong class="source-inline">-a</strong>: The parameters to the module (<strong class="source-inline">uname</strong> in <span class="No-Break">this case)</span></li>
+			</ul>
+			<p>The command finally ends with where we want to run this task. Since we’ve specified <strong class="source-inline">all</strong>, it runs the task on all servers. We can run this on a single server, a set of servers, a role, or multiple roles, or use a wildcard to select the combination <span class="No-Break">we want.</span></p>
+			<p>The tasks have three possible statuses—<strong class="source-inline">SUCCESS</strong>, <strong class="source-inline">CHANGED</strong>, and <strong class="source-inline">FAILURE</strong>. The <strong class="source-inline">SUCCESS</strong> status denotes that the task was successful, and Ansible took no action. The <strong class="source-inline">CHANGED</strong> status denotes that Ansible had to change the existing configuration to apply the expected configuration, and <strong class="source-inline">FAILURE</strong> denotes an error while executing <span class="No-Break">the task.</span></p>
+			<p>Ansible modules are reusable scripts that we can use to define configuration within servers. Each module targets a particular aspect of CM. Modules are used in both Ansible tasks and playbooks. There are many modules available for consumption, and they are available at <a href="https://docs.ansible.com/ansible/latest/collections/index_module.html">https://docs.ansible.com/ansible/latest/collections/index_module.html</a>. You can pick and choose modules according to your requirements and <span class="No-Break">use cases.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">As Ansible is idempotent, always use modules specific to your task and avoid using <strong class="source-inline">command</strong> and <strong class="source-inline">shell</strong> modules. For example, use the <strong class="source-inline">apt</strong> module to install a package instead of the <strong class="source-inline">command</strong> module to run <strong class="source-inline">apt install &lt;package&gt; -y</strong>. If your playbook starts to look like code, then you’re doing something <span class="No-Break">fundamentally wrong.</span></p>
+			<p>Tasks do <a id="_idIndexMarker1021"/>not mak<a id="_idTextAnchor1238"/>e sense when we have a series of steps to follow while setting up a server. Therefore, Ansible provides <em class="italic">playbooks</em> for this activity. Let’s<a id="_idTextAnchor1239"/><a id="_idTextAnchor1240"/> have a look at this in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-248"><a id="_idTextAnchor1241"/>Introduction to Ansible playbooks</h1>
+			<p>Imagine you’re a <a id="_idIndexMarker1022"/>conductor leading an orchestra. In this scenario, Ansible playbooks are akin to your musical score, guiding every musician to create a harmonious symphony of automation in the <span class="No-Break">tech world.</span></p>
+			<p>In the realm <a id="_idIndexMarker1023"/>of tech and automation, Ansible playbooks provide <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="bold">Musical score for automation</strong>: Just as a conductor uses a musical score with notations to guide each instrument, an Ansible playbook contains a set of instructions and actions for orchestrating specific IT tasks and configurations, spanning from software deployments to <span class="No-Break">system configurations.</span></li>
+				<li><strong class="bold">Harmonious guidance</strong>: Ansible playbooks take a similar approach. You declare the desired IT state, and Ansible plays the role of the conductor, ensuring that all the necessary steps are followed, much like specifying, “<em class="italic">I want a flawless musical performance</em>,” and Ansible orchestrates the <span class="No-Break">entire process.</span></li>
+				<li><strong class="bold">Tasks and reusability</strong>: Ansible playbooks are organized into tasks and roles, as with musical sheets and instruments. These tasks can be reused across various playbooks, promoting consistency and <span class="No-Break">saving time.</span></li>
+				<li><strong class="bold">Instrument selection and direction</strong>: Just as a conductor selects which instruments play at which times, playbooks specify which servers or machines (the inventory) should execute tasks. You can direct specific server groups or <span class="No-Break">individual machines.</span></li>
+				<li><strong class="bold">Harmonious execution</strong>: Ansible can skilfully coordinate tasks on multiple machines simultaneously, much as a conductor harmonizes the efforts of different musicians to create a <span class="No-Break">beautiful composition.</span></li>
+				<li><strong class="bold">Fine-tuned performance</strong>: If <a id="_idIndexMarker1024"/>unexpected challenges arise during the performance, a conductor adjusts and guides the musicians to ensure a flawless outcome. Similarly, Ansible playbooks incorporate error-handling strategies to handle unexpected issue<a id="_idTextAnchor1242"/>s <span class="No-Break">during automation.</span></li>
+			</ul>
+			<p><strong class="bold">Ansible playbooks</strong> are a collection of tasks that produce the desired configuration with<a id="_idTextAnchor1243"/>in the managed nodes. They have the <span class="No-Break">following features:</span></p>
+			<ul>
+				<li>They help in managing configuration within multiple remote servers using <span class="No-Break">declarative steps</span></li>
+				<li>They use a sequential list of idempotent steps, and steps that match the expected configuration are not <span class="No-Break">applied again</span></li>
+				<li>Tasks within the playbook can be synchronous <span class="No-Break">and asynchronous</span></li>
+				<li>They enable GitOps by allowing the steps to be stored using a simple YAML file to keep in source control, <span class="No-Break">providing CaC</span></li>
+			</ul>
+			<p>Ansible playbooks consist of multiple <strong class="bold">plays</strong>, and each play is mapped to a group of <strong class="bold">hosts</strong> using a <strong class="bold">role</strong> and consists of a series of <strong class="bold">tasks</strong> required to achieve<a id="_idTextAnchor1244"/> them—something like the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer076" class="IMG---Figure">
+					<img src="image/B19877_09_2.jpg" alt="Figure 9.2 – Playbooks" width="1650" height="792"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.2 – <a id="_idTextAnchor1245"/>Playbooks</p>
+			<p>The following <strong class="source-inline">ping.yaml</strong> file is an example of a simple playbook that pings <span class="No-Break">all servers:</span></p>
+			<pre class="console">
+---
+  - hosts: all
+    tasks:
+      - name: Ping all servers
+        action: ping</pre>			<p>The YAML file contains<a id="_idIndexMarker1025"/> a list of plays, as the list directive shows. Each play consists of a <strong class="source-inline">hosts</strong> attribute that defines the role to which we want to apply the play. The <strong class="source-inline">tasks</strong> section consists of a list of tasks, each with <strong class="source-inline">name</strong> and <strong class="source-inline">action</strong> attributes. In the preceding example, we have a single pla<a id="_idTextAnchor1246"/><a id="_idTextAnchor1247"/>y with a single task that pings <span class="No-Break">all se<a id="_idTextAnchor1248"/>rvers.</span></p>
+			<h2 id="_idParaDest-249"><a id="_idTextAnchor1249"/>Checking playbook syntax</h2>
+			<p>It is a <a id="_idIndexMarker1026"/>best practice to check playbook syntax before applying it to your inventory. To check your playbook’s syntax, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible-playbook ping.yaml --syntax-check
+playbook: ping.yaml</pre>			<p>The syntax is correct, as we get a response with the playbook name<a id="_idTextAnchor1250"/><a id="_idTextAnchor1251"/>. Now, let’s go ahead and apply<a id="_idIndexMarker1027"/> <span class="No-Break">the playbook.</span></p>
+			<h2 id="_idParaDest-250">Applying the<a id="_idTextAnchor1252"/> first playbook</h2>
+			<p>To apply the<a id="_idIndexMarker1028"/> playbook, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ansible-playbook ping.yaml
+PLAY [all] *******************************************
+TASK [Gathering Facts] *******************************
+ok: [db]
+ok: [web]
+TASK [Ping all servers] ******************************
+ok: [db]
+ok: [web]
+PLAY RECAP *******************************************
+db : ok=2 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+web : ok=2 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0</pre>			<p>There are three elements of <span class="No-Break">play execution:</span></p>
+			<ul>
+				<li><strong class="bold">Gathering facts</strong>: Ansible checks for all hosts that are part of the role, logs in to each instance, and gathers information from each host it uses while executing the tasks fro<a id="_idTextAnchor1253"/>m <span class="No-Break">the plays.</span></li>
+				<li><strong class="bold">Run tasks</strong>: Then, it runs the tasks of each play, as defined in <span class="No-Break">the playbook.</span></li>
+				<li><strong class="bold">Play recap</strong>: Ansible then provides a recap of the tasks it executed and the hosts it ran them on. This includes a list of all successful and <span class="No-Break">failed responses.</span></li>
+			</ul>
+			<p>As we’ve investigated an elementary example of playbooks, we must understand how to use Ansible playbooks effectively. In the next section, let’s look at Ans<a id="_idTextAnchor1254"/><a id="_idTextAnchor1255"/>ible playbooks in action wit<a id="_idTextAnchor1256"/>h a <span class="No-Break">better example.</span></p>
+			<h1 id="_idParaDest-251"><a id="_idTextAnchor1257"/>Ansible playbooks in action</h1>
+			<p>Let’s set <a id="_idIndexMarker1029"/>up an Apache server for a custom website that connects with a MySQL backend—in short, a <strong class="bold">Linux</strong>, <strong class="bold">Apache</strong>, <strong class="bold">MySQL</strong>, and <strong class="bold">PHP</strong> (<strong class="bold">LAMP</strong>) stack <span class="No-Break">using Ansible.</span></p>
+			<p>The following directory contains all resources for the exercises in <span class="No-Break">this section:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch9/lamp-stack</pre>			<p>We have created the following custom <strong class="source-inline">index.php</strong> page that tests the connection to the MySQL database and displays whether it can connect <span class="No-Break">or not:</span></p>
+			<pre class="console">
+...
+&lt;?php
+mysqli_connect('db', 'testuser', 'Password@1') or die('Could not connect the database : 
+Username or password incorrect');
+echo 'Database Connected successfully';
+?&gt;
+...</pre>			<p>We create several Ansible playbooks according to the log<a id="_idTextAnchor1258"/>ical steps we follow <span class="No-Break">with CM.</span></p>
+			<p>It is an excellent practice to update the packages and repositories at the start of every configuration. Therefor<a id="_idTextAnchor1259"/><a id="_idTextAnchor1260"/>e, we need to start our playbook with <span class="No-Break">this s<a id="_idTextAnchor1261"/>tep.</span></p>
+			<h2 id="_idParaDest-252"><a id="_idTextAnchor1262"/>Updating packages and repositories</h2>
+			<p>As we’re<a id="_idIndexMarker1030"/> using Ubuntu, we can use the <strong class="source-inline">apt</strong> module<a id="_idIndexMarker1031"/> to update the packages. We must update packages and repositories to ensure the latest package index is available with all our <strong class="source-inline">apt</strong> repositories and avoid any untoward issues while installing packages. The following playbook, <strong class="source-inline">apt-update.yaml</strong>, performs <span class="No-Break">the update:</span></p>
+			<pre class="console">
+---
+- hosts: webservers:dbservers
+  become: true
+  tasks:
+    - name: Update apt packages
+      apt: update_cache=yes cache_valid_time=3600</pre>			<p>The <a id="_idIndexMarker1032"/>YAML file begins with a list of plays and contains a <a id="_idIndexMarker1033"/>single play in this case. The <strong class="source-inline">hosts</strong> attribute defines a colon-separated list of <strong class="source-inline">roles</strong>/<strong class="source-inline">hosts</strong> inventory to apply the playbook. In this case, we’ve specified <strong class="source-inline">webservers</strong> and <strong class="source-inline">dbservers</strong>. The <strong class="source-inline">become</strong> attribute specifies whether we want to execute the play as a <strong class="source-inline">root</strong> user. So, as we’ve set <strong class="source-inline">become</strong> to <strong class="source-inline">true</strong>, Ansible will perform all play tasks with <strong class="source-inline">sudo</strong> privileges. The play contains a single task—<strong class="source-inline">Update apt packages</strong>. The task uses the <strong class="source-inline">apt</strong> module and consists of <strong class="source-inline">update_cache=yes</strong>. It will run an <strong class="source-inline">apt update</strong> operation on all nodes with the <strong class="source-inline">webservers</strong> and <strong class="source-inline">dbservers</strong> roles<a id="_idTextAnchor1263"/><a id="_idTextAnchor1264"/>. The next step is to install packages <span class="No-Break">and services.</span></p>
+			<h2 id="_idParaDest-253">Installing application packages a<a id="_idTextAnchor1265"/>nd services</h2>
+			<p>We will <a id="_idIndexMarker1034"/>use the <strong class="source-inline">apt</strong> module to install the<a id="_idIndexMarker1035"/> packages on Ubuntu, and the <strong class="source-inline">service</strong> module to start and enable <span class="No-Break">the service.</span></p>
+			<p>Let’s start by installing Apache on the web servers using the following <span class="No-Break"><strong class="source-inline">install-webserver.yaml</strong></span><span class="No-Break"> playbook:</span></p>
+			<pre class="console">
+---
+- hosts: webservers
+  become: true
+  tasks:
+    - name: Install packages
+      apt:
+        name:
+        - apache2
+        - php
+        - libapache2-mod-php
+        - php-mysql
+        update_cache: yes
+        cache_valid_time: 3600
+        state: present
+    - name: Start and Enable Apache service
+      service: name=apache2 state=started enabled=yes</pre>			<p>As this <a id="_idIndexMarker1036"/>configuration is for <strong class="source-inline">webservers</strong>, we’ve specified that within the <strong class="source-inline">hosts</strong> attribute. The <strong class="source-inline">tasks</strong> section defines two tasks—<strong class="source-inline">Install packages</strong> and <strong class="source-inline">Start and Enable Apache service</strong>. The <strong class="source-inline">Install packages</strong> task uses the <strong class="source-inline">apt</strong> module to install <strong class="source-inline">apache2</strong>, <strong class="source-inline">php</strong>, <strong class="source-inline">libapache2-mod-php</strong>, and <strong class="source-inline">php-mysql</strong>. The <strong class="source-inline">Start and Enable Apache service</strong> task will start and enable the <span class="No-Break"><strong class="source-inline">apache2</strong></span><span class="No-Break"> service.</span></p>
+			<p>Similarly, we <a id="_idIndexMarker1037"/>will install and set up the MySQL service using the following <span class="No-Break"><strong class="source-inline">install-dbserver.yaml</strong></span><span class="No-Break"> playbook:</span></p>
+			<pre class="console">
+---
+- hosts: dbservers
+  become: true
+  tasks:
+  - name: Install packages
+    apt:
+      name:
+      - python-pymysql
+      - mysql-server
+      update_cache: yes
+      cache_valid_time: 3600
+      state: present
+  - name: Start and enable MySQL service
+    service:
+      name: mysql
+      state: started
+      enabled: true</pre>			<p>This<a id="_idIndexMarker1038"/> playbook will run two tasks—<strong class="source-inline">Install packages</strong> and <strong class="source-inline">Start and enable MySQL service</strong>. The <strong class="source-inline">Install packages</strong> ta<a id="_idTextAnchor1266"/>sk will install the <strong class="source-inline">python-mysql</strong> and <strong class="source-inline">mysql-server</strong> packages <a id="_idIndexMarker1039"/>using the <strong class="source-inline">apt</strong> module. The <strong class="source-inline">Start and enable M<a id="_idTextAnchor1267"/><a id="_idTextAnchor1268"/>ySQL service</strong> task will start and <a id="_idTextAnchor1269"/>enable the <span class="No-Break">MySQL service.</span></p>
+			<h2 id="_idParaDest-254"><a id="_idTextAnchor1270"/>Configuring applications</h2>
+			<p>The<a id="_idIndexMarker1040"/> next step in the chain is to configure the applications. There are two playbooks for this. The first will configure Apache on <strong class="source-inline">webservers</strong>, and the second will configure MySQL <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">dbservers</strong></span><span class="No-Break">.</span></p>
+			<p>The following <strong class="source-inline">setup-webservers.yaml</strong> playbook will <span class="No-Break">configure </span><span class="No-Break"><strong class="source-inline">webservers</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+---
+- hosts: webservers
+  become: true
+  tasks:
+  - name: Delete index.html file
+    file:
+      path: /var/www/html/index.html
+      state: absent
+  - name: Upload application file
+    copy:
+      src: index.php
+      dest: /var/www/html
+      mode: 0755
+    notify:
+      - Restart Apache
+  handlers:
+  - name: Restart Apache
+    service: name=apache2 state=restarted</pre>			<p>This<a id="_idIndexMarker1041"/> playbook runs on all nodes with the <strong class="source-inline">webservers</strong> role, and there are three tasks in this playbook. The <strong class="source-inline">Delete index.html file</strong> task uses the <strong class="source-inline">file</strong> module to delete the <strong class="source-inline">/var/www/html/index.html</strong> file from the web server. That is because we are using <strong class="source-inline">index.php</strong> as the index page and not <strong class="source-inline">index.html</strong>. The <strong class="source-inline">Upload application file</strong> task then uses the <strong class="source-inline">copy</strong> module to copy the <strong class="source-inline">index.php</strong> file from the Ansible control node to the web server at the <strong class="source-inline">/var/www/html</strong> destination, with a mode of <strong class="source-inline">0755</strong>. The <strong class="source-inline">Upload application file</strong> task also has a <strong class="source-inline">notify</strong> action that will call the <strong class="source-inline">Restart Apache</strong> handler if this task has a status of <strong class="source-inline">CHANGED</strong>. A <strong class="source-inline">handlers</strong> section within the pla<a id="_idTextAnchor1271"/>ybook defines handlers that listen to notify events. In this scenario, if there is a change in the <strong class="source-inline">Upload application file</strong> task, the <strong class="source-inline">Restart Apache</strong> handler will be triggered and will restart the <span class="No-Break"><strong class="source-inline">apache2</strong></span><span class="No-Break"> service.</span></p>
+			<p>We will use the following <strong class="source-inline">setup-dbservers.yaml</strong> playbook to configure MySQL <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">dbservers</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+---
+- hosts: dbservers
+  become: true
+  vars:
+    mysql_root_password: "Password@1"
+  tasks:
+  - name: Set the root password
+    copy:
+      src: client.my.cnf
+      dest: "/root/.my.cnf"
+      mode: 0600
+    notify:
+      - Restart MySQL
+  - name: Create a test user
+    mysql_user:
+      name: testuser
+      password: "Password@1"
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+      state: present
+      priv: '*.*:ALL,GRANT'
+      host: '%'
+  - name: Remove all anonymous user accounts
+    mysql_user:
+      name: ''
+      host_all: yes
+      state: absent
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+    notify:
+    - Restart MySQL
+  - name: Remove the MySQL test database
+    mysql_db:
+      name: test
+      state: absent
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+    notify:
+    - Restart MySQL
+  - name: Change bind address
+    lineinfile:
+      path:  /etc/mysql/mysql.conf.d/mysqld.cnf
+      regexp: ^bind-address
+      line: 'bind-address            = 0.0.0.0'
+    notify:
+    - Restart MySQL
+  handlers:
+  - name: Restart MySQL
+    service: name=mysql state=restarted</pre>			<p>This <a id="_idIndexMarker1042"/>playbook is a bit more complicated, but let’s break it down into <a id="_idTextAnchor1272"/>parts to facilitate <span class="No-Break">our understanding.</span></p>
+			<p>There is a <strong class="source-inline">vars</strong> section in this playbook that defines a <strong class="source-inline">mysql_root_password</strong> variable. We need this password while executing MySQL tasks. The first task is to set up the root password. The best way to set that up is by defining a <strong class="source-inline">/root/.my.cnf</strong> file within MySQL that contains the root credentials. We are copying the following <strong class="source-inline">client.my.cnf</strong> file to <strong class="source-inline">/root/.my.cnf</strong> using the <span class="No-Break"><strong class="source-inline">copy</strong></span><span class="No-Break"> module:</span></p>
+			<pre class="console">
+[client]
+user=root
+password=Password@1</pre>			<p>Then, the <strong class="source-inline">Create a test user</strong> task uses the <strong class="source-inline">mysql_user</strong> module to create a user <a id="_idIndexMarker1043"/>called <strong class="source-inline">testuser</strong>. It requires values for the <strong class="source-inline">login_user</strong> and <strong class="source-inline">login_password</strong> attributes, and we are supplying <strong class="source-inline">root</strong> and <strong class="source-inline">{{ mysql_root_password }}</strong>, respectively. It then goes ahead and removes all anonymous users and also removes the test database. It then changes the bind address to <strong class="source-inline">0.0.0.0</strong> using the <strong class="source-inline">lineinfile</strong> module. The <strong class="source-inline">lineinfile</strong> module is a powerful module that helps manipulate files by first grepping a file using a regex and then replacing those lines with the line attribute’s value. All these tasks notify the <strong class="source-inline">R<a id="_idTextAnchor1273"/><a id="_idTextAnchor1274"/>estart MySQL</strong> handler that restarts th<a id="_idTextAnchor1275"/>e MySQL <span class="No-Break">database service.</span></p>
+			<h2 id="_idParaDest-255"><a id="_idTextAnchor1276"/>Combining playbooks</h2>
+			<p>As we’ve <a id="_idIndexMarker1044"/>written multiple playbooks, we need to execute them in order. We cannot configure the services before installing packages and services, and there is no point in running an <strong class="source-inline">apt</strong> update after installing the packages. Therefore, we can create a playbook <span class="No-Break">of playbooks.</span></p>
+			<p>To do so, we’ve created a YAML file,  <strong class="source-inline">playbook.yaml</strong>, that has the <span class="No-Break">following content:</span></p>
+			<pre class="console">
+---
+- import_playbook: apt-update.yaml
+- import_playbook: install-webserver.yaml
+- import_playbook: install-dbserver.yaml
+- import_playbook: setup-webservers.yaml
+- import_playbook: setup-dbservers.yaml</pre>			<p>This YAML file contains a list of plays, and every play contains an <strong class="source-inline">import_playbook</strong> statement. The plays are executed in order as speci<a id="_idTextAnchor1277"/><a id="_idTextAnchor1278"/>fied in the file. Now, let’s go a<a id="_idTextAnchor1279"/>head and execute <span class="No-Break">the playbook.</span></p>
+			<h2 id="_idParaDest-256"><a id="_idTextAnchor1280"/>Executing playbooks</h2>
+			<p>Executing <a id="_idIndexMarker1045"/>the playbook is simple. We will use the <strong class="source-inline">ansible-playbook</strong> command followed by the playbook YAML file. As we’ve combined playbooks in a <strong class="source-inline">playbook.yaml</strong> file, the following command will run <span class="No-Break">the playbook:</span></p>
+			<pre class="console">
+$ ansible-playbook playbook.yaml
+PLAY [webservers:dbservers] **************************
+TASK [Gathering Facts] *******************************
+ok: [web]
+ok: [db]
+TASK [Update apt packages] ***************************
+ok: [web]
+ok: [db]
+PLAY [webservers] ************************************
+TASK [Gathering Facts] *******************************
+ok: [web]
+TASK [Install packages] ******************************
+changed: [web]
+TASK [Start and Enable Apache service] ***************
+ok: [web]
+PLAY [dbservers] *************************************
+TASK [Gathering Facts] *******************************
+ok: [db]
+TASK [Install packages] ******************************
+changed: [db]
+TASK [Start and enable MySQL service] ****************
+ok: [db]
+PLAY [webservers] ************************************
+TASK [Gathering Facts] *******************************
+ok: [web]
+TASK [Delete index.html file] ************************
+changed: [web]
+TASK [Upload application file] ***********************
+changed: [web]
+RUNNING HANDLER [Restart Apache] *********************
+changed: [web]
+PLAY [dbservers] *************************************
+TASK [Gathering Facts] *******************************
+ok: [db]
+TASK [Set the root password] *************************
+changed: [db]
+TASK [Update the cnf file] ***************************
+changed: [db]
+TASK [Create a test user] ****************************
+changed: [db]
+TASK [Remove all anonymous user accounts] ************
+ok: [db]
+TASK [Remove the MySQL test database] ***************
+ok: [db]
+TASK [Change bind address] **************************
+changed: [db]
+RUNNING HANDLER [Restart MySQL] **********************
+changed: [db]
+PLAY RECAP *******************************************
+db: ok=13   changed=6    unreachable=0    failed=0    
+skipped=0    rescued=0    ignored=0
+web: ok=9    changed=4    unreachable=0    failed=0    
+skipped=0    rescued=0    ignored=0</pre>			<p>As we can see, the <a id="_idIndexMarker1046"/>configuration is applied on both <strong class="source-inline">webservers</strong> and <strong class="source-inline">dbservers</strong>, so let’s run a <strong class="source-inline">curl</strong> command to the web server to see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ curl web
+&lt;html&gt;
+&lt;head&gt;
+&lt;title&gt;PHP to MQSQL&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;Database Connected successfully&lt;/body&gt;
+&lt;/html&gt;</pre>			<p>As we can see, the database is connected successf<a id="_idTextAnchor1281"/>ully! That proves that the setup <span class="No-Break">was successful.</span></p>
+			<p>There are several reasons why the way we approached the problem was not the best. First, there are several sections within the playbook where we’ve hardcoded values. While we have used variables in a few playbooks, we’ve also assigned values to variables within them. That does not make the playbooks a candidate for reuse. The best way to design software is to keep reusability in mind. Therefore, there are many w<a id="_idTextAnchor1282"/><a id="_idTextAnchor1283"/>ays in which we can redesign the playbooks <a id="_idTextAnchor1284"/>to <span class="No-Break">foster reusability.</span></p>
+			<h1 id="_idParaDest-257"><a id="_idTextAnchor1285"/>Designing for reusability</h1>
+			<p>Ansi<a id="_idTextAnchor1286"/>ble provides <a id="_idIndexMarker1047"/>variables for turning Ansible playbooks into reusable templates. You can substitute variables in the right places using <strong class="bold">Jinja2</strong> markup, which <a id="_idIndexMarker1048"/>we’ve already used in the last playbook. Let<a id="_idTextAnchor1287"/><a id="_idTextAnchor1288"/>’s now look at Ansible variables, their type<a id="_idTextAnchor1289"/>s, and how to <span class="No-Break">use them.</span></p>
+			<h2 id="_idParaDest-258"><a id="_idTextAnchor1290"/>Ansible variables</h2>
+			<p><strong class="bold">Ansible variables</strong>, as<a id="_idIndexMarker1049"/> with any other variables, are used to manage differences between managed nodes. You can use a similar playbook for multiple servers, but sometimes, there are some differences in configuration. Ansible variables help you template your playbooks so that you can reuse them for a variety of similar systems. There are multiple places where you can define <span class="No-Break">your variables:</span></p>
+			<ul>
+				<li>Within the Ansible playbook within the <span class="No-Break"><strong class="source-inline">vars</strong></span><span class="No-Break"> section</span></li>
+				<li>In <span class="No-Break">your inventory</span></li>
+				<li>In reusable files <span class="No-Break">or roles</span></li>
+				<li>Passing variables through the <span class="No-Break">command line</span></li>
+				<li>Registering<a id="_idTextAnchor1291"/> variables by assigning the return values of <span class="No-Break">a task</span></li>
+			</ul>
+			<p>Ansible variable names can include <em class="italic">letters</em>, <em class="italic">numbers</em>, and <em class="italic">underscores</em>. You cannot have a Python <em class="italic">keyword</em> as a variable, as Ansible uses Python in the background. Also, a variable name cannot begin with a number but can start with <span class="No-Break">an underscore.</span></p>
+			<p>You can define variables using a simple key-value pair within the YAML files and following the standard <span class="No-Break">YAML syntax.</span></p>
+			<p>Variables can broadly be of three types—<em class="italic">simple variables</em>, <em class="italic">list variab<a id="_idTextAnchor1292"/>les</em>, and <span class="No-Break"><em class="italic">dictionary variables</em></span><span class="No-Break">.</span></p>
+			<h3>Simple variables</h3>
+			<p><strong class="bold">Simple variables</strong> are <a id="_idIndexMarker1050"/>variables that hold a single value. They <a id="_idIndexMarker1051"/>can have <em class="italic">string</em>, <em class="italic">integer</em>, <em class="italic">double</em>, or <em class="italic">boolean</em> values. To refer to simple Ansible variables within the playbook, use them within Jinja expressions, such as <strong class="source-inline">{{ var_name }}</strong>. You should always quote Jinja expressions, as the YAML files will fail to parse <span class="No-Break">without that.</span></p>
+			<p>The following is an example of a simple <span class="No-Break">variable declaration:</span></p>
+			<pre class="console">
+mysql_root_password: bar</pre>			<p>And this is how <a id="_idIndexMarker1052"/>you should <span class="No-Break">reference it:</span></p>
+			<pre class="console">
+  - name: Remove the MySQL test database
+    mysql_db:
+      name: test
+      state: absent
+      login_user: root
+  <a id="_idTextAnchor1293"/>    login_password: "{{ mysql_root_passw<a id="_idTextAnchor1294"/>ord }}"</pre>			<p>Now, let’s look at <span class="No-Break">list variables.</span></p>
+			<h3>List variables</h3>
+			<p><strong class="bold">List variables</strong> hold<a id="_idIndexMarker1053"/> a list of values you can reference using an<a id="_idIndexMarker1054"/> index. You can also use list variables within loops. To define a list variable, you can use the standard YAML syntax for a list, as in the <span class="No-Break">following example:</span></p>
+			<pre class="console">
+region:
+  - europe-west1
+  - europe-west2
+  - europe-west3</pre>			<p>To access the variable, we can use the index format, as in <span class="No-Break">this example:</span></p>
+			<pre class="console">
+region: " {{ region[0] }} "</pre>			<p>Ansible also supports more complex dictionary varia<a id="_idTextAnchor1295"/>bles. Let’s have <span class="No-Break">a look.</span></p>
+			<h3>Dictionary variables</h3>
+			<p><strong class="bold">Dictionary variables</strong> hold <a id="_idIndexMarker1055"/>a complex combination <a id="_idIndexMarker1056"/>of <em class="italic">key-value pairs</em>, the same as a Python dictionary. You can define dictionary variables using the standard YAML syntax, as in the <span class="No-Break">following example:</span></p>
+			<pre class="console">
+foo:
+  bar: one
+  baz: two</pre>			<p>There are two ways in which to refer to these variables’ values. For example, in dot notation, we<a id="_idIndexMarker1057"/> can write <span class="No-Break">the following:</span></p>
+			<pre class="console">
+bar: {{ foo.bar }}</pre>			<p>And in<a id="_idIndexMarker1058"/> bracket notation, we can depict the same thing using the <span class="No-Break">following expression:</span></p>
+			<pre class="console">
+bar: {{ foo[bar] }}</pre>			<p>We can use either dot or bracket notation in the same way as <span class="No-Break">in Python.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">While both dot and bracket notation signify the same thing, bracket notification is better. With dot notation, some keys can collide with <a id="_idTextAnchor1296"/>the methods and attributes<a id="_idTextAnchor1297"/><a id="_idTextAnchor1298"/> of <span class="No-Break">Python dictionaries.</span></p>
+			<p>Now, let’s lo<a id="_idTextAnchor1299"/>ok at ways of sourcing <span class="No-Break">variable values.</span></p>
+			<h2 id="_idParaDest-259"><a id="_idTextAnchor1300"/>Sourcing variable values</h2>
+			<p>While <a id="_idIndexMarker1059"/>you can manually define variables and provide their values, sometimes we need dynamically generated values; for example, if we need to know the server’s hostname where Ansible is executing the playbook or want to use a specific value returned from a task within a variable. Ansible provides a list of variables and system metadata during the gathering facts phase for the former requirement. That helps determine which variables are available and how to use them. Let’s understand how we can g<a id="_idTextAnchor1301"/>ather <span class="No-Break">that information.</span></p>
+			<h3>Finding metadata using Ansible facts</h3>
+			<p>Ansible facts<a id="_idIndexMarker1060"/> are metadata information<a id="_idIndexMarker1061"/> associated with the managed nodes. Ansible gets the facts during the <em class="italic">gathering facts</em> stage, and we can use the <strong class="source-inline">facts</strong> variable directly within the<a id="_idIndexMarker1062"/> playbook. We can use the <strong class="source-inline">setup</strong> module as an Ansible task to determine the facts. For example, you can run the following command to get the Ansible facts for all nodes with the <span class="No-Break"><strong class="source-inline">webservers</strong></span><span class="No-Break"> role:</span></p>
+			<pre class="console">
+$ ansible -m setup webservers
+web | SUCCESS =&gt; {
+    "ansible_facts": {
+        "ansible_all_ipv4_addresses": [
+            "10.0.2.5"
+        ],
+        ...
+        "ansible_hostname": "web",</pre>			<p>So, as <a id="_idIndexMarker1063"/>we can see, we get <strong class="source-inline">ansible_facts</strong> with multiple variables associated with the inventory item. As we have a single server here, we get <strong class="source-inline">web</strong> server details. Within the piece, we have an <strong class="source-inline">ansible_hostname</strong> attribute called <strong class="source-inline">web</strong>. We can use that <strong class="source-inline">a<a id="_idTextAnchor1302"/>nsible_hostname</strong> attribute within our playbook if we <span class="No-Break">need to.</span></p>
+			<p>Sometimes, we <a id="_idIndexMarker1064"/>want to source a task’s output to a particular variable to use the variable in any subsequent tasks<a id="_idTextAnchor1303"/> of the playbook. Let’s look at how we can <span class="No-Break">do that.</span></p>
+			<h3>Registering variables</h3>
+			<p>If a task <a id="_idIndexMarker1065"/>within your playbook, for example, needs a value from the result of a preceding task, we can use the <span class="No-Break"><strong class="source-inline">register</strong></span><span class="No-Break"> attribute.</span></p>
+			<p>The following directory contains all the resources for exercises in <span class="No-Break">this section:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch9/vars-exercise</pre>			<p>Let’s look at the following example <span class="No-Break"><strong class="source-inline">register.yaml</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+- hosts: webservers
+  tasks:
+    - name: Get free space
+      command: free -m 
+      register: free_space
+      ignore_errors: true
+    - name: Print the free space from the previous task
+      debug:
+        msg: "{{ free_space }}"</pre>			<p>The<a id="_idIndexMarker1066"/> playbook contains two tasks. The first task uses the <strong class="source-inline">command</strong> module to execute a command, <strong class="source-inline">free -m</strong>, and registers the result in the <strong class="source-inline">free_space</strong> variable. The subsequent task uses the previous task’s output using the <strong class="source-inline">debug</strong> module to print <strong class="source-inline">free_space</strong> as a message to <span class="No-Break">the console.</span></p>
+			<p>Let’s run the playbook to see <span class="No-Break">for ourselves:</span></p>
+			<pre class="console">
+$ ansible-playbook register.yaml
+PLAY [webservers] ************************************
+TASK [Gathering Facts] *******************************
+ok: [web]
+TASK [Get free space] ********************************
+changed: [web]
+TASK [Print the free space from the previous task] ***
+ok: [web] =&gt; {
+    "msg": {
+       "stdout": "              total        used        
+free      shared  buff/cache   available\nMem:           3.3G        
+170M        2.6G        2.2M        642M        3.0G\nSwap:           
+ 0B          0B          0B",
+   }
+PLAY RECAP ****************************************
+web: ok=3    change<a id="_idTextAnchor1304"/>d=1    unreachable=0    failed=0    skipped=0
+    rescued=0    ignored=0</pre>			<p>Now that we’ve understoo<a id="_idTextAnchor1305"/><a id="_idTextAnchor1306"/>d variables, let’s look at other asp<a id="_idTextAnchor1307"/>ects that will help us improve the <span class="No-Break">last playbook.</span></p>
+			<h2 id="_idParaDest-260"><a id="_idTextAnchor1308"/>Jinja2 templates</h2>
+			<p>Ansible allows<a id="_idIndexMarker1067"/> for templating files using dynamic Jinja2 templates. You can use the Python syntax within the file, starting with <strong class="source-inline">{{</strong> and ending with <strong class="source-inline">}}</strong>. That will allow you to substitute variables during runtime and run complex computations <span class="No-Break">on variables.</span></p>
+			<p>To understand this further, let’s modify the <strong class="source-inline">index.php</strong> file to supply the MySQL username and password dynamically <span class="No-Break">during execution:</span></p>
+			<pre class="console">
+...
+&lt;?php
+mysqli_connect('db', '{{ mysql_user }}', '{{ mysql_password }}') 
+or die('Could not connect the database : Username or password 
+incorrect');
+echo 'Database Connected successfully';
+?&gt;
+...</pre>			<p>As we can see, instead of hardcoding the username and password, we can use templates to substitute the variable values during runtime. That will make the file more reusable and will fit multiple environments. Ansible provides another important aspect of coding reusabili<a id="_idTextAnchor1309"/><a id="_idTextAnchor1310"/>ty within your playbooks—Ansible <strong class="bold">roles</strong>. Let’s<a id="_idTextAnchor1311"/> have a look at this in the <span class="No-Break">next section.</span></p>
+			<h2 id="_idParaDest-261"><a id="_idTextAnchor1312"/>Ansible roles</h2>
+			<p>Well, the <a id="_idIndexMarker1068"/>last playbook looks a bit cluttered. You have a lot of files within it, and none of them are reusable. The code we’ve written can only set up the configuration in a particular way. This may work fine for smaller teams with limited configurations to manage, but it is not as simple as it looks for <span class="No-Break">most enterprises.</span></p>
+			<p>Ansible roles help to standardize an Ansible setup and promote reusability. With roles, you can automatically load <strong class="bold">var files</strong>, <strong class="bold">handlers</strong>, <strong class="bold">tasks</strong>, and other Ansible artifacts using a standard directory structure relative to your playbooks. The directory structure is <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+&lt;playbook&gt;.yaml
+roles/
+    &lt;role&gt;/
+        tasks/
+        handlers/
+        library/
+        files/
+        templates/
+        vars/
+        defaults/
+        meta/</pre>			<p>The <strong class="source-inline">roles</strong> directory <a id="_idIndexMarker1069"/>contains multiple subdirectories for each role. Each role directory contains multiple <span class="No-Break">standard directories:</span></p>
+			<ul>
+				<li><strong class="source-inline">tasks</strong>: This directory contains a list of tasks’ YAML files. It should contain a file called <strong class="source-inline">main.yaml</strong> (or <strong class="source-inline">main.yml</strong> or <strong class="source-inline">main</strong>), containing an entire list of tasks or importing tasks from other files within <span class="No-Break">the directory.</span></li>
+				<li><strong class="source-inline">handlers</strong>: This directory contains a list of handlers associated with the role within a file <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">main.yaml</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">library</strong>: This directory contains Python modules that can be used with <span class="No-Break">the role.</span></li>
+				<li><strong class="source-inline">files</strong>: This directory contains all files that we require for <span class="No-Break">our configuration.</span></li>
+				<li><strong class="source-inline">templates</strong>: This directory contains the Jinja2 templates that the <span class="No-Break">role deploys.</span></li>
+				<li><strong class="source-inline">vars</strong>: This directory contains a <strong class="source-inline">main.yaml</strong> file with a list of variables associated with <span class="No-Break">the role.</span></li>
+				<li><strong class="source-inline">defaults</strong>: This directory contains a <strong class="source-inline">main.yaml</strong> file containing the default variables associated with the role that can be easily overridden by any other variable that <a id="_idIndexMarker1070"/>includes <span class="No-Break">inventory variables.</span></li>
+				<li><strong class="source-inline">meta</strong>: This directory contains the metad<a id="_idTextAnchor1313"/>ata and dependencies associated with the role within a <span class="No-Break"><strong class="source-inline">main.yaml</strong></span><span class="No-Break"> file.</span></li>
+			</ul>
+			<p>Some best practices revolve around managing your Ansible configuration through the folder structure. Let’s look at some of <span class="No-Break">these next.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">While choosing between the <strong class="source-inline">vars</strong> and <strong class="source-inline">defaults</strong> directories, the rule of thumb is to put variables that will not change within the <strong class="source-inline">vars</strong> directory. Put variables that are likely to change within the <span class="No-Break"><strong class="source-inline">defaults</strong></span><span class="No-Break"> directory.</span></p>
+			<p>So, we’ll go and <a id="_idIndexMarker1071"/>use the <strong class="source-inline">defaults</strong> directory as much as we can. There are some best practices regarding roles that we should follow as well. Let’s look at some <span class="No-Break">of them.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Think about the full life cycle of a specific service while designing roles rather than building the entire stack—in other words, instead of using <strong class="source-inline">lamp</strong> as a role, use <strong class="source-inline">apache</strong> and <strong class="source-inline">mysql</strong> <span class="No-Break">roles instead.</span></p>
+			<p>We will create three roles for our use—<strong class="source-inline">common</strong>, <strong class="source-inline">apache</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">mysql</strong></span><span class="No-Break">.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Use specific roles, such as <strong class="source-inline">apache</strong> or <strong class="source-inline">mysql</strong>, instead of using <strong class="source-inline">webserver</strong> or <strong class="source-inline">dbserver</strong>. Typical enterprises have a mix and match of multiple web servers and database technologie<a id="_idTextAnchor1314"/>s. Therefore, giving a generic name to a role will <span class="No-Break">confuse things.</span></p>
+			<p>The following directory contains all the resources for the exercises in <span class="No-Break">this section:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch9/lamp-stack-roles</pre>			<p>The following is the directory structure we will follow for <span class="No-Break">our scenario:</span></p>
+			<pre class="console">
+├── ansible.cfg
+├── hosts
+├── output.log
+├── playbook.yaml</pre>			<p>There are three roles that we’ll create—<strong class="source-inline">apache</strong>, <strong class="source-inline">mysql</strong>, and <strong class="source-inline">common</strong>. Let’s look at the directory structure of the <strong class="source-inline">apache</strong> <span class="No-Break">role first:</span></p>
+			<pre class="console">
+└── roles
+    ├── apache
+    │   ├── defaults
+    │   │   └── main.yaml
+    │   ├── handlers
+    │   │   └── main.yaml
+    │   ├── tasks
+    │   │   ├── install-apache.yaml
+    │   │   ├── main.yaml
+    │   │   └── setup-apache.yaml
+    │   └── templates
+    │       └── index.php.j2</pre>			<p>There is also a <strong class="source-inline">common</strong> role that will apply to all scenarios. The following directory struct<a id="_idTextAnchor1315"/>ure <span class="No-Break">defines that:</span></p>
+			<pre class="console">
+    ├── common
+    │   └── tasks
+    │       └── main.yaml</pre>			<p>Finally, let’s define the <strong class="source-inline">mysql</strong> role through the following <span class="No-Break">directory structure:</span></p>
+			<pre class="console">
+    └── mysql
+        ├── defaults
+        │   └── main.yaml
+        ├── files
+        ├── handlers
+        │   └── main.yaml
+        ├── tasks
+        │   ├── install-mysql.yaml
+        │   ├── main.yaml
+        │   └── setup-mysql.yaml
+        └── templates
+            └── client.my.cnf.j2</pre>			<p>The <strong class="source-inline">apache</strong> directory<a id="_idIndexMarker1072"/> consists of <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>We’ve used the same <strong class="source-inline">index.php</strong> file we created in the last exercise, converted it to a Jinja2 template called <strong class="source-inline">index.php.j2</strong>, and copied it <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">roles/apache/templates</strong></span><span class="No-Break">.</span></li>
+				<li>The <strong class="source-inline">handlers</strong> directory contains a <strong class="source-inline">main.yaml</strong> file that contains the <strong class="source-inline">Restart </strong><span class="No-Break"><strong class="source-inline">Apache</strong></span><span class="No-Break"> handler.</span></li>
+				<li>The <strong class="source-inline">tasks</strong> directory contains an <strong class="source-inline">install-apache.yaml</strong> file that includes all tasks required to install Apache. The <strong class="source-inline">setup-apache.yaml</strong> file consists of a list of tasks <a id="_idTextAnchor1316"/>that will set up Apache, similar to what we did in the previous exercise. The <strong class="source-inline">main.yaml</strong> file contains tasks from both files, using <strong class="source-inline">include</strong> directives such as <span class="No-Break">the following:</span></li>
+			</ul>
+			<pre class="console">
+---
+- include: install-apache.yaml
+- include: setup-apache.yaml</pre>			<ul>
+				<li>The <strong class="source-inline">defaults</strong> directory<a id="_idIndexMarker1073"/> contains the <strong class="source-inline">main.yaml</strong> file, which contains the <strong class="source-inline">mysql_username</strong> and <strong class="source-inline">mysql_password</strong> variables and their <span class="No-Break">default values.</span></li>
+			</ul>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Use as few variables as possible and try to default them. Use defaults for variables in such a way that minimal custom configuration <span class="No-Break">is needed.</span></p>
+			<p>The <strong class="source-inline">mysql</strong> directory <a id="_idIndexMarker1074"/>consists of <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>We’ve modified <strong class="source-inline">client.my.cnf</strong> and converted that to a <strong class="source-inline">j2</strong> file. The <strong class="source-inline">j2</strong> file is a Jinja2 template file we will use in the role through the <strong class="source-inline">template</strong> module in the <strong class="source-inline">Set the root password</strong> task. The file exists within the <span class="No-Break"><strong class="source-inline">templates</strong></span><span class="No-Break"> directory:</span></li>
+			</ul>
+			<pre class="console">
+[client]
+user=root
+password={{ mysql_root_password }}</pre>			<p class="list-inset">As we can see, we’re providing the password through a Jinja2 expression. When we run the <strong class="source-inline">mysql</strong> role through the playbook, the value of <strong class="source-inline">mysql_root_password</strong> will be substituted in the <span class="No-Break"><strong class="source-inline">password</strong></span><span class="No-Break"> section.</span></p>
+			<ul>
+				<li>The <strong class="source-inline">handlers</strong> directory contains the <strong class="source-inline">Restart </strong><span class="No-Break"><strong class="source-inline">MySQL</strong></span><span class="No-Break"> handler.</span></li>
+				<li>The <strong class="source-inline">tasks</strong> directory consists of three files. The <strong class="source-inline">install-mysql.yaml</strong> file contains tasks that install <strong class="source-inline">mysql</strong>, and the <strong class="source-inline">setup-mysql.yaml</strong> file contains tasks that set up <strong class="source-inline">mysql</strong>. The <strong class="source-inline">main.yaml</strong> file combines both these files using <strong class="source-inline">include</strong> task directives, <span class="No-Break">as follows:</span></li>
+			</ul>
+			<pre class="console">
+---
+- include: install-mysql.yaml
+- include: setup-mysql.yaml</pre>			<ul>
+				<li>The <strong class="source-inline">defaults</strong> directory contains a <strong class="source-inline">main.yaml</strong> file with a list of variables we will use within t<a id="_idTextAnchor1317"/>he role. In <a id="_idIndexMarker1075"/>this case, it just contains the value <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">mysql_root_password</strong></span><span class="No-Break">.</span></li>
+			</ul>
+			<p>The <strong class="source-inline">common</strong> directory <a id="_idIndexMarker1076"/>contains a single directory called <strong class="source-inline">tasks</strong> that includes a <strong class="source-inline">main.yaml</strong> file with a single task to run an <strong class="source-inline">apt </strong><span class="No-Break"><strong class="source-inline">update</strong></span><span class="No-Break"> operation.</span></p>
+			<p>The main directory contains <strong class="source-inline">ansible.cfg</strong>, <strong class="source-inline">hosts</strong>, and <strong class="source-inline">playbook.yaml</strong> files. While the <strong class="source-inline">hosts</strong> and <strong class="source-inline">ansible.cfg</strong> files are the same as the last exercise, the <strong class="source-inline">playbook.yaml</strong> file looks like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+---
+- hosts: webservers
+  become: true
+  roles:
+    - common
+    - apache
+- hosts: dbservers
+  become: true
+  roles:
+    - common
+    - mysql</pre>			<p>The playbook is now a concise one with a lot of reusable elements. It consists of two plays. The first play will run on all web servers with the <strong class="source-inline">root</strong> user and apply <strong class="source-inline">common</strong> and <strong class="source-inline">apache</strong> roles to them. The second play will run on all nodes with the <strong class="source-inline">dbservers</strong> role with the <strong class="source-inline">root</strong> user and use <strong class="source-inline">common</strong> and <span class="No-Break"><strong class="source-inline">mysql</strong></span><span class="No-Break"> roles.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always keep roles loosely coupled. In the preceding example, the <strong class="source-inline">apache</strong> role has no dependency on <strong class="source-inline">mysql</strong> and vice versa. This will allow us to reuse configuration <span class="No-Break">with ease.</span></p>
+			<p>Now, let’s go ahead and execute <span class="No-Break">the playbook:</span></p>
+			<pre class="console">
+$ ansible-playbook playbook.yaml
+PLAY [webservers]
+...
+PLAY [dbservers]
+...
+PLAY RECAP
+db: ok=10 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+we<a id="_idTextAnchor1318"/>b:  ok=7 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0</pre>			<p>And, as we<a id="_idIndexMarker1077"/> can see, there are no changes to the configuration. We’ve applied the same configuration but in a better way. If we want to share our configuration with people within the team, we can share the <strong class="source-inline">roles</strong> directory, and they can apply the role within <span class="No-Break">their playbook.</span></p>
+			<p>There may be instances where we want to use a different value for the variable defined in the <strong class="source-inline">roles</strong> section. You can override variables within the playbook by supplying the variable values with the <strong class="source-inline">extra-vars</strong> flag, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+$ ansible-playbook playbook.yaml --extra-vars "mysql_user=foo mysql_password=bar@123"</pre>			<p>When we apply<a id="_idTextAnchor1319"/> the playbook using the preceding command, we’ll see that the user now changes to <strong class="source-inline">foo</strong> and that the password changes to <strong class="source-inline">bar@123</strong> in both the Apache and <span class="No-Break">MySQL configurations:</span></p>
+			<pre class="console">
+...
+PLAY RECAP
+db: ok=9 changed=1 unreachable=0 failed= skipped=0 rescued=0 ignored=0
+web: ok=7 changed=2 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0</pre>			<p>So, if we run the  <strong class="source-inline">curl</strong> command to the web host, we will get the <a id="_idTextAnchor1320"/>same response <span class="No-Break">as before:</span></p>
+			<pre class="console">
+...
+&lt;body&gt;Database Connected successfully&lt;/body&gt;
+...</pre>			<p>Our setup is <a id="_idIndexMarker1078"/>working correctly with roles. We’ve set up the Ansible playbook by following all the best practices and using re<a id="_idTextAnchor1321"/><a id="_idTextAnchor1322"/>usable roles and templates. That is the way to go forward in designing powerful <span class="No-Break">Ansible playbooks.</span></p>
+			<h1 id="_idParaDest-262"><a id="_idTextAnchor1323"/>Summary</h1>
+			<p>In this chapter, we’ve discussed Ansible and its core functionalities from a hands-on perspective. We began by understanding CaC, looked at Ansible and Ansible architecture, installed Ansible, understood Ansible modules, tasks, and playbooks, and then applied our first Ansible configuration. We then looked at fostering reusability with Ansible variables, Jinja2 templates, and roles and reorganized our configuration with reusability in mind. We also looked at several best practices along <span class="No-Break">the way.</span></p>
+			<p>In the next chapter, we will combine Terraform with Ansible<a id="_idTextAnchor1324"/><a id="_idTextAnchor1325"/> to spin up something useful and look at HashiCorp’s Packer to create <span class="No-Break">immutable infrastructure.</span></p>
+			<h1 id="_idParaDest-263"><a id="_idTextAnchor1326"/>Questions</h1>
+			<ol>
+				<li>It is a best practice to avoid using <strong class="source-inline">command</strong> and <strong class="source-inline">shell</strong> modules as much as <span class="No-Break">possible. (True/False)</span></li>
+				<li>Aliases help in keeping your inventory <span class="No-Break">generic. (True/False)</span></li>
+				<li>What does the <strong class="source-inline">ansible-playbook</strong> <span class="No-Break">command do?</span><p class="list-inset">A. It runs an ad hoc task on <span class="No-Break">the inventory.</span></p><p class="list-inset">B. It runs a series of tasks on <span class="No-Break">the inventory.</span></p><p class="list-inset">C. It applies the plays and tasks configured with <span class="No-Break">the playbook.</span></p><p class="list-inset">D. It destroys the configuration from <span class="No-Break">managed nodes.</span></p></li>
+				<li>Which of the following techniques helps in building reusability within your Ansible configuration? (<span class="No-Break">Choose three)</span><p class="list-inset">A. <span class="No-Break">Use variables.</span></p><p class="list-inset">B. Use <span class="No-Break">Jinja2 templates.</span></p><p class="list-inset">C. <span class="No-Break">Use roles.</span></p><p class="list-inset">D. <span class="No-Break">Use tasks.</span></p></li>
+				<li>While naming roles, what should we consider? (<span class="No-Break">Choose two)</span><p class="list-inset">A. Name roles as precisely <span class="No-Break">as possible.</span></p><p class="list-inset">B. While thinking of roles, think of the service instead of the <span class="No-Break">full stack.</span></p><p class="list-inset">C. Use generic names <span class="No-Break">for roles.</span></p></li>
+				<li>In which directory should you define variables within roles if the variable’s value is likely <span class="No-Break">to change?</span><p class="list-inset"><span class="No-Break">A. </span><span class="No-Break"><strong class="source-inline">defaults</strong></span></p><p class="list-inset"><span class="No-Break">B. </span><span class="No-Break"><strong class="source-inline">vars</strong></span></p></li>
+				<li>Handlers are triggered when the output of the task associated with the handler <span class="No-Break">is …?</span><p class="list-inset"><span class="No-Break">A. </span><span class="No-Break"><strong class="source-inline">SUCCESS</strong></span></p><p class="list-inset"><span class="No-Break">B. </span><span class="No-Break"><strong class="source-inline">CHANGED</strong></span></p><p class="list-inset"><span class="No-Break">C. </span><span class="No-Break"><strong class="source-inline">FAILED</strong></span></p></li>
+				<li>Does a <strong class="source-inline">SUCCESS</strong> status denote that the task did not detect any changed <span class="No-Break">configuration? (True/False)</span></li>
+				<li>What are the best practices for inventory management? (<span class="No-Break">Choose three)</span><p class="list-inset">A. Use a separate inventory for <span class="No-Break">each environment.</span></p><p class="list-inset">B. G<a id="_idTextAnchor1327"/><a id="_idTextAnchor1328"/>roup the inventory <span class="No-Break">by functions.</span></p><p class="list-inset">C. <span class="No-Break">Use aliases.</span></p><p class="list-inset">D. Keep the inventory file in a <span class="No-Break">central location.</span></p></li>
+			</ol>
+			<h1 id="_idParaDest-264"><a id="_idTextAnchor1329"/>Answers</h1>
+			<ol>
+				<li value="1"><span class="No-Break">True</span></li>
+				<li><span class="No-Break">True</span></li>
+				<li>C</li>
+				<li>A, <span class="No-Break">B, C</span></li>
+				<li><span class="No-Break">A, B</span></li>
+				<li>A</li>
+				<li>B</li>
+				<li><span class="No-Break">True</span></li>
+				<li>A, B, <span class="No-Break">and C</span></li>
+			</ol>
+		</div>
+	</div>
+</div>
+</body></html>

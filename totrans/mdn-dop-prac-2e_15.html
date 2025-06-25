@@ -1,0 +1,1121 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer161">
+			<h1 id="_idParaDest-391" class="chapter-number"><a id="_idTextAnchor1834"/>15</h1>
+			<h1 id="_idParaDest-392"><a id="_idTextAnchor1835"/>Implementing Traffic Management, Security, and Observability with Istio</h1>
+			<p>In the previous chapter, we <a id="_idIndexMarker1603"/>covered <strong class="bold">site reliability engineering</strong> (<strong class="bold">SRE</strong>) and how it has helped manage production environments using DevOps practices. In this chapter, we’ll dive deep into a service mesh technology called<a id="_idIndexMarker1604"/> Istio, which will help us implement SRE practices and manage our application better <span class="No-Break">in production.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Revisiting the <span class="No-Break">Blog App</span></li>
+				<li>Introduction to <span class="No-Break">service mesh</span></li>
+				<li>Introduction <span class="No-Break">to Istio</span></li>
+				<li>Understanding the <span class="No-Break">Istio architecture</span></li>
+				<li><span class="No-Break">Installing Istio</span></li>
+				<li>Using Istio Ingress to <span class="No-Break">allow traffic</span></li>
+				<li>Securing your microservices <span class="No-Break">using Istio</span></li>
+				<li>Managing traffic <span class="No-Break">with Istio</span></li>
+				<li>Observing traffic and alerting <span class="No-Break">with Isti<a id="_idTextAnchor1836"/><a id="_idTextAnchor1837"/>o</span></li>
+			</ul>
+			<h1 id="_idParaDest-393"><a id="_idTextAnchor1838"/>Technical requirements</h1>
+			<p>For this chapter, we will spin up a<a id="_idIndexMarker1605"/> cloud-based Kubernetes cluster, <strong class="bold">Google Kubernetes Engine</strong> (<strong class="bold">GKE</strong>), for the exercises. At the time of writing, <strong class="bold">Google Cloud Platform</strong> (<strong class="bold">GCP</strong>) provides <a id="_idIndexMarker1606"/>a free $300 trial for 90 days, so you can go ahead and sign up for one <span class="No-Break">at </span><a href="https://console.cloud.google.com/"><span class="No-Break">https://console.cloud.google.com/</span></a><span class="No-Break">.</span></p>
+			<p>You will also need to clone the following GitHub repository for some of the <span class="No-Break">exercises: </span><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a><span class="No-Break">.</span></p>
+			<p>You can use the Cloud Shell offering available from GCP to follow this chapter. Go to Cloud Shell and start a new session. Run the following command to clone the repository into your home directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \
+modern-devops</pre>			<p>We also need to set the project ID and enable a few GCP APIs we will use in this chapter. To do so, run the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ PROJECT_ID=&lt;YOUR_PROJECT_ID&gt;
+$ gcloud services enable iam.googleapis.com \
+ container.googleapis.com \
+ binaryauthorization.googleapis.com \
+ containeranalysis.googleapis.com \
+ secretmanager.googleapis.com \
+ cloudresourcemanager.googleapis.com \
+ cloudkms.googleapis.<a id="_idTextAnchor1839"/><a id="_idTextAnchor1840"/>com</pre>			<p>If you haven't followed the previous chapters and want to start quickly with this, you can follow the next part, <em class="italic">Setting up the baseline</em>, though I highly recommend that you go through the last few chapters to get a flow. If you have been following the hands-on exercises in the previous chapters, feel free to skip <span class="No-Break">this part.</span></p>
+			<h2 id="_idParaDest-394"><a id="_idTextAnchor1841"/>Setting up the baseline</h2>
+			<p>To ensure continuity with the previous chapters, let’s start by creating a service account for Terraform so that we can interact with our <span class="No-Break">GCP project:</span></p>
+			<pre class="console">
+$ gcloud iam service-accounts create terraform \
+--description="Service Account for terraform" --display-name="Terraform"
+$ gcloud projects add-iam-policy-binding $PROJECT_ID \
+--member="serviceAccount:terraform@$PROJECT_ID.iam.gserviceaccount.com" \
+--role="roles/editor"
+$ gcloud iam service-accounts keys create key-file \
+--iam-account=terraform@$PROJECT_ID.iam.gserviceaccount.com</pre>			<p>You will see that a file called <strong class="source-inline">key-file</strong> has been created within your working directory. Now, create a new repository called <strong class="source-inline">mdo-environments</strong> with a <strong class="source-inline">README.md</strong> file on GitHub, rename the <strong class="source-inline">main</strong> branch to <strong class="source-inline">prod</strong>, and create a new branch called <strong class="source-inline">dev</strong> using GitHub. Navigate to <strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/settings/secrets/actions/new</strong> and create a secret named <strong class="source-inline">GCP_CREDENTIALS</strong>. For the value, print the <strong class="source-inline">key-file</strong> file, copy its contents, and paste it into the <strong class="bold">values</strong> field of the <span class="No-Break">GitHub secret.</span></p>
+			<p>Next, create another secret, <strong class="source-inline">PROJECT_ID</strong>, and specify your GCP project ID within the <span class="No-Break"><strong class="bold">values</strong></span><span class="No-Break"> field.</span></p>
+			<p>Next, we need to create a <strong class="bold">GCS bucket</strong> for Terraform to use as a remote backend. To do this, run the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ gsutil mb gs://tf-state-mdo-terraform-${PROJECT_ID}</pre>			<p>The next thing we need to do is set up our Secrets Manager. Let’s cre<a id="_idTextAnchor1842"/>ate a secret called <strong class="source-inline">external-secrets</strong>, where we will pass the MongoDB credentials in the JSON format. To do so, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ echo -ne '{"MONGO_INITDB_ROOT_USERNAME": "root", \
+"MONGO_INITDB_ROOT_PASSWORD": "itsasecret"}' | \
+gcloud secrets create external-secrets --locations=us-central1 \
+--replication-policy=user-managed --data-file=-
+Created version [1] of the secret [external-secrets].</pre>			<p>We need to create the <strong class="source-inline">Secret</strong> resource, which will interact with GCP to fetch the stored secret. First, we need to create a GCP service account to interact with Secrets Manager using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~
+$ gcloud iam service-accounts create external-secrets</pre>			<p>As we’re following the principle of least privilege, we will add the following role binding to provide access only to the <strong class="source-inline">external-secrets</strong> secret, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+$ gcloud secrets add-iam-policy-binding external-secrets \
+--member "serviceAccount:external-secrets@$PROJECT_ID.iam.gserviceaccount.com" \
+--role "roles/secretmanager.secretAccessor"</pre>			<p>Now, let’s generate the service account key file using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud iam service-accounts keys create key.json \
+--iam-account=external-secrets@$PROJECT_ID.iam.gserviceaccount.com</pre>			<p>Next, copy the contents of the <strong class="source-inline">key.json</strong> file into a new GitHub Actions secret called <strong class="source-inline">GCP_SM_CREDENTIALS</strong>. </p>
+			<p>We also need to create the following GitHub Actions secrets for binary authorization <span class="No-Break">to work:</span></p>
+			<pre class="console">
+ATTESTOR_NAME=quality-assurance-attestor
+KMS_KEY_LOCATION=us-central1
+KMS_KEYRING_NAME=qa-attestor-keyring
+KMS_KEY_NAME=quality-assurance-attestor-key
+KMS_KEY_VERSION=1</pre>			<p>As the workflow automatically raises pull requests at the end, we need to define a GitHub token. This token allows the workflow to act on behalf of the current user when creating the pull request. Here are <span class="No-Break">the steps:</span></p>
+			<ol>
+				<li>Go <span class="No-Break">to </span><a href="https://github.com/settings/personal-access-tokens/new"><span class="No-Break">https://github.com/settings/personal-access-tokens/new</span></a><span class="No-Break">.</span></li>
+				<li>Create a new token with “Repository” access for the <strong class="source-inline">mdo-environments</strong> repository, granting it <strong class="source-inline">read-write</strong> pull request permissions. This approach aligns with the principle of least privilege, offering more <span class="No-Break">granular control.</span></li>
+				<li>Once the token is created, <span class="No-Break">copy it.</span></li>
+				<li>Now, create a GitHub Actions secret named <strong class="source-inline">GH_TOKEN</strong> and paste the copied token as <span class="No-Break">the value.</span></li>
+			</ol>
+			<p>Now that all the prerequisites have been met, we can clone our repository and copy the baseline code. Run the following commands to <span class="No-Break">do this:</span></p>
+			<pre class="console">
+$ cd ~ &amp;&amp; git clone git@github.com:&lt;your_github_user&gt;/mdo-environments.git
+$ cd mdo-environments/
+$ git checkout dev
+$ cp -r ~/modern-devops/ch15/baseline/* .
+$ cp -r ~/modern-devops/ch15/baseline/.github .</pre>			<p>As we’re now on the baseline, let’s proceed further and understand the sample Blog App that we will deploy and manage in <span class="No-Break">this chapt<a id="_idTextAnchor1843"/>er.</span></p>
+			<h1 id="_idParaDest-395"><a id="_idTextAnchor1844"/>Revisiting the Blog App</h1>
+			<p>Since we discussed the<a id="_idIndexMarker1607"/> Blog App previously, let’s look at the services and their <span class="No-Break">interactions again:</span></p>
+			<div>
+				<div id="_idContainer146" class="IMG---Figure">
+					<img src="image/B19877_15__1.jpg" alt="Figure 15.1 – The Blog App and its services and interactions" width="1628" height="488"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.1 – The Blog App and its services and interactions</p>
+			<p>So far, we’ve created CI and<a id="_idIndexMarker1608"/> CD pipelines for building, testing, and pushing our Blog App microservices containers using GitHub Actions, deploying them using Argo CD in a <span class="No-Break">GKE cluster.</span></p>
+			<p>As you may recall, we created the following resources for the application to <span class="No-Break">run seamlessly:</span></p>
+			<ul>
+				<li><strong class="bold">MongoDB</strong>: We<a id="_idIndexMarker1609"/> deployed an auth-enabled MongoDB database with root credentials. The credentials were injected via environment variables sourced from a <a id="_idIndexMarker1610"/>Kubernetes <strong class="bold">Secret</strong> resource. To persist our database data, we created <a id="_idIndexMarker1611"/>a <strong class="bold">PersistentVolume</strong> mounted to the container, which we provisioned<a id="_idIndexMarker1612"/> dynamically using a <strong class="bold">PersistentVolumeClaim</strong>. As the container is stateful, we used<a id="_idIndexMarker1613"/> a <strong class="bold">StatefulSet</strong> to manage it and, therefore, a headless <strong class="bold">Service</strong> to <a id="_idIndexMarker1614"/>expose <span class="No-Break">the database.</span></li>
+				<li><strong class="bold">Posts, reviews, ratings, and users</strong>: The <em class="italic">posts</em>, <em class="italic">reviews</em>, <em class="italic">ratings</em>, and <em class="italic">users</em> microservices interacted with MongoDB through the root credentials that were injected via environment variables sourced from<a id="_idIndexMarker1615"/> the same <strong class="bold">Secret</strong> as MongoDB. We deployed them using their<a id="_idIndexMarker1616"/> respective <strong class="bold">Deployment</strong> resources and exposed all of them via <a id="_idIndexMarker1617"/>individual <span class="No-Break"><strong class="bold">ClusterIP Services</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="bold">Frontend</strong>: The <em class="italic">frontend</em> microservice does not need to interact with MongoDB, so there was no interaction with the Secret resource. We also deployed this service using<a id="_idIndexMarker1618"/> a <strong class="bold">Deployment</strong> resource. As we wanted to expose the service on the internet, we created a <strong class="bold">LoadBalancer Service</strong> <span class="No-Break">for </span><span class="No-Break"><a id="_idIndexMarker1619"/></span><span class="No-Break">it.</span></li>
+			</ul>
+			<p>We can summarize <a id="_idIndexMarker1620"/>them with the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer147" class="IMG---Figure">
+					<img src="image/B19877_15_2.jpg" alt="Figure 15.2 – Blog App – Kubernetes resources and interactions" width="1663" height="1420"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.2 – Blog App – Kubernetes resources and interactions</p>
+			<p>Now that we understand the application, let’s understand what a service mesh is and how it is beneficial in this <span class="No-Break">use case.</span></p>
+			<h1 id="_idParaDest-396"><a id="_idTextAnchor1845"/>Introduction to service mesh</h1>
+			<p>Imagine being in a bustling city with a <a id="_idIndexMarker1621"/>complex network of roads and highways. You’re driving your car from one side of the city to the other. In this scenario, you deal with the <span class="No-Break">following entities:</span></p>
+			<ul>
+				<li><strong class="bold">Your car</strong>: Your car represents an individual service or application in a computer system. It has a specific purpose, just like a microservice or application in a <span class="No-Break">software architecture.</span></li>
+				<li><strong class="bold">Roads and highways</strong>: The roads and highways are like the network connections and communication pathways between different services in your application. Services need to interact and communicate with each other to perform various functions, just as vehicles need roads to get from one place <span class="No-Break">to another.</span></li>
+				<li><strong class="bold">Traffic lights and signs</strong>: Traffic lights, signs, and road rules help manage traffic flow, ensuring that vehicles (services) can safely and efficiently navigate the city. These are like the rules, protocols, and tools in a service mesh regulating communication and data exchange <span class="No-Break">between services.</span></li>
+				<li><strong class="bold">Traffic control center</strong>: Think of the traffic control center as the service mesh. It’s a centralized system that monitors and manages traffic flow across the city. Similarly, a service mesh is a centralized infrastructure that oversees and facilitates communication between services, ensuring they can communicate reliably <span class="No-Break">and securely.</span></li>
+				<li><strong class="bold">Traffic monitoring and optimization</strong>: The traffic control center ensures safe travel and can optimize traffic flow. It can reroute vehicles to avoid congestion or accidents. In the context of a service mesh, it can optimize the flow of data and requests between services, ensuring efficient and <span class="No-Break">resilient communication.</span></li>
+				<li><strong class="bold">Safety and reliability</strong>: In the<a id="_idIndexMarker1622"/> city, the traffic control center helps prevent accidents and ensures everyone reaches their destinations safely. Similarly, a service mesh enhances the safety and reliability of your computer system by providing features such as load balancing, security, and <span class="No-Break">fault tolerance.</span></li>
+			</ul>
+			<p>So, just as the traffic control center makes your journey in a complex city more manageable and secure, a service mesh in a computer system simplifies and secures the communication between different services, ensuring that data and requests can flow smoothly, reliably, <span class="No-Break">and safely.</span></p>
+			<p>Containers and the orchestration platforms that manage them, such as Kubernetes, have streamlined how we handle microservices. The introduction of container technology played a pivotal role in popularizing this concept by allowing for the execution and scalability of individual application components as self-contained entities, each with an isolated <span class="No-Break">runtime environment.</span></p>
+			<p>While adopting a microservices architecture offers advantages such as accelerated development, enhanced system robustness, simplified testing, and the ability to scale different aspects of an application independently, it isn’t without its challenges. Managing microservices can be a complex endeavor. Instead of dealing with a single, monolithic application, you now have multiple dynamic components, each catering to <span class="No-Break">specific functionalities.</span></p>
+			<p>In the context of<a id="_idIndexMarker1623"/> extensive applications, it’s not uncommon to see hundreds of microservices interacting with each other, which can quickly become overwhelming. The primary concerns that may be raised by your security and operations teams are <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li>Ensuring secure communication between microservices. You need to secure numerous smaller services rather than securing a single <span class="No-Break">monolithic application.</span></li>
+				<li>Isolating a problematic microservice in case of <span class="No-Break">an issue.</span></li>
+				<li>Testing deployments with a limited percentage of traffic before a full release to <span class="No-Break">establish trust.</span></li>
+				<li>Consolidating application logs that are now distributed across <span class="No-Break">multiple sources.</span></li>
+				<li>Monitoring the health of the services becomes more intricate, with many components constituting <span class="No-Break">the application.</span></li>
+			</ul>
+			<p>While Kubernetes effectively addresses some management issues, it primarily serves as a container orchestration platform and excels in that role. However, it doesn’t inherently solve all the complexities of a microservices architecture as they require specific solutions. Kubernetes does not inherently provide robust service <span class="No-Break">management capabilities.</span></p>
+			<p>By default, communication between Kubernetes containers lacks security measures, and enforcing TLS between pods involves managing an extensive number of TLS certificates. Identity and access management between pods is also not applied out of <span class="No-Break">the box.</span></p>
+			<p>While tools such as Kubernetes Network Policy can be employed to implement a firewall between pods, they function at a Layer 3 level rather than Layer 7, which is what modern firewalls operate at. This means you can identify the source of traffic but cannot inspect the data packets to make metadata-driven decisions, such as routing based on an <span class="No-Break">HTTP header.</span></p>
+			<p>Although Kubernetes offers methods for deploying pods and conducting A/B testing and canary deployments, these processes often involve scaling container replicas. For example, deploying a new microservice version with just 10% of traffic directed to it requires at least 10 containers: 9 for the old version and 1 for the new version. Kubernetes distributes traffic evenly among pods without intelligent <span class="No-Break">traffic splitting.</span></p>
+			<p>Each Kubernetes container within a pod maintains separate logging, necessitating a custom solution for capturing and <span class="No-Break">consolidating logs.</span></p>
+			<p>While the Kubernetes dashboard provides features such as monitoring pods and checking their health, it does not offer insights into how components interact, the traffic distribution among pods, or the container chains that constitute the application. The inability to trace traffic flow through Kubernetes pods means you cannot pinpoint where in the chain a request encountered <span class="No-Break">a failure.</span></p>
+			<p>To address these challenges comprehensively, a<a id="_idIndexMarker1624"/> service mesh technology such as Istio can be of extreme help. This can effectively tackle the intricacies of managing microservices in Kubernetes and offer solutions for secure communication, intelligent traffic management, monitoring, and more. Let’s understand what the Istio service mesh is through a <a id="_idTextAnchor1846"/><span class="No-Break">brief introduction.</span></p>
+			<h1 id="_idParaDest-397"><a id="_idTextAnchor1847"/>Introduction to Istio</h1>
+			<p>Istio<a id="_idIndexMarker1625"/> is a service mesh technology designed to streamline service connectivity, security, governance, <span class="No-Break">and monitoring.</span></p>
+			<p>In the context of a microservices application, each microservice operates independently using containers, resulting in a complex web of interactions. This is where a service mesh comes into play, simplifying the discovery, management, and control of these interactions, often accomplished through a sidecar proxy. Allow me to break it down for you step <span class="No-Break">by step.</span></p>
+			<p>Imagine a standard Kubernetes application comprising a frontend and a backend pod. Kubernetes offers built-in service discovery between pods using Kubernetes services and CoreDNS. Consequently, you can direct traffic using the service name from one pod to another. However, you won’t have significant control over these interactions and runtime <span class="No-Break">traffic management.</span></p>
+			<p>Istio steps<a id="_idIndexMarker1626"/> in by injecting a sidecar container into your pod, which acts as a proxy. Your containers communicate with other containers via this proxy. This architecture allows all requests to flow through the proxy, enabling you to exert control over the traffic and collect data for further analysis. Moreover, Istio provides the means to encrypt communication between pods and enforce identity and access management through a unified <span class="No-Break">control plane.</span></p>
+			<p>Due to this architecture, Istio boasts a range of core functionalities that enhance the traffic management, security, and observability of your <span class="No-Break">microservices environment.</span></p>
+			<h2 id="_idParaDest-398"><a id="_idTextAnchor1848"/>Traffic management</h2>
+			<p>Istio effectively manages <a id="_idIndexMarker1627"/>traffic by harnessing the power of the sidecar proxy, often referred to as the <a id="_idIndexMarker1628"/>envoy proxy, alongside <strong class="bold">ingress</strong> and <strong class="bold">egress gateways</strong>. With these<a id="_idIndexMarker1629"/> components, Istio empowers you to shape traffic and define service interaction rules. This includes implementing features such<a id="_idIndexMarker1630"/> as <strong class="bold">timeouts</strong>, <strong class="bold">retries</strong>, <strong class="bold">circuit breakers</strong>, and much more, all through <a id="_idIndexMarker1631"/>configurations <a id="_idIndexMarker1632"/>within the <span class="No-Break">control plane.</span></p>
+			<p>These<a id="_idIndexMarker1633"/> capabilities <a id="_idIndexMarker1634"/>open the door to intelligent<a id="_idIndexMarker1635"/> practices such as <strong class="bold">A/B testing</strong>, <strong class="bold">canary deployments</strong>, and <strong class="bold">staged rollouts</strong> with <strong class="bold">traffic division based on percentages</strong>. You can seamlessly execute gradual releases, transitioning from an existing version (<strong class="bold">Blue</strong>) to a new one (<strong class="bold">Green</strong>), all with <span class="No-Break">user-friendly controls.</span></p>
+			<p>Moreover, Istio allows you to conduct operational tests in a live production environment, offering <strong class="bold">live traffic mirroring</strong> to<a id="_idIndexMarker1636"/> test instances. This enables you to gather real-time insights and identify potential production issues before they impact your application. Additionally, you can route requests to different language-specific microservices versions based on <strong class="bold">geolocation or user profiles</strong>, among <span class="No-Break">other possibilities.</span></p>
+			<h2 id="_idParaDest-399"><a id="_idTextAnchor1849"/>Security</h2>
+			<p>Istio takes security <a id="_idIndexMarker1637"/>seriously by securing your microservices through the envoy proxy and establishing identity access management between pods via mutual TLS. It is a robust defense against man-in-the-middle attacks through out-of-the-box <strong class="bold">traffic encryption</strong> between<a id="_idIndexMarker1638"/> pods. This mutual authentication ensures that only trusted frontends can connect to backends, creating a strong trust relationship. Consequently, even if one of the pods is compromised, it cannot compromise the rest of your application. Istio further enhances security<a id="_idIndexMarker1639"/> with <strong class="bold">fine-grained access control policies</strong> and introduces auditing tools currently lacking in Kubernetes, enhancing your cluster’s overall <span class="No-Break">security posture.</span></p>
+			<h2 id="_idParaDest-400"><a id="_idTextAnchor1850"/>Observability</h2>
+			<p>Thanks to the envoy<a id="_idIndexMarker1640"/> sidecar, Istio maintains a keen awareness of the traffic flowing through the pods, enabling you to gather crucial telemetry data from the services. This wealth of data aids in gaining insights into service behavior and offers a window into future optimization possibilities for your applications. Additionally, Istio consolidates application logs and<a id="_idIndexMarker1641"/> facilitates <strong class="bold">traffic tracing</strong> through multiple microservices. These features empower you to identify and resolve issues more swiftly, helping you isolate problematic services and <span class="No-Break">expedite debugging.</span></p>
+			<h2 id="_idParaDest-401"><a id="_idTextAnchor1851"/>Developer-friendly</h2>
+			<p>Istio’s most <a id="_idIndexMarker1642"/>remarkable feature is its ability to relieve developers from the burdens of managing security and operational intricacies within <span class="No-Break">their implementations.</span></p>
+			<p>Istio’s Kubernetes-aware nature permits developers to continue building their applications as standard Kubernetes deployments. Istio seamlessly and automatically injects sidecar containers into the pods, sparing developers the need to worry about these <span class="No-Break">technical intricacies.</span></p>
+			<p>Once these sidecar containers have been integrated, operations and security teams can then step in to enforce policies related to traffic management, security, and the overall operation of the application. This results in a mutually beneficial scenario for all <span class="No-Break">involved parties.</span></p>
+			<p>Istio empowers <a id="_idIndexMarker1643"/>security and operations teams to efficiently oversee microservices applications without hampering the development team’s productivity. This collaborative approach ensures that each team within the organization can maintain its specialized focus and effectively contribute to the app’s success. Now that we understand Istio, let’s look at <span class="No-Break">its architecture.</span></p>
+			<h1 id="_idParaDest-402"><a id="_idTextAnchor1852"/>Understanding the Istio architecture</h1>
+			<p>Istio simplifies microservices management through two <span class="No-Break">fundamental components:</span></p>
+			<ul>
+				<li><strong class="bold">Data plane</strong>: This <a id="_idIndexMarker1644"/>comprises the sidecar envoy proxies that Istio injects into<a id="_idIndexMarker1645"/> your microservices. These proxies take on the essential role of routing traffic between various services, and they also collect crucial telemetry data to facilitate monitoring <span class="No-Break">and insights.</span></li>
+				<li><strong class="bold">Control plane</strong>: The control plane<a id="_idIndexMarker1646"/> serves as the command center, instructing<a id="_idIndexMarker1647"/> the data plane on how to route traffic effectively. It also handles the storage and management of configuration details, making it easier for administrators to interact with the sidecar proxy and take control of the Istio service mesh. In essence, the control plane functions as the intelligence and decision-making hub <span class="No-Break">of Istio.</span></li>
+			</ul>
+			<p>Similarly, Istio manages two types <span class="No-Break">of traffic:</span></p>
+			<ul>
+				<li><strong class="bold">Data plane traffic</strong>: This <a id="_idIndexMarker1648"/>type of traffic consists of the core business-related data exchanged between your microservices. It encompasses the actual interactions and transactions that your <span class="No-Break">application handles.</span></li>
+				<li><strong class="bold">Control plane traffic</strong>: In <a id="_idIndexMarker1649"/>contrast, the control plane traffic consists of messages and communications between Istio components, and it is chiefly responsible for governing the behavior of the service mesh. It acts as the control mechanism that orchestrates the routing, security, and overall functioning of the <span class="No-Break">microservices architecture.</span></li>
+			</ul>
+			<p>The following diagram describes the Istio architecture <span class="No-Break">in detail:</span></p>
+			<div>
+				<div id="_idContainer148" class="IMG---Figure">
+					<img src="image/B19877_15_3.jpg" alt="Figure 15.3 – Istio architecture" width="1701" height="909"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.3 – Istio architecture</p>
+			<p>As we can see two distinct parts in the preceding diagram, the control plane and the data plane, let’s go ahead and <span class="No-Break">understand them.</span></p>
+			<h2 id="_idParaDest-403"><a id="_idTextAnchor1853"/>The control plane architecture</h2>
+			<p>Istio ships the <a id="_idIndexMarker1650"/>control plane as a <a id="_idIndexMarker1651"/>single <strong class="bold">istiod</strong> component. The Istio <a id="_idIndexMarker1652"/>control plane, or istiod, comprises several critical components, each playing a distinct role in managing your <span class="No-Break">service mesh.</span></p>
+			<h3>Pilot</h3>
+			<p><strong class="bold">Pilot</strong> serves as the<a id="_idIndexMarker1653"/> central control hub of the service mesh. It communicates with the envoy <a id="_idIndexMarker1654"/>sidecars using the Envoy API and translates the high-level rules specified in Istio manifests into envoy configurations. Pilot enables service discovery, intelligent traffic management, and routing capabilities. It empowers you to implement practices such as A/B testing, Blue/Green deployments, canary rollouts, and more. Additionally, Pilot enhances the resiliency of your service mesh by configuring sidecars to handle tasks such as timeouts, retries, and circuit breaking. One of its notable features is providing a bridge between Istio configuration and the underlying infrastructure, allowing Istio to<a id="_idIndexMarker1655"/> run on diverse platforms such as <a id="_idIndexMarker1656"/>Kubernetes, <strong class="bold">Nomad</strong>, and <strong class="bold">Consul</strong>. Regardless of the platform, Pilot ensures consistent <span class="No-Break">traffic management.</span></p>
+			<h3>Citadel</h3>
+			<p><strong class="bold">Citadel</strong> focuses on<a id="_idIndexMarker1657"/> identity and access management within your service mesh, fostering secure <a id="_idIndexMarker1658"/>communication between Kubernetes pods. It safeguards your pods by ensuring encrypted communication, even if your developers have designed components with insecure TCP connections. Citadel simplifies the implementation of mutual TLS by managing the complexities of certificates. It offers user authentication, credential management, certificate handling, and traffic encryption, ensuring pods can securely validate one another <span class="No-Break">when necessary.</span></p>
+			<h3>Galley</h3>
+			<p><strong class="bold">Galley</strong> is <a id="_idIndexMarker1659"/>responsible for essential configuration tasks within your service mesh. It validates, processes, and <a id="_idIndexMarker1660"/>distributes configuration changes throughout the Istio control plane. For example, when you apply a new policy, Galley ingests the configuration, validates its accuracy, processes it for the intended components, and seamlessly disseminates it within the service mesh. In essence, Galley serves as the interface through which the Istio control plane interacts with the underlying APIs, facilitating the smooth management of your <span class="No-Break">service mesh.</span></p>
+			<p>Now, let’s dive deep into understanding the data <span class="No-Break">plane architecture.</span></p>
+			<h2 id="_idParaDest-404"><a id="_idTextAnchor1854"/>The data plane architecture</h2>
+			<p>The <a id="_idIndexMarker1661"/>data plane component of<a id="_idIndexMarker1662"/> Istio is composed of <strong class="bold">envoy proxies</strong>, <strong class="bold">ingress gateways</strong>, and <span class="No-Break"><strong class="bold">egress gateways</strong></span><span class="No-Break">.</span></p>
+			<h3>Envoy proxies</h3>
+			<p>Envoy proxies play a pivotal <a id="_idIndexMarker1663"/>role in <a id="_idIndexMarker1664"/>enabling various aspects of your service mesh. These <strong class="bold">Layer 7</strong> proxies are uniquely capable of making crucial decisions based on the content of the messages they handle, and they are the sole components that directly interact with your business traffic. Here’s how these envoy proxies contribute to the functionality <span class="No-Break">of Istio:</span></p>
+			<ul>
+				<li><strong class="bold">Traffic control</strong>: They <a id="_idIndexMarker1665"/>provide<a id="_idIndexMarker1666"/> fine-grained control over how traffic flows within your<a id="_idIndexMarker1667"/> service mesh, allowing you to define routing rules for various <a id="_idIndexMarker1668"/>types of <a id="_idIndexMarker1669"/>traffic, including <strong class="bold">HTTP</strong>, <strong class="bold">TCP</strong>, <strong class="bold">WebSockets</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="bold">gRPC</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="bold">Security and authentication</strong>: Envoy<a id="_idIndexMarker1670"/> proxies enforce <strong class="bold">identity and access management</strong>, ensuring <a id="_idIndexMarker1671"/>that only authorized pods can <a id="_idIndexMarker1672"/>interact with one another. They implement <strong class="bold">mutual TLS</strong> and <strong class="bold">traffic encryption</strong> to prevent <strong class="bold">man-in-the-middle attacks</strong> and<a id="_idIndexMarker1673"/> offer features such as rate<a id="_idIndexMarker1674"/> limiting to safeguard against runaway costs and <span class="No-Break"><strong class="bold">denial-of-service attacks</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="bold">Network resiliency</strong>: They <a id="_idIndexMarker1675"/>enhance<a id="_idIndexMarker1676"/> network resiliency by supporting<a id="_idIndexMarker1677"/> features <a id="_idIndexMarker1678"/>such as <strong class="bold">retries</strong>, <strong class="bold">failover</strong>, <strong class="bold">circuit breaking</strong>, and <strong class="bold">fault injection</strong> to <a id="_idIndexMarker1679"/>maintain the reliability and robustness<a id="_idIndexMarker1680"/> of <span class="No-Break">your services.</span></li>
+			</ul>
+			<p>Next, let’s look at Ingress and <span class="No-Break">egress gateways.</span></p>
+			<h3>Ingress and egress gateways</h3>
+			<p>In Istio, ingress<a id="_idIndexMarker1681"/> is a collection of one or more envoy proxies, which <a id="_idIndexMarker1682"/>Pilot dynamically configures upon their deployment. These envoy proxies are crucial in controlling and routing incoming external traffic into your service mesh, ensuring that it is appropriately directed to the relevant services based on defined routing rules and policies. This dynamic configuration allows Istio to effectively manage and secure external traffic flows without requiring extensive manual intervention, ensuring that your applications can operate efficiently and securely within the <span class="No-Break">service mesh.</span></p>
+			<p>Egress gateways<a id="_idIndexMarker1683"/> are similar to ingress gateways but they work on outgoing traffic instead. To understand this better, let’s use <span class="No-Break"><em class="italic">Figure 15</em></span><em class="italic">.3</em> as a reference and understand the traffic flow through <strong class="bold">Service A</strong> and <span class="No-Break"><strong class="bold">Service B</strong></span><span class="No-Break">.</span></p>
+			<p>In this architecture, traffic <a id="_idIndexMarker1684"/>within the service mesh follows a structured path through <strong class="bold">Ingress</strong>, microservices (<strong class="bold">Service A</strong> and <strong class="bold">Service B</strong>), and <strong class="bold">Egress</strong>, ensuring efficient routing and security measures. Let’s break down the flow of a traffic packet through your <span class="No-Break">service mesh.</span></p>
+			<h4>Ingress</h4>
+			<p>Traffic enters the<a id="_idIndexMarker1685"/> service mesh through an ingress resource, which is essentially a cluster of envoy proxies. Pilot configures these envoy proxies upon deployment. Ingress proxies are aware of their backends due to configurations based on Kubernetes service endpoints. Ingress proxies conduct health checks, perform load balancing, and make intelligent routing decisions based on metrics such as load, packets, quotas, and <span class="No-Break">traffic balancing.</span></p>
+			<h4>Service A</h4>
+			<p>Once Ingress routes the traffic<a id="_idIndexMarker1686"/> to a pod, it encounters the sidecar proxy container of the Service A pod, not the actual microservice container. The envoy proxy and the microservice container share the same network namespace within the pod and have identical IP addresses and IP Table rules. The envoy proxy takes control of the pod, handling all traffic passing through it. The proxy interacts with Citadel to enforce policies, checks whether traffic needs encryption, and establishes TLS connections with the <span class="No-Break">backend pod.</span></p>
+			<h4>Service B</h4>
+			<p>Service A’s encrypted packet is sent to <a id="_idIndexMarker1687"/>Service B, where similar steps are followed. Service B’s proxy verifies the sender’s identity through a TLS handshake with the source proxy. Upon establishing trust, the packet is forwarded to the Service B container, continuing the flow toward the <span class="No-Break">egress layer.</span></p>
+			<h4>Egress</h4>
+			<p>The egress<a id="_idIndexMarker1688"/> resource manages outbound traffic from the mesh. Egress defines which traffic can exit the mesh and employs Pilot for configuration, similar to the ingress layer. Egress resources enable the implementation of policies restricting outbound traffic to only <span class="No-Break">necessary services.</span></p>
+			<h4>Telemetry data collection</h4>
+			<p>Throughout these steps, proxies collect <a id="_idIndexMarker1689"/>telemetry data from the traffic. This telemetry data is sent to <strong class="bold">Prometheus</strong> for <a id="_idIndexMarker1690"/>storage and analysis. This data can be visualized in <strong class="bold">Grafana</strong>, offering<a id="_idIndexMarker1691"/> insights into the service mesh’s behavior. The telemetry data can also be sent to<a id="_idIndexMarker1692"/> external tools such as <strong class="bold">ELK</strong> for more in-depth analysis and machine learning applications on <span class="No-Break">metrics collected.</span></p>
+			<p>This structured flow ensures traffic moves securely and efficiently through the service mesh while providing valuable insights for monitoring, analysis, and <span class="No-Break">decision-making processes.</span></p>
+			<p>Now that we’ve understood <a id="_idTextAnchor1855"/><a id="_idTextAnchor1856"/>the Istio architecture and its features, let’s go ahead and see how we can <span class="No-Break">install it.</span></p>
+			<h1 id="_idParaDest-405"><a id="_idTextAnchor1857"/>Installing Istio</h1>
+			<p>The general way of<a id="_idIndexMarker1693"/> installing Istio is to download Istio using the provided link and run a shell, which will install Istio on our system, including<a id="_idIndexMarker1694"/> the <strong class="bold">istioctl</strong> component. Then, we need to use <strong class="bold">istioctl</strong> to install Istio within a Kubernetes cluster. However, since we’re using GitOps, we will use the GitOps principles to install it. Istio offers another method to install Istio – that is, using Helm. Since we know that Argo CD supports Helm, we will use <span class="No-Break">that instead.</span></p>
+			<p>Therefore, we will create new <a id="_idIndexMarker1695"/>Argo CD applications to deploy it. We will create an<a id="_idIndexMarker1696"/> Argo CD<a id="_idIndexMarker1697"/> application for <strong class="bold">istio-base</strong>, <strong class="bold">istiod</strong>, and <strong class="bold">ingress</strong>. The following YAML <span class="No-Break">describes </span><span class="No-Break"><strong class="source-inline">istio-base</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base
+  namespace: argo
+spec:
+  project: default
+  source:
+    chart: base
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.1
+    helm:
+      releaseName: istio-base
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: istio-system
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=true
+    automated:
+      selfHeal: true</pre>			<p>As we can see, it <a id="_idIndexMarker1698"/>will deploy <strong class="source-inline">v1.19.1</strong> of the <strong class="source-inline">istio-base</strong> helm chart from <a href="https://istio-release.storage.googleapis.com/charts">https://istio-release.storage.googleapis.com/charts</a> to the <strong class="source-inline">istio-system</strong> namespace of the Kubernetes cluster. Similarly, we will deploy <strong class="source-inline">istiod</strong> to the <strong class="source-inline">istio-system</strong> namespace using the <span class="No-Break">following config:</span></p>
+			<pre class="console">
+...
+  source:
+    chart: istiod
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.1
+    helm:
+      releaseName: istiod
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: istio-system
+...</pre>			<p>Finally, we will<a id="_idIndexMarker1699"/> install the <strong class="source-inline">istio-ingress</strong> component on the <strong class="source-inline">istio-ingress</strong> namespace using the <span class="No-Break">following config:</span></p>
+			<pre class="console">
+...
+  source:
+    chart: gateway
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: 1.19.1
+    helm:
+      releaseName: istio-ingress
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: istio-ingress
+...</pre>			<p>We will also define the <a id="_idIndexMarker1700"/>configuration on Terraform so that we can use push-based GitOps to create our application automatically. So, we will append the following to the <span class="No-Break"><strong class="source-inline">app.tf</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+data "kubectl_file_documents" "istio" {
+    content = file("../manifests/argocd/istio.yaml")
+}
+resource "kubectl_manifest" "istio" {
+  depends_on = [
+    kubectl_manifest.gcpsm-secrets,
+  ]
+  for_each  = data.kubectl_file_documents.istio.manifests
+  yaml_body = each.value
+  override_namespace = "argocd"
+}</pre>			<p>Now, we can commit and push these files to our remote repository and wait for Argo CD to reconcile the changes using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~
+$ cp -a ~/modern-devops/ch15/install-istio/app.tf \
+ ~/mdo-environments/terraform/app.tf
+$ cp -a ~/modern-devops/ch15/install-istio/istio.yaml \
+ ~/mdo-environments/manifests/argocd/istio.yaml
+$ git add --all
+$ git commit -m "Install istio"
+$ git push</pre>			<p>As soon as we push the code, we’ll see that the GitHub Actions workflow has been triggered. To access the workflow, go to <strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/actions</strong>. Soon, the workflow will apply the configuration and create the Kubernetes cluster, deploy Argo CD, external secrets, our Blog App, <span class="No-Break">and Istio.</span></p>
+			<p>Once the workflow succeeds, we must access the Argo Web UI. To do that, we need to authenticate with the GKE cluster. To do so, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud container clusters get-credentials \
+ mdo-cluster-dev --zone us-central1-a --project $PROJECT_ID</pre>			<p>To utilize the Argo CD Web UI, you will require the external IP address of the <strong class="source-inline">argo-server</strong> service. To get that, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get svc argocd-server -n argocd
+NAME          TYPE        EXTERNAL-IP  PORTS          AGE  
+argocd-server LoadBalaner 34.122.51.25 80/TCP,443/TCP 6m15s</pre>			<p>Now, we know that <a id="_idIndexMarker1701"/>Argo CD can be accessed at <strong class="source-inline">https://34.122.51.25/</strong>. </p>
+			<p>Next, we will run the following commands to reset the <span class="No-Break">admin password:</span></p>
+			<pre class="console">
+$ kubectl patch secret argocd-secret -n argocd \
+-p '{"data": {"admin.password": null, "admin.passwordMtime": null}}'
+$ kubectl scale deployment argocd-server --replicas 0 -n argocd
+$ kubectl scale deployment argocd-server --replicas 1 -n argocd</pre>			<p>Now, allow 2 minutes for the new credentials to be generated. After that, execute the following command to retrieve <span class="No-Break">the password:</span></p>
+			<pre class="console">
+$ kubectl -n argocd get secret argocd-initial-admin-secret \
+ -o jsonpath="{.data.password}" | base64 -d &amp;&amp; echo</pre>			<p>Now that we have the credentials, we can log in. We will see the <span class="No-Break">following page:</span></p>
+			<div>
+				<div id="_idContainer149" class="IMG---Figure">
+					<img src="image/B19877_15_4.jpg" alt="Figure 15.4 – Argo CD Web UI – home page" width="1630" height="1032"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.4 – Argo CD Web UI – home page</p>
+			<p>As we can see, the Istio applications are up and running. Though Istio is installed and running, the sidecars won’t be injected unless we ask Istio to do so. We’ll look at <span class="No-Break">this next.</span></p>
+			<h2 id="_idParaDest-406"><a id="_idTextAnchor1858"/>Enabling automatic sidecar injection</h2>
+			<p>Since envoy sidecars are the key<a id="_idIndexMarker1702"/> technology behind Istio’s capabilities, they must be added to your existing pods to enable Istio to manage them. Updating each pod’s configuration to include these sidecars can be challenging. To address this challenge, Istio offers a solution by enabling the automatic injection of these sidecars. To allow automatic sidecar injection on a namespace, we must add a label – that is, <strong class="source-inline">istio-injection: enabled</strong>. To do so, we will modify the <strong class="source-inline">blog-app.yaml</strong> file and add the label to the <span class="No-Break">namespace resource:</span></p>
+			<pre class="console">
+apiVersion: v1
+ kind: Namespace
+ metadata:
+   name: blog-app
+   labels:
+     istio-injection: enabled
+...</pre>			<p>Now, we can<a id="_idIndexMarker1703"/> commit this resource to Git and push the changes remotely using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~
+$ cp -a ~/modern-devops/ch15/install-istio/blog-app.yaml \
+ ~/mdo-environments/manifests/blog-app/blog-app.yaml
+$ git add --all
+$ git commit -m "Enable sidecar injection"
+$ git push</pre>			<p>In the next Argo CD sync, we will soon find the label attached to the namespace. As soon as the label is applied, we need to restart our deployments and stateful sets, at which point new pods will come up with the injected sidecars. Use the following commands to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ kubectl -n blog-app rollout restart deploy frontend
+$ kubectl -n blog-app rollout restart deploy posts
+$ kubectl -n blog-app rollout restart deploy users
+$ kubectl -n blog-app rollout restart deploy reviews
+$ kubectl -n blog-app rollout restart deploy ratings
+$ kubectl -n blog-app rollout restart statefulset mongodb</pre>			<p>Now, let’s list the pods in the <strong class="source-inline">blog-app</strong> namespace using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod -n blog-app 
+NAME                      READY   STATUS    RESTARTS   AGE
+frontend-759f58f579-gqkp9 2/2     Running   0          109s
+mongodb-0                 2/2     Running   0          98s
+posts-5cdcb5cdf6-6wjrr    2/2     Running   0          108s
+ratings-9888d6fb5-j27l2   2/2     Running   0          105s
+reviews-55ccb7fbd9-vw72m  2/2     Running   0          106s
+users-5dbd56c4c5-stgjp    2/2     Running   0          107s</pre>			<p>As we can see, the pods now show two containers instead of one. The extra container is the envoy sidecar. Istio’s<a id="_idIndexMarker1704"/> installation and setup <span class="No-Break">are complete.</span></p>
+			<p>Now that our application has the Istio sidecar injected, we can use Istio ingress to allow traffic to our application, which is currently exposed via a load <span class="No-Break">balancer service.</span></p>
+			<h1 id="_idParaDest-407"><a id="_idTextAnchor1859"/>Using Istio ingress to allow traffic</h1>
+			<p>We need to create<a id="_idIndexMarker1705"/> a Blog App ingress gateway to associate our application with the Istio ingress gateway. It is necessary for configuring our application to route traffic through the Istio ingress gateway as we want to leverage Istio’s traffic management and <span class="No-Break">security features.</span></p>
+			<p>Istio deploys the Istio ingress gateway as a part of the installation process, and it’s exposed on a load balancer by default. To determine the load balancer’s IP address and ports, you can run the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl get svc istio-ingress -n istio-ingress
+NAME           EXTERNAL-IP    PORT(S)       
+istio-ingress  34.30.247.164  80:30950/TCP,443:32100/TCP</pre>			<p>As we can see, Istio exposes various ports on your load balancer, and as our application needs to run on port 80, we can access it <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">http://&lt;IngressLoadBalancerExternalIP&gt;:80</strong></span><span class="No-Break">.</span></p>
+			<p>The next step would be to use this ingress gateway and expose our application. For that, we need to create <strong class="bold">Gateway</strong> and <span class="No-Break"><strong class="bold">VirtualService</strong></span><span class="No-Break"> resources.</span></p>
+			<p>Istio gateway is<a id="_idIndexMarker1706"/> a <strong class="bold">custom resource definition</strong> (<strong class="bold">CRD</strong>) that helps you define how incoming external traffic can access services in your mesh. It acts as an entry point to your service and a load balancer for incoming traffic. When external traffic arrives at a gateway, it determines how to route it to the appropriate services based on the specified <span class="No-Break">routing rules.</span></p>
+			<p>When we define an Istio gateway, we also need to define a <strong class="source-inline">VirtualService</strong> resource that uses the gateway and describes the routing rules for the traffic. Without a <strong class="source-inline">VirtualService</strong> resource, the Istio gateway will not know where and how to route the traffic it receives. A <strong class="source-inline">VirtualService</strong> resource is not only used for routing traffic from gateways but also for routing traffic within different services of the mesh. It allows you to define sophisticated routing rules, including traffic splitting, retries, timeouts, and more. Virtual services are often associated with specific services or workloads and determine how traffic should be routed to them. You can use virtual services to control how traffic is distributed among different versions of a service, enabling practices such as A/B testing, canary deployments, and Blue/Green deployments. Virtual services can also route traffic based on HTTP headers, paths, or other request attributes. In the current context, we will use the <strong class="source-inline">VirtualService</strong> resource to filter traffic based on paths and route them all to the <span class="No-Break"><strong class="bold">frontend</strong></span><span class="No-Break"> microservice.</span></p>
+			<p>Let’s look at the <a id="_idIndexMarker1707"/>definition of the <strong class="source-inline">Gateway</strong> <span class="No-Break">resource first:</span></p>
+			<pre class="console">
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: blog-app-gateway
+  namespace: blog-app
+spec:
+  selector:
+    istio: ingress
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"</pre>			<p>As we can see, we <a id="_idIndexMarker1708"/>define a <strong class="source-inline">Gateway</strong> resource that uses the Istio ingress gateway (defined by the <strong class="source-inline">istio: ingress</strong> selector) and listens on HTTP port <strong class="source-inline">80</strong>. It allows connection to all hosts as we’ve set that to <strong class="source-inline">"*"</strong>. For gateways to work correctly, we need to define a <strong class="source-inline">VirtualService</strong> resource. Let’s look at <span class="No-Break">that next:</span></p>
+			<pre class="console">
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: blog-app
+  namespace: blog-app
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - blog-app-gateway
+  http:
+  - match:
+    - uri:
+        exact: /
+    - uri:
+        prefix: /static
+    - uri:
+        prefix: /posts
+    - uri:
+        exact: /login
+    - uri:
+        exact: /logout
+    - uri:
+        exact: /register
+    - uri:
+        exact: /updateprofile
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 80</pre>			<p>The <strong class="source-inline">VirtualService</strong> resource listens on all hosts and applies to <strong class="source-inline">blog-app-gateway</strong> as specified. It allows <strong class="source-inline">/static</strong>, and <strong class="source-inline">/posts</strong> as a <strong class="source-inline">prefix</strong> match. This means all requests with a URI that begins with them would be routed. The <strong class="source-inline">/login</strong>, <strong class="source-inline">/logout</strong>, <strong class="source-inline">/register</strong>, <strong class="source-inline">/updateprofile</strong>, and <strong class="source-inline">/</strong> paths have an <strong class="source-inline">exact</strong> match, which means that the exact URI is matched and allowed. These are routed to the <strong class="source-inline">frontend</strong> service on <span class="No-Break">port </span><span class="No-Break"><strong class="source-inline">80</strong></span><span class="No-Break">.</span></p>
+			<p>We must also modify<a id="_idIndexMarker1709"/> the <strong class="source-inline">frontend</strong> service within the <strong class="source-inline">blog-app.yaml</strong> file to change the service type to <strong class="source-inline">ClusterIP</strong>. This will remove the attached load balancer from the service, and all requests will be routed via the <span class="No-Break">ingress gateway.</span></p>
+			<p>Now, let’s go ahead and apply these changes using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~/mdo-environments
+$ cp ~/modern-devops/ch15/istio-ingressgateway/gateway.yaml \
+manifests/blog-app/gateway.yaml
+$ cp ~/modern-devops/ch15/istio-ingressgateway/blog-app.yaml \
+manifests/blog-app/blog-app.yaml
+$ git add --all
+$ git commit -m "Added gateway"
+$ git push</pre>			<p>We will wait 5 minutes for the sync to work, after which we can go <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">http://&lt;Ingress</strong></span><strong class="source-inline">
+LoadBalancerExternalIP&gt;</strong> to access our Blog App. You should see the following page. This shows that the application is <span class="No-Break">working correctly:</span></p>
+			<div>
+				<div id="_idContainer150" class="IMG---Figure">
+					<img src="image/B19877_15_5.jpg" alt="Figure 15.5 – Blog App – home page" width="879" height="181"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.5 – Blog App – home page</p>
+			<p>You can play <a id="_idIndexMarker1710"/>around with the application by registering, logging in, creating a post, and writing a review. Try updating the post and reviews to see whether all aspects of the application are working. Now, let’s look at the security aspects of <span class="No-Break">our microservices.</span></p>
+			<h1 id="_idParaDest-408"><a id="_idTextAnchor1860"/>Securing your microservices using Istio</h1>
+			<p>Running<a id="_idIndexMarker1711"/> microservices in production offers numerous advantages, such as<a id="_idIndexMarker1712"/> independent scalability, enhanced agility, reduced scope of change, frequent deployments, and reusability. However, they also introduce unique challenges, particularly in terms <span class="No-Break">of security.</span></p>
+			<p>In a monolithic architecture, the security focus revolves around safeguarding a single application. However, in a typical enterprise-grade microservices application, hundreds of microservices may need to interact securely with each other. Kubernetes serves as an excellent platform for hosting and orchestrating microservices. Nevertheless, the default communication between microservices is insecure, as they typically use plaintext HTTP. This may<a id="_idIndexMarker1713"/> not meet your security requirements. To apply the same <a id="_idIndexMarker1714"/>security principles to microservices as you would to a traditional enterprise monolith, you must ensure <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="bold">Encrypted communications</strong>: All interactions between microservices must be encrypted to prevent potential <span class="No-Break">man-in-the-middle attacks</span></li>
+				<li><strong class="bold">Access control</strong>: Access control mechanisms need to be in place to ensure that only authorized microservices can interface with <span class="No-Break">each other</span></li>
+				<li><strong class="bold">Telemetry and audit logging</strong>: Capturing, logging, and auditing telemetry data is crucial to understanding traffic behavior and proactively <span class="No-Break">detecting intrusions</span></li>
+			</ul>
+			<p>Istio simplifies addressing these<a id="_idIndexMarker1715"/> security concerns and provides these essential security features out of the <a id="_idIndexMarker1716"/>box. With Istio, you can enforce strong <strong class="bold">identity and access management</strong>, mutual <strong class="bold">TLS</strong> and <strong class="bold">encryption</strong>, <strong class="bold">authentication</strong> and <strong class="bold">authorization</strong>, and comprehensive <strong class="bold">audit logging</strong> – all within a <a id="_idIndexMarker1717"/>unified control plane. This means you can establish <a id="_idIndexMarker1718"/>robust <a id="_idIndexMarker1719"/>security practices for your microservices, promoting the safety and reliability of your applications in a dynamic and <span class="No-Break">distributed environment.</span></p>
+			<p>In the context of Istio, you should be aware that it automatically injects sidecar proxies into your pods and modifies the IP tables of your Kubernetes cluster to ensure that all connections occur through these proxies. This setup is designed to enforce TLS encryption by default, enhancing the security of your microservices without requiring specific configurations. The communication between these envoy proxies within the service mesh is automatically secured <span class="No-Break">through TLS.</span></p>
+			<p>While the default setup offers a foundational level of security and effectively prevents man-in-the-middle attacks, it’s advisable to further bolster the security of your microservices by applying specific policies. Before delving into the detailed features, having a high-level understanding of how security functions in Istio <span class="No-Break">is beneficial.</span></p>
+			<p>Istio incorporates the following key components for <span class="No-Break">enforcing security:</span></p>
+			<ul>
+				<li><strong class="bold">Certificate authority</strong> (<strong class="bold">CA</strong>): This <a id="_idIndexMarker1720"/>component manages keys and certificates, ensuring secure and authenticated communication within the <span class="No-Break">service mesh.</span></li>
+				<li><strong class="bold">Configuration API Server</strong>: The Configuration API Server<a id="_idIndexMarker1721"/> distributes authentication policies, authorization policies, and secure naming information to the envoy proxies. These policies define how services can authenticate and authorize each other and manage <span class="No-Break">secure communication.</span></li>
+				<li><strong class="bold">Sidecar proxies</strong>: Sidecar proxies, deployed <a id="_idIndexMarker1722"/>alongside your microservices, are crucial in enforcing security policies. They act as policy enforcement points, implementing the policies supplied <span class="No-Break">to them.</span></li>
+				<li><strong class="bold">Envoy proxy extensions</strong>: These <a id="_idIndexMarker1723"/>extensions enable the collection of telemetry data and auditing, providing insights into traffic behavior and helping to identify and mitigate <span class="No-Break">security issues.</span></li>
+			</ul>
+			<p>With these <a id="_idIndexMarker1724"/>components working in concert, Istio ensures a <a id="_idIndexMarker1725"/>robust security framework for your microservices, which can be further fine-tuned by defining and enforcing specific security policies tailored to your <span class="No-Break">application’s needs.</span></p>
+			<p>As our application currently runs on HTTP, it would be a great idea to implement TLS in our Blog App and expose it over HTTPS. Let’s start by creating a secure ingress gateway <span class="No-Break">for this.</span></p>
+			<h2 id="_idParaDest-409"><a id="_idTextAnchor1861"/>Creating secure ingress gateways</h2>
+			<p>Secure<a id="_idIndexMarker1726"/> ingress gateways are nothing but <strong class="bold">TLS-enabled ingress gateways</strong>. To<a id="_idIndexMarker1727"/> enable TLS on an ingress gateway, we must provide it with a <strong class="bold">private key</strong> and a <strong class="bold">certificate</strong> chain. We will use a self-signed certificate chain for this exercise, but you must use a proper CA certificate chain in production. A CA certificate is a digital certificate that’s granted by a<a id="_idIndexMarker1728"/> reputable CA, such as Verisign or Entrust, within a <strong class="bold">public key infrastructure</strong> (<strong class="bold">PKI</strong>). It plays a pivotal role in guaranteeing the security and reliability of digital interactions <span class="No-Break">and transactions.</span></p>
+			<p>Let’s start <a id="_idIndexMarker1729"/>by creating <a id="_idIndexMarker1730"/>a <strong class="bold">root certificate</strong> and <strong class="bold">private key</strong> to sign certificates for our application by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ openssl req -x509 -sha256 -nodes -days 365 \ 
+-newkey rsa:2048 -subj '/O=example Inc./CN=example.com' \ 
+-keyout example.com.key -out example.com.crt </pre>			<p>Using the <a id="_idIndexMarker1731"/>generated root certificate, we can now generate the <strong class="bold">server certificate</strong> and the<a id="_idIndexMarker1732"/> key using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ openssl req -out blogapp.example.com.csr \ 
+-newkey rsa:2048 -nodes -keyout blogapp.example.com.key \ 
+-subj "/CN=blogapp.example.com/O=blogapp organization" 
+$ openssl x509 -req -sha256 -days 365 \ 
+-CA example.com.crt -CAkey example.com.key -set_serial 1 \ 
+-in blogapp.example.com.csr -out blogapp.example.com.crt </pre>			<p>The next step is to generate a Kubernetes TLS secret within the <strong class="source-inline">istio-ingress</strong> namespace for our ingress gateway to read it. However, as we don’t want to store the TLS key and certificate in our Git repository, we will use <strong class="bold">Google Secrets Manager</strong> instead. Therefore, let’s run the following <a id="_idIndexMarker1733"/>command to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ echo -ne "{\"MONGO_INITDB_ROOT_USERNAME\": \"root\", \
+\"MONGO_INITDB_ROOT_PASSWORD\": \"itsasecret\", \
+\"blogapptlskey\": \"$(base64 blogapp.example.com.key -w 0)\", \
+\"blogapptlscert\": \"$(base64 blogapp.example.com.crt -w 0)\"}" | \
+gcloud secrets versions add external-secrets --data-file=-
+Created version [2] of the secret [external-secrets].</pre>			<p>Now, we must create an<a id="_idIndexMarker1734"/> external secret manifest to fetch the keys and certificates from Secrets Manager and generate a TLS secret. The following manifest will help us <span class="No-Break">achieve that:</span></p>
+			<pre class="console">
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  name: blogapp-tls-credentials
+  namespace: istio-ingress
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: gcp-backend
+  target:
+    template:
+      type: kubernetes.io/tls
+      data:
+        tls.crt: "{{ .blogapptlscert | base64decode | toString }}"
+        tls.key: "{{ .blogapptlskey | base64decode | toString }}"
+    name: blogapp-tls-credentials
+  data:
+  - secretKey: blogapptlskey
+    remoteRef:
+      key: external-secrets
+      property:  blogapptlskey
+  - secretKey: blogapptlscert
+    remoteRef:
+      key: external-secrets
+      property: blogapptlscert</pre>			<p>Now, let’s create a directory within our Environment Repository and copy the external secret manifest there. Use the following commands <span class="No-Break">for that:</span></p>
+			<pre class="console">
+$ mkdir ~/mdo-environments/manifests/istio-ingress
+$ cp ~/modern-devops/ch15/security/blogapp-tls-credentials.yaml \
+~/mdo-environments/manifests/istio-ingress</pre>			<p>Next, we need to<a id="_idIndexMarker1735"/> modify the ingress gateway resource to configure TLS. To do so, we must modify the <strong class="source-inline">Gateway</strong> resource to <span class="No-Break">the following:</span></p>
+			<pre class="console">
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: blog-app-gateway
+  namespace: blog-app
+spec:
+  selector:
+    istio: ingress
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: blogapp-tls-credentials
+    hosts:
+    - "*"</pre>			<p>The gateway<a id="_idIndexMarker1736"/> configuration is similar to the previous one, but instead of <strong class="source-inline">port 80</strong>, we’re using <strong class="source-inline">port 443</strong> for <strong class="source-inline">HTTPS</strong>. We also have a <strong class="source-inline">tls</strong> section with a <strong class="source-inline">SIMPLE</strong> mode, which means it is a standard TLS connection. We’ve specified <strong class="source-inline">credentialName</strong>, pointing to the secret we created using the TLS key and certificate. Since all the setup is now ready, let’s commit and push the code using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/ch15/security/gateway.yaml \
+~/mdo-environments/manifests/blog-app/
+$ cp ~/modern-devops/ch15/security/run-tests.yml \
+~/mdo-environments/.github/workflows/
+$ git add --all
+$ git commit -m "Enabled frontend TLS"
+$ git push</pre>			<p>Wait for <strong class="source-inline">blog-app</strong> to sync. Once we’ve done this, we can access our application <span class="No-Break">at </span><span class="No-Break"><strong class="source-inline">https:</strong></span><strong class="source-inline">
+//&lt;IngressLoadBalancerExternalIP&gt;</strong>. With that, the connection coming into our application has <span class="No-Break">been encrypted.</span></p>
+			<p>Though we’ve secured connection coming into our mesh, securing all internal service interactions with services using TLS within your service mesh would be good as an additional security layer. We’ll implement <span class="No-Break">that next.</span></p>
+			<h2 id="_idParaDest-410"><a id="_idTextAnchor1862"/>Enforcing TLS within your service mesh</h2>
+			<p>As we know by now, by <a id="_idIndexMarker1737"/>default, Istio provides TLS encryption for <a id="_idIndexMarker1738"/>communication between workloads that have sidecar proxies injected. However, it’s important to note that this default setting operates in compatibility mode. In this mode, traffic between two services with sidecar proxies injected is encrypted. However, workloads without sidecar proxies can still communicate with backend microservices over plaintext HTTP. This design choice is made to simplify the adoption of Istio, as teams newly introducing Istio don’t need to immediately address the issue of making all source <span class="No-Break">traffic TLS-enabled.</span></p>
+			<p>Let’s create and get a shell to a pod in the <strong class="source-inline">default</strong> namespace. The backend traffic will be plaintext because the namespace does not have automatic sidecar injection. We will then <strong class="source-inline">curl</strong> the <strong class="source-inline">frontend</strong> microservice<a id="_idIndexMarker1739"/> from there and see whether we get a <a id="_idIndexMarker1740"/>response. Run the following command to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ kubectl run -it --rm --image=curlimages/curl curly -- curl -v http://frontend.blog-app
+*   Trying 10.71.246.145:80…
+* Connected to frontend (10.71.246.145) port 80
+&gt; GET / HTTP/1.1
+&gt; Host: frontend
+&gt; User-Agent: curl/8.4.0
+&gt; Accept: */*
+&lt; HTTP/1.1 200 OK
+&lt; server: envoy
+&lt; date: Sat, 21 Oct 2023 07:19:18 GMT
+&lt; content-type: text/html; charset=utf-8
+&lt; content-length: 5950
+&lt; x-envoy-upstream-service-time: 32
+&lt;!doctype html&gt;
+&lt;html la"g="en"&gt;
+...</pre>			<p>As we can see, we get an <strong class="source-inline">HTTP 200</strong> <span class="No-Break">response back.</span></p>
+			<p>This approach balances security and compatibility, allowing a gradual transition to a fully encrypted communication model. Over time, as more services have sidecar proxies injected, the overall security posture of the microservices application improves. However, as we are starting fresh, enforcing strict TLS for our Blog App would make sense. So, let’s <span class="No-Break">do that.</span></p>
+			<p>To enable strict TLS on a workload, namespace, or the entire cluster, Istio provides peer authentication policies using the <strong class="source-inline">PeerAuthentication</strong> resource. As we only need to implement strict <a id="_idIndexMarker1741"/>TLS on the Blog App, enabling it at the <a id="_idIndexMarker1742"/>namespace level would make sense. To do that, we will use the following <span class="No-Break"><strong class="source-inline">PeerAuthentication</strong></span><span class="No-Break"> resource:</span></p>
+			<pre class="console">
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: blog-app
+spec:
+  mtls:
+    mode: STRICT</pre>			<p>Now, let’s apply this using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/<a id="_idTextAnchor1863"/><a id="_idTextAnchor1864"/>ch15/security/strict-mtls.yaml \
+ ~/mdo-environments/manifests/blog-app/
+$ git add --all
+$ git commit -m "Enable strict TLS"
+$ git push</pre>			<p>Argo CD should pick up the new configuration and apply the strict TLS policy as soon as we push the changes. Wait for the Argo CD sync to be in a clean state, and run the following commands to check whether strict TLS <span class="No-Break">is working:</span></p>
+			<pre class="console">
+$ kubectl run -it --rm --image=curlimages/curl  curly -- curl -v http://frontend.blog-app
+*   Trying 10.71.246.145:80...
+* Connected to frontend.blog-app (10.71.246.145) port 80
+&gt; GET / HTTP/1.1
+&gt; Host: frontend.blog-app
+&gt; User-Agent: curl/8.4.0
+&gt; Accept: */*
+* Recv failure: Connection reset by peer
+* Closing connection
+curl: (56) Recv failure: Connection reset by peer</pre>			<p>As we can see, the<a id="_idIndexMarker1743"/> request has now been rejected as it is a <a id="_idIndexMarker1744"/>plaintext request, and the backend will only allow TLS. This shows that strict TLS is working fine. Now, let’s move on and secure our services <span class="No-Break">even better.</span></p>
+			<p>From our design, we know how services interact with <span class="No-Break">each other:</span></p>
+			<ul>
+				<li>The <strong class="source-inline">frontend</strong> microservice can only connect to the <strong class="source-inline">posts</strong>, <strong class="source-inline">reviews</strong>, and <span class="No-Break"><strong class="source-inline">users</strong></span><span class="No-Break"> microservices</span></li>
+				<li>Only the <strong class="source-inline">reviews</strong> microservice can connect to the <span class="No-Break"><strong class="source-inline">ratings</strong></span><span class="No-Break"> microservice.</span></li>
+				<li>Only the <strong class="source-inline">posts</strong>, <strong class="source-inline">reviews</strong>, <strong class="source-inline">users</strong>, and <strong class="source-inline">ratings</strong> microservices can connect to the <span class="No-Break"><strong class="source-inline">mongodb</strong></span><span class="No-Break"> database</span></li>
+			</ul>
+			<p>Therefore, we can define these interactions and only allow these connections explicitly. Therefore, the <strong class="source-inline">frontend</strong> microservice will not be able to connect with the <strong class="source-inline">mongodb</strong> database directly, even if it <span class="No-Break">tries to.</span></p>
+			<p>Istio provides the <strong class="source-inline">AuthorizationPolicy</strong> resource to manage this. Let’s implement the preceding scenario <span class="No-Break">using that.</span></p>
+			<p>Let’s start with the <span class="No-Break"><strong class="source-inline">posts</strong></span><span class="No-Break"> microservice:</span></p>
+			<pre class="console">
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: posts
+  namespace: blog-app
+spec:
+  selector:
+    matchLabels:
+      app: posts
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/blog-app/sa/frontend"]</pre>			<p>The <strong class="source-inline">AuthorizationPolicy</strong> has multiple sections. It starts with <strong class="source-inline">name</strong> and <strong class="source-inline">namespace</strong>, which are <strong class="source-inline">posts</strong> and <strong class="source-inline">blog-app</strong>, respectively. The <strong class="source-inline">spec</strong> section contains <strong class="source-inline">selector</strong>, where we specify that we need to apply this policy to all pods with the <strong class="source-inline">app: posts</strong> label. We use an <strong class="source-inline">ALLOW</strong> action for this. Note that Istio has an implicit <strong class="source-inline">deny-all</strong> policy for all pods that match the selector, and any <strong class="source-inline">ALLOW</strong> rules will be applied on top of that. Any traffic that does not match the <strong class="source-inline">ALLOW</strong> rules will be denied by default. We have rules to define what traffic to allow; here, we’re using the <strong class="source-inline">from</strong> &gt; <strong class="source-inline">source</strong> &gt; <strong class="source-inline">principals</strong> and setting the <strong class="source-inline">frontend</strong> service account on this. So, in summary, this rule <a id="_idIndexMarker1745"/>will apply to the <strong class="source-inline">posts</strong> microservice and <a id="_idIndexMarker1746"/>only allow traffic from the <span class="No-Break"><strong class="source-inline">frontend</strong></span><span class="No-Break"> microservice.</span></p>
+			<p>Similarly, we will apply the same policy to the <strong class="source-inline">reviews</strong> microservice, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+...
+  name: reviews
+...
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/blog-app/sa/frontend"]</pre>			<p>The <strong class="source-inline">users</strong> microservice also only needs to accept traffic from the <span class="No-Break"><strong class="source-inline">frontend</strong></span><span class="No-Break"> microservice:</span></p>
+			<pre class="console">
+...
+  name: users
+...
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/blog-app/sa/frontend"]</pre>			<p>The <strong class="source-inline">ratings</strong> microservice <a id="_idIndexMarker1747"/>should accept traffic only from<a id="_idIndexMarker1748"/> the <strong class="source-inline">reviews</strong> microservice, so we will make a slight change to the principals, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+...
+  name: ratings
+...
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/blog-app/sa/reviews"]</pre>			<p>Finally, the <strong class="source-inline">mongodb</strong> service needs a connection from all microservices apart from <strong class="source-inline">frontend</strong>, so we must specify multiple entries in the <span class="No-Break">principal section:</span></p>
+			<pre class="console">
+...
+  name: mongodb
+...
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/blog-app/sa/posts", "cluster.local/ns/blog-app/sa/
+reviews", "cluster.local/ns/blog-app/sa/ratings", "cluster.local/ns/blog-app/sa/users"]</pre>			<p>Since we’ve used service accounts<a id="_idIndexMarker1749"/> to understand where the<a id="_idIndexMarker1750"/> requests are coming from, we must also create and assign service accounts to respective services. So, we will modify the <strong class="source-inline">blog-app.yaml</strong> file and add service accounts for each service, something like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb
+  namespace: blog-app
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+...
+spec:
+...
+  template:
+...
+    spec:
+      serviceAccountName: mongodb
+      containers:
+...</pre>			<p>I’ve already<a id="_idIndexMarker1751"/> replicated the same in the new <strong class="source-inline">blog-app.yaml</strong> file. Let’s<a id="_idIndexMarker1752"/> commit the changes and push them to GitHub so that we can apply them to <span class="No-Break">our cluster:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/ch15/security/authorization-policies.yaml \
+ ~/mdo-environments/manifests/blog-app/
+$ cp ~/modern-devops/ch15/security/blog-app.yaml \
+ ~/mdo-environments/manifests/blog-app/
+$ git add --all
+$ git commit -m "Added auth policies"
+$ git push</pre>			<p>Now, we must wait for the sync to complete and then verify the setup. First, we’ll get a shell to the <strong class="source-inline">frontend</strong> pod and try to use <strong class="source-inline">wget</strong> to connect with the backend microservices. We will try to connect with each microservice and see what we get. If we get <strong class="source-inline">HTTP 200</strong> or <strong class="source-inline">404</strong>, this means the backend is allowing connections, while if we get <strong class="source-inline">HTTP 403</strong> or <strong class="source-inline">Error</strong>, this signifies the backend is blocking connections. Run the following commands to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ kubectl -n blog-app exec -it $(kubectl get pod -n blog-app | \
+grep frontend | awk {'print $1'}) -- /bin/sh
+/ # wget posts:5000
+Connecting to posts:5000 (10.71.255.204:5000)
+wget: server returned error: HTTP/1.1 404 Not Found
+/ # wget reviews:5000
+Connecting to reviews:5000 (10.71.244.177:5000)
+wget: server returned error: HTTP/1.1 404 Not Found
+/ # wget ratings:5000
+Connecting to ratings:5000 (10.71.242.178:5000)
+wget: server returned error: HTTP/1.1 403 Forbidden
+/ # wget users:5000
+Connecting to users:5000 (10.71.241.255:5000)
+wget: server returned error: HTTP/1.1 404 Not Found
+/ # wget mongodb:27017
+Connecting to mongodb:27017 (10.68.0.18:27017)
+wget: error getting response: Resource temporarily unavailable
+/ # exit
+command terminated with exit code 1</pre>			<p>As we can see, we get an <strong class="source-inline">HTTP 404</strong> response from the <strong class="source-inline">posts</strong>, <strong class="source-inline">reviews</strong>, and <strong class="source-inline">users</strong> microservices. The <strong class="source-inline">ratings</strong> microservice returns a <strong class="source-inline">403 Forbidden</strong> response, and the <strong class="source-inline">mongodb</strong> service reports that the resource is unavailable. This means that our setup is <span class="No-Break">working correctly.</span></p>
+			<p>Let’s try the <a id="_idIndexMarker1753"/>same <a id="_idIndexMarker1754"/>with the <span class="No-Break"><strong class="source-inline">posts</strong></span><span class="No-Break"> microservice:</span></p>
+			<pre class="console">
+$ kubectl -n blog-app exec -it $(kubectl get pod -n blog-app | \
+grep posts | awk {'print $1'}) -- /bin/sh
+/ # wget mongodb:27017
+Connecting to mongodb:27017 (10.68.0.18:27017)
+saving to 'index.html'
+index.html           100% |************|    85  0:00:00 ETA
+'index.html' saved
+/ # wget ratings:5000
+Connecting to ratings:5000 (10.71.242.178:5000)
+wget: server returned error: HTTP/1.1 403 Forbidden
+/ # wget reviews:5000
+Connecting to reviews:5000 (10.71.244.177:5000)
+wget: server returned error: HTTP/1.1 403 Forbidden
+/ # wget users:5000
+Connecting to users:5000 (10.71.241.255:5000)
+wget: server returned error: HTTP/1.1 403 Forbidden
+/ # exit
+command terminated with exit code 1</pre>			<p>As we can see, the <strong class="source-inline">posts</strong> microservice can communicate successfully with <strong class="source-inline">mongodb</strong>, but the rest of the <a id="_idIndexMarker1755"/>microservices return <strong class="source-inline">403 Forbidden</strong>. This is <a id="_idIndexMarker1756"/>what we were expecting. Now, let’s do the same with the <span class="No-Break"><strong class="source-inline">reviews</strong></span><span class="No-Break"> microservice:</span></p>
+			<pre class="console">
+$ kubectl -n blog-app exec -it $(kubectl get pod -n blog-app | \
+grep reviews | awk {'print $1'}) -- /bin/sh
+/ # wget ratings:5000
+Connecting to ratings:5000 (10.71.242.178:5000)
+wget: server returned error: HTTP/1.1 404 Not Found
+/ # wget mongodb:27017
+Connecting to mongodb:27017 (10.68.0.18:27017)
+saving to 'index.html'
+index.html           100% |**********|    85  0:00:00 ETA
+'index.html' saved
+/ # wget users:5000
+Connecting to users:5000 (10.71.241.255:5000)
+wget: server returned error: HTTP/1.1 403 Forbidden
+/ # exit
+command terminated with exit code 1</pre>			<p>As we can see, the <strong class="source-inline">reviews</strong> microservice can successfully connect with the <strong class="source-inline">ratings</strong> microservice and <strong class="source-inline">mongodb</strong>, while getting a <strong class="source-inline">403</strong> response from other microservices. This is <a id="_idIndexMarker1757"/>what we<a id="_idIndexMarker1758"/> expected. Now, let’s check the <span class="No-Break"><strong class="source-inline">ratings</strong></span><span class="No-Break"> microservice:</span></p>
+			<pre class="console">
+$ kubectl -n blog-app exec -it $(kubectl get pod -n blog-app \
+   | grep ratings | awk {'print $1'}) -- /bin/sh
+/ # wget mongodb:27017
+Connecting to mongodb:27017 (10.68.0.18:27017)
+saving to 'index.html'
+index.html           100% |************|    85  0:00:00 ETA
+'index.html' saved
+/ # wget ratings:5000
+Connecting to ratings:5000 (10.71.242.178:5000)
+wget: server returned error: HTTP/1.1 403 Forbidden
+/ # exit
+command terminated with exit code 1</pre>			<p>As we can see, the <strong class="source-inline">ratings</strong> microservice can only connect successfully with the <strong class="source-inline">mongdb</strong> database and gets a <strong class="source-inline">403</strong> response for <span class="No-Break">other services.</span></p>
+			<p>Now that we’ve tested all the services, the setup is working fine. We’ve secured our microservices to a great extent! Now, let’s look at another aspect of managing microservices with Istio – <span class="No-Break">traffic management.</span></p>
+			<h1 id="_idParaDest-411"><a id="_idTextAnchor1865"/>Managing traffic with Istio</h1>
+			<p>Istio <a id="_idIndexMarker1759"/>offers robust traffic management capabilities that form a core part of its<a id="_idIndexMarker1760"/> functionality. When leveraging Istio for microservice management within your Kubernetes environment, you gain precise control over how these services communicate with each other. This empowers you to define the traffic path within your service <span class="No-Break">mesh meticulously.</span></p>
+			<p>Some of the <a id="_idIndexMarker1761"/>traffic management<a id="_idIndexMarker1762"/> features at your disposal are <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li><span class="No-Break">Request routing</span></li>
+				<li><span class="No-Break">Fault injection</span></li>
+				<li><span class="No-Break">Traffic shifting</span></li>
+				<li>TCP <span class="No-Break">traffic shifting</span></li>
+				<li><span class="No-Break">Request timeouts</span></li>
+				<li><span class="No-Break">Circuit breaking</span></li>
+				<li><span class="No-Break">Mirroring</span></li>
+			</ul>
+			<p>The previous section <a id="_idIndexMarker1763"/>employed an ingress gateway to enable traffic entry into our mesh and used a virtual service to distribute traffic to the services. With virtual services, the traffic distribution happens in a round-robin fashion by default. However, we can change that using destination rules. These rules provide us with an intricate level of control over the behavior of our mesh, allowing for a more granular management of traffic within the <span class="No-Break">Istio ecosystem.</span></p>
+			<p>Before we delve into that, we need to update our Blog App so that it includes a new version of the <strong class="source-inline">ratings</strong> service deployed as <strong class="source-inline">ratings-v2</strong>, which will return black stars instead of orange stars. I’ve already updated the manifest for that in the repository. Therefore, we just need to copy that to the <strong class="source-inline">mdo-environments</strong> repository, commit it, and push it remotely using the following commands: </p>
+			<pre class="console">
+$ cd ~/mdo-environments/manifests/blog-app/
+$ cp ~/modern-devops/ch15/traffic-management/blog-app.yaml .
+$ git add --all
+$ git commit -m "Added ratings-v2 service"
+$ git push</pre>			<p>Wait for the application to sync. After this, we need to do a <span class="No-Break">few things:</span></p>
+			<ol>
+				<li>Go to the Blog App home page &gt; <strong class="bold">Sign In</strong> &gt; <strong class="bold">Not a User? Create an account</strong> and create a <span class="No-Break">new account.</span></li>
+				<li>Click on the <strong class="bold">Actions</strong> tab &gt; <strong class="bold">Add a Post</strong>, add a new post with a title and content of your choice, and <span class="No-Break">click </span><span class="No-Break"><strong class="bold">Submit</strong></span><span class="No-Break">.</span></li>
+				<li>Use the <strong class="bold">Add a Review</strong> text field to add a review, provide a rating, and <span class="No-Break">click </span><span class="No-Break"><strong class="bold">Submit</strong></span><span class="No-Break">.</span></li>
+				<li>Click on <strong class="bold">Posts</strong> again and access the post that we <span class="No-Break">had created.</span></li>
+			</ol>
+			<p>Now, keep <a id="_idIndexMarker1764"/>refreshing the page. We will see that we get orange stars half the <a id="_idIndexMarker1765"/>time and black stars for the rest. Traffic is splitting equally across <strong class="source-inline">v1</strong> and <strong class="source-inline">v2</strong> (that is, the orange and <span class="No-Break">black stars):</span></p>
+			<div>
+				<div id="_idContainer151" class="IMG---Figure">
+					<img src="image/B19877_15_6.jpg" alt="Figure 15.6 – Round robin routing" width="1141" height="884"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.6 – Round robin routing</p>
+			<p>This occurs due to the absence of destination rules, which leaves Istio unaware of the distinctions between <strong class="source-inline">v1</strong> and <strong class="source-inline">v2</strong>. Let’s define destination rules for our microservices to rectify this, clearly informing Istio of these versions. In our case, we have one version for each microservice, except for the <strong class="source-inline">ratings</strong> microservice, so we’ll define the following destination rules accordingly. </p>
+			<p>Let’s start by <a id="_idIndexMarker1766"/>defining the<a id="_idIndexMarker1767"/> destination rule of the <span class="No-Break"><strong class="source-inline">frontend</strong></span><span class="No-Break"> microservice:</span></p>
+			<pre class="console">
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: frontend
+  namespace: blog-app
+spec:
+  host: frontend
+  subsets:
+  - name: v1
+    labels:
+      version: v1</pre>			<p>The provided YAML manifest introduces a <strong class="source-inline">DestinationRule</strong> resource named <strong class="source-inline">frontend</strong> within the <strong class="source-inline">blog-app</strong> namespace. This resource is associated with the host named <strong class="source-inline">frontend</strong>. Subsequently, we define subsets labeled as <strong class="source-inline">v1</strong>, targeting pods with the <strong class="source-inline">version: v1</strong> label. Consequently, configuring our virtual service to direct traffic to the <strong class="source-inline">v1</strong> destination will route requests to pods bearing the <strong class="source-inline">version: </strong><span class="No-Break"><strong class="source-inline">v1</strong></span><span class="No-Break"> label.</span></p>
+			<p>This same configuration approach can be replicated for the <strong class="source-inline">posts</strong>, <strong class="source-inline">users</strong>, and <strong class="source-inline">reviews</strong> microservices. However, the <strong class="source-inline">ratings</strong> microservice requires a slightly different configuration due to the deployment of two versions, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+...
+spec:
+  host: ratings
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2</pre>			<p>The YAML manifest for the <strong class="source-inline">ratings</strong> microservice closely resembles that of the other microservices, with one notable distinction: it features a second subset labeled as <strong class="source-inline">v2</strong>, corresponding to pods bearing the <strong class="source-inline">version: </strong><span class="No-Break"><strong class="source-inline">v2</strong></span><span class="No-Break"> label.</span></p>
+			<p>Consequently, requests routed to the <strong class="source-inline">v1</strong> destination target all pods with the <strong class="source-inline">version: v1</strong> label, while requests routed to the <strong class="source-inline">v2</strong> destination are directed to pods labeled <span class="No-Break"><strong class="source-inline">version: v2</strong></span><span class="No-Break">.</span></p>
+			<p>To illustrate <a id="_idIndexMarker1768"/>this in a practical context, we will proceed to define virtual <a id="_idIndexMarker1769"/>services for each microservice. Our starting point will be defining the virtual service for the <strong class="source-inline">frontend</strong> microservice, as illustrated in the <span class="No-Break">following manifest:</span></p>
+			<pre class="console">
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: frontend
+  namespace: blog-app
+spec:
+  hosts:
+  - frontend
+  http:
+  - route:
+    - destination:
+        host: frontend
+        subset: v1</pre>			<p>The provided YAML manifest outlines a <strong class="source-inline">VirtualService</strong> resource named <strong class="source-inline">frontend</strong> within the <strong class="source-inline">blog-app</strong> namespace. This resource configures the host <strong class="source-inline">frontend</strong> with an HTTP route destination, directing all traffic to the <strong class="source-inline">frontend</strong> host and specifying the <strong class="source-inline">v1</strong> subset. Consequently, all requests targeting the <strong class="source-inline">frontend</strong> host will be routed to the <strong class="source-inline">v1</strong> destination that we <span class="No-Break">previously defined.</span></p>
+			<p>We will replicate this configuration approach for the <strong class="source-inline">posts</strong>, <strong class="source-inline">reviews</strong>, and <strong class="source-inline">users</strong> microservices, creating corresponding <strong class="source-inline">VirtualService</strong> resources. In the case of the <strong class="source-inline">ratings</strong> microservice, the decision is made to route all traffic to the <strong class="source-inline">v1</strong> (orange stars) version. Therefore, we apply a similar <strong class="source-inline">VirtualService</strong> resource for the <strong class="source-inline">ratings</strong> microservice <span class="No-Break">as well.</span></p>
+			<p>Now, let’s copy<a id="_idIndexMarker1770"/> the manifests to the <strong class="source-inline">mdo-environments</strong> repository<a id="_idIndexMarker1771"/> and commit and push the code to the remote repository using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~/mdo-environments/manifests/blog-app
+$ cp ~/modern-devops/ch15/traffic-management/destination-rules.yaml .
+$ cp ~/modern-devops/ch15/traffic-management/virtual-services-v1.yaml .
+$ git add --all
+$ git commit -m "Route to v1"
+$ git push</pre>			<p>Wait for Argo CD to sync the changes. Now, all requests will route to <strong class="source-inline">v1</strong>. Therefore, you will only see orange stars in the reviews, as shown in the <span class="No-Break">following screenshot:</span></p>
+			<div>
+				<div id="_idContainer152" class="IMG---Figure">
+					<img src="image/B19877_15_7.jpg" alt="Figure 15.7 – Route to v1" width="1083" height="830"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.7 – Route to v1</p>
+			<p>Now, let’s try to roll out <strong class="source-inline">v2</strong> using a canary <span class="No-Break">rollout approach.</span></p>
+			<h2 id="_idParaDest-412"><a id="_idTextAnchor1866"/>Traffic shifting and canary rollouts</h2>
+			<p>Consider a scenario where you’ve developed a new version of your microservice and are eager to introduce it to your user base. However, you’re understandably cautious about the potential impact on the entire <a id="_idIndexMarker1772"/>service. In such cases, you may opt for a deployment <a id="_idIndexMarker1773"/>strategy known as <strong class="bold">canary rollouts</strong>, also known as a <span class="No-Break"><strong class="bold">Blue/Green deployment</strong></span><span class="No-Break">.</span></p>
+			<p>The essence of a canary rollout lies in its incremental approach. Instead of an abrupt transition, you methodically shift traffic from the previous version (referred to as <strong class="bold">Blue</strong>) to the new version (<strong class="bold">Green</strong>). This gradual migration allows you to thoroughly test the functionality and reliability of the new release with a limited subset of users before implementing it across the entire user base. This approach minimizes the risks associated with deploying new features or updates and ensures a more controlled and secure release process. The following figure illustrates this <span class="No-Break">process beautifully:</span></p>
+			<div>
+				<div id="_idContainer153" class="IMG---Figure">
+					<img src="image/B19877_15_8.jpg" alt="Figure 15.8 – Canary rollouts" width="1407" height="846"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.8 – Canary rollouts</p>
+			<p>Here’s how a <em class="italic">canary rollout</em> <span class="No-Break">strategy works:</span></p>
+			<ol>
+				<li><strong class="bold">Initial release</strong>: The <a id="_idIndexMarker1774"/>existing version (referred to as the <em class="italic">baseline</em> or <em class="italic">current version</em>) continues to serve the majority <span class="No-Break">of users.</span></li>
+				<li><strong class="bold">Early access</strong>: A small group of users or systems, typically selected as a representative sample, is identified as the <em class="italic">canary group</em>. They receive the <span class="No-Break">new version.</span></li>
+				<li><strong class="bold">Monitoring and evaluation</strong>: The software’s performance and behavior in the canary group are closely monitored. Metrics, logs, and user feedback are collected to identify issues <span class="No-Break">or anomalies.</span></li>
+				<li><strong class="bold">Gradual expansion</strong>: If the new version proves stable and performs as expected in the canary group, its exposure is incrementally expanded to a broader user base. This expansion can occur in stages, with a small percentage of users being “promoted” to the new version at <span class="No-Break">each stage.</span></li>
+				<li><strong class="bold">Continuous monitoring</strong>: Throughout the rollout, continuous monitoring and analysis are critical to identify and address any emerging issues promptly. If problems are detected, the rollout can be halted or reversed to protect the majority <span class="No-Break">of users.</span></li>
+				<li><strong class="bold">Full deployment</strong>: Once the <a id="_idIndexMarker1775"/>new version has been successfully validated through the canary rollout stages, it is eventually made available to the entire <span class="No-Break">user base.</span></li>
+			</ol>
+			<p>So, let’s roll out the <strong class="source-inline">ratings-v2</strong> service to <strong class="source-inline">20%</strong> of our users. For that, we’ll use the following <span class="No-Break"><strong class="source-inline">VirtualService</strong></span><span class="No-Break"> resource:</span></p>
+			<pre class="console">
+...
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+      weight: 80
+    - destination:
+        host: ratings
+        subset: v2
+      weight: 20</pre>			<p>As we can see, we’ve modified the <strong class="source-inline">ratings</strong> virtual service to introduce a second destination pointing to the <strong class="source-inline">v2</strong> subset. A noteworthy addition in this configuration is the introduction of the <strong class="source-inline">weight</strong> attribute. For the <strong class="source-inline">v1</strong> destination, we have assigned a weight of <strong class="source-inline">80</strong>, while the <strong class="source-inline">v2</strong> destination carries a weight of <strong class="source-inline">20</strong>. This means that <strong class="source-inline">20%</strong> of the traffic will be directed to the <strong class="source-inline">v2</strong> version of the <strong class="source-inline">ratings</strong> microservice, providing a controlled and adjustable distribution of traffic between the <span class="No-Break">two versions.</span></p>
+			<p>Let’s copy the manifest and then commit and push the changes to the remote repository using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~/mdo-environments/manifests/blog-app 
+$ cp ~/modern-devops/ch15/traffic-management/virtual-services-canary.yaml \
+virtual-services.yaml 
+$ git add --all
+$ git commit -m "Canary rollout"
+$ git push</pre>			<p>Following the completion of the Argo CD sync, if you refresh the page 10 times, you’ll observe that black stars appear twice out of those 10 times. This is a prime example of a canary rollout in action. You can continue monitoring the application and gradually adjust the weights to shift traffic toward <strong class="source-inline">v2</strong>. Canary rollouts <a id="_idIndexMarker1776"/>effectively mitigate risks during production rollouts, providing a method to address the fear of the unknown, especially when implementing <span class="No-Break">significant changes.</span></p>
+			<p>However, another approach exists to test your code in a production environment that involves using live traffic without exposing your application to end users. This method is known as traffic mirroring. We’ll delve into it in the <span class="No-Break">following discussion.</span></p>
+			<h2 id="_idParaDest-413"><a id="_idTextAnchor1867"/>Traffic mirroring</h2>
+			<p><strong class="bold">Traffic mirroring</strong>, also called<a id="_idIndexMarker1777"/> shadowing, is a concept that has recently gained traction. It is a powerful approach that allows you to assess your releases in a production environment without posing any risk to your <span class="No-Break">end users.</span></p>
+			<p>Traditionally, many enterprises maintained a staging environment that closely mimicked the production setup. The Ops team deployed new releases to the staging environment in this setup while testers generated synthetic traffic to simulate real-world usage. This approach provided a means for teams to evaluate how the code would perform in the production environment, assessing its functional and non-functional aspects before promoting it to production. The staging environment served as the ground for performance, volumetric, and operational acceptance testing. While this approach had its merits, it was not without its challenges. Maintaining static test environments, which involved substantial costs and resources, was one of them. Creating and sustaining a replica of the production environment required a team of engineers, leading to <span class="No-Break">high overhead.</span></p>
+			<p>Moreover, synthetic traffic often deviated from real live traffic since the former relied on historical data, while the latter reflected current user interactions. This discrepancy occasionally led to <span class="No-Break">overlooked scenarios.</span></p>
+			<p>On the other hand, traffic mirroring offers a solution that similarly enables operational acceptance testing while going a step further. It allows you to conduct this testing using live, real-time traffic without any impact on <span class="No-Break">end users.</span></p>
+			<p>Here’s how traffic <span class="No-Break">mirroring</span><span class="No-Break"><a id="_idIndexMarker1778"/></span><span class="No-Break"> operates:</span></p>
+			<ol>
+				<li>Deploy a new version of the application and activate <span class="No-Break">traffic mirroring.</span></li>
+				<li>The old version continues to respond to requests as usual but concurrently sends an asynchronous copy of the traffic to the <span class="No-Break">new version.</span></li>
+				<li>The new version processes the mirrored traffic but refrains from responding to <span class="No-Break">end users.</span></li>
+				<li>The ops team monitors the behavior of the new version and reports any issues to the <span class="No-Break">development team.</span></li>
+			</ol>
+			<p>This process is depicted in the <span class="No-Break">following figure:</span></p>
+			<div>
+				<div id="_idContainer154" class="IMG---Figure">
+					<img src="image/B19877_15_9.jpg" alt="Figure 15.9 – Traffic mirroring" width="1435" height="694"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.9 – Traffic mirroring</p>
+			<p>Traffic mirroring revolutionizes the testing process by enabling teams to uncover issues that might remain hidden in a traditional staging environment. Additionally, you can utilize monitoring tools such as Prometheus and Grafana to record and monitor the outcomes of your testing efforts, enhancing the overall quality and reliability of <span class="No-Break">your releases.</span></p>
+			<p>Now, without further ado, let’s configure traffic mirroring for our <strong class="source-inline">ratings</strong> service. Traffic mirroring is managed through the <strong class="source-inline">VirtualService</strong> resource, so let’s modify the <strong class="source-inline">ratings</strong> virtual service to <span class="No-Break">the following:</span></p>
+			<pre class="console">
+...
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+      weight: 100
+    mirror:
+      host: ratings
+      subset: v2
+    mirror_percent: 100</pre>			<p>In this configuration, we set up a single <strong class="source-inline">destination</strong> targeting <strong class="source-inline">v1</strong> with a <strong class="source-inline">weight</strong> value of <strong class="source-inline">100</strong>. Additionally, we defined a <strong class="source-inline">mirror</strong> section that directs traffic to <strong class="source-inline">ratings:v2</strong> with a <strong class="source-inline">mirror_percent</strong> value of 100. This signifies that all traffic initially routed to <strong class="source-inline">ratings:v1</strong> is mirrored and simultaneously sent <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">v2</strong></span><span class="No-Break">.</span></p>
+			<p>Let’s commit the changes and push them to the remote repository using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/ch15/traffic-management/virtual-services-mirroring.yaml \
+virtual-services.yaml
+$ git add --all
+$ git commit -m "Mirror traffic"
+$ git push</pre>			<p>Following the completion<a id="_idIndexMarker1779"/> of the Argo CD synchronization process, we’ll proceed to refresh the page five times. Subsequently, we can inspect the logs of the <strong class="source-inline">ratings:v1</strong> service using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl logs $(kubectl get pod -n blog-app | \
+grep "ratings-" | awk '{print $1}') -n blog-app
+127.0.0.6 - - [22/Oct/2023 08:33:19] "GET /review/6534cba72485f5a51cbdcef0/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:19] "GET /review/6534cbb32485f5a51cbdcef1/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:23] "GET /review/6534cba72485f5a51cbdcef0/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:23] "GET /review/6534cbb32485f5a51cbdcef1/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:25] "GET /review/6534cba72485f5a51cbdcef0/rating 
+HTTP/1.1" 200 -</pre>			<p>With traffic mirroring active, it’s expected that the same set of logs observed in the <strong class="source-inline">ratings:v1</strong> service will also be mirrored in the <strong class="source-inline">ratings:v2</strong> service. To confirm this, we can list the logs for the <strong class="source-inline">ratings:v2</strong> service using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl logs $(kubectl get pod -n blog-app | \
+grep "ratings-v2" | awk '{print $1}') -n blog-app
+127.0.0.6 - - [22/Oct/2023 08:33:19] "GET /review/6534cba72485f5a51cbdcef0/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:19] "GET /review/6534cbb32485f5a51cbdcef1/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:23] "GET /review/6534cba72485f5a51cbdcef0/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:23] "GET /review/6534cbb32485f5a51cbdcef1/rating 
+HTTP/1.1" 200 -
+127.0.0.6 - - [22/Oct/2023 08:33:25] "GET /review/6534cba72485f5a51cbdcef0/rating 
+HTTP/1.1" 200 -</pre>			<p>Indeed, the logs and timestamps match precisely, providing clear evidence of concurrent log entries in <strong class="source-inline">ratings:v1</strong> and <strong class="source-inline">ratings:v2</strong>. This observation effectively demonstrates the mirroring functionality in operation, showcasing how traffic is duplicated for real-time monitoring and analysis in <span class="No-Break">both versions.</span></p>
+			<p>Traffic mirroring <a id="_idIndexMarker1780"/>is a highly effective method for identifying issues that often elude detection within traditional infrastructure setups. It is a potent approach for conducting operational acceptance testing of your software releases. This practice simplifies testing and safeguards against potential customer incidents and <span class="No-Break">operational challenges.</span></p>
+			<p>There are other aspects of traffic management<a id="_idIndexMarker1781"/> that Istio provides, but covering all of them is beyond the scope of this chapter. Please feel free to explore other aspects of it by visiting the Istio <span class="No-Break">documentation: </span><a href="https://istio.io/latest/docs/tasks/traffic-management/"><span class="No-Break">https://istio.io/latest/docs/tasks/traffic-management/</span></a><span class="No-Break">.</span></p>
+			<p>As we already know, Istio leverages envoy proxies as sidecar components alongside your microservice containers. Given that these proxies play a central role in directing and managing the traffic within your service mesh, they also collect valuable <span class="No-Break">telemetry data.</span></p>
+			<p>This telemetry data is subsequently transmitted to <a id="_idIndexMarker1782"/>Prometheus, a monitoring and alerting tool, where it can be stored and effectively visualized. Tools such as Grafana are often employed in conjunction with Prometheus to provide insightful and accessible visualizations of this telemetry data, empowering you to monitor and manage your service mesh effectively. Therefore, we’ll go ahead and explore the observability portion of Istio in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-414"><a id="_idTextAnchor1868"/>Observing traffic and alerting with Istio</h1>
+			<p>Istio provides several tools to visualize traffic through our mesh through Istio add-ons. While <strong class="bold">Prometheus</strong> is <a id="_idIndexMarker1783"/>the central telemetry data collection, storage, and query <a id="_idIndexMarker1784"/>layer, <strong class="bold">Grafana</strong> and <strong class="bold">Kiali</strong> provide<a id="_idIndexMarker1785"/> us with interactive graphical tools to interact with <span class="No-Break">that data.</span></p>
+			<p>Let’s start this section by installing the observability add-ons using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~
+$ mkdir ~/mdo-environments/manifests/istio-system
+$ cd ~/mdo-environments/manifests/istio-system/
+$ cp ~/modern-devops/ch15/observability/*.yaml .
+$ git add --all
+$ git commit -m "Added observability"
+$ git push</pre>			<p>As soon as we push the code, Argo CD should create a new <strong class="source-inline">istio-system</strong> namespace and install the add-ons. Once they have been installed, we can start by accessing the <span class="No-Break">Kiali dashboard.</span></p>
+			<h2 id="_idParaDest-415"><a id="_idTextAnchor1869"/>Accessing the Kiali dashboard</h2>
+			<p><strong class="bold">Kiali</strong> is a<a id="_idIndexMarker1786"/> powerful observability and visualization tool for microservices and service mesh management. It offers real-time insights into the behavior of your service mesh, helping you monitor and troubleshoot <span class="No-Break">issues efficiently.</span></p>
+			<p>As the Kiali service is deployed on a cluster IP and hence not exposed externally, let’s do a port forward to access the Kiali dashboard using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl port-forward deploy/kiali -n istio-system 20001:20001</pre>			<p>Once the port forward session has started, click on the web preview icon of Google Cloud Shell, choose <strong class="bold">Change port to 20001</strong>, and click <strong class="bold">preview</strong>. You will see the following <a id="_idIndexMarker1787"/>dashboard. This dashboard provides valuable insights into the applications running across <span class="No-Break">the mesh:</span></p>
+			<div>
+				<div id="_idContainer155" class="IMG---Figure">
+					<img src="image/B19877_15_10.jpg" alt="Figure 15.10 – Kiali dashboard" width="1645" height="1145"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.10 – Kiali dashboard</p>
+			<p>To visualize <a id="_idIndexMarker1788"/>service interactions, we can switch to the graph view by clicking on the <strong class="bold">Graph</strong> tab and selecting the <strong class="source-inline">blog-app</strong> namespace. We will see the following dashboard, which provides an accurate view of how traffic flows, the percentage of successful traffic, and <span class="No-Break">other metrics:</span></p>
+			<div>
+				<div id="_idContainer156" class="IMG---Figure">
+					<img src="image/B19877_15_11.jpg" alt="Figure 15.11 – Kiali service interaction graph" width="1650" height="919"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.11 – Kiali service interaction graph</p>
+			<p>While Kiali dashboards provide valuable insights regarding our mesh and help us observe service interactions in real time, they lack the capability of providing us with advanced monitoring and alerting capabilities. For that, we can <span class="No-Break">use Grafana.</span></p>
+			<h2 id="_idParaDest-416"><a id="_idTextAnchor1870"/>Monitoring and alerting with Grafana</h2>
+			<p><strong class="bold">Grafana</strong> is a<a id="_idIndexMarker1789"/> leading open source platform for observability and monitoring, offering dynamic dashboards and robust alerting capabilities. It enables users to visualize data from diverse sources while setting up alerts for proactive <span class="No-Break">issue detection.</span></p>
+			<p>As we’ve already installed Grafana with the necessary add-ons, let’s access it by opening a port forward session. Ensure you terminate the existing Kiali port-forwarding session or use a different port. Run the following command to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ kubectl port-forward deploy/grafana -n istio-system 20001:3000</pre>			<p>Once the port forwarding session has started, access the Grafana page like we did for Kiali, and go to <strong class="bold">Home</strong> &gt; <strong class="bold">Dashboards</strong> &gt; <strong class="bold">Istio</strong> &gt; <strong class="bold">Istio Service Dashboard</strong>. We should see a dashboard similar to <span class="No-Break">the following:</span></p>
+			<div>
+				<div id="_idContainer157" class="IMG---Figure">
+					<img src="image/B19877_15_12.jpg" alt="Figure 15.12 – Istio service dashboard " width="1649" height="866"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.12 – Istio service dashboard </p>
+			<p>This dashboard provides rich visualizations regarding some standard SLIs we may want to monitor, such as the request’s <em class="italic">success rate</em>, <em class="italic">duration</em>, <em class="italic">size</em>, <em class="italic">volume</em>, and <em class="italic">latency</em>. It helps you observe your mesh meticulously, and you can also build additional visualizations based on your requirements by using the <strong class="bold">Prometheus Query Language</strong> (<strong class="bold">PromQL</strong>), which is <a id="_idIndexMarker1790"/>simple to learn <span class="No-Break">and apply.</span></p>
+			<p>However, monitoring and visualization must be complemented by alerting for complete reliability. So, let’s delve <span class="No-Break">into that.</span></p>
+			<h3>Alerting with Grafana</h3>
+			<p>To initiate the <a id="_idIndexMarker1791"/>alerting process, it’s crucial to establish clear criteria. Given the<a id="_idIndexMarker1792"/> limited volume at hand, simulating an accurate SLO breach can be challenging. For simplicity, our alerting criteria will trigger when traffic volume surpasses one transaction <span class="No-Break">per second.</span></p>
+			<p>The initial phase of this process involves crafting the query to retrieve the necessary metrics. We will employ the following query to achieve <span class="No-Break">this objective:</span></p>
+			<pre class="console">
+round(sum(irate(istio_requests_total{connection_security_policy="mutual_tls",destination_
+service=~"frontend.blog-app.svc.cluster.local",reporter=~"destination",source_
+workload=~"istio-ingress",source_workload_namespace=~"istio-ingress"}[5m])) by (source_
+workload, source_workload_namespace, response_code), 0.001)</pre>			<p>The provided<a id="_idIndexMarker1793"/> query determines the traffic rate for all transactions passing <a id="_idIndexMarker1794"/>through the Istio ingress gateway to the <span class="No-Break"><strong class="source-inline">frontend</strong></span><span class="No-Break"> microservice.</span></p>
+			<p>The next step involves creating the alert rules with the query in place. To do this, navigate to <strong class="bold">Home</strong> &gt; <strong class="bold">Alerting</strong> &gt; <strong class="bold">Alert rules</strong>. Then, fill in the form, as illustrated in the <span class="No-Break">following screenshot:</span></p>
+			<div>
+				<div id="_idContainer158" class="IMG---Figure">
+					<img src="image/B19877_15_13.jpg" alt="Figure 15.13 – Defining alert rules" width="1665" height="1876"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.13 – Defining alert rules</p>
+			<p>The alert rule is <a id="_idIndexMarker1795"/>configured to monitor for violations at a 1-minute interval for 2 <a id="_idIndexMarker1796"/>consecutive minutes. Once the alert rule has been established, triggering the alert is as simple as refreshing the Blog App home page about 15–20 times rapidly every 1 to 2 minutes. This action should activate the alert. To observe this process, navigate to <strong class="bold">Home</strong> &gt; <strong class="bold">Alerting</strong> &gt; <strong class="bold">Alert rules</strong>. You will notice the alert in a <strong class="bold">Pending</strong> state in the first minute. This means it has detected a violation in one of its checks and will wait for another violation within the 2-minute duration before triggering <span class="No-Break">the alert.</span></p>
+			<p>In a production environment, setting longer check intervals, typically around 5 minutes, with alerting intervals <a id="_idIndexMarker1797"/>of 15 minutes is typical. This approach helps avoid excessive <a id="_idIndexMarker1798"/>alerting for self-resolving transient issues, ensuring the SRE team is not inundated with false alerts. The goal is to maintain a balance and prevent the team from treating every alert as a potential false alarm. The following screenshot shows a pending alert: </p>
+			<div>
+				<div id="_idContainer159" class="IMG---Figure">
+					<img src="image/B19877_15_15.jpg" alt="Figure 15.14 – Alert pending" width="1650" height="737"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.14 – Alert pending</p>
+			<p>After the 2-minute monitoring period, you should observe the alert being triggered, as depicted in the following screenshot. This indicates that the alert rule has successfully identified a sustained violation of the defined criteria and is now actively notifying relevant parties <span class="No-Break">or systems:</span></p>
+			<div>
+				<div id="_idContainer160" class="IMG---Figure">
+					<img src="image/B19877_15_16.jpg" alt="Figure 15.15 – Alert firing" width="1440" height="866"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 15.15 – Alert firing</p>
+			<p>Since no specific alert channels have been configured in this context, the fired alerts will be visible within the Grafana dashboard only. It is highly advisable to set up a designated alert destination for sending alerts to your designated channels, using a tool such as <strong class="bold">PagerDuty</strong> to page <a id="_idIndexMarker1799"/>on-call engineers or <strong class="bold">Slack</strong> notifications<a id="_idIndexMarker1800"/> to alert your on-call team. Proper alert channels ensure that the right individuals or teams are promptly notified of critical issues, enabling rapid response and <span class="No-Break">issue resolution.</span></p>
+			<h1 id="_idParaDest-417"><a id="_idTextAnchor1871"/>Summary</h1>
+			<p>As we conclude this chapter and wrap up this book, our journey has taken us through an array of diverse concepts and functionalities. While we’ve covered substantial ground in this chapter, it’s essential to recognize that Istio is a rich and multifaceted technology, making it a challenge to encompass all its intricacies within a <span class="No-Break">single chapter.</span></p>
+			<p>This chapter marked our initiation into the world of service mesh, shedding light on its particular advantages in the context of microservices. Our exploration extended to various dimensions of Istio, beginning with installing Istio and extending our sample Blog App to utilize it using automatic sidecar injection. We then moved on to security, delving into the intricacies of securing ingress gateways with mTLS, enforcing strict mTLS among microservices, and harnessing authorization policies to manage <span class="No-Break">traffic flows.</span></p>
+			<p>Our journey then led us to traffic management, where we introduced essential concepts such as destination rules and virtual services. These enabled us to carry out canary rollouts and traffic mirroring, demonstrating the power of controlled deployments and real-time traffic analysis. Our voyage culminated in observability, where we harnessed the Kiali dashboard to visualize service interactions and ventured deep into advanced monitoring and alerting capabilities <span class="No-Break">using Grafana.</span></p>
+			<p>As we end this remarkable journey, I want to extend my heartfelt gratitude to you for choosing this book and accompanying me through its pages. I trust you’ve found every part of this book enjoyable and enlightening. I ho<a id="_idTextAnchor1872"/><a id="_idTextAnchor1873"/>pe this book has equipped you with the skills necessary to excel in the ever-evolving realm of modern DevOps. I wish you the utmost success in all your present and <span class="No-Break">future endeavors.</span></p>
+			<h1 id="_idParaDest-418"><a id="_idTextAnchor1874"/>Questions</h1>
+			<p>Answer the following questions to test your knowledge of <span class="No-Break">this chapter:</span></p>
+			<ol>
+				<li>Which approach would you use to install Istio among the available options using <span class="No-Break">GitOps methodology?</span><p class="list-inset"><span class="No-Break">A. Istioctl</span></p><p class="list-inset">B. <span class="No-Break">Helm charts</span></p><p class="list-inset"><span class="No-Break">C. Kustomize</span></p><p class="list-inset">D. <span class="No-Break">Manifest bundle</span></p></li>
+				<li>What configuration is necessary for Istio to inject sidecars into your <span class="No-Break">workloads automatically?</span><p class="list-inset">A. Apply the <strong class="source-inline">istio-injection-enabled: true</strong> label to <span class="No-Break">the namespace</span></p><p class="list-inset">B. No configuration is needed – Istio automatically injects sidecars into <span class="No-Break">all pods</span></p><p class="list-inset">C. Modify the manifests so that they include the Istio sidecars and <span class="No-Break">redeploy them</span></p></li>
+				<li>Istio sidecars automatically communicate with each other using <span class="No-Break">mTLS</span><span class="No-Break">. (True/False)</span></li>
+				<li>Which resource enforces policies that dictate which services are permitted to communicate with <span class="No-Break">each other?</span><p class="list-inset"><span class="No-Break">A. </span><span class="No-Break"><strong class="source-inline">AuthenticationPolicy</strong></span></p><p class="list-inset"><span class="No-Break">B. </span><span class="No-Break"><strong class="source-inline">AuthorizationPolicy</strong></span></p><p class="list-inset"><span class="No-Break">C. </span><span class="No-Break"><strong class="source-inline">PeerAuthentication</strong></span></p></li>
+				<li>Which of the following resources would you use for canary rollouts? (<span class="No-Break">Choose two)</span><p class="list-inset"><span class="No-Break">A. </span><span class="No-Break"><strong class="source-inline">VirtualService</strong></span></p><p class="list-inset"><span class="No-Break">B. </span><span class="No-Break"><strong class="source-inline">IngressGateway</strong></span></p><p class="list-inset"><span class="No-Break">C. </span><span class="No-Break"><strong class="source-inline">DestinationRule</strong></span></p><p class="list-inset">D. <span class="No-Break"><strong class="source-inline">Egress Gateway</strong></span></p></li>
+				<li>Why would you use traffic mirroring in production? (<span class="No-Break">Choose three)</span><p class="list-inset">A. Real-time monitoring for production performance and <span class="No-Break">behavior analysis</span></p><p class="list-inset">B. To route traffic to a new version to duplicate traffic to test the performance of your <span class="No-Break">backend service</span></p><p class="list-inset">C. Safe testing of changes or updates without risking <span class="No-Break">production disruptions</span></p><p class="list-inset">D. Streamlined troubleshootin<a id="_idTextAnchor1875"/><a id="_idTextAnchor1876"/>g and debugging for issue identification <span class="No-Break">and resolution</span></p></li>
+				<li>Which observability tool would you use to visualize real-time <span class="No-Break">service interactions?</span><p class="list-inset"><span class="No-Break">A. Prometheus</span></p><p class="list-inset"><span class="No-Break">B. Grafana</span></p><p class="list-inset"><span class="No-Break">C. Kiali</span></p><p class="list-inset"><span class="No-Break">D. Loki</span></p></li>
+			</ol>
+			<h1 id="_idParaDest-419"><a id="_idTextAnchor1877"/>Answers</h1>
+			<p>Here are the answers to this <span class="No-Break">chapter’s questions:</span></p>
+			<ol>
+				<li>B</li>
+				<li>A</li>
+				<li><span class="No-Break">True</span></li>
+				<li>B</li>
+				<li>A <span class="No-Break">and C</span></li>
+				<li>A, C, <span class="No-Break">and D</span></li>
+				<li>C</li>
+			</ol>
+		</div>
+	</div>
+</div>
+
+
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer163">
+			<h1 id="_idParaDest-420"><a id="_idTextAnchor1878"/><a id="_idTextAnchor1879"/>Appendix: The Role of AI in DevOps</h1>
+			<p>The recent developments in <strong class="bold">artificial intelligence</strong> (<strong class="bold">AI</strong>) with the launch of generative AI using ChatGPT have taken the tech industry by storm. It has made many existing AI players pivot, and most companies are now looking at the best ways to use it in their products. Naturally, DevOps and the tooling surrounding it are no exceptions, and slowly, AI is gaining firm ground in this discipline, which historically relied upon more traditional automation methods. Before we delve into how AI changes DevOps, let’s first understand what AI is. </p>
+			<p>This appendix will cover the <span class="No-Break">following topics:</span></p>
+			<ul>
+				<li>What <span class="No-Break">is AI?</span></li>
+				<li>The role of AI in the DevOps <span class="No-Break">infinity loop</span></li>
+			</ul>
+			<h1 id="_idParaDest-421"><a id="_idTextAnchor1880"/><a id="_idTextAnchor1881"/>What is AI?</h1>
+			<p>AI emulates human intelligence in computing. You know how our computers do fantastic things, but they need to be told everything to do? Well, AI doesn’t work like that. It learns a ton from looking at lots of information, like how we learn from our experiences. That way, it can figure out patterns independently and make decisions without needing someone to tell it what to do every time. This makes AI intelligent because it can keep learning new things and get better at what <span class="No-Break">it does.</span></p>
+			<p>Imagine if your computer could learn from everything it sees, just like you remember from everything around you. That’s how AI works—it’s a computer’s way of getting more intelligent. Instead of needing step-by-step instructions, AI learns from vast amounts of information. This makes it great at spotting patterns in data and deciding things on its own. And when it comes to DevOps, AI can be of great help! Let’s look at <span class="No-Break">that next.</span></p>
+			<h1 id="_idParaDest-422"><a id="_idTextAnchor1882"/>The role of AI in the DevOps infinity loop</h1>
+			<p>As we are already aware, instead of following a linear path of software delivery, DevOps practices generally follow an infinity loop, as shown in the <span class="No-Break">following figure:</span></p>
+			<div>
+				<div id="_idContainer162" class="IMG---Figure">
+					<img src="image/B19877_Appendix_1.jpg" alt="" role="presentation" width="1171" height="570"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure A.1 – DevOps infinity loop</p>
+			<p>DevOps practices heavily emphasize automation to ensure that this infinity loop operates smoothly, and we need tools. Most of these tools help build, deploy, and operate your software. You will typically start writing code in an <strong class="bold">integrated development environment</strong> (<strong class="bold">IDE</strong>) and then check code into a central source code repository such as Git. There will be a continuous integration pipeline that will build code from your Git repository and push it to an artifact repository. Your QA team might write automated tests to ensure the artifact is tested before it is deployed to higher environments using a continuous <span class="No-Break">deployment pipeline.</span></p>
+			<p>Before the advent of AI, setting up all of the toolchains and operating them relied on traditional coding methods; that is, you would still write code to automate the processes, and the automation would behave more predictably and do what it was told to. However, with AI, things are changing. </p>
+			<p>AI is transforming DevOps by automating tasks, predicting failures, and optimizing performance. In other words, by leveraging AI’s capabilities, DevOps teams can achieve greater efficiency, reduce errors, and deliver software faster and <span class="No-Break">more reliably.</span></p>
+			<p>Here are some key roles of AI <span class="No-Break">in DevOps:</span></p>
+			<ul>
+				<li><strong class="bold">Automating Repetitive Tasks</strong>: AI can automate repetitive and tedious tasks, such as code testing, deployment, and infrastructure provisioning. This frees up DevOps engineers to focus on more strategic and creative work, such as developing new features and improving <span class="No-Break">application performance.</span></li>
+				<li><strong class="bold">Predicting and Preventing Failures</strong>: AI can analyze vast amounts of data, including logs, performance metrics, and user feedback, to identify patterns and predict potential failures. This proactive approach allows DevOps teams to address issues before they impact users or cause <span class="No-Break">major disruptions.</span></li>
+				<li><strong class="bold">Optimizing Resource Utilization</strong>: AI can analyze resource usage data to optimize infrastructure allocation and prevent resource bottlenecks. This ensures that applications have the resources they need to perform optimally, minimizing downtime and improving overall <span class="No-Break">system efficiency.</span></li>
+				<li><strong class="bold">Enhancing Security</strong>: AI can be used to detect and prevent security threats by analyzing network traffic, identifying anomalous behavior, and flagging suspicious activity. This helps DevOps teams maintain a robust security posture and protect <span class="No-Break">sensitive data.</span></li>
+				<li><strong class="bold">Improving Collaboration and Communication</strong>: AI can facilitate collaboration and communication among DevOps teams by providing real-time insights, automating workflows, and enabling seamless communication channels. This breaks down silos and promotes a more cohesive <span class="No-Break">DevOps culture.</span></li>
+			</ul>
+			<p>Let’s look at the areas of the DevOps infinity loop and see how AI <span class="No-Break">impacts them.</span></p>
+			<h2 id="_idParaDest-423"><a id="_idTextAnchor1883"/>Code development</h2>
+			<p>This area is where we see the most significant impact of generative AI and other AI technologies. AI revolutionizes code development by automating tasks such as code generation, bug detection, optimization, and testing. Through autocomplete suggestions, bug detection algorithms, and predictive analytics, AI accelerates coding, enhances code quality, and ensures better performance while aiding in documentation and code security analysis. Its role spans from assisting in writing code to predicting issues, ultimately streamlining the software development life cycle, and empowering developers to create more efficient, reliable, and <span class="No-Break">secure applications.</span></p>
+			<p>Many tools employ AI in code development, and one of the most popular tools in this area is <span class="No-Break"><strong class="bold">GitHub Copilot</strong></span><span class="No-Break">.</span></p>
+			<p>GitHub Copilot is a collaborative effort between <strong class="bold">GitHub</strong> and <strong class="bold">OpenAI</strong>, introducing a code completion feature that utilizes OpenAI’s <strong class="bold">Codex</strong>. Codex, trained on vast code repositories from GitHub, quickly generates code based on the current file’s content and cursor location. Compatible with popular code editors such as <strong class="bold">Visual Studio Code</strong>, <strong class="bold">Visual Studio</strong>, <strong class="bold">Neovim</strong>, and <strong class="bold">JetBrains IDEs</strong>, Copilot supports languages such as <strong class="bold">Python</strong>, <strong class="bold">JavaScript</strong>, <strong class="bold">TypeScript</strong>, <strong class="bold">Ruby</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="bold">Go</strong></span><span class="No-Break">.</span></p>
+			<p>Praised by GitHub and users alike, Copilot generates entire code lines, functions, tests, and documentation. Its functionality relied on the context provided and the extensive code contributions by developers on GitHub, regardless of their software license. Dubbed the world’s first AI pair programmer by <strong class="bold">Microsoft</strong>, it is a paid tool and charges a subscription fee of $10 per month or $100 per year per user after a 60-day <span class="No-Break">trial period.</span></p>
+			<p>With Copilot, you can start by writing comments on what you intend to do, and it will generate the required code for you. This speeds up development many times, and most of the time, you just need to review and test your code to see whether it does what you intend it to do. A great power indeed! It can optimize existing code and provide feedback by generating code snippets. It can also scan your code for security vulnerabilities and suggest <span class="No-Break">alternative approaches.</span></p>
+			<p>If you don’t want to pay that $10, you can also look at free alternatives such as <strong class="bold">Tabnine</strong>, <strong class="bold">Captain Stack</strong>, <strong class="bold">GPT-Code Clippy</strong>, <strong class="bold">Second Mate</strong>, and <strong class="bold">Intellicode</strong>. Paid alternatives include Amazon’s <strong class="bold">Code Whisperer</strong> and Google’s <strong class="bold">ML-enhanced </strong><span class="No-Break"><strong class="bold">code completion</strong></span><span class="No-Break">.</span></p>
+			<p>AI tools not only help enhance the development workflow but also help in software testing and quality assurance. Let’s look at <span class="No-Break">that next.</span></p>
+			<h2 id="_idParaDest-424"><a id="_idTextAnchor1884"/>Software testing and quality assurance</h2>
+			<p>Traditionally, software testing has taken more of a manual approach because most developers don’t want software testing as a full-time profession. Though automation testing has gained ground recently, the knowledge gap has hindered this process in most organizations. Therefore, AI would most impact the testing function as it bridges the human-machine gap. </p>
+			<p>AI-integrated testing techniques revolutionize every stage of the <strong class="bold">software testing life cycle</strong> (<strong class="bold">STLC</strong>); some of them are <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li><strong class="bold">Test script generation</strong>: Traditionally, creating test scripts was time-consuming, involving deep system understanding. AI and <strong class="bold">machine learning</strong> (<strong class="bold">ML</strong>) now expedite this process by analyzing requirements, existing test cases, and application behavior to craft more optimized test scripts, offering ready-to-use templates with preconfigured code snippets and comprehensive comments, and translating plain language instructions into complete test scripts using <strong class="bold">natural language processing</strong> (<span class="No-Break"><strong class="bold">NLP</strong></span><span class="No-Break">) techniques.</span></li>
+				<li><strong class="bold">Test data generation</strong>: AI-equipped testing tools provide detailed and ample test data for comprehensive coverage. They achieve this by generating synthetic data from existing sets for specific test objectives, transforming data to create diverse testing scenarios, refining existing data for higher precision and relevance, and scanning large code bases for <span class="No-Break">context comprehension.</span></li>
+				<li><strong class="bold">Intelligent test execution</strong>: AI alleviates test execution challenges by automatically categorizing and organizing test cases, efficiently selecting tests for various devices, operating systems, and configurations, and smartly executing regression tests for <span class="No-Break">critical functionalities.</span></li>
+				<li><strong class="bold">Intelligent test maintenance</strong>: AI/ML minimizes test maintenance challenges by implementing self-healing mechanisms to handle broken selectors and analyzing UI and code change relationships to identify <span class="No-Break">affected areas.</span></li>
+				<li><strong class="bold">Root cause analysis</strong>: AI aids in understanding and rectifying issues by analyzing logs, performance metrics, and anomalies to pinpoint impact areas, tracing issues back to affected user stories and feature requirements, and utilizing knowledge repositories for comprehensive root <span class="No-Break">cause analysis.</span></li>
+			</ul>
+			<p>Multiple tools in the market help you achieve all of it; some of the most popular ones are <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="bold">Katalon platform</strong>: A comprehensive quality management tool that simplifies test creation, execution, and maintenance across various applications and environments. It boasts AI features such as <strong class="bold">TrueTest</strong>, <strong class="bold">StudioAssist</strong>, <strong class="bold">self-healing</strong>, <strong class="bold">visual testing</strong>, and <strong class="bold">AI-powered test </strong><span class="No-Break"><strong class="bold">failure analysis</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="bold">TestCraft</strong>: Built on <strong class="bold">Selenium</strong>, TestCraft offers both manual and automated testing capabilities with a user-friendly interface and AI-driven element identification, allowing tests to run across multiple browsers <span class="No-Break">in parallel.</span></li>
+				<li><strong class="bold">Applitools</strong>: Known for its AI-based visual testing, Applitools efficiently identifies visual bugs, monitors app visual aspects, and provides accurate visual test analytics using AI <span class="No-Break">and ML.</span></li>
+				<li><strong class="bold">Function</strong>: Utilizes AI/ML for functional, performance, and load testing with simplicity, allowing test creation through plain English input, self-healing, test analytics, and <span class="No-Break">multi-browser support.</span></li>
+				<li><strong class="bold">Mabl</strong>: An AI-powered tool offering low-code testing, intuitive intelligence, data-driven capabilities, end-to-end testing, and valuable insights generation, promoting <span class="No-Break">team collaboration.</span></li>
+				<li><strong class="bold">AccelQ</strong>: Automates test designs, plans, and execution across the UI, mobile, API, and PC software, featuring <strong class="bold">automated test generation</strong>, <strong class="bold">predictive analysis</strong>, and comprehensive <span class="No-Break">test management.</span></li>
+				<li><strong class="bold">Testim</strong>: Uses ML to expedite test creation and maintenance, allowing for quick end-to-end test creation, smart locators for resilient tests, and a blend of recording functions and coding for robust <span class="No-Break">test creation.</span></li>
+			</ul>
+			<p>As we’ve already seen the benefits of AI in development and testing, let’s move on to <span class="No-Break">software delivery.</span></p>
+			<h2 id="_idParaDest-425"><a id="_idTextAnchor1885"/>Continuous integration and delivery</h2>
+			<p>In <strong class="bold">continuous integration</strong> (<strong class="bold">CI</strong>) and <strong class="bold">continuous delivery</strong> (<strong class="bold">CD</strong>), AI brings a transformative edge by optimizing and automating various stages of the software development pipeline. AI augments CI by automating code analysis, identifying patterns, and predicting potential integration issues. It streamlines the process by analyzing code changes, suggesting appropriate test cases, and facilitating faster integration cycles. Through ML, AI can understand historical data from past builds, recognizing patterns that lead to failures, thereby aiding in more efficient debugging and code <span class="No-Break">quality improvement.</span></p>
+			<p>In CD, AI optimizes deployment pipelines by automating release strategies, predicting performance bottlenecks, and suggesting optimizations for smoother delivery. It analyzes deployment patterns, user feedback, and system performance data to recommend the most efficient delivery routes. Additionally, AI-driven CD tools enhance risk prediction, allowing teams to foresee potential deployment failures and make informed decisions to mitigate risks before they impact production environments. Ultimately, AI’s role in CI/CD accelerates the development cycle, improves software quality, and enhances the reliability of <span class="No-Break">software releases.</span></p>
+			<p>Here are some AI-powered tools used in software release <span class="No-Break">and delivery:</span></p>
+			<ul>
+				<li><strong class="bold">Harness</strong>: Harness utilizes AI to automate software delivery processes, including continuous integration, deployment, and verification. It employs ML to analyze patterns from deployment pipelines, predict potential issues, and optimize release strategies for better efficiency <span class="No-Break">and reliability.</span></li>
+				<li><strong class="bold">GitClear</strong>: GitClear employs AI algorithms to analyze code repositories and provides insights into developer productivity, code contributions, and team performance. It helps understand code base changes, identify bottlenecks, and optimize <span class="No-Break">development workflows.</span></li>
+				<li><strong class="bold">Jenkins</strong>: Thanks to its plugin-based architecture, Jenkins, a widely used automation server, employs a lot of AI plugins and extensions to enhance its capabilities in CI/CD. AI-powered plugins help automate tasks, optimize build times, and predict build failures by analyzing <span class="No-Break">historical data.</span></li>
+				<li><strong class="bold">CircleCI</strong>: CircleCI integrates AI and ML to optimize CI/CD workflows. It analyzes build logs, identifies patterns leading to failures, and provides recommendations to improve build performance <span class="No-Break">and reliability.</span></li>
+			</ul>
+			<p>These AI-powered tools improve software release and delivery processes’ speed, quality, and reliability by automating tasks, optimizing workflows, predicting issues, and providing valuable insights for <span class="No-Break">better decision-making.</span></p>
+			<p>Now, let’s look at the next stage in the <span class="No-Break">process—software operations.</span></p>
+			<h2 id="_idParaDest-426"><a id="_idTextAnchor1886"/>Software operations</h2>
+			<p>AI is pivotal in modern software operations, revolutionizing how systems are monitored, managed, and optimized. By leveraging ML algorithms, AI helps automate routine tasks such as monitoring system performance, analyzing logs, and identifying anomalies in real time. It enables predictive maintenance by detecting patterns that precede system failures, allowing for proactive intervention and preventing potential downtime. Additionally, AI-powered tools streamline incident management by correlating alerts, prioritizing critical issues, and providing actionable insights, enhancing the overall resilience and reliability of <span class="No-Break">software operations.</span></p>
+			<p>Moreover, AI augments decision-making processes by analyzing vast amounts of data to identify trends, forecast resource requirements, and optimize infrastructure utilization. AI adapts to changing environments through its continuous learning capabilities, enabling software operations teams to stay ahead of evolving challenges and complexities. Overall, AI’s role in software operations ensures greater efficiency, improved system performance, and proactive problem resolution, contributing significantly to the seamless functioning of <span class="No-Break">IT infrastructures.</span></p>
+			<p>Here are some AI-powered tools used in <span class="No-Break">software operations:</span></p>
+			<ul>
+				<li><strong class="bold">Dynatrace</strong>: Dynatrace utilizes AI for application performance monitoring and management. It employs AI algorithms to analyze vast amounts of data, providing real-time insights into application performance, identifying bottlenecks, and predicting potential issues before they impact <span class="No-Break">end users.</span></li>
+				<li><strong class="bold">PagerDuty</strong>: PagerDuty integrates AI-driven incident management, alerting, and on-call scheduling. It uses ML to correlate events and alerts, reducing noise and providing intelligent notifications for <span class="No-Break">critical incidents.</span></li>
+				<li><strong class="bold">Opsani</strong>: Opsani leverages AI for autonomous optimization of cloud applications. It analyzes application performance, dynamically adjusts configurations, and optimizes resources to maximize performance <span class="No-Break">and cost-efficiency.</span></li>
+				<li><strong class="bold">Moogsoft</strong>: Moogsoft offers AI-driven IT operations and AIOps platforms. It uses ML to detect anomalies, correlate events, and automate incident resolution, helping teams proactively manage and resolve issues in complex <span class="No-Break">IT environments.</span></li>
+				<li><strong class="bold">Sumo Logic</strong>: Sumo Logic employs AI for log management, monitoring, and analytics. It uses ML to identify patterns, anomalies, and security threats within logs and operational data, enabling proactive troubleshooting and security <span class="No-Break">incident detection.</span></li>
+				<li><strong class="bold">New Relic</strong>: New Relic utilizes AI for application and infrastructure monitoring. Its AI-powered platform helps identify performance issues, predict system behavior, and optimize resource utilization for better <span class="No-Break">application performance.</span></li>
+				<li><strong class="bold">LogicMonitor</strong>: LogicMonitor uses AI for infrastructure monitoring and observability. It analyzes metrics and performance data to provide insights into system health, predict potential issues, and optimize resource allocation in <span class="No-Break">complex environments.</span></li>
+				<li><strong class="bold">OpsRamp</strong>: OpsRamp employs AI for IT operations management, offering capabilities for monitoring, incident management, and automation. It uses ML to detect anomalies, automate routine tasks, and optimize workflows for better <span class="No-Break">operational efficiency.</span></li>
+			</ul>
+			<p>These AI-powered tools assist in automating tasks, predicting and preventing issues, optimizing resource allocation, and enhancing overall system reliability in <span class="No-Break">software operations.</span></p>
+			<p>The integration of AI into DevOps practices is still in its early stages, but its potential impact is significant. By automating tasks, optimizing processes, and enhancing collaboration, AI can revolutionize the way software is developed, deployed, and managed. As AI technology continues to develop, we can expect to see even more ways in which AI is used to improve the <span class="No-Break">DevOps process.</span></p>
+			<h1 id="_idParaDest-427">S<a id="_idTextAnchor1887"/>ummary</h1>
+			<p>AI revolutionizes DevOps practices by infusing intelligence into every development and operations cycle stage. It streamlines processes, enhances efficiency, and ensures smoother collaboration between development and operations teams. AI automates routine tasks, predicts potential bottlenecks, and optimizes workflows, transforming how software is built, tested, deployed, and monitored. From automating code analysis to predicting system failures, AI empowers DevOps by enabling quicker decision-making, reducing errors, and fostering a more agile and responsive software <span class="No-Break">development environment.</span></p>
+			<p>In essence, AI acts as a silent partner, continuously learning from data, suggesting improvements, and helping DevOps teams foresee and address issues before they impact the software’s performance. It’s the catalyst that drives agility and innovation, allowing DevOps to evolve from a mere collaboration between teams to a symbiotic relationship where AI enhances the capabilities of both development and operations, paving the way for more efficient and reliable <span class="No-Break">software delivery.</span></p>
+			<p><a id="_idTextAnchor1888"/></p>
+		</div>
+	</div>
+</div>
+</body></html>

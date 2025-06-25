@@ -1,0 +1,654 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer082">
+			<h1 id="_idParaDest-265" class="chapter-number"><a id="_idTextAnchor1330"/>10</h1>
+			<h1 id="_idParaDest-266"><a id="_idTextAnchor1331"/>Immutable Infrastructure with Packer</h1>
+			<p>In the previous chapter, we looked at configuration management with Ansible and the tool’s core concepts. We also discussed Terraform and IaC in <a href="B19877_08.xhtml#_idTextAnchor1010"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, <em class="italic">Infrastructure as Code (IaC) with Terraform</em>. In this chapter, we will look at another way of provisioning your infrastructure and configuration using both tools, as well as another one, called <strong class="bold">Packer</strong>. With all three<a id="_idIndexMarker1079"/> tools, let’s boot up a scalable <strong class="bold">Linux</strong>,<strong class="bold"> Apache</strong>,<strong class="bold"> MySQL</strong>,<strong class="bold"> and PHP</strong> (<strong class="bold">LAMP</strong>) stack <span class="No-Break">on </span><span class="No-Break"><a id="_idIndexMarker1080"/></span><span class="No-Break">Azure.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Immutable infrastructure with <span class="No-Break">HashiCorp’s Packer</span></li>
+				<li>Creating the Apache and <span class="No-Break">MySQL playbook</span></li>
+				<li>Building the Apache and MySQL images using Packer and <span class="No-Break">Ansible provisioners</span></li>
+				<li>Creating the required infrastructure <span class="No-Break">with Terrafor<a id="_idTextAnchor1332"/><a id="_idTextAnchor1333"/>m</span></li>
+			</ul>
+			<h1 id="_idParaDest-267"><a id="_idTextAnchor1334"/>Technical requirements</h1>
+			<p>You will need an active Azure subscription to follow the exercises for this chapter. Currently, Azure is offering a free trial for 30 days with $200 worth of free credits; sign up <span class="No-Break">at </span><a href="https://azure.microsoft.com/en-in/free"><span class="No-Break">https://azure.microsoft.com/en-in/free</span></a><span class="No-Break">.</span></p>
+			<p>You will also need to clone the following GitHub repository for some of <span class="No-Break">the exercises:</span></p>
+			<p><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e%0D"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a></p>
+			<p>Run the following command to clone the repository into your home directory, and <strong class="source-inline">cd</strong> into the <strong class="source-inline">ch10</strong> directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \
+   modern-devops
+$ cd modern-devops/ch10</pre>			<p>You also need to install <strong class="bold">Terraform</strong> and <strong class="bold">Ansible</strong> on your system. Refer to <a href="B19877_08.xhtml#_idTextAnchor1010"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, <em class="italic">Infrastructure as Code (IaC) with Terraform</em>, and <a href="B19877_09.xhtml#_idTextAnchor1198"><span class="No-Break"><em class="italic">Chapter 9</em></span></a>, <em class="italic">Configuration Management with Ansible</em>, for more details on installing and setting up Terraform <span class="No-Break">and Ansible<a id="_idTextAnchor1335"/><a id="_idTextAnchor1336"/>.</span></p>
+			<h1 id="_idParaDest-268"><a id="_idTextAnchor1337"/>Immutable infrastructure with HashiCorp’s Packer</h1>
+			<p>Imagine you are the author of a book and you need to make changes to an existing edition. When you want to make changes, such as improving the content or fixing the issues and ensuring the book is up<a id="_idIndexMarker1081"/> to date, you don’t edit the existing book. Instead, you create a new edition with the desired updates while keeping the existing editions intact, like the new edition of this book. This <a id="_idIndexMarker1082"/>concept aligns with <span class="No-Break"><strong class="bold">immutable infrastructure</strong></span><span class="No-Break">.</span></p>
+			<p>In IT and systems management, immutable infrastructure is a strategy where, instead of making changes to existing <a id="_idIndexMarker1083"/>servers or <strong class="bold">Virtual Machines</strong> (<strong class="bold">VMs</strong>), you generate entirely new instances with the desired configuration. These new instances replace the old ones instead of modifying them, like creating a new book edition when you want to <span class="No-Break">incorporate changes.</span></p>
+			<p>Here’s how <span class="No-Break">it works:</span></p>
+			<ul>
+				<li><strong class="bold">Building from scratch</strong>: When you need to update a part of your infrastructure, you avoid making direct changes to the existing servers or machines. Instead, you create new ones from a pre-established template (an image) that includes the <span class="No-Break">updated configuration.</span></li>
+				<li><strong class="bold">No in-place modifications</strong>: Like not editing an existing book, you avoid making in-place modifications to current servers. This practice reduces the risk of unforeseen changes or <span class="No-Break">configuration inconsistencies.</span></li>
+				<li><strong class="bold">Consistency</strong>: Immutable infrastructure ensures that every server or instance is identical because they all originate from the same template. This uniformity is valuable for ensuring reliability <span class="No-Break">and predictability.</span></li>
+				<li><strong class="bold">Rolling updates</strong>: When it’s time to implement an update, you systematically replace the old instances with the new ones in a controlled manner. This minimizes downtime and <span class="No-Break">potential risks.</span></li>
+				<li><strong class="bold">Scalability</strong>: Scaling your infrastructure becomes effortless by generating new instances as needed. This is akin to publishing new book editions when there’s a surge in demand, or things <span class="No-Break">become outdated.</span></li>
+				<li><strong class="bold">Rollback and recovery</strong>: If issues arise from an update, you can swiftly revert to the previous version by<a id="_idIndexMarker1084"/> re-creating instances from a<a id="_idIndexMarker1085"/> known <span class="No-Break">good template.</span></li>
+			</ul>
+			<p>So, consider immutable infrastructure as a means of maintaining your infrastructure by creating new, improved instances rather than attempting to revise or modify existing ones. This approach elevates consistency, reliability, and predictability within your <span class="No-Break">IT environment.</span></p>
+			<p>To understand this further, let’s consider the trad<a id="_idTextAnchor1338"/>itional method of setting up applications via Terraform and Ansible. We would use Terraform to spin<a id="_idTextAnchor1339"/> up the infrastructure and then use Ansible on top to apply the relevant configuration to the infrastructure. That is what we did in the last chapter. While that is a viable approach, and many enterprises use it, there is a better way to do it with modern DevOps approaches and <span class="No-Break">immutable infrastructure.</span></p>
+			<p>Immutable infrastructure is a ground-breaking concept that emerged due to the p<a id="_idTextAnchor1340"/>roblems with <strong class="bold">mutable infrastructure</strong>. In a <a id="_idIndexMarker1086"/>mutable infrastructure approach, we generally update servers in place. So, we follow a mutable process when we install Apache in a VM using Ansible and customize it further. We may want to update the servers, patch them, update our Apache to a newer version, and update our application code from time <span class="No-Break">to time.</span></p>
+			<p>The issue with this approach is<a id="_idIndexMarker1087"/> that while we can manage it well with Ansible (or related tools, such<a id="_idIndexMarker1088"/> as <strong class="bold">Puppet</strong>, <strong class="bold">Chef</strong>, and <strong class="bold">SaltStack</strong>), the problem<a id="_idIndexMarker1089"/> always remains that we are m<a id="_idTextAnchor1341"/>aking live changes in a production <a id="_idTextAnchor1342"/>environment that might go wrong for various reasons. Worse, it mi<a id="_idTextAnchor1343"/>ght update something we did not anticipate or test in the first place. We also might end up in a partial upgrade state that might be difficult to <span class="No-Break">roll back.</span></p>
+			<p>With the scalable <a id="_idIndexMarker1090"/>infrastructure that the cloud provides, you <a id="_idIndexMarker1091"/>can have a dynamic horizontal scaling model where VMs scale with traffic. Therefore, you can have the best possible utilization of your infrastructure – the best bang for your buck! The problem with the traditional approach is that even if we use Ansible to apply the configuration to new machines, it is slower to get ready. Therefore, the scaling is not optimal, especially for <span class="No-Break">bursty traffic.</span></p>
+			<p>Immutable infrastructure helps you manage these problems by taking the same approach we took for containers – <em class="italic">baking configuration directly into the OS image using modern DevOps tools and practices</em>. Immutable infrastructure helps you deploy the tested configuration to production by replacing the existing VM without doing any updates in place. It is faster to start and easy to roll back. You can also version infrastructure changes with <span class="No-Break">this approach.</span></p>
+			<p><strong class="bold">HashiCorp</strong> has an excellent <a id="_idIndexMarker1092"/>suite of DevOps products related to infrastructure and configuration management. HashiCorp provides <strong class="bold">Packer</strong> to help you create immutable infrastructure by baking configurations directly in your VM image, rather than the slow process of creating a VM with a generic OS image and then customizing it later. It works on a similar principle as Docker uses to bake container images; that is, you define a template (configuration file) that specifies the source image, the desired configuration, and any provisioning steps needed to set up the software on the image. Packer then builds the image by creating a temporary instance with the base image, applying the defined configuration, and capturing the machine image <span class="No-Break">for reuse.</span></p>
+			<p>Packer provides some<a id="_idIndexMarker1093"/> of the following <span class="No-Break">key features:</span></p>
+			<ul>
+				<li><strong class="bold">Multi-platform support</strong>: Packer works on the plugin architecture and, therefore, can be used to create VM images for a lot of different cloud and on-premises platforms, such as VMware, Oracle VirtualBox, Amazon EC2, Azure’s ARM, Google Cloud Compute, and container images for Docker or other <span class="No-Break">container runtimes.</span></li>
+				<li><strong class="bold">Automation</strong>: Packer automates image creation and eliminates manual effort to build images. It also helps you with your multi-cloud strategy, as you can use a single configuration to build images for <span class="No-Break">various platforms.</span></li>
+				<li><strong class="bold">Fosters GitOps</strong>: Packer configurations are machine-readable and written in HCL or JSON, so they can easily sit with your code. This, therefore, <span class="No-Break">fosters GitOps.</span></li>
+				<li><strong class="bold">Integration with other tools</strong>: Packer integrates well with other HashiCorp tools, such as Terraform <span class="No-Break">and </span><span class="No-Break"><a id="_idIndexMarker1094"/></span><span class="No-Break">Vagrant.</span></li>
+			</ul>
+			<p>Packer uses a staging VM to customize the image. The following is the process tha<a id="_idTextAnchor1344"/>t Packer follows while<a id="_idIndexMarker1095"/> building the <span class="No-Break">custom image:</span></p>
+			<ol>
+				<li>You start with Packer configuration HCL files to define the base image you want to start from and where to build the image. You also define the provisioner for building the custom image, such as Ansible, and specify what playbooks <span class="No-Break">to use.</span></li>
+				<li>When you run a Packer build, Packer uses the details in the configuration files to create a build VM from the base image, run the provisioner to customize it, turn off the build VM, take a snapshot, and save that as a disk image. It finally saves the image in an <span class="No-Break">image repository.</span></li>
+				<li>You can then<a id="_idIndexMarker1096"/> build the VM from the custom image using Terraform or <span class="No-Break">other tools.</span></li>
+			</ol>
+			<p>The following figure explains the pr<a id="_idTextAnchor1345"/>ocess <span class="No-Break">in detail:</span></p>
+			<div>
+				<div id="_idContainer078" class="IMG---Figure">
+					<img src="image/B19877_10_1.jpg" alt="Figure 10.1 – Packer build process" width="1256" height="1013"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.1 – Packer build process</p>
+			<p>T<a id="_idTextAnchor1346"/>he result is<a id="_idIndexMarker1097"/> that your application is quick to start up and scales very well. For any changes within your configuration, create a new disk image with Packer and Ansible and then use Terraform to apply the changes to your resources. Terraform will then spin down the old VMs and spin up new ones with the new configuration. If you can relate it to the container deployment workflow, you can make real sense of it. It's akin to using the container workflow within the VM world! But is immutable infrastructure for everyone? Let’s understand wh<a id="_idTextAnchor1347"/><a id="_idTextAnchor1348"/>ere it <span class="No-Break">fits best.</span></p>
+			<h2 id="_idParaDest-269"><a id="_idTextAnchor1349"/>When to use immutable infrastructure</h2>
+			<p>Dec<a id="_idTextAnchor1350"/>iding to <a id="_idIndexMarker1098"/>switch to immutable infrastructure is difficult, especially when your Ops team treats servers as pets. Most people get paranoid about the idea of deleting an existing server and creating a new one for every update. Well, you need to do a lot of convincing when you first come up with the idea. However, it does not mean that you must use immutable infrastructure to do proper DevOps. It all depends on your <span class="No-Break">use case.</span></p>
+			<p>Let’s look at each approach’s pros and cons to understand <span class="No-Break">them better.</span></p>
+			<h3>Pros of mutable infrastructure</h3>
+			<p>Le<a id="_idTextAnchor1351"/>t’s begin with the<a id="_idIndexMarker1099"/> pros of <span class="No-Break">mutable infrastructure:</span></p>
+			<ul>
+				<li>If adequately managed, mutable infrastructure is faster to upgrade and change. It makes security <span class="No-Break">patches quicker.</span></li>
+				<li>It is simpler to manage, as we don’t have to worry about building the entire VM image and redeploying it for <span class="No-Break">every update.</span></li>
+			</ul>
+			<h3>Cons of mutable infras<a id="_idTextAnchor1352"/>tructure</h3>
+			<p>Next, let’s see the cons<a id="_idIndexMarker1100"/> of <span class="No-Break">mutable infrastructure:</span></p>
+			<ul>
+				<li>It eventually results in configuration drift. When people start making changes manually in the server and do not use a config management tool, it becomes difficult to know what’s in the server after a particular point. Then, you will have to start relying <span class="No-Break">on snapshots.</span></li>
+				<li>Versioning is impossible with mutable infrastructure, and rolling back changes <span class="No-Break">is troublesome.</span></li>
+				<li>There is a possibility of partial updates because of technical issues such as a patchy network, unresponsive <strong class="bold">apt</strong> repositories, and <span class="No-Break">so on.</span></li>
+				<li>There is a risk because changes are applied directly to the production environment. There is also a chance that you will end up in an unanticipated state that is difficult <span class="No-Break">to troubleshoot.</span></li>
+				<li>Because of configuration drift, it is impossible to say that the current configuration is the same as being tracked in version control. Therefore, build<a id="_idTextAnchor1353"/>ing a new server <a id="_idIndexMarker1101"/>from scratch may require manual intervention and <span class="No-Break">comprehensive testing.</span></li>
+			</ul>
+			<p>Similarly, let’s look at the pros and cons of <span class="No-Break">immutable infrastructure.</span></p>
+			<h3>Pros of immutable infr<a id="_idTextAnchor1354"/>astructure</h3>
+			<p>The pros of immutable infrastructure are <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li>It eliminates configuration drift as the infrastructure cannot change once deployed, and any <a id="_idIndexMarker1102"/>changes should come via the <span class="No-Break">CI/CD process.</span></li>
+				<li>It is DevOps-friendly as every build and deployment process inherently follows modern <span class="No-Break">DevOps practices.</span></li>
+				<li>It makes discrete versioning possible as every image generated from an image build can be versioned and kept within an image repository. That makes rollouts and rollbacks much more <a id="_idIndexMarker1103"/>straightforward and promotes modern DevOps practices <a id="_idIndexMarker1104"/>such as <strong class="bold">canary</strong> and <strong class="bold">blue-green</strong> deployments with <span class="No-Break">A/B testing.</span></li>
+				<li>The image is pre-built and tested, so we always get a predictable state from immutable infrastructure. We, therefore, reduce a lot of risk from <span class="No-Break">production implementations.</span></li>
+				<li>It helps with <a id="_idIndexMarker1105"/>horizontal scaling on the cloud because you can now create servers from pre-built images, making new VMs faster to start up and <span class="No-Break">get ready.</span></li>
+			</ul>
+			<h3>Cons of immutable infrastruc<a id="_idTextAnchor1355"/>ture</h3>
+			<p>The cons of<a id="_idIndexMarker1106"/> immutable infrastructure are <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li>Building and deploying immutable infrastructure is a bit complex, and it is slow to add updates and manage <span class="No-Break">urgent hotfixes</span></li>
+				<li>There are storage and network overheads in generating and managing <span class="No-Break">VM images</span></li>
+			</ul>
+			<p>So, as we’ve looked at the pros and cons of both approaches, it ultimately depends on how you currently do infrastructure management and your end goal. Immutable infrastructure has a huge benefit, and therefore, it is something that every modern DevOps engineer should understand and implement if possible. However, technical and process constraints prevent people from doing it – while some constraints are related to the technology stack, most are simply related to processes and red tape. Immutable infrastructure is best when you need consistently reproducible and exceptionally reliable deployments. This approach minimizes the risk of configuration drift and streamlines updates by reconstructing entire environments instead of tweaking existing elements. It proves especially advantageous in scenarios such as microservices architectures, container orchestration, and situations where rapid scaling and the ability to roll back changes <span class="No-Break">are pa<a id="_idTextAnchor1356"/>ramount.</span></p>
+			<p>We all know that DevOps is not all about tools but it is a cultural change that should originate from the very top. If it is not possible to use immutable infrastructure, you can <a id="_idIndexMarker1107"/>always use a <strong class="bold">co<a id="_idTextAnchor1357"/>nfig management</strong> tool such as Ansible on top of live servers. That makes things manageable to a <span class="No-Break">certain extent.</span></p>
+			<p>Now, moving on to Packer, let’s<a id="_idTextAnchor1358"/><a id="_idTextAnchor1359"/> look at how to <span class="No-Break">install it.</span></p>
+			<h2 id="_idParaDest-270"><a id="_idTextAnchor1360"/>Installing Packer</h2>
+			<p>You can install Packer on a <a id="_idIndexMarker1108"/>variety of platforms in a variety of ways. Please refer to <a href="https://developer.hashicorp.com/packer/downloads">https://developer.hashicorp.com/packer/downloads</a>. As Packer is available as an <strong class="bold">apt </strong>package, use the<a id="_idIndexMarker1109"/> following commands to install Packer on <span class="No-Break">Ubuntu Linux:</span></p>
+			<pre class="console">
+$ wget -O- https://apt.releases.hashicorp.com/gpg | sudo \
+gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+$ echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \ 
+sudo tee /etc/apt/sources.list.d/hashicorp.list
+$ sudo apt update &amp;&amp; sudo apt install -y packer</pre>			<p>To verify th<a id="_idIndexMarker1110"/>e installation, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ packer --version
+1.9.2</pre>			<p>As we see, Packer is installed successfully. We can proceed with the next activity in <a id="_idTextAnchor1361"/><a id="_idTextAnchor1362"/>our goal – <span class="No-Break"><em class="italic">creating playbooks</em></span><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-271">Creating the Apache and MySQL pl<a id="_idTextAnchor1363"/>aybooks</h1>
+			<p>As our goal is to <a id="_idIndexMarker1111"/>spin up a scalable <strong class="bold">LAMP stack</strong> in this chapter, we must start by defining Ansible playbooks that would run on the build VM. We’ve<a id="_idTextAnchor1364"/> already created some roles for Apache and MySQL in <a href="B19877_09.xhtml#_idTextAnchor1198"><span class="No-Break"><em class="italic">Chapter 9</em></span></a>, <em class="italic">Configuration Management with Ansible</em>. We will use the <a id="_idIndexMarker1112"/>same roles within this setup <span class="No-Break">as well.</span></p>
+			<p>Therefore, we will have the following directory structure within the <span class="No-Break"><strong class="source-inline">ch10</strong></span><span class="No-Break"> directory:</span></p>
+			<pre class="console">
+├── ansible
+│   ├── dbserver-playbook.yaml
+│   ├── roles
+│   │   ├── apache
+│   │   ├── common
+│   │   └── mysql
+│   └── webserver-playbook.yaml
+├── packer
+│   ├── dbserver.pkr.hcl
+│   ├── plugins.pkr.hcl
+│   ├── variables.pkr.hcl
+│   ├── variables.pkrvars.hcl
+│   └── webserver.pkr.hcl
+└── terraform
+    ├── main.tf
+    ├── outputs.tf
+    ├── terraform.tfvars
+    └── vars.tf</pre>			<p>We have two playbooks within the <strong class="source-inline">ansible</strong> directory – <strong class="source-inline">webserver-playbook.yaml</strong> and <strong class="source-inline">dbserver-playbook.yaml</strong>. Let’s look at each to understand how we write our<a id="_idIndexMarker1113"/> playbooks <span class="No-Break">for Ansible.</span></p>
+			<p><strong class="source-inline">webserver-playbook.yaml</strong> looks like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+---
+- hosts: default
+  become: true
+  roles:
+    - common
+    - apache</pre>			<p><strong class="source-inline">dbserver-playbook.yaml</strong> looks like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+---
+- hosts: default
+  become: true
+  roles:
+    - common
+    - m<a id="_idTextAnchor1365"/>ysql</pre>			<p>As we can see, both playbooks have <strong class="source-inline">hosts</strong> s<a id="_idTextAnchor1366"/>et to <strong class="source-inline">default</strong>. That is because we will not define the inventory for this playbook. Instead, Packer will use the build VM to build the image and dynamically <a id="_idIndexMarker1114"/>generate <span class="No-Break">the inventory.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Packer will also ignore any <strong class="source-inline">remote_user</strong> attributes within the task and use the user present in the Ansible <span class="No-Break">provisioner’s config.</span></p>
+			<p>As we’ve already tested this configuration in the previous chapter, all we need to do now is define the Packer configuration, so let’s go ahea<a id="_idTextAnchor1367"/><a id="_idTextAnchor1368"/>d and do that in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-272"><a id="_idTextAnchor1369"/>Building the Apache and MySQL images using Packer and A<a id="_idTextAnchor1370"/>nsible provisioners</h1>
+			<p>We will now use Packer to create the Apache and MySQL images. Before de<a id="_idTextAnchor1371"/>fining the P<a id="_idTextAnchor1372"/>acker configuration, we have a <a id="_idIndexMarker1115"/>few pre<a id="_idTextAnchor1373"/>requisites to a<a id="_idTextAnchor1374"/><a id="_idTextAnchor1375"/>llow Packer to build <span class="No-Break">custom images.</span></p>
+			<h2 id="_idParaDest-273"><a id="_idTextAnchor1376"/>Prerequisites</h2>
+			<p>We must<a id="_idIndexMarker1116"/> create an <strong class="bold">Azure service principal</strong> for Packer to interact with Azure and build <span class="No-Break">the image.</span></p>
+			<p>First, log in to your Azure account using the Azure CLI with the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az login</pre>			<p>Now, set the subscription to the subscription ID we got in response to the <strong class="source-inline">az login</strong> command to an environment variable using <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ export SUBSCRIPTION_ID=&lt;SUBSCRIPTION_ID&gt;</pre>			<p>Next, let’s set the subscription ID using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az account set --subscription="${SUBSCRIPTION_ID}"</pre>			<p>Then, create the service principal with contributor access using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az ad sp create-for-rbac --role="Contributor" \
+--scopes="/subscriptions/${SUBSCRIPTION_ID}"
+{"appId": "00000000-0000-0000-0000-00000", "name": "http://azure-
+cli-2021-01-07-05-59-24",  "password": "xxxxxxxxxxxxxxxxxxxxxxxx", "tenant": "00000000-
+0000-0000-0000-0000000000000"}</pre>			<p>We’ve successfully created the service principal. The response JSON consists of <strong class="source-inline">appId</strong>, <strong class="source-inline">password</strong>, and <strong class="source-inline">tenant</strong> values that<a id="_idIndexMarker1117"/> we will use in the <span class="No-Break">subsequent sections.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">You can also reuse the service principal we created in <a href="B19877_08.xhtml#_idTextAnchor1010"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, <em class="italic">Infrastructure as Code (IaC) with </em><span class="No-Break"><em class="italic">Terraform</em></span><span class="No-Break">, instead.</span></p>
+			<p>Now, let’s go ahead and set the values of these variables in the <strong class="source-inline">packer/variables.pkrvars.hcl</strong> file with <span class="No-Break">the details:</span></p>
+			<pre class="console">
+client_id = "&lt;VALUE_OF_APP_ID&gt;"
+client_secret = "&lt;VALUE_OF_PASSWORD&gt;"
+tenant_id = "&lt;VALUE_OF_TENANT&gt;"
+subscription_id = "&lt;SUBSCRIPTION_ID&gt;"</pre>			<p>We will use the variable file in our Packer build. We also need a resource group for storing the <span class="No-Break">built images.</span></p>
+			<p>To create the <a id="_idIndexMarker1118"/>resource group, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az group create -n packer-rg -l eastus</pre>			<p>Now, let’s go ahea<a id="_idTextAnchor1377"/><a id="_idTextAnchor1378"/>d and define the <span class="No-Break">Packer configuration.</span></p>
+			<h2 id="_idParaDest-274">Defining the Pa<a id="_idTextAnchor1379"/>cker configuration</h2>
+			<p>Packer allows us to define configuration in JSON as well as HCL files. As JSON is now deprecated and HCL is preferred, let’s <a id="_idIndexMarker1119"/>define the Packer configuration <span class="No-Break">using HCL.</span></p>
+			<p>To access resources for <a id="_idIndexMarker1120"/>this section, switch to the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch10/packer</pre>			<p>We will create the following files in the <span class="No-Break"><strong class="source-inline">packer</strong></span><span class="No-Break"> directory:</span></p>
+			<ul>
+				<li><strong class="source-inline">variables.pkr.hcl</strong>: Contains a list of variables we would use while applying <span class="No-Break">the configuration</span></li>
+				<li><strong class="source-inline">plugins.pkr.hcl</strong>: Contains the Packer <span class="No-Break">plugin configuration</span></li>
+				<li><strong class="source-inline">webserver.pkr.hcl</strong>: Contains the Packer configuration for building the web <span class="No-Break">server image</span></li>
+				<li><strong class="source-inline">dbserver.pkr.hcl</strong>: Contains the Packer configuration for building the <span class="No-Break"><strong class="source-inline">dbserver</strong></span><span class="No-Break"> image</span></li>
+				<li><strong class="source-inline">variables.pkrvars.hcl</strong>: Contains the values of the Packer variables defined in the <span class="No-Break"><strong class="source-inline">variables.pkr.hcl</strong></span><span class="No-Break"> file</span></li>
+			</ul>
+			<p>The <strong class="source-inline">variables.pkr.hcl</strong> file contains <span class="No-Break">the following:</span></p>
+			<pre class="console">
+variable "client_id" {
+  type    = string
+}
+variable "client_secret" {
+  type    = string
+}
+variable "subscription_id" {
+  type    = string
+}
+variable "tenant_id" {
+  type    = string
+}</pre>			<p>The <strong class="source-inline">variables.pkr.hcl</strong> file defines a list of user variables that we can use within the <strong class="source-inline">source</strong> and <strong class="source-inline">build</strong> blocks of the <a id="_idIndexMarker1121"/>Packer configuration. We’ve defined four string variables – <strong class="source-inline">client_id</strong>, <strong class="source-inline">client_secret</strong>, <strong class="source-inline">tenant_id</strong>, and <strong class="source-inline">subscription_id</strong>. We can pass the values of these variables by using the <strong class="source-inline">variables.pkrvars.hcl</strong> variable file we defined in the <span class="No-Break">last section.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always provide sensitive data from external variables, such as a variable file, environment variables, or a secret manager, such as HashiCorp’s Vault. You should never commit sensitive information <span class="No-Break">with code.</span></p>
+			<p>The <strong class="source-inline">plugins.pkr.hcl</strong> file contains the <span class="No-Break">following block:</span></p>
+			<p><strong class="source-inline">packer</strong>: This section defines the common configuration for Packer. In this case, we’ve defined the plugins required to build the image. There are two plugins defined here – <strong class="source-inline">ansible</strong> and <strong class="source-inline">azure</strong>. Plugins contain a <strong class="source-inline">source</strong> and <strong class="source-inline">version</strong> attribute. They contain everything you would need to interact with the <span class="No-Break">technology component:</span></p>
+			<pre class="console">
+packer {
+  required_plugins {
+    ansible = {
+      source  = "github.com/hashicorp/ansible"
+      version = "=1.1.0"
+    }
+    azure = {
+      source  = "github.com/hashicorp/azure"
+      version = "=1.4.5"
+    }
+  }
+}</pre>			<p>The <strong class="source-inline">webserver.pkr.hcl</strong> file contains the <span class="No-Break">following sections:</span></p>
+			<ul>
+				<li><strong class="source-inline">source</strong>: The <strong class="source-inline">source</strong> block<a id="_idIndexMarker1122"/> contains the configuration we would use to build the VM. As we build an <strong class="source-inline">azure-arm</strong> image, we define the source <span class="No-Break">as follows:</span></li>
+			</ul>
+			<pre class="console">
+<strong class="bold">source "azure-arm" "webserver" {</strong>
+<strong class="bold">  client_id                         = var.client_id</strong>
+<strong class="bold">  client_secret                     = var.client_secret</strong>
+<strong class="bold">  image_offer                       = "UbuntuServer"</strong>
+<strong class="bold">  image_publisher                   = "Canonical"</strong>
+<strong class="bold">  image_sku                         = "18.04-LTS"</strong>
+<strong class="bold">  location                          = "East US"</strong>
+<strong class="bold">  managed_image_name                = "apache-webserver"</strong>
+<strong class="bold">  managed_image_resource_group_name = "packer-rg"</strong>
+<strong class="bold">  os_type                           = "Linux"</strong>
+<strong class="bold">  subscription_id                   = var.subscription_id</strong>
+<strong class="bold">  tenant_id                         = var.tenant_id</strong>
+<strong class="bold">  vm_size                           = "Standard_DS2_v2"</strong>
+<strong class="bold">}</strong></pre>			<p class="list-inset">Different types of sources have different attributes that help us connect and authenticate with the cloud provider that the source is associated with. Other attributes define the build VM’s specification and the base image that the build VM will use. It also describes the properties of the custom image we’re trying to create. Since we’re using Azure in this case, its source type is <strong class="source-inline">azure-arm</strong> and consists of <strong class="source-inline">client_id</strong>, <strong class="source-inline">client_secret</strong>, <strong class="source-inline">tenant_id</strong>, and <strong class="source-inline">subscription_id</strong>, which helps Packer authenticate with the Azure API server. These attributes’ values<a id="_idIndexMarker1123"/> are sourced from the <span class="No-Break"><strong class="source-inline">variables.pkr.hcl</strong></span><span class="No-Break"> file.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">The managed image name can also contain a version. That will help you build a new image for every new version you want <span class="No-Break">to deploy.</span></p>
+			<ul>
+				<li> <strong class="source-inline">build</strong>: The <strong class="source-inline">build</strong> block consists of <strong class="source-inline">sources</strong> and <strong class="source-inline">provisioner</strong> attributes. It contains all the sources we want to use, and the <strong class="source-inline">provisioner</strong> attribute allows us to configure the build VM to achieve the desired configuration. We’ve defined the following <span class="No-Break"><strong class="source-inline">build</strong></span><span class="No-Break"> block:</span></li>
+			</ul>
+			<pre class="console">
+<strong class="bold">build {</strong>
+<strong class="bold">  sources = ["source.azure-arm.webserver"]</strong>
+<strong class="bold">  provisioner "ansible" {</strong>
+<strong class="bold">    playbook_file = "../ansible/webserver-playbook.yaml"</strong>
+<strong class="bold">  }</strong>
+<strong class="bold">}</strong></pre>			<p>We’ve defined <a id="_idIndexMarker1124"/>an <strong class="bold">Ansible provisioner</strong> to customize our VM. There are a lot of provisioners that Packer provides. Luckily, Packer provides the Ansible provisioner out of the box. The Ansible provisioner requires the path to the playbook file; therefore, in this case, we’ve <span class="No-Break">provided </span><span class="No-Break"><strong class="source-inline">../ansible/webserver-playbook.yaml</strong></span><span class="No-Break">.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">You can specify multiple sources in the <strong class="source-inline">build</strong> block, each with the same or different types. Similarly, we can have numerous provisioners, each executed in parallel. So, if you want to build the same configuration for multiple cloud providers, you can specify multiple sources for each <span class="No-Break">cloud provider.</span></p>
+			<p>Similarly, we’ve defined the<a id="_idIndexMarker1125"/> following <span class="No-Break"><strong class="source-inline">dbserver.pkr.hcl</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+source "azure-arm" "dbserver" {
+  ...
+  managed_image_name                = "mysql-dbserver"
+  ...
+}
+build {
+  sources = ["source.azure-arm.dbserver"]
+  provisioner "ansible" {
+    playbook_file = "../ansible/dbserver-playbook.yaml"
+  }
+}</pre>			<p>The <strong class="source-inline">source</strong> block has the same configuration as the web server apart from <strong class="source-inline">managed_image_name</strong>. The <strong class="source-inline">build</strong> block is also like the web server, but instead, it uses the <strong class="source-inline">../</strong><span class="No-Break"><strong class="source-inline">ansible/dbserver-playbook.yaml</strong></span><span class="No-Break"> playbook.</span></p>
+			<p>Now, let’s look at the Packer workflow and how to use it to build <span class="No-Break">the image.</span></p>
+			<h2 id="_idParaDest-275"><a id="_idTextAnchor1380"/>The Packer workflow for building images</h2>
+			<p>The Packer workflow comprises<a id="_idIndexMarker1126"/> two steps – <strong class="source-inline">init</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">build</strong></span><span class="No-Break">.</span></p>
+			<p>As we already know, Packer uses plugins to interact with the cloud providers; therefore, we need to install them. To <a id="_idTextAnchor1381"/>do so, Packer provides the <span class="No-Break"><strong class="source-inline">init</strong></span><span class="No-Break"> command.</span></p>
+			<p>Let’s initialize and install the required plugins using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ packer init .
+Installed plugin github.com/hashicorp/ansible v1.1.0 in "~/.config/packer/plugins/github.
+com/hashicorp/ansible/packer-plugin-ansible_v1.1.0_x5.0_linux_amd64"
+Installed plugin github.com/hashicorp/azure v1.4.5 in "~/.config/packer/plugins/github.
+com/hashicorp/azure/packer-plugin-azure_v1.4.5_x5.0_linux_amd64"</pre>			<p>As we can see, the plugin is now installed. Let’s now go ahead and build <span class="No-Break">the image.</span></p>
+			<p>We use the <strong class="source-inline">build</strong> command to create an image using Packer. As we would need to pass values to variables, we will specify the variable values using a command-line argument, as in the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ packer build -var-file="variables.pkrvars.hcl" .</pre>			<p>Packer would build parallel stacks <a id="_idIndexMarker1127"/>using both the <strong class="source-inline">webserver</strong> and <span class="No-Break"><strong class="source-inline">dbserver</strong></span><span class="No-Break"> configs.</span></p>
+			<p>Packer first creates temporary resource groups to spin up <span class="No-Break">staging VMs:</span></p>
+			<pre class="console">
+==&gt; azure-arm.webserver: Creating resource group ...
+==&gt; azure-arm.webserver:  -&gt; ResourceGroupName : 'pkr-Resource-Group-7dfj1c2iej'
+==&gt; azure-arm.webserver:  -&gt; Location          : 'East US'
+==&gt; azure-arm.dbserver: Creating resource group ...
+==&gt; azure-arm.dbserver:  -&gt; ResourceGroupName : 'pkr-Resource-Group-11xqpuxsm3'
+==&gt; azure-arm.dbserver:  -&gt; Location          : 'East US'</pre>			<p>Packer then validates and deploys the deployment templates and gets the IP addresses of the <span class="No-Break">staging VMs:</span></p>
+			<pre class="console">
+==&gt; azure-arm.webserver: Validating deployment template ...
+==&gt; azure-arm.webserver: Deploying deployment template ...
+==&gt; azure-arm.webserver:  -&gt; DeploymentName : 'pkrdp7dfj1c2iej'
+==&gt; azure-arm.webserver: Getting the VM's IP address ...
+==&gt; azure-arm.webserver:  -&gt; IP Address : '104.41.158.85'
+==&gt; azure-arm.dbserver: Validating deployment template ...
+==&gt; azure-arm.dbserver: Deploying deployment template ...
+==&gt; azure-arm.dbserver:  -&gt; DeploymentName : 'pkrdp11xqpuxsm3'
+==&gt; azure-arm.dbserver: Getting the VM's IP address ...
+==&gt; azure-arm.dbserver:  -&gt; IP Address : '40.114.7.11'</pre>			<p>Then, Packer uses SSH to<a id="_idIndexMarker1128"/> connect with the staging VMs and provisions them <span class="No-Break">with Ansible:</span></p>
+			<pre class="console">
+==&gt; azure-arm.webserver: Waiting for SSH to become available...
+==&gt; azure-arm.dbserver: Waiting for SSH to become available...
+==&gt; azure-arm.webserver: Connected to SSH!
+==&gt; azure-arm.dbserver: Connected to SSH!
+==&gt; azure-arm.webserver: Provisioning with Ansible...
+==&gt; azure-arm.dbserver: Provisioning with Ansible...
+==&gt; azure-arm.webserver: Executing Ansible: ansible-playbook -e packer_build_
+name="webserver" -e packer_builder_type=azure-arm --ssh-extra-args '-o IdentitiesOnly=yes' 
+-e ansible_ssh_private_key_file=/tmp/ansible-key328774773 -i /tmp/packer-provisioner-
+ansible747322992 ~/ansible/webserver-playbook.yaml
+==&gt; azure-arm.dbserver: Executing Ansible: ansible-playbook -e packer_build_
+name="dbserver" -e packer_builder_type=azure-arm --ssh-extra-args '-o IdentitiesOnly=yes' 
+-e ansible_ssh_private_key_file=/tmp/ansible-key906086565 -i /tmp/packer-provisioner-
+ansible3847259155 ~/ansible/dbserver-playbook.yaml
+azure-arm.webserver: PLAY RECAP *********************************************************
+**
+azure-arm.webserver: default: ok=7 changed=5 unreachable=0 failed=0 skipped=0 rescued=0 
+ignored=0
+azure-arm.dbserver: PLAY RECAP ***********************************************************
+azure-arm.dbserver: default: ok=11 changed=7 unreachable=0 failed=0 skip<a id="_idTextAnchor1382"/>ped=0 rescued=0 
+ignored=0</pre>			<p>Once the Ansible run is complete, Packer gets the disk details, captures the images, and creates the machine images in the resource groups<a id="_idIndexMarker1129"/> we specified in the <span class="No-Break">Packer configuration:</span></p>
+			<pre class="console">
+==&gt; azure-arm.webserver: Querying the machine's properties
+==&gt; azure-arm.dbserver: Querying the machine's properties
+==&gt; azure-arm.webserver: Querying the machine's additional disks properties ...
+==&gt; azure-arm.dbserver: Querying the machine's additional disks properties ...
+==&gt; azure-arm.webserver: Powering off machine ...
+==&gt; azure-arm.dbserver: Powering off machine ...
+==&gt; azure-arm.webserver: Generalizing machine ...
+==&gt; azure-arm.dbserver: Generalizing machine ...
+==&gt; azure-arm.webserver: Capturing image ...
+==&gt; azure-arm.dbserver: Capturing image ...
+==&gt; azure-arm.webserver: -&gt; Image ResourceGroupName: 'packer-rg'
+==&gt; azure-arm.dbserver: -&gt; Image ResourceGroupName: 'packer-rg'
+==&gt; azure-arm.webserver: -&gt; Image Name: 'apache-webserver'
+==&gt; azure-arm.webserver:  -&gt; Image Location: 'East US'
+==&gt; azure-arm.dbserver: -&gt; Image Name: 'mysql-dbserver'
+==&gt; azure-arm.dbserver:  -&gt; Image Location: 'East US'</pre>			<p>Finally, it removes the <a id="_idIndexMarker1130"/>deployment object and the temporary resource group <span class="No-Break">it created:</span></p>
+			<pre class="console">
+==&gt; azure-arm.webserver: Deleting Virtual Machine deployment and its attached resources...
+==&gt; azure-arm.dbserver: Deleting Virtual Machine deployment and its attached resources...
+==&gt; azure-arm.webserver: Cleanup requested, deleting resource group ...
+==&gt; azure-arm.dbserver: Cleanup requested, deleting resource group ...
+==&gt; azure-arm.webserver: Resource group has been deleted.
+==&gt; azure-arm.dbserver: Resource group has been deleted.</pre>			<p>It then provides the list of artifacts it <span class="No-Break">has generated:</span></p>
+			<pre class="console">
+==&gt; Builds finished. The artifacts of successful builds are:
+--&gt; azure-arm: Azure.ResourceManagement.VMImage:
+OSType: Linux
+ManagedImageResourceGroupName: packer-rg
+ManagedImageName: apache-webserver
+ManagedImageId: /subscriptions/Id/resourceGroups/packer-rg/providers/Microsoft.Compute/
+images/apache-webserver
+ManagedImageLocation: West Europe
+OSType: Linux
+ManagedImageResourceGroupName: packer-rg
+ManagedImageName: mysql-dbserver
+ManagedImageId: /subscriptions/Id/resourceGroups/packer-rg/providers/Microsoft.Compute/
+images/mysql-dbse<a id="_idTextAnchor1383"/>rver</pre>			<p>If we look at the <strong class="source-inline">packer-rg</strong> resource group, we <a id="_idTextAnchor1384"/>will find that there <a id="_idIndexMarker1131"/>are two VM images <span class="No-Break">within it:</span></p>
+			<div>
+				<div id="_idContainer079" class="IMG---Figure">
+					<img src="image/B19877_10_2.jpg" alt="Figure 10.2 – Packer custom images" width="1643" height="528"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.2 – Packer custom images</p>
+			<p>We’ve successfully built custom images <span class="No-Break">with Packer!</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">It isn’t possible to rerun Packer with the same managed image name once the image is created in the resource group. That is because we don’t want to override an existing image accidentally. While you can override it by using the <strong class="source-inline">-force</strong> flag with <strong class="source-inline">packer build</strong>, you should include a version within the image name to allow multiple versions of the image to exist in the resource group. For example, instead of using <strong class="source-inline">apache-webserver</strong>, you can <span class="No-Break">use </span><span class="No-Break"><strong class="source-inline">apache-webserver-0.0.1</strong></span><span class="No-Break">.</span></p>
+			<p>It’s time to use these i<a id="_idTextAnchor1385"/><a id="_idTextAnchor1386"/>mages and create our infrastructure with <span class="No-Break">them now.</span></p>
+			<h1 id="_idParaDest-276"><a id="_idTextAnchor1387"/>Creating the required infrastructure with Terraform</h1>
+			<p>Our goal was to build a scalable LAMP stack, so<a id="_idIndexMarker1132"/> we will define<a id="_idTextAnchor1388"/> a <strong class="bold">VM scale set</strong> using the <strong class="source-inline">apache-webserver</strong> image we created and a single VM with the <strong class="source-inline">mysql-dbserver</strong> image. A VM scale set is an<a id="_idIndexMarker1133"/> autoscaling group of VMs tha<a id="_idTextAnchor1389"/>t will scale out and scale back horizontally based on traffic, similar to how we did with containers <span class="No-Break">on Kubernetes.</span></p>
+			<p>We will create the <span class="No-Break">following resources:</span></p>
+			<ul>
+				<li>A new resource group <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">lamp-rg</strong></span></li>
+				<li>A virtual network within the resource group <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">lampvnet</strong></span></li>
+				<li>A subnet within <strong class="source-inline">lampvnet</strong> <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">lampsub</strong></span></li>
+				<li>Within the<a id="_idIndexMarker1134"/> subnet, we create a <strong class="bold">Network Interface Card</strong> (<strong class="bold">NIC</strong>) for the database called <strong class="source-inline">db-nic</strong> that contains <span class="No-Break">the following:</span><ul><li>A network security group <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">db-nsg</strong></span></li><li>A VM called <strong class="source-inline">db</strong> that uses the custom <span class="No-Break"><strong class="source-inline">mysql-dbserver</strong></span><span class="No-Break"> image</span></li></ul></li>
+				<li>We then create a VM scale set that includes <span class="No-Break">the following:</span><ul><li>A network profile <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">webnp</strong></span></li><li>A backend <span class="No-Break">address pool</span></li><li>A load balancer <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">web-lb</strong></span></li><li>A public IP address attached <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">web-lb</strong></span></li><li>An HTTP<a id="_idTextAnchor1390"/> probe that checks the health of <span class="No-Break">port </span><span class="No-Break"><strong class="source-inline">80</strong></span></li></ul></li>
+			</ul>
+			<p>The<a id="_idTextAnchor1391"/> following <a id="_idIndexMarker1135"/>figure explains the <span class="No-Break">topology graphically:</span></p>
+			<div>
+				<div id="_idContainer080" class="IMG---Figure">
+					<img src="image/B19877_10_3.jpg" alt="Figure 10.3 – Scalable LAMP stack topology diagram" width="1615" height="1699"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.3 – Scalable LAMP stack topology diagram</p>
+			<p>To access resources for this section, switch to the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch10/terraform</pre>			<p>We use the following <a id="_idIndexMarker1136"/>Terraform template, <strong class="source-inline">main.tf</strong>, to define <span class="No-Break">the configuration.</span></p>
+			<p>We first define the <span class="No-Break">Terraform providers:</span></p>
+			<pre class="console">
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "azurerm"
+    }
+  }
+}
+provider "azurerm" {
+  subscription_id = var.subscription_id
+  client_id       = var.client_id
+  client_secret   = var.client_secret
+  tenant_id       = var.tenant_id
+}</pre>			<p>We then define the custom<a id="_idIndexMarker1137"/> image data sources so that we can use them within <span class="No-Break">our configuration:</span></p>
+			<pre class="console">
+data "azurerm_image" "websig" {
+  name            = "apache-webserver"
+  resource_group_name = "packer-rg"
+}
+data "azurerm_image" "dbsig" {
+  name            = "mysql-dbserver"
+  resource_group_name = "packer-rg"
+}</pre>			<p>We then define the resource group, virtual network, <span class="No-Break">and subnet:</span></p>
+			<pre class="console">
+resource "azurerm_resource_group" "main" {
+  name     = var.rg_name
+  location = var.location
+}
+resource "azurerm_virtual_network" "main" {
+  name                = "lampvnet"
+  address_space       = ["10.0.0.0/16"]
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+resource "azurerm_subnet" "main" {
+  name                 = "lampsub"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  addre<a id="_idTextAnchor1392"/>ss_prefixes       = ["10.0.2.0/24"]
+}</pre>			<p>As the Apache web <a id="_idIndexMarker1138"/>servers will remain behind a network load balancer, we will define the load balancer and the public IP address that we will attach <span class="No-Break">to it:</span></p>
+			<pre class="console">
+resource "azurerm_public_ip" "main" {
+  name                = "webip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+  domain_name_label   = azurerm_resource_group.main.name
+}
+resource "azurerm_lb" "main" {
+  name                = "web-lb"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  frontend_ip_configuration {
+    name                 = "PublicIPAddress"
+    public_ip_address_id = azurerm_p<a id="_idTextAnchor1393"/>ublic_ip.main.id
+  }
+  tags = {}
+}</pre>			<p>We will then define a<a id="_idIndexMarker1139"/> backend address pool to the load balancer so that we can use this within the Apache VM <span class="No-Break">scale set:</span></p>
+			<pre class="console">
+resource "azurerm_lb_backend_address_pool" "bpepool" {
+  loadbalancer_id     = azurerm_lb.main.id
+  name                = "BackEndAddressPool"
+}</pre>			<p>We will define an HTTP probe on port <strong class="source-inline">80</strong> for a health check and attach it to the <span class="No-Break">load balancer:</span></p>
+			<pre class="console">
+resource "azurerm_lb_probe" "main" {
+  loadbalancer_id     = azurerm_lb.main.id
+  name                = "http-running-probe"
+  port                = 80
+}</pre>			<p>We need a <strong class="bold">NAT rule</strong> to map the load <a id="_idIndexMarker1140"/>balancer ports to the backend pool port, and therefore, we will define a load balancer rule that will map port <strong class="source-inline">80</strong> on the load balancer with port <strong class="source-inline">80</strong> of the backend pool VMs. We will also attach the HTTP health check probe in <span class="No-Break">this config:</span></p>
+			<pre class="console">
+resource "azurerm_lb_rule" "lbnatrule" {
+  resource_group_name            = azurerm_resource_group.main.name
+  loadbalancer_id                = azurerm_lb.main.id
+  name                           = "http"
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  backend_address_pool_ids       = [ azurerm_lb_backend_address_pool.bpepool.id ]
+  frontend_ip_configuration_name = "PublicIPAddress"
+  probe_id      <a id="_idTextAnchor1394"/>                 = azurerm_lb_probe.main.id
+}</pre>			<p>Now, we will define the <a id="_idIndexMarker1141"/>VM scale set within the resource group using the custom image and the load balancer we <span class="No-Break">defined before:</span></p>
+			<pre class="console">
+resource "azurerm_virtual_machine_scale_set" "main" {
+  name                = "webscaleset"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  upgrade_policy_mode = "Manual"
+  sku {
+    name     = "Standard_DS1_v2"
+    tier     = "Standard"
+    capacity = 2
+  }
+  storage_profile_image_reference {
+    id=data.azurerm_image.websig.id
+  }</pre>			<p>We then go ahead and define the OS disk and the <span class="No-Break">data disk:</span></p>
+			<pre class="console">
+  storage_profile_os_disk {
+    name              = ""
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Standard_LRS"
+  }
+  storage_profile_data_disk {
+    lun          = 0
+    caching        = "ReadWrite"
+    create_option  <a id="_idTextAnchor1395"/>= "Empty"
+    disk_size_gb   = 10
+  }</pre>			<p>The OS profile defines how <a id="_idIndexMarker1142"/>we log in to <span class="No-Break">the VM:</span></p>
+			<pre class="console">
+  os_profile {
+    computer_name_prefix = "web"
+    admin_username       = var.admin_username
+    admin_password       = var.admin_password
+  }
+  os_profile_linux_config {
+    disable_password_authentication = false
+  }</pre>			<p>We then define a network profile that will associate the scale set with the load balancer we <span class="No-Break">defined before:</span></p>
+			<pre class="console">
+  network_profile {
+    name    = "webnp"
+    primary = true
+    ip_configuration {
+      name      = "IPConfiguration"
+      subnet_id = azurerm_subnet.main.id
+      load_balancer_backend_address_pool_ids = [azurerm_lb_backend_address_pool.bpepool.id]
+      primary = true
+    }
+  }
+  tags = {}
+}</pre>			<p>Now, moving on to the database configuration, we will start by defining a network security group for the <a id="_idIndexMarker1143"/>database servers to allow ports <strong class="source-inline">22</strong> and <strong class="source-inline">3306</strong> from internal servers within the <span class="No-Break">virtual network:</span></p>
+			<pre class="console">
+resource "azurerm_network_security_group" "db_nsg" {
+    name                = "db-nsg"
+    location            = var.location
+    resource_group_name = azurerm_resource_group.main.name
+    security_rule {
+        name                       = "SSH"
+        priority                   = 1001
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Tcp"
+        source_port_range          = "*"
+        destination_port_range     = "22"
+        source_address_prefix      = "*"
+        destination_address_prefix = "*"
+    }
+    security_rule {
+        name                       = "SQL"
+        priority                   = 1002
+        direction                  = "Inbound"
+        access                     = "Allow"
+        protocol                   = "Tcp"
+        source_port_range          = "*"
+        destination_port_range     = "3306"
+        source_address_prefix      = "*"
+        destinat<a id="_idTextAnchor1396"/>ion_address_prefix = "*"
+    }
+    tags = {}
+}</pre>			<p>We then define a<a id="_idIndexMarker1144"/> NIC to provide an internal IP to <span class="No-Break">the VM:</span></p>
+			<pre class="console">
+resource "azurerm_network_interface" "db" {
+  name                = "db-nic"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  ip_configuration {
+    name                          = "db-ipconfiguration"
+    subnet_id                     = azurerm_subnet.main.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}</pre>			<p>We will then associate the network security group to the <span class="No-Break">network interface:</span></p>
+			<pre class="console">
+resource "azurerm_network_interface_security_group_association" "db" {
+    network_interface_id      = azurerm_network_interface.db.id
+    network_security_group_id = azure<a id="_idTextAnchor1397"/>rm_network_security_group.db_nsg.id
+}</pre>			<p>Finally, we’ll define the <a id="_idIndexMarker1145"/>database VM using the <span class="No-Break">custom image:</span></p>
+			<pre class="console">
+resource "azurerm_virtual_machine" "db" {
+  name                  = "db"
+  location              = var.location
+  resource_group_name   = azurerm_resource_group.main.name
+  network_interface_ids = [azurerm_network_interface.db.id]
+  vm_size               = var.vm_size
+  delete_os_disk_on_termination = true
+  storage_image_reference {
+    id   = data.azurerm_image.dbsig.id
+  }
+  storage_os_disk {
+    name              = "db-osdisk"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Standard_LRS"
+  }
+  os_profile {
+    computer_name  = "db"
+    admin_username = var.admin_username
+    admin_password = var.admin_password
+  }
+  os_profile_linux_config {
+    disable_password<a id="_idTextAnchor1398"/>_authentication = false
+  }
+  tags = {}
+}</pre>			<p>Now, as we’ve defined everything we needed, fill the <strong class="source-inline">terraform.tfvars</strong> file with the required information, and <a id="_idIndexMarker1146"/>go ahead and initialize our Terraform workspace by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform init</pre>			<p>As Terraform has initialized successfully, use the following command to apply the <span class="No-Break">Terraform configuration:</span></p>
+			<pre class="console">
+$ terraform apply
+Apply complete! Resources: 13 added, 0 changed, 0 destroyed.
+Outputs:
+web_ip_addr = "40.115.61.69"</pre>			<p>As Terraform has applied the configuration and provided the load balancer IP addr<a id="_idTextAnchor1399"/>ess as an output, let’s use that to navigate to the <span class="No-Break">web server:</span></p>
+			<div>
+				<div id="_idContainer081" class="IMG---Figure">
+					<img src="image/B19877_10_4.jpg" alt="Figure 10.4 – LAMP stack working correctly" width="728" height="171"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.4 – LAMP stack working correctly</p>
+			<p>As we get the <strong class="source-inline">Database Connected successfully</strong> message, we see that the configuration is successful! We’ve succes<a id="_idTextAnchor1400"/>sfully created a scalable LAMP stack using Packer, Ansible, and <a id="_idIndexMarker1147"/>Terraform. It combines <em class="italic">IaC</em>, <em class="italic">configuration as code</em>, <em class="italic">immutable infrastructure</em>, and modern DevOps practic<a id="_idTextAnchor1401"/><a id="_idTextAnchor1402"/>es to create a seamless environment without <span class="No-Break">manual intervention.</span></p>
+			<h1 id="_idParaDest-277"><a id="_idTextAnchor1403"/>Summary</h1>
+			<p>In this chapter, we have covered immutable infrastructure with Packer. We used Packer with the Ansible provisioner to build custom images for Apache and MySQL. We used the custom images to create a scalable LAMP stack using Terraform. The chapter introduced you to the era of modern DevOps, where everything is automated. We follow the same principles for building and deploying all kinds of infrastructure, be it containers or VMs. In the next chapter, we will discuss one <a id="_idTextAnchor1404"/><a id="_idTextAnchor1405"/>of the most important topics of DevOps – <span class="No-Break"><strong class="bold">continuous integration</strong></span><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-278"><a id="_idTextAnchor1406"/>Questions</h1>
+			<ol>
+				<li>Immutable infrastructure helps avoid configuration <span class="No-Break">drift. (True/False)</span></li>
+				<li>It is a best practice to source sensitive data from external variables such as environment variables or a secret management tool such as HashiCorp’s <span class="No-Break">Vault. (True/False)</span></li>
+				<li>What modifications must we make to our existing playbooks to allow Packer to <span class="No-Break">use them?</span><p class="list-inset">A. Remove any existing <strong class="source-inline">ansible.cfg</strong> files from the current <span class="No-Break">working directory.</span></p><p class="list-inset">B. Remove any host files from the current <span class="No-Break">working directory.</span></p><p class="list-inset">C. Update the <strong class="source-inline">hosts</strong> attribute to default within <span class="No-Break">the playbook.</span></p><p class="list-inset">D. None of <span class="No-Break">the above.</span></p></li>
+				<li>Which of the following are the limitations of using the Ansible provisioner with Packer? (<span class="No-Break">Choose </span><span class="No-Break">two</span><span class="No-Break">)</span><p class="list-inset">A. You cannot pass Jinja2 macros as is to your <span class="No-Break">Ansible playbooks.</span></p><p class="list-inset">B. You cannot define <strong class="source-inline">remote_user</strong> within your <span class="No-Break">Ansible playbooks.</span></p><p class="list-inset">C. You cannot use Jinja2 templates within your <span class="No-Break">Ansible playbooks.</span></p><p class="list-inset">D. You cannot use roles and variables within your <span class="No-Break">Ansible playbooks.</span></p></li>
+				<li>While naming managed images, what should we consider? (<span class="No-Break">Choose </span><span class="No-Break">two</span><span class="No-Break">)</span><p class="list-inset">A. Name images as specifically <span class="No-Break">as possible.</span></p><p class="list-inset">B. Use the version as part of <span class="No-Break">the image.</span></p><p class="list-inset">C. Don’t use the version as part of the image name. Instead, always use the <strong class="source-inline">-force</strong> flag within the <span class="No-Break">Packer build.</span></p></li>
+				<li>When using multiple provisioners, how are configurations applied to the <span class="No-Break">build VM?</span><p class="list-inset">A. One after the other based on occurrence in the <span class="No-Break">HCL file</span></p><p class="list-inset"><span class="No-Break">B. Parallelly</span></p></li>
+				<li>We can use a single set of Packer files to build images with the same configuration in multiple cloud <span class="No-Break">environments. (True/False)</span></li>
+				<li>What features does a VM scale set provide? (<span class="No-Break">Choose </span><span class="No-Break">two</span><span class="No-Break">)</span><p class="list-inset">A. It helps you horizontally scale VM instances <span class="No-Break">with traffic.</span></p><p class="list-inset">B. It helps you auto-heal <span class="No-Break">faulty V<a id="_idTextAnchor1407"/><a id="_idTextAnchor1408"/>Ms.</span></p><p class="list-inset">C. It helps you do <span class="No-Break">canary deployments.</span></p><p class="list-inset">D. None of <span class="No-Break">the above.</span></p></li>
+			</ol>
+			<h1 id="_idParaDest-279"><a id="_idTextAnchor1409"/>Answers</h1>
+			<ol>
+				<li value="1"><span class="No-Break">True</span></li>
+				<li><span class="No-Break">True</span></li>
+				<li>C</li>
+				<li><span class="No-Break">A, B</span></li>
+				<li><span class="No-Break">A, B</span></li>
+				<li>B</li>
+				<li><span class="No-Break">True</span></li>
+				<li>A, <span class="No-Break">B, C</span></li>
+			</ol>
+		</div>
+	</div>
+</div>
+
+
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer083" class="Content">
+			<h1 id="_idParaDest-280" lang="en-US" xml:lang="en-US"><a id="_idTextAnchor1410"/>Part 4:Delivering Applications with GitOps</h1>
+			<p>This section forms the core of the book and elucidates various tools and techniques to effectively implement modern DevOps in the cloud. With GitOps as the central guiding principle, we will explore various tools and techniques for continuously building, testing, securing, and deploying our applications into development, testing, and <span class="No-Break">production environments.</span></p>
+			<p>This part has the <span class="No-Break">following chapters:</span></p>
+			<ul>
+				<li><a href="B19877_11.xhtml#_idTextAnchor1412"><em class="italic">Chapter 11</em></a>, <em class="italic">Continuous Integration with GitHub Actions and Jenkins</em></li>
+				<li><a href="B19877_12.xhtml#_idTextAnchor1554"><em class="italic">Chapter 12</em></a>, <em class="italic">Continuous Deployment/Delivery with Argo CD</em></li>
+				<li><a href="B19877_13.xhtml#_idTextAnchor1679"><em class="italic">Chapter 13</em></a>, <em class="italic">Securing and Testing Your CI/CD<a id="_idTextAnchor1411"/> Pipeline</em></li>
+			</ul>
+		</div>
+		<div>
+			<div id="_idContainer084" class="Basic-Graphics-Frame">
+			</div>
+		</div>
+	</div>
+</div>
+</body></html>

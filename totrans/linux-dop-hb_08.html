@@ -1,0 +1,636 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer021">
+<h1 class="chapter-number" id="_idParaDest-134"><a id="_idTextAnchor166"/>8</h1>
+<h1 id="_idParaDest-135"><a id="_idTextAnchor167"/>Docker Basics</h1>
+<p><a id="_idTextAnchor168"/>In this chapter, we introduce one of the building blocks of the DevOps toolkit – containers. We are going to explain the differences between virtualization and containers, and then present the advantages and disadvantages of both solutions. Additionally, we are going to present a way to choose between both solutions for a <span class="No-Break">given workload.</span></p>
+<p>The main topics covered in this chapter are <span class="No-Break">as follows:</span></p>
+<ul>
+<li>Virtualization <span class="No-Break">versus containerization</span></li>
+<li>Anatomy <span class="No-Break">of Docker</span></li>
+<li><span class="No-Break">Docker commands</span></li>
+<li><span class="No-Break">Dockerfile</span></li>
+<li>Docker <span class="No-Break">image registries</span></li>
+<li><span class="No-Break">Docker networking</span></li>
+</ul>
+<h1 id="_idParaDest-136"><a id="_idTextAnchor169"/>Technical requirements</h1>
+<p>For this chapter, you will need a Linux system with an installed Docker Engine. We are not going to cover the installation steps here. Different Linux distributions provide Docker in different ways. We are going to use Docker Engine 20.10.23 here. Since in this chapter all examples are very basic, older versions of Docker will most probably work. Still, if you run into issues with following our examples, updating Docker to our version should be your first step <span class="No-Break">in troubleshooting.</span></p>
+<h1 id="_idParaDest-137"><a id="_idTextAnchor170"/>Virtualization versus containerization</h1>
+<p>In this section, we are going to explain what virtualization and containerization are and what the major differences between <span class="No-Break">them are.</span></p>
+<h2 id="_idParaDest-138"><a id="_idTextAnchor171"/>Virtualization</h2>
+<p>Virtualization<a id="_idIndexMarker623"/> is a technique of running a complete simulated computer within another computer. Complete means that it mirrors everything a physical computer would have: motherboard, BIOS, processor, hard drives, USB ports, and so on. Simulated means that it is entirely a product of software. This computer does not exist physically, thus it is called virtual. To exist, the <strong class="bold">virtual machine</strong> (<strong class="bold">VM</strong>), as simulated <a id="_idIndexMarker624"/>computers are often called, needs a real, physical one to emulate it. The physical machine is called a host <span class="No-Break">or hypervisor.</span></p>
+<p>So, I have a physical computer. It is powerful. Why would I want to run a VM in it? For obvious reasons, the VM will be less powerful than the host: after all, the host requires RAM, CPU, and hard drive space for itself. There is also some small drop in performance (since we are actually running a program that emulates full hardware) when compared to the <span class="No-Break">physical machine.</span></p>
+<p>The reasons can vary depending on the use case, but there are a lot <span class="No-Break">of them.</span></p>
+<p>You may want to run a full operating system different from your own to test some software, to run software unavailable for your operating system, or to dutifully recreate a development environment for your application. You may want to recreate, as closely as possible, a production environment for your application. All those are valid and pretty popular reasons for <span class="No-Break">using VMs.</span></p>
+<p>Let us see what the <a id="_idIndexMarker625"/>advantages of <span class="No-Break">virtualization are:</span></p>
+<ul>
+<li><strong class="bold">Isolation</strong>: VMs present themselves, as mentioned, as fully functional computers. To the running operating system, they create the illusion of being separate physical machines. Whatever we run in them shouldn’t be able to access the host computer (unless specifically allowed to) and, indeed, barring a few incidents where such things were possible (as a result of a programming error), VMs have provided secure environments. This isolation is a very good solution in malware analysis, running workloads that require separate servers, and so on. As an example, if a VM runs a single WWW server, the security vulnerability in the server may grant the attacker access to the operating system, thus allowing them a free run. But since other components of infrastructure, for example, databases, are run in separate VMs, the incident can be contained to the WWW <span class="No-Break">server only.</span></li>
+<li><strong class="bold">Tuning</strong>: With a sufficiently powerful host, it is possible to partition its resources so that each running VM has guaranteed RAM, hard disk space, <span class="No-Break">and CPU.</span></li>
+<li><strong class="bold">Operating system simplification</strong>: When running various workloads, such as databases, WWW servers, and mail servers, the complexity of maintaining a single server running them all grows pretty fast. Every installed software requires additional software to be installed (such as libraries and helper programs). Libraries required by various programs may introduce incompatibilities (especially if we install software not distributed by operating system <a id="_idIndexMarker626"/>developers, so-called third-party programs). On rare occasions, even the software included in the distribution may be incompatible with each other to a degree that makes it impossible or very difficult to install them on one operating system. Maintenance of such a system can become troublesome and require a lot of detective work. Modern hypervisor software alleviates many system administration hurdles by means of clones, snapshots, golden images, and <span class="No-Break">so on.</span></li>
+<li><strong class="bold">Automation</strong>: Modern virtualization software provides a lot of features that promote the automation of system management on many levels. Snapshots – a point-in-time capture of the whole system – allow a rollback at any given moment to a previous system state. This allows it to easily back out of unwanted changes to the last known good state. Clones let us provision new VMs based on another, already running and configured. Golden images are archived images of VMs that we can easily and quickly import and start – completely omitting installation and limiting configuration to the absolute minimum. This also allows for reliable <span class="No-Break">environment recreation.</span></li>
+<li><strong class="bold">Speed up</strong>: Properly setting up a workflow utilizing VMs allows us to start a new operating system complete with its own server or desktop hardware in a matter of minutes instead of hours. This opens new possibilities for testing environments, remote desktop solutions, and <span class="No-Break">so on.</span></li>
+</ul>
+<p>The preceding list is not exhaustive but should easily demonstrate why virtualization became a darling of data centers and hosting companies. The availability of a wide variety of servers we can cheaply rent is a direct result of virtualization allowing companies to partition <span class="No-Break">the hardware.</span></p>
+<p>As great as<a id="_idIndexMarker627"/> the solution is, it is not a panacea and not everything should be virtualized. More so, running a separate VM for every piece of software easily leads to resource utilization overhead. 100 virtual servers not only will use the CPU and RAM provided to the operating system in it but also, some percent will be used for housekeeping on the host machine. Each of those servers will utilize the disk space required by the operating system within, even though it probably will be an exact copy of the 99 other servers on the same server – a waste of space, RAM, and CPU. Also, bringing up a new VM will take some time. Granted, if you have everything configured and automated properly, it is going to be shorter than setting up a new hardware machine, <span class="No-Break">but still.</span></p>
+<p>Before virtualization became widely available, operating system developers were trying to provide techniques that would allow system operators to isolate various workloads. The main targets were data centers, where one physical server was too much for one workload (a database or a WWW server), but running more than one posed a risk (security, stability, etc.). After the virtualization became widespread, it became obvious that using it was sometimes like using cannons against sparrows. It doesn’t make sense to procure a whole new server (even virtual) with the whole operating system when you want to run a small program. Thus, through a natural progression of innovating new features that allow for better process isolation, <span class="No-Break">containers aro<a id="_idTextAnchor172"/>se.</span></p>
+<h2 id="_idParaDest-139"><a id="_idTextAnchor173"/>Containerization</h2>
+<p>Containers are<a id="_idIndexMarker628"/> lightweight virtual environments that allow us to run a single process in an isolated manner. An ideally prepared container consists of only software and libraries required to run the application. The host operating system takes care of operating hardware, managing memory, and all other peripheral tasks. The main assumption of the container is that it doesn’t emulate being a separate operating system or a separate server. Processes or users within the container can easily find out they are enclosed there. The downside is that containers won’t emulate hardware. You cannot use them to test new drivers, for instance. The upside is that a single container can take as little as just a few megabytes of hard drive space and only the memory required for the process <span class="No-Break">to run.</span></p>
+<p>As a consequence, starting up a container takes only the time that the application needs to start. The bootup time – the BIOS, hardware tests, and operating system boot time – is all shaved off. All the software not required by the application can, and should, be omitted. Given the small size of container images, their redistribution times became almost negligible, their start times almost instantaneous, and the build time and process largely simplified. This has led to much easier recreation of the environment. This, in turn, has led to easier test environment setup and very often deployments of new versions of the software – as often as several thousand times a day. The scaling of applications has become much easier <span class="No-Break">and faster.</span></p>
+<p>The preceding <a id="_idIndexMarker629"/>brought another change in the approach to running applications. The logical consequence of the preceding change is that containers are not maintained the same way the operating system is. You do not upgrade software within the container – you deploy a container with a new version of software in place of the obsolete one. This leads to an assumption that you don’t keep data within a container but in a filesystem that you attach to the container during <span class="No-Break">the run.</span></p>
+<p>The poster child of Linux containerization is <strong class="bold">Docker</strong>. One thing<a id="_idIndexMarker630"/> that Docker did that has probably helped to bring the revolution is creating an ecosystem for easy sharing of <span class="No-Break">container images.</span></p>
+<p>A <a id="_idIndexMarker631"/>container image is, in the case of Docker, a simple archive consisting of all the binaries and libraries that are required for the application and a few files with configuration information. Since the size tends to be rather small and the image never has any data within, it is logical to allow people to share the image they have built. Docker has an image hub (called Docker Hub) with a nice WWW UI, and command-line tools for searching, downloading, and uploading images. The hub allows rating images and giving comments and feedback to <span class="No-Break">the authors.</span></p>
+<p>Now that we know what containerization is, we can look deeper into how Docker works internally and what makes it tick. Let’s look into the anatomy <span class="No-Break">of<a id="_idTextAnchor174"/> Docker.</span></p>
+<h1 id="_idParaDest-140">Anatomy of Docker</h1>
+<p>Docker <a id="_idIndexMarker632"/>comprises <span class="No-Break">several components:</span></p>
+<ul>
+<li>Command-line utility – <span class="No-Break">Docker</span></li>
+<li><span class="No-Break">Host</span></li>
+<li><span class="No-Break">Objects</span></li>
+<li><span class="No-Break">Registries</span></li>
+</ul>
+<p>The Docker CLI tool – <strong class="source-inline">docker</strong> – is the<a id="_idIndexMarker633"/> main means of managing containers and images. It is <a id="_idIndexMarker634"/>used to build images, pull them from the registry, upload them to the registry, run containers, interact with them, set runtime options, and, finally, destroy them. It is a command-line tool that communicates with Docker hosts using an API. By default, it is assumed that the <strong class="source-inline">docker</strong> command is being invoked on the host, but it is not strictly necessary. One <strong class="source-inline">docker</strong> CLI tool can manage more than <span class="No-Break">one host.</span></p>
+<p>The<a id="_idIndexMarker635"/> host is <a id="_idIndexMarker636"/>more interesting. The host runs <strong class="source-inline">dockerd</strong> – a daemon responsible for actually performing the actions ordered via the <strong class="source-inline">docker</strong> tool. It is here that container images are stored. The host also provides resources such as networking, storage, and the <span class="No-Break">containers themselves.</span></p>
+<p>The <strong class="source-inline">dockerd</strong> daemon is the beating heart of the containers. It’s the background process that runs on a host machine and manages the containers. <strong class="source-inline">dockerd</strong> manages creating and managing containers, providing an API for interacting with the daemon, managing volumes, networks, and image distribution, providing an interface to manage images and containers, and storing and managing metadata for containers and images. It also manages communication between other processes in Docke<a id="_idTextAnchor175"/>r <span class="No-Break">Swarm mode.</span></p>
+<h2 id="_idParaDest-141"><a id="_idTextAnchor176"/>OverlayFS</h2>
+<p><strong class="bold">OverlayFS</strong> was<a id="_idIndexMarker637"/> first <a id="_idIndexMarker638"/>released as a part of the Linux kernel version 3.18 in August 2014. It was initially developed as a means to provide a more efficient and flexible way to handle container storage in comparison to the previous storage driver, <strong class="bold">Another UnionFS</strong> (<strong class="bold">AUFS</strong>). OverlayFS <a id="_idIndexMarker639"/>was considered the next generation of UnionFS, which was the storage driver used by Docker at <span class="No-Break">that time.</span></p>
+<p>This filesystem was included as a built-in storage driver in Docker starting from version 1.9.0. Since then, OverlayFS has become the default storage driver for Docker on most Linux distributions, and it is widely used in various container orchestration platforms such as Kubernetes <span class="No-Break">and OpenShift.</span></p>
+<p>OverlayFS is a filesystem for Linux that allows for the overlay of one directory on top of another. It allows for the creation of a <em class="italic">virtual</em> filesystem that is composed of two different directories: a lower directory and an upper directory. The upper directory contains the files that are visible to the user, while the lower directory contains the <em class="italic">base</em> files that <span class="No-Break">are hidden.</span></p>
+<p>When a file or <a id="_idIndexMarker640"/>directory is accessed in the upper directory, OverlayFS first looks for it in the upper directory, and if it doesn’t find it, it looks in the lower directory. If the file or directory is found in the upper directory, that version is used. If it is found in the lower directory, that version <span class="No-Break">is used.</span></p>
+<p>This mechanism<a id="_idIndexMarker641"/> allows for the creation of <em class="italic">overlay</em> filesystems, where the upper directory can be used to add, modify, or delete files and directories in the lower directory, without modifying the lower directory itself. This is useful in scenarios such as containerization, where the upper layer can be used to store the changes made in a container, while the lower layer contains the base image <a id="_idTextAnchor177"/>for <span class="No-Break">the container.</span></p>
+<h2 id="_idParaDest-142"><a id="_idTextAnchor178"/>What is an image?</h2>
+<p>A <strong class="bold">Docker image</strong> is a<a id="_idIndexMarker642"/> pre-built package that contains all of the files and settings needed to run a piece of software in a container. It includes your application code or a binary, runtime, system tools, libraries, and all needed configuration files. Once an image is built, it can be used to start one or more containers, which are isolated environments that provide a consistent way to run <span class="No-Break">the software.</span></p>
+<p>When starting a container, you must select a program to run as a primary process of the container. If this process quits, the whole container will be terminated <span class="No-Break">as well.</span></p>
+<p>Building a Docker image typically involves creating a Dockerfile, which is a script that contains instructions for building the image. The Dockerfile specifies the base image to use, any additional software to be installed, any files to be added to the image, and any configuration settings to <span class="No-Break">be applied.</span></p>
+<p>When building an image, Docker reads the instructions in the Dockerfile and performs the steps we’ve prepared inside <span class="No-Break">the Dockerfile.</span></p>
+<p>Once the image is built, it can be saved and used to start one or more containers. The process of building an image can also be automated using a tool such as Jenkins, GitHub, or GitLab actions, which can automatically build and test new images whenever changes are made to the <span class="No-Break">code base.</span></p>
+<p>The resulting image consists of a unique ID (SHA-256 hash), which is a hash of the image’s content and metadata, and it also can have a tag, which is a human-readable string that can be used to refer to a specific version of the image. UnionFS takes care of merging all content when running <span class="No-Break">a container.</span></p>
+<p>To inspect <a id="_idIndexMarker643"/>the metadata and content parts of an image, you can run the <span class="No-Break">following commands:</span></p>
+<pre class="console">
+admin@myhome:~$ docker pull ubuntu
+admin@myhome:~$ docker inspect ubuntu
+[
+    {
+        "Id": "sha256:6b7dfa7e8fdbe18ad425dd965a1049d984f31cf0ad57fa6d5377cca355e65f03",
+        "RepoTags": [
+            "ubuntu:latest"
+        ],
+        "RepoDigests": [
+            "ubuntu@sha256:27cb6e6ccef575a4698b66f5de06c7ecd61589132d5a91d098f7f3f9285415a9"
+        ],
+        "Created": "2022-12-09T01:20:31.321639501Z",
+        "Container": "8bf713004e88c9bc4d60fe0527a509636598e73e3ad1e71a9c9123c863c17c31",
+            "Image": sha256:070606cf58d59117ddc1c48c0af233d6761addbcd4bf9e8e39fd10eef13c1bb7",
+        "GraphDriver": {
+            "Data": {
+                "MergedDir": "/var/lib/docker/overlay2/f2c75e37be7af790f0823f6e576ec511396582ba71defe5a3ad0f661a632f11e/merged",
+                "UpperDir": "/var/lib/docker/overlay2/f2c75e37be7af790f0823f6e576ec511396582ba71defe5a3ad0f661a632f11e/diff",
+                "WorkDir": "/var/lib/docker/overlay2/f2c75e37be7af790f0823f6e576ec511396582ba71defe5a3ad0f661a632f11e/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": ["sha256:6515074984c6f8bb1b8a9962c8fb5f310fc85e70b04c88442a3939c026dbfad3"
+            ]
+        },
+    }
+]</pre>
+<p>There’s a lot of <a id="_idIndexMarker644"/>information here, so we’ve stripped the output and left the information we want to focus on. You can see an image ID, all merged directories under the <strong class="source-inline">GraphDriver</strong> section, and the <strong class="source-inline">RootFS sha256</strong> layer. <strong class="source-inline">RootFS</strong> contains the whole filesystem created by UnionFS when we start a process <a id="_idTextAnchor179"/>within <span class="No-Break">the container.</span></p>
+<h2 id="_idParaDest-143"><a id="_idTextAnchor180"/>What is a container runtime?</h2>
+<p>A <strong class="bold">container runtime</strong> (or <strong class="bold">container engine</strong>) is a <a id="_idIndexMarker645"/>software <a id="_idIndexMarker646"/>component that runs containers on your system. Container runtimes load container images from a Docker registry, monitoring system resources, allocating system resources for a container, and managing its <span class="No-Break">life cycle.</span></p>
+<p>There are a number of runtime containers that are being used. The most known and used on laptops – you probably have it installed on your system already – is <strong class="source-inline">containerd</strong>. It’s a high-performance container runtime that is designed to be embedded in a larger system. It is used by many cloud providers and is also the default runtime <span class="No-Break">for Kubernetes.</span></p>
+<p>LXC is a<a id="_idIndexMarker647"/> runtime that uses Linux namespaces and cgroups to provide isolation for containers. It is considered to be more lightweight and efficient than Docker (<strong class="source-inline">containerd</strong>). It’s also harder <span class="No-Break">to use.</span></p>
+<p>Another interesting<a id="_idIndexMarker648"/> runtime is <strong class="bold">Container Runtime Interface for OCI</strong> (<strong class="bold">CRI-O</strong>). CRI-O is fully compliant with the <strong class="bold">Open Container Initiative</strong> (<strong class="bold">OCI</strong>) specification, which<a id="_idIndexMarker649"/> means that it can run any OCI-compliant container image. Also, it’s designed to work natively with Kubernetes Pods, which allows it to provide better integration with Kubernetes than <span class="No-Break">other runtimes.</span></p>
+<p><strong class="bold">Rocket</strong> (<strong class="bold">rkt</strong>) is an<a id="_idIndexMarker650"/> alternative container runtime that is designed to be more secure and efficient than Docker. It uses<a id="_idIndexMarker651"/> the <strong class="bold">App Container</strong> (<strong class="bold">appc</strong>) image format and has a simpler architecture than Docker. It’s also not used <span class="No-Break">very often.</span></p>
+<p>Other container engines worth noting<a id="_idIndexMarker652"/> are <strong class="bold">run Open Container</strong> (<strong class="bold">runC</strong>), a low-level container engine that provides the basic functionality for creating and managing containers, and <a id="_idTextAnchor181"/>Firecracker developed <span class="No-Break">by AWS.</span></p>
+<h2 id="_idParaDest-144"><a id="_idTextAnchor182"/>cgroups</h2>
+<p>Linux <strong class="bold">cgroups</strong> (short for <strong class="bold">control groups</strong>) are a<a id="_idIndexMarker653"/> Linux kernel feature that <a id="_idIndexMarker654"/>allows for the management and isolation of system resources for groups of processes. Cgroups allow the system administrator to allocate resources such as CPU, memory, and network bandwidth to specific groups of processes, and to monitor and control <span class="No-Break">their usage.</span></p>
+<p>This can be used to limit the resources used by a particular application or user, or for isolating different types of workloads on a <span class="No-Break">shared system.</span></p>
+<p>Docker by<a id="_idIndexMarker655"/> default doesn’t limit either CPU or memory consumption for an application inside a container. It’s quite easy to enable without any direct interaction with cgroups or kernel settings – the Docker daemon will do it <span class="No-Break">for us.</span></p>
+<p>You can limit the amount of memory a Docker container can use by using the <strong class="source-inline">--memory</strong> or <strong class="source-inline">-m</strong> option with the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">run</strong></span><span class="No-Break"> command.</span></p>
+<p>For example, use the following to run the <strong class="source-inline">alpine</strong> image with a memory limit of <span class="No-Break">500 MB:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run --memory 500m alpine /bin/sh</pre>
+<p>You can specify the memory limit in bytes, kilobytes, megabytes, or gigabytes by using the appropriate suffix (<strong class="source-inline">b</strong>, <strong class="source-inline">k</strong>, <strong class="source-inline">m</strong>, <span class="No-Break">or </span><span class="No-Break"><strong class="source-inline">g</strong></span><span class="No-Break">).</span></p>
+<p>When <a id="_idIndexMarker656"/>you limit the memory for a container, Docker will also limit the amount of memory swap that a container can use. By default, the memory swap limit is twice the value of the memory limit. It’s also possible to limit the memory swap by using the <strong class="source-inline">--memory-swap</strong> or <strong class="source-inline">--</strong><span class="No-Break"><strong class="source-inline">memory-swappiness</strong></span><span class="No-Break"> option.</span></p>
+<p>Limiting usage of the CPU time that an application inside a Docker container can use can be done by using the CPU shares limit (<strong class="source-inline">--cpus</strong> or <strong class="source-inline">-c</strong> option). CPU shares are a relative measure of CPU time that a container can use. By default, a container is allocated a certain number of CPU shares, which it can use to consume CPU time proportional to its share. For example, if a container has 0.5 CPU shares, it can use up to 50% of the CPU time if no other containers are <span class="No-Break">consuming CPU.</span></p>
+<p>Other options available are <span class="No-Break">the following:</span></p>
+<ul>
+<li><strong class="source-inline">--cpuset-cpus</strong>: This allows you to specify the range of CPU cores that the container can use, for example, <strong class="source-inline">0-1</strong> to use the first two cores, or <strong class="source-inline">0,2</strong> to use the first and <span class="No-Break">third core.</span></li>
+<li><strong class="source-inline">--cpu-shares</strong>: This allows you to set a CPU time limit for a Docker container. It specifies the amount of CPU time, in microseconds, that the container can use in a given period of time. The period of time is specified by the <strong class="source-inline">--</strong><span class="No-Break"><strong class="source-inline">cpu-period</strong></span><span class="No-Break"> option.</span></li>
+<li><strong class="source-inline">--cpu-quota</strong> and <strong class="source-inline">--cpu-period</strong>: <strong class="source-inline">--cpu-quota</strong> is the CPU time limit in microseconds and <strong class="source-inline">--cpu-period</strong> is the length of the CPU time period <span class="No-Break">in microseconds.</span></li>
+</ul>
+<p>The <strong class="source-inline">--cpu-quota</strong> and <strong class="source-inline">--cpu-period</strong> options allow you to specify a more precise CPU time limit <a id="_idIndexMarker657"/>for a container compared to the <strong class="source-inline">--cpus</strong> and <strong class="source-inline">--cpuset-cpus</strong> options. It is useful if you need to limit the CPU time for a container more precisely to prevent performance issues or ensure that your application <span class="No-Break">runs reliably.</span></p>
+<p>In this section, we went through the container runtime and how it works. Next, we will be looking into the command-line interface for the <strong class="source-inline">containerd</strong> daemon to interact with all Docker com<a id="_idTextAnchor183"/>ponents in an easy and <span class="No-Break">robust way.</span></p>
+<h1 id="_idParaDest-145">Docker commands</h1>
+<p>The <strong class="bold">Docker command-line interface</strong> is a tool <a id="_idIndexMarker658"/>that allows users to interact with containers. It provides a set of commands that you can use to build Docker images and create and manage containers, images, networks, and volumes. It interacts with the <strong class="source-inline">containerd</strong> daemon using a socket file <span class="No-Break">or network.</span></p>
+<p>The most <a id="_idIndexMarker659"/>common commands you can use are <span class="No-Break">the following:</span></p>
+<ul>
+<li><strong class="source-inline">build</strong>: This allows you to build a new Docker image using <span class="No-Break">a Dockerfile</span></li>
+<li><strong class="source-inline">run</strong>: This starts a <span class="No-Break">new container</span></li>
+<li><strong class="source-inline">start</strong>: This restarts one or more <span class="No-Break">stopped containers</span></li>
+<li><strong class="source-inline">stop</strong>: This will stop one or more <span class="No-Break">running containers</span></li>
+<li><strong class="source-inline">login</strong>: This is used to gain access to <span class="No-Break">private registries</span></li>
+<li><strong class="source-inline">pull</strong>: This downloads an image or a repository from <span class="No-Break">a registry</span></li>
+<li><strong class="source-inline">push</strong>: This uploads an image or a repository to <span class="No-Break">a registry</span></li>
+<li><strong class="source-inline">build</strong>: This helps create an image from a <span class="No-Break">provided Dockerfile</span></li>
+<li><strong class="source-inline">images</strong>: This lists all images on <span class="No-Break">your machine</span></li>
+<li><strong class="source-inline">ps</strong>: This lists all <span class="No-Break">running containers</span></li>
+<li><strong class="source-inline">exec</strong>: This executes a command in a <span class="No-Break">running container</span></li>
+<li><strong class="source-inline">logs</strong>: This shows the logs of <span class="No-Break">a container</span></li>
+<li><strong class="source-inline">rm</strong>: This removes one or <span class="No-Break">more containers</span></li>
+<li><strong class="source-inline">rmi</strong>: This removes one or <span class="No-Break">more images</span></li>
+<li><strong class="source-inline">network</strong>: This<a id="_idIndexMarker660"/> is used to manage <span class="No-Break">Docker networks</span></li>
+<li><strong class="source-inline">v<a id="_idTextAnchor184"/>olume</strong>: This is used to <span class="No-Break">manage volumes</span></li>
+</ul>
+<h2 id="_idParaDest-146"><a id="_idTextAnchor185"/>docker build</h2>
+<p>The <strong class="source-inline">docker build</strong> command is <a id="_idIndexMarker661"/>used to build a Docker image from a Dockerfile. The basic syntax is <span class="No-Break">as follows:</span></p>
+<pre class="source-code">
+docker build [OPTIONS] PATH | URL | -</pre>
+<p><strong class="source-inline">PATH</strong> is the path to the directory containing <span class="No-Break">the Dockerfile.</span></p>
+<p><strong class="source-inline">URL</strong> is the URL to a Git repository containing <span class="No-Break">the Dockerfile.</span></p>
+<p><strong class="source-inline">-</strong> (a dash) is used to build an image from the contents of <strong class="source-inline">stdin</strong>, so you could pipe Dockerfile content to it from the output of some previous command that would build a Dockerfile, for example, generate it from <span class="No-Break">a template.</span></p>
+<p>To build an image from a Dockerfile located in the current directory, you would run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker build .</pre>
+<p>You can also use a specific tag for the build image, as in the <span class="No-Break">following example:</span></p>
+<pre class="console">
+admin@myhome:~$ docker build -t my-image:1.0 .</pre>
+<p>You can also pass <strong class="source-inline">--build-arg</strong> to your build command to pass build-time variables to <span class="No-Break">the Dockerfile:</span></p>
+<pre class="console">
+admin@myhome:~$ docker build --b<a id="_idTextAnchor186"/>uild-arg VAR1=value1 -t my-image:1.0 .</pre>
+<h2 id="_idParaDest-147"><a id="_idTextAnchor187"/>docker run</h2>
+<p>When you’re running<a id="_idIndexMarker662"/> a container, you’re essentially taking a Docker image and executing a process within that environment. An image is a blueprint or a snapshot of a container; it’s a read-only template with instructions for creating a container. A container that is running is an instance of that image but with its <span class="No-Break">own state.</span></p>
+<p>The <strong class="source-inline">docker run</strong> command is used to start a container from a Docker image. For example, to start a container from the <strong class="source-inline">myimage</strong> image and run <strong class="source-inline">/bin/bash</strong>, you would run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run myimage /bin/bash</pre>
+<p>You can also pass options to the <strong class="source-inline">run</strong> command, as in the <span class="No-Break">following example:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -d -p 8080:80 --name containername myimage</pre>
+<p>This command starts the container in detached mode (the <strong class="source-inline">-d</strong> option; it puts a container in the background), maps port <strong class="source-inline">80</strong> in the container to port <strong class="source-inline">8080</strong> on the host (<strong class="source-inline">-p 8080:80</strong>), and assigns the name <strong class="source-inline">containername</strong> to the container (<strong class="source-inline">--</strong><span class="No-Break"><strong class="source-inline">name containername</strong></span><span class="No-Break">).</span></p>
+<p>You can also pass environment variables to <span class="No-Break">the container:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -e VAR1=value1 -e VAR2=value2 myimage:latest</pre>
+<p>Docker containers don’t store data after they are killed. To make data persistent you would use storage external to the docker container itself. In the simplest setup, this would be a directory or a file on filesystem outside <span class="No-Break">the container.</span></p>
+<p>There are two ways to do it: create a <span class="No-Break">Docker volume:</span></p>
+<pre class="console">
+admin@myhome:~$ docker volume create myvolume</pre>
+<p>To use this volume for data persistence you’d mount it when starting <span class="No-Break">the container:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run –v myvolume:/mnt/volume myimage:latest</pre>
+<p>You can also bind mount local<a id="_idIndexMarker663"/> folder (<strong class="bold">bind mount</strong> is a Docker term for this operation) as a volume inside the container using the <strong class="source-inline">-v</strong> option. In this case you don’t run the Docker <a id="_idIndexMarker664"/>volume <span class="No-Break">create command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -v /host/path:/mnt/volume myimage:latest</pre>
+<p>You can also specify the working directory inside the container using the <strong class="source-inline">-</strong><span class="No-Break"><strong class="source-inline">w</strong></span><span class="No-Break"> option:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -w /opt/srv my-image</pre>
+<p>Other options that are useful are <span class="No-Break">as follows:</span></p>
+<ul>
+<li><strong class="source-inline">--rm</strong>: This option will remove the container after it <span class="No-Break">is stopped</span></li>
+<li><strong class="source-inline">-P</strong>, <strong class="source-inline">--publish-all</strong>: This option will publish all exposed ports (<strong class="source-inline">EXPOSE</strong> option in <strong class="source-inline">Dockerfile</strong>) to a random <span class="No-Break">local port</span></li>
+<li><strong class="source-inline">--network</strong>: This option will connect the container to the Docker <span class="No-Break">network specified</span></li>
+</ul>
+<p>You can find more available options to use b<a id="_idTextAnchor188"/>y invoking the <strong class="source-inline">docker run --</strong><span class="No-Break"><strong class="source-inline">help</strong></span><span class="No-Break"> command.</span></p>
+<h2 id="_idParaDest-148"><a id="_idTextAnchor189"/>docker start</h2>
+<p>The <strong class="source-inline">docker start</strong> command <a id="_idIndexMarker665"/>is used to start one or more stopped Docker containers. For example, to start a container, you would run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker start mycontainer</pre>
+<p><strong class="source-inline">mycontainer</strong> is the name or ID of the container you want to start. You can check all running and stopped containers using the <strong class="source-inline">docker ps</strong> command; we will get into it a bit later. You can also start multiple containers at once. To do that, you can list their names or IDs separated <span class="No-Break">by spaces.</span></p>
+<p>To start multiple containers, you would run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker start mycontainer othercontainer lastcontainer</pre>
+<p>To attach to the container’s process so that you can see its output, use the <strong class="source-inline">-a</strong> option while starting<a id="_idIndexMarker666"/> <span class="No-Break">the container:</span></p>
+<pre class="console">
+<a id="_idTextAnchor190"/>admin@myhome:~$ docker start -a mycontainer</pre>
+<h2 id="_idParaDest-149"><a id="_idTextAnchor191"/>docker stop</h2>
+<p>This<a id="_idIndexMarker667"/> command is used to stop containers running in the background. The syntax for the command is the same as for starting the container. The difference lies in the available options you <span class="No-Break">can use.</span></p>
+<p>To stop multiple containers at once, you can list their names or IDs separated <span class="No-Break">by spaces.</span></p>
+<pre class="console">
+admin@myhome:~$ docker stop mycontainer</pre>
+<p>To stop multiple containers, you would run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker stop mycontainer othercontainer lastcontainer</pre>
+<p>You can also use the <strong class="source-inline">-t</strong> option to specify the amount of time (in seconds) to wait for the container to stop before sending a <strong class="source-inline">SIGKILL</strong> signal. For example, to wait for <strong class="source-inline">10</strong> seconds before stopping a container, run <span class="No-Break">the following:</span></p>
+<pre class="console">
+admin@myhome:~$ docker stop -t 10 mycontainer</pre>
+<p>You can also use <strong class="source-inline">--time</strong> or <strong class="source-inline">-t</strong> to specify the amount of time to wait for the container to stop before sending a <span class="No-Break"><strong class="source-inline">SIGKILL</strong></span><span class="No-Break"> signal.</span></p>
+<p>By default, the <strong class="source-inline">docker stop</strong> command sends a <strong class="source-inline">SIGTERM</strong> signal to the container, which gives the process running in the container a chance to cleanly shut down. If the container does not stop after the default 10-second timeout, a <strong class="source-inline">SIGK<a id="_idTextAnchor192"/>ILL</strong> signal will be sent to force it <span class="No-Break">to stop.</span></p>
+<h2 id="_idParaDest-150"><a id="_idTextAnchor193"/>docker ps</h2>
+<p>This command is <a id="_idIndexMarker668"/>used to list the running or stopped containers. When you run the <strong class="source-inline">docker ps</strong> command without any options, it will show you the list of running containers along with their container ID, names, image, command, created time, <span class="No-Break">and status:</span></p>
+<pre class="console">
+admin@myhome:~$ docker ps</pre>
+<p>It’s possible to view all containers with the <strong class="source-inline">-</strong><span class="No-Break"><strong class="source-inline">a</strong></span><span class="No-Break"> option:</span></p>
+<pre class="console">
+admin@myhome:~$ docker ps -a
+CONTAINER ID           IMAGE                          COMMAND         
+STATUS                          PORTS                    NAMES
+a1e83e89948e   ubuntu:latest                                "/bin/bash -c 'while…"   29 seconds ago       Up 29 seconds                                            pedantic_mayer
+0e17e9729e9c   ubuntu:latest                                "bash"                   About a minute ago   Exited (0) About a minute ago                            angry_stonebraker
+aa3665f022a5   ecr.aws.com/pgsql/server:latest   "/opt/pgsql/bin/nonr…"   5 weeks ago          Exited (255) 8 days ago         0.0.0.0:1433-&gt;1433/tcp   db-1</pre>
+<p>You can <a id="_idIndexMarker669"/>use the <strong class="source-inline">--quiet</strong> or <strong class="source-inline">-q</strong> option to display only the container IDs, which might be useful <span class="No-Break">for scripting:</span></p>
+<pre class="console">
+admin@myhome:~$
+docker ps --quiet</pre>
+<p>You can use the <strong class="source-inline">--filter</strong> or <strong class="source-inline">-f</strong> option to filter the output based on <span class="No-Break">certain criteria:</span></p>
+<pre class="console">
+admin@myhome:~$
+docker ps --filter "name=ubuntu"</pre>
+<p>To inspect how much disk space the container is utilizing, you will need to use the <strong class="source-inline">-</strong><span class="No-Break"><strong class="source-inline">s</strong></span><span class="No-Break"> option:</span></p>
+<pre class="console">
+admin@myhome:~$ docker ps -s
+CONTAINER ID      IMAGE      COMMAND   CREATED          STATUS          PORTS     NAMES            SIZE
+a1e83e89948e   ubuntu:latest   "/bin/bash -c 'while…"   14 seconds ago   Up 13 seconds             pedantic_mayer   0B (virtual 77.8MB)</pre>
+<p>This container doesn’t use additional <a id="_idTextAnchor194"/>space on the disk, as it didn’t save <span class="No-Break">any data.</span></p>
+<h2 id="_idParaDest-151"><a id="_idTextAnchor195"/>docker login</h2>
+<p>The <strong class="source-inline">docker login</strong> command <a id="_idIndexMarker670"/>is used to log in to a Docker registry. A registry is a place where you can store and distribute Docker images. The most commonly used registry is Docker Hub, but you can also use other registries, such as <a id="_idIndexMarker671"/>AWS <strong class="bold">Elastic Container Registry</strong> (<strong class="bold">ECR</strong>), Project Quay, or Google <span class="No-Break">Container Registry.</span></p>
+<p>By default, <strong class="source-inline">docker login</strong> will connect to the Docker Hub registry. If you want to log in to a different registry, you can specify the server URL as <span class="No-Break">an argument:</span></p>
+<pre class="console">
+admin@myhome:~$ docker login quay.io</pre>
+<p>When you run the <strong class="source-inline">docker login</strong> command, it will prompt you for your username and password. If you don’t have an account on the registry, you can create one by visiting the <span class="No-Break">registry’s website.</span></p>
+<p>Once you are logged in, you will be able to push and pull images from <span class="No-Break">the registry.</span></p>
+<p>You can also use the <strong class="source-inline">--username</strong> or <strong class="source-inline">-u</strong> option to specify your username, and <strong class="source-inline">--password</strong> or <strong class="source-inline">-p</strong> to specify the password on the command line, but it is not recommended due to <span class="No-Break">security reasons.</span></p>
+<p>You can also use the <strong class="source-inline">--password-stdin</strong> or <strong class="source-inline">-P</strong> option to pass your password <span class="No-Break">via </span><span class="No-Break"><strong class="source-inline">stdin</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+admin@myhome:~$ echo "mypassword" | docker login --username myusername --password-stdin</pre>
+<p>It can be an output for any command. For example, to log in to AWS ECR, you would use the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ aws ecr get-login-password | docker login --username AWS --password-stdin 1234567890.dkr.ecr.region.amazonaws.com</pre>
+<p>You can also use the <strong class="source-inline">--token</strong> or <strong class="source-inline">-t</strong> option to specify <span class="No-Break">your token:</span></p>
+<pre class="console">
+admin@myhome:~$ docker login --token usertokenwithrandomcharacters</pre>
+<p>Once you are logged in, you will be<a id="_idTextAnchor196"/> able to push and pull images from <span class="No-Break">the registry.</span></p>
+<h2 id="_idParaDest-152"><a id="_idTextAnchor197"/>docker pull</h2>
+<p>To pull a <a id="_idIndexMarker672"/>Docker image, you can use the <strong class="source-inline">docker pull</strong> command followed by the image name and a tag. By default, <strong class="source-inline">pull</strong> will pull a tag <strong class="source-inline">latest</strong> (latest is the name of the tag, or the version of <span class="No-Break">the image).</span></p>
+<p>For example, use the following to pull the latest version of the <strong class="source-inline">alpine</strong> image from <span class="No-Break">Docker Hub:</span></p>
+<pre class="console">
+admin@myhome:~$ docker pull alpine</pre>
+<p>Use the following to pull a specific version of the <strong class="source-inline">alpine</strong> image, such as <span class="No-Break">version 3.12:</span></p>
+<pre class="console">
+admin@myhome:~$ docker pull alpine:3.12</pre>
+<p>You can also pull an image from a different registry by specifying the registry URL in the <span class="No-Break">image name.</span></p>
+<p>For example, use the following to pull an image from a <span class="No-Break">private registry:</span></p>
+<pre class="console">
+admin@my<a id="_idTextAnchor198"/>home:~$ docker pull myregistry.com/myimage:latest</pre>
+<h2 id="_idParaDest-153"><a id="_idTextAnchor199"/>docker push</h2>
+<p>After you build<a id="_idIndexMarker673"/> a new image, you can push that image to the image registry. By default, <strong class="source-inline">push</strong> will try to upload it to the Docker <span class="No-Break">Hub registry:</span></p>
+<pre class="console">
+admin@myhome:~$ docker push myimage</pre>
+<p>To push a specific version of the image, such as version 1.0, you will need to tag the image locally as version 1.0 and then push it to <span class="No-Break">the registry:</span></p>
+<pre class="console">
+admin@myhome:~$ docker tag myimage:latest myimage:1.0
+admin@myhome:~$ docker push myimage:1.0</pre>
+<p>You can also push an image to a different registry by specifying the registry URL in the <span class="No-Break">image name:</span></p>
+<pre class="console">
+admin@myhome:~$ docker push myregistry.com/myimage:latest</pre>
+<p>You need to be logged in to the registry to which you are pushing the image using<a id="_idTextAnchor200"/> the <strong class="source-inline">docker login</strong> command before pushing <span class="No-Break">an image.</span></p>
+<h2 id="_idParaDest-154"><a id="_idTextAnchor201"/>docker image</h2>
+<p>This is a <a id="_idIndexMarker674"/>command to manage images. The common use cases for <strong class="source-inline">docker image</strong> are shown in the <span class="No-Break">following examples.</span></p>
+<p>To list available images on your machine, you can use the <strong class="source-inline">docker image </strong><span class="No-Break"><strong class="source-inline">ls</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker image ls</pre>
+<p>REPOSITORY         TAG            IMAGE ID       CREATED        SIZE</p>
+<pre class="console">
+ubuntu           latest        6b7dfa7e8fdb   7 weeks ago    77.8MB
+mcr.microsoft.com/mssql/server     2017-latest               a03c94c3147d   4 months ago   1.33GB
+mcr.microsoft.com/azure-functions/python   3.0.15066-python3.9-buildenv   b4f18abb38f7   2 years ago    940MB</pre>
+<p>You can also use the <strong class="source-inline">docker images</strong> command to do the <span class="No-Break">same action:</span></p>
+<pre class="console">
+admin@myhome:~$ docker images
+REPOSITORY     TAG           IMAGE ID       CREATED        SIZE
+ubuntu        latest        6b7dfa7e8fdb   7 weeks ago    77.8MB
+mcr.microsoft.com/mssql/server             2017-latest                    a03c94c3147d   4 months ago   1.33GB
+mcr.microsoft.com/azure-functions/python   3.0.15066-python3.9-buildenv   b4f18abb38f7   2 years ago    940MB</pre>
+<p>To pull an image from the Docker registry, use <span class="No-Break">the following:</span></p>
+<pre class="console">
+admin@myhome:~$ docker image pull ubuntu</pre>
+<p>When you specify an image name, you can use either the full repository name (for example, <strong class="source-inline">docker.io/library/alpine</strong>) or just the image name (for example, <strong class="source-inline">alpine</strong>), if the <a id="_idIndexMarker675"/>image is in the default repository (Docker Hub). See also the <strong class="source-inline">docker pull</strong> command discussed in an <span class="No-Break">earlier section.</span></p>
+<p>It’s also possible to build <span class="No-Break">an image:</span></p>
+<pre class="console">
+admin@myhome:~$ docker image build -t &lt;image_name&gt; .</pre>
+<p>See also the section on the <strong class="source-inline">docker build</strong> command for more details on <span class="No-Break">building images.</span></p>
+<p>To create a tag for an image, you should run <span class="No-Break">the following:</span></p>
+<pre class="console">
+admin@myhome:~$ docker image tag &lt;image&gt; &lt;new_image_name&gt;</pre>
+<p>Finally, you can remove <span class="No-Break">an image:</span></p>
+<pre class="console">
+admin@myhome:~$ docker image rm &lt;image&gt;</pre>
+<p>See the section on the <strong class="source-inline">docker rmi</strong> command, which is an alias of <span class="No-Break">this command.</span></p>
+<p>Another option to remove images is the <strong class="source-inline">docker image prune –</strong> command. This comm<a id="_idTextAnchor202"/>and will remove all unused images (<span class="No-Break">dangling images).</span></p>
+<h2 id="_idParaDest-155"><a id="_idTextAnchor203"/>docker exec</h2>
+<p><strong class="source-inline">docker exec</strong> allows<a id="_idIndexMarker676"/> you to run a command in a running Docker container. The basic syntax is <span class="No-Break">as follows:</span></p>
+<pre class="source-code">
+docker exec CONTAINER COMMAND ARGUMENTS</pre>
+<p>In the preceding example, the terms have the <span class="No-Break">following meanings:</span></p>
+<ul>
+<li><strong class="source-inline">CONTAINER</strong> is the name or ID of the container to run the <span class="No-Break">command in</span></li>
+<li><strong class="source-inline">COMMAND</strong> is the command to run in <span class="No-Break">the container</span></li>
+<li><strong class="source-inline">ARGUMENTS</strong> represents any additional arguments for the command (this <span class="No-Break">is optional)</span></li>
+</ul>
+<p>For example, to run the <strong class="source-inline">ls</strong> command in the container named <strong class="source-inline">my_container</strong>, you can use the <span class="No-Break">followin<a id="_idTextAnchor204"/>g command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker exec mycontainer ls</pre>
+<h2 id="_idParaDest-156"><a id="_idTextAnchor205"/>docker logs</h2>
+<p><strong class="source-inline">docker logs</strong> is <a id="_idIndexMarker677"/>used to fetch logs generated by a <span class="No-Break">Docker container:</span></p>
+<pre class="source-code">
+docker logs CONTAINER_NAME_OR_ID</pre>
+<p>Additional options you can pass to the command are <span class="No-Break">as follows:</span></p>
+<ul>
+<li><strong class="source-inline">--details, -a</strong>: Show extra details provided <span class="No-Break">to logs</span></li>
+<li><strong class="source-inline">--follow, -f</strong>: Follow <span class="No-Break">log output</span></li>
+<li><strong class="source-inline">--since, -t</strong>: Only display logs since a certain date (<span class="No-Break">e.g., 2013-01-02T13:23:37)</span></li>
+<li><strong class="source-inline">--tail, -t</strong>: Number of lines to show from the end of the logs (<span class="No-Break">default </span><span class="No-Break"><strong class="source-inline">all</strong></span><span class="No-Break">)</span></li>
+</ul>
+<p>An example of its use i<a id="_idTextAnchor206"/>s <span class="No-Break">as follows:</span></p>
+<pre class="console">
+admin@myhome:~$ docker logs CONTAINER_ID</pre>
+<h2 id="_idParaDest-157"><a id="_idTextAnchor207"/>docker rm</h2>
+<p><strong class="source-inline">docker rm</strong> is <a id="_idIndexMarker678"/>used to remove one or more <span class="No-Break">Docker containers:</span></p>
+<pre class="source-code">
+docker rm CONTAINER_NAME_OR_ID</pre>
+<p>An example of its use is <span class="No-Break">as follows:</span></p>
+<pre class="console">
+admin@myhome:~$ docker rm CONTAINER_I<a id="_idTextAnchor208"/>D</pre>
+<p>To list all containers, use the <strong class="source-inline">docker ps -</strong><span class="No-Break"><strong class="source-inline">a</strong></span><span class="No-Break"> command.</span></p>
+<h2 id="_idParaDest-158"><a id="_idTextAnchor209"/>docker rmi</h2>
+<p>Images that are<a id="_idIndexMarker679"/> pulled or built locally can take up a lot of space on your disk, so it’s useful to check and remove unused ones. <strong class="source-inline">docker rmi</strong> is used to remove one or more <span class="No-Break">Docker images.</span></p>
+<p>The following is <span class="No-Break">its usage:</span></p>
+<pre class="source-code">
+docker rmi IMAGE</pre>
+<p>An example of it<a id="_idTextAnchor210"/>s use is <span class="No-Break">as follows:</span></p>
+<pre class="console">
+admin@myhome:~$ docker rmi IMAGE_ID</pre>
+<h2 id="_idParaDest-159"><a id="_idTextAnchor211"/>docker network</h2>
+<p>The <strong class="source-inline">docker network</strong> command <a id="_idIndexMarker680"/>is used to manage Docker networks. Apart from the usual actions (create, delete, and list), it’s possible to attach (and disconnect) a running Docker container to a <span class="No-Break">different network.</span></p>
+<p>It’s also possible to extend Docker with a specialized network plugin of your choice. There are multiple options here, so we will just list some of the network plugins with a short description. Plugins can also be used with more advanced setups, such as <span class="No-Break">Kubernetes clusters:</span></p>
+<ul>
+<li><strong class="bold">Contiv-VPP</strong> (<a href="https://contivpp.io/">https://contivpp.io/</a>) uses the <strong class="bold">Vector Packet Processing </strong>(<strong class="bold">VPP</strong>) technology<a id="_idIndexMarker681"/> to provide an efficient, scalable, and<a id="_idIndexMarker682"/> programmable networking solution for containers, suitable for use in enterprise and service provider environments, where high-performance and scalable networking are <span class="No-Break">a requirement.</span></li>
+<li><strong class="bold">Weave Net</strong> (<a href="https://www.weave.works/docs/net/latest/overview/">https://www.weave.works/docs/net/latest/overview/</a>) allows containers to<a id="_idIndexMarker683"/> communicate with each other, regardless of which host they are running on. Weave Net creates a virtual network that spans multiple hosts, making it possible to deploy containers in a highly available, redundant, and <span class="No-Break">load-balanced manner.</span></li>
+<li><strong class="bold">Calico</strong> (<a href="https://www.tigera.io/tigera-products/calico/">https://www.tigera.io/tigera-products/calico/</a>) is one of the most recognizable plugins <a id="_idIndexMarker684"/>out there. It uses a pure IP-based approach to networking, providing simplicity and scalability. Calico allows administrators to define and enforce network policies, such as allowing or denying specific traffic flows based on the source, destination, and port. Calico is designed for large-scale deployments and supports both virtual and <span class="No-Break">physical networks.</span></li>
+</ul>
+<p>The following are common operations when using the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">network</strong></span><span class="No-Break"> command:</span></p>
+<ul>
+<li>Creating a <span class="No-Break">new network:</span></li>
+</ul>
+<pre class="console">
+    admin@myhome:~$ docker network create mynetwork</pre>
+<ul>
+<li>Inspecting <span class="No-Break">a network:</span></li>
+</ul>
+<pre class="console">
+    admin@myhome:~$ docker network inspect mynetwork</pre>
+<ul>
+<li>Removing <span class="No-Break">a network:</span></li>
+</ul>
+<pre class="console">
+    admin@myhome:~$ docker network rm mynetwork</pre>
+<ul>
+<li><span class="No-Break">Listing networks:</span></li>
+</ul>
+<pre class="console">
+    admin@myhome:~$ docker network ls</pre>
+<ul>
+<li>Connecting a container to <span class="No-Break">a network:</span></li>
+</ul>
+<pre class="console">
+    admin@myhome:~$ docker network connect mynetwork        CONTAINER_NAME_OR_ID</pre>
+<ul>
+<li>Disconnecting a container from <span class="No-Break">a network:</span></li>
+</ul>
+<pre class="console">
+    admin@myhome:~$ docker network disconnect mynetwork         CONTAINER_NAME_OR_ID</pre>
+<h2 id="_idParaDest-160"><a id="_idTextAnchor212"/>docker volume</h2>
+<p>The <strong class="source-inline">docker volume</strong> command<a id="_idIndexMarker685"/> is used to manage volumes in Docker. With this single command, you’re able to list available volumes, clean unused ones, or create one for <span class="No-Break">later use.</span></p>
+<p>Docker supports multiple volume drivers, including <span class="No-Break">the following:</span></p>
+<ul>
+<li><strong class="source-inline">local</strong>: The default driver; stores data on the local filesystem <span class="No-Break">using UnionFS</span></li>
+<li><strong class="source-inline">awslogs</strong>: Makes it possible to store logs generated by your applications in Amazon <span class="No-Break">CloudWatch Logs</span></li>
+<li><strong class="source-inline">cifs</strong>: Allows you to mount an SMB/CIFS (Windows) share as a <span class="No-Break">Docker volume</span></li>
+<li><strong class="source-inline">GlusterFS</strong>: Mounts the GlusterFS distributed filesystem as a <span class="No-Break">Docker volume</span></li>
+<li><strong class="source-inline">NFS</strong>: Mounts <a id="_idIndexMarker686"/>the <strong class="bold">Network File System</strong> (<strong class="bold">NFS</strong>) as a <span class="No-Break">Docker volume</span></li>
+</ul>
+<p>Many more drivers are available. The list of available drivers can be found in the official Docker <span class="No-Break">documentation: </span><a href="https://docs.docker.com/engine/extend/legacy_plugins/"><span class="No-Break">https://docs.docker.com/engine/extend/legacy_plugins/</span></a><span class="No-Break">.</span></p>
+<p>The following are examples of <span class="No-Break">its use:</span></p>
+<ul>
+<li><strong class="bold">List volumes</strong>: <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">volume ls</strong></span></li>
+<li><strong class="bold">Create a volume</strong>: <strong class="source-inline">docker volume </strong><span class="No-Break"><strong class="source-inline">create &lt;volume-name&gt;</strong></span></li>
+<li><strong class="bold">Inspect a volume</strong>: <strong class="source-inline">docker volume </strong><span class="No-Break"><strong class="source-inline">inspect &lt;volume-name&gt;</strong></span></li>
+<li><strong class="bold">Remove a volume</strong>: <strong class="source-inline">docker volume </strong><span class="No-Break"><strong class="source-inline">rm &lt;volume-name&gt;</strong></span></li>
+<li><strong class="bold">Mount a volume</strong> to a container, which can be done when starting a new container: <strong class="source-inline">docker volume </strong><span class="No-Break"><strong class="source-inline">create myvolume</strong></span><p class="list-inset"><strong class="source-inline">docker run -v </strong><span class="No-Break"><strong class="source-inline">myvolume:/opt/data alpine</strong></span></p></li>
+</ul>
+<p>In this section, we’ve<a id="_idIndexMarker687"/> learned how to interact with all Docker components using a command-line interface. Up to now, we’ve been using publicly available Doc<a id="_idTextAnchor213"/>ker images, but it’s time to learn how to build your <span class="No-Break">own images.</span></p>
+<h1 id="_idParaDest-161">Dockerfile</h1>
+<p>A Dockerfile is <a id="_idIndexMarker688"/>essentially a text file with a predetermined structure that contains a set of instructions for building a Docker image. The instructions in the Dockerfile specify what base image to start with (for example, Ubuntu 20.04), what software to install, and how to configure the image. The purpose of a Dockerfile is to automate the process of building a Docker image so that the image can be easily reproduced <span class="No-Break">and distributed.</span></p>
+<p>The structure of a Dockerfile is a list of commands (one per line) that Docker (<strong class="source-inline">containerd</strong> to be exact) uses to build an image. Each command creates a new layer in the image in UnionFS, and the resulting image is the union of all the layers. The fewer layers we manage to create, the smaller the <span class="No-Break">resulting image.</span></p>
+<p>The most frequently used commands in a Dockerfile are <span class="No-Break">the following:</span></p>
+<ul>
+<li><span class="No-Break"><strong class="source-inline">FROM</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">COPY</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">ADD</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">EXPOSE</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">CMD</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">ENTRYPOINT</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">RUN</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">LABEL</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">ENV</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">ARG</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">VOLUME</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">USER</strong></span></li>
+<li><span class="No-Break"><strong class="source-inline">WORKDIR</strong></span></li>
+</ul>
+<p>You can find a complete list of commands on the official Docker documentation <span class="No-Break">website: </span><a href="https://docs.docker.com/engine/reference/builder/"><span class="No-Break">https://docs.docker.com/engine/reference/builder/</span></a><span class="No-Break">.</span></p>
+<p>Let’s go through the preceding list to<a id="_idTextAnchor214"/> understand which command does what and when it’s best to <span class="No-Break">use it.</span></p>
+<h2 id="_idParaDest-162"><a id="_idTextAnchor215"/>FROM</h2>
+<p>A Dockerfile<a id="_idIndexMarker689"/> starts with a <strong class="source-inline">FROM</strong> command, which specifies the base image to <span class="No-Break">start with:</span></p>
+<pre class="source-code">
+FROM ubuntu:20.04</pre>
+<p>You can also name this build using <strong class="source-inline">as</strong> keyword followed by a <span class="No-Break">custom name:</span></p>
+<pre class="source-code">
+FROM ubuntu:20.04 as builder1</pre>
+<p><strong class="source-inline">docker build</strong> will try to download Docker images from the public Docker Hub registry, but it’s <a id="_idTextAnchor216"/>also possible to use other registries out there, or a <span class="No-Break">private one.</span></p>
+<h2 id="_idParaDest-163"><a id="_idTextAnchor217"/>COPY and ADD</h2>
+<p>The <strong class="source-inline">COPY</strong> command <a id="_idIndexMarker690"/>is used to copy files or directories from the host machine to the container file system. Take the <span class="No-Break">following example:</span></p>
+<pre class="source-code">
+COPY . /var/www/html</pre>
+<p>You can also<a id="_idIndexMarker691"/> use the <strong class="source-inline">ADD</strong> command to add files or directories to your Docker image. <strong class="source-inline">ADD</strong> has additional functionality beyond <strong class="source-inline">COPY</strong>. It can extract a TAR archive file automatically and check for the presence of a URL in the source field, and if it finds one, it will download the file from the URL. Finally, the <strong class="source-inline">ADD</strong> command has a <strong class="source-inline">--chown</strong> option to set the ownership of the files in the destination. In general, it is recommended to use <strong class="source-inline">COPY</strong> in most cases, and o<a id="_idTextAnchor218"/>nly use <strong class="source-inline">ADD</strong> when the additional functionality it provides <span class="No-Break">is needed.</span></p>
+<h2 id="_idParaDest-164"><a id="_idTextAnchor219"/>EXPOSE</h2>
+<p>The <strong class="source-inline">EXPOSE</strong> command <a id="_idIndexMarker692"/>in a Dockerfile informs Docker that the container listens on the specified network ports at runtime. It does not actually publish the ports. It is used to provide information to the user about which ports are intended to be published by <span class="No-Break">the container.</span></p>
+<p>For example, if a container runs a web server on port <strong class="source-inline">80</strong>, you would include the following line in <span class="No-Break">your Dockerfile:</span></p>
+<pre class="source-code">
+EXPOSE 80</pre>
+<p>You can specify whether the port listens on TCP or UDP – after specifying the port number, add a slash and a TCP or UDP keyword (for example, <strong class="source-inline">EXPOSE 80/udp</strong>). The default is TCP if you specify only a <span class="No-Break">port number.</span></p>
+<p>The <strong class="source-inline">EXPOSE</strong> command does not publish the ports. To make ports available, you will need to publish them with the use of the <strong class="source-inline">-p</strong> or <strong class="source-inline">--publish</strong> option when running the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">run</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -p 8080:80 thedockerimagename:tag</pre>
+<p>This will map port <strong class="source-inline">8080</strong> on the host machine to port <strong class="source-inline">80</strong> in the container so that any incoming <a id="_idIndexMarker693"/>traffic on port <strong class="source-inline">8080</strong> will be forwarded to the web server running in the container on <span class="No-Break">port </span><span class="No-Break"><strong class="source-inline">80</strong></span><span class="No-Break">.</span></p>
+<p>Regardless of the <strong class="source-inline">EXPOSE</strong> command, you can publish different ports when running a container. <strong class="source-inline">EXPOSE</strong> is used to inform the<a id="_idTextAnchor220"/> user about which ports are intended to be published by <span class="No-Break">the container.</span></p>
+<h2 id="_idParaDest-165"><a id="_idTextAnchor221"/>ENTRYPOINT and CMD</h2>
+<p>Next on our list is <a id="_idIndexMarker694"/>the <strong class="source-inline">ENTRYPOINT</strong> command, which in a Dockerfile specifies the command that should always be run when the container starts. It cannot be overridden by any command-line options passed to the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">run</strong></span><span class="No-Break"> command.</span></p>
+<p>The <strong class="source-inline">ENTRYPOINT</strong> command is used to configure the container as an executable. It is similar to the <strong class="source-inline">CMD</strong> command, but it <a id="_idIndexMarker695"/>is used to configure the container to run as an executable. It is typically used to specify the command that should be run when the container starts, such as a command-line tool or <span class="No-Break">a script.</span></p>
+<p>For example, if you have a container that runs a web server, you might use the <strong class="source-inline">ENTRYPOINT</strong> command to specify the command that starts the <span class="No-Break">web server:</span></p>
+<pre class="source-code">
+ENTRYPOINT ["nginx", "-g", "daemon off;"]</pre>
+<p>If you want to run a container with different arguments, you can use the <strong class="source-inline">CMD</strong> command to set default arguments that can be overridden when the container <span class="No-Break">is started:</span></p>
+<pre class="source-code">
+ENTRYPOINT ["/usr/bin/python"]
+CMD ["main.py","arg1","arg2"]</pre>
+<p><strong class="source-inline">CMD</strong> is used to specify the command that should be run when a container is started from the image. Take the <span class="No-Break">following example:</span></p>
+<pre class="source-code">
+CMD ["nginx", "-g", "daemon off;"]</pre>
+<p>The rule of thumb here is that if you want your application to take custom arguments, you are free to use <strong class="source-inline">ENTRYPOINT</strong> to launch a process and <strong class="source-inline">CMD</strong> to pass arguments to it. This way, you can be flexible with what<a id="_idTextAnchor222"/> your process will do by passing different options via the <span class="No-Break">command line.</span></p>
+<h2 id="_idParaDest-166"><a id="_idTextAnchor223"/>RUN</h2>
+<p>The <strong class="source-inline">RUN</strong> command in <a id="_idIndexMarker696"/>a Dockerfile is used to execute commands inside the container. It creates a new layer in the image each time it <span class="No-Break">is executed.</span></p>
+<p>The <strong class="source-inline">RUN</strong> command is used to install software packages, create directories, set environment variables, and perform any other actions that are required to set up the environment inside <span class="No-Break">the container.</span></p>
+<p>For example, you can use the <strong class="source-inline">RUN</strong> command to install <span class="No-Break">a package:</span></p>
+<pre class="source-code">
+RUN apt-get update &amp;&amp; apt-get install -y python3 python3-dev</pre>
+<p>You can use the <strong class="source-inline">RUN</strong> command to create <span class="No-Break">a directory:</span></p>
+<pre class="source-code">
+RUN mkdir /var/www</pre>
+<p>You can use the <strong class="source-inline">RUN</strong> command to set <span class="No-Break">environment variables:</span></p>
+<pre class="source-code">
+RUN echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" &gt;&gt; ~/.bashrc</pre>
+<p>It’s worth noting that the order of the <strong class="source-inline">RUN</strong> commands in the Dockerfile is important, as each command creates a new layer in the image, and the resulting image is the union of all the layers. So, if you’re expecting some packages t<a id="_idTextAnchor224"/>o be installed later in the process, you need to do it before <span class="No-Break">using them.</span></p>
+<h2 id="_idParaDest-167"><a id="_idTextAnchor225"/>LABEL</h2>
+<p>The <strong class="source-inline">LABEL</strong> command is <a id="_idIndexMarker697"/>used to add metadata to the image. It basically adds the key-value pairs of data to the image. Those can be used to store information such as the image’s version, maintainer, and other relevant information you might need in your organization. The following is an example of <span class="No-Break">the command:</span></p>
+<pre class="source-code">
+LABEL maintainer="Chris Carter &lt;chcarter@your.comain.tld&gt;"</pre>
+<p>You can also add multiple labels in <span class="No-Break">one line:</span></p>
+<pre class="source-code">
+LABEL maintainer="Chris Carter &lt;chcarter@your.comain.tld&gt;" version="0.2"</pre>
+<p>The labels added to the image can be viewed using the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">inspect</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker inspect --format='{{json .Config.Labels}}' &lt;image_name_or_ID&gt;</pre>
+<p>The <a id="_idIndexMarker698"/>use of <strong class="source-inline">LABEL</strong> commands to add metadata to the image can help users understand what the image’s purpose <a id="_idTextAnchor226"/>is or who they should ask about the details, and help to manage <span class="No-Break">the images.</span></p>
+<h2 id="_idParaDest-168"><a id="_idTextAnchor227"/>ENV and ARG</h2>
+<p>The <strong class="source-inline">ENV</strong> command is<a id="_idIndexMarker699"/> used to set environment variables in the <span class="No-Break">following format:</span></p>
+<pre class="source-code">
+ENV &lt;key&gt;=&lt;value&gt;</pre>
+<p>The <strong class="source-inline">ARG</strong> command, on<a id="_idIndexMarker700"/> the other hand, is used to define build-time variables. These variables can be passed to the <strong class="source-inline">docker build</strong> command using the <strong class="source-inline">--build-arg</strong> flag and their values can be used in <span class="No-Break">the Dockerfile.</span></p>
+<p>The <strong class="source-inline">ARG</strong> command is used to define build-time variables similar to the <span class="No-Break"><strong class="source-inline">ENV</strong></span><span class="No-Break"> format:</span></p>
+<pre class="source-code">
+ARG &lt;name&gt;[=&lt;default value&gt;]</pre>
+<p>The <strong class="source-inline">ARG</strong> command creates a variable that is only accessible during the build process, whereas the <strong class="source-inline">ENV</strong> command creates an environment variable that is accessible to all processes running inside <span class="No-Break">the container.</span></p>
+<p>In the next chapter, we’ll get into more detail about the build process of the Docker image, wher<a id="_idTextAnchor228"/>e <strong class="source-inline">ARG</strong> and <strong class="source-inline">ENV</strong> are used together to persist <strong class="source-inline">ENV</strong> variables across <span class="No-Break">build stages.</span></p>
+<h2 id="_idParaDest-169"><a id="_idTextAnchor229"/>VOLUME</h2>
+<p>Another command is <strong class="source-inline">VOLUME</strong>. With it, you <a id="_idIndexMarker701"/>can configure a container to create a mount point for a volume at a specific location. Volumes are a way to store data outside of the container’s filesystem, which means the data can persist even if the container is deleted or recreated. The following is <span class="No-Break">the command:</span></p>
+<pre class="source-code">
+VOLUME /opt/postgresql_data</pre>
+<p>Use the following to specify <span class="No-Break">multiple directories:</span></p>
+<pre class="source-code">
+VOLUME /opt/postgresql_data /opt/postgresql_xferlog</pre>
+<p>Or, the following is <span class="No-Break">also valid:</span></p>
+<pre class="source-code">
+VOLUME ["/opt/postgresql_data", "/opt/postgresql_xferlog"]</pre>
+<p>If there is any data in the <a id="_idIndexMarker702"/>directory marked as <strong class="source-inline">volume</strong>, when running a Docker using the <strong class="source-inline">docker run</strong> command, a new volume will be created with the content of this directory. That way, you can ensure that data created while this Docker container is running won’t be lost when the container gets killed or stopped otherwise. It’<a id="_idTextAnchor230"/>s especially important for databases, as we suggested in the <span class="No-Break">preceding example.</span></p>
+<h2 id="_idParaDest-170"><a id="_idTextAnchor231"/>USER</h2>
+<p>The <strong class="source-inline">USER</strong> command<a id="_idIndexMarker703"/> in a Dockerfile is used to set the default user that the container runs as. By default, the container runs as the root user; it is recommended to run the container as a custom user without <span class="No-Break">root capabilities.</span></p>
+<p>The <strong class="source-inline">USER</strong> command is used to set the user and optionally the group that the container runs as. For example, you can use the <strong class="source-inline">USER</strong> command to run the container as the <span class="No-Break"><strong class="source-inline">webserver</strong></span><span class="No-Break"> user:</span></p>
+<pre class="source-code">
+USER webserver</pre>
+<p>You can also specify the user <span class="No-Break">and group:</span></p>
+<pre class="source-code">
+USER webserver:webserver</pre>
+<p>It’s also possible to set the user ID and group ID instead of <span class="No-Break">the name:</span></p>
+<pre class="source-code">
+USER 1001:1001</pre>
+<p>The <strong class="source-inline">USER</strong> command only sets the default user for the container, but you can override it when running <span class="No-Break">the container:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run --user=root webserver-image</pre>
+<p>Running your application as a non-root user is a best practice for security reasons. It limits the potential damage that can be done if an attacker gains access to the container, as the process running with full permissions is al<a id="_idTextAnchor232"/>so running with the same UID (here: <strong class="source-inline">root</strong>) on the host you are running <span class="No-Break">the image.</span></p>
+<h2 id="_idParaDest-171"><a id="_idTextAnchor233"/>WORKDIR</h2>
+<p>The <strong class="source-inline">WORKDIR</strong> command<a id="_idIndexMarker704"/> in a Dockerfile is used to set the current working directory for the container. The working directory is the location in the container’s filesystem where all the subsequent <strong class="source-inline">RUN</strong>, <strong class="source-inline">CMD</strong>, <strong class="source-inline">ENTRYPOINT</strong>, <strong class="source-inline">COPY</strong>, and <strong class="source-inline">ADD</strong> commands will <span class="No-Break">be executed.</span></p>
+<p>You can use the <strong class="source-inline">WORKDIR</strong> command to set the working directory <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">/usr/local/app</strong></span><span class="No-Break">:</span></p>
+<pre class="source-code">
+WORKDIR /usr/local/app</pre>
+<p>When using <strong class="source-inline">WORKDIR</strong>, you won’t need to set full paths for the files while using any other commands and you could parameterize your application location (with <strong class="source-inline">ARG</strong> <span class="No-Break">or </span><span class="No-Break"><strong class="source-inline">ENV</strong></span><span class="No-Break">).</span></p>
+<p>Now that we’ve familiarized ourselves with Dockerfiles and how to build Docker images, it’s useful to know how to store this new image in some way. Docker image registries a<a id="_idTextAnchor234"/>re used for that exact purpose. We will look into registries in the <span class="No-Break">next section.</span></p>
+<h1 id="_idParaDest-172">Docker image registries</h1>
+<p>A <strong class="bold">Docker image registry</strong> hosts <a id="_idIndexMarker705"/>Docker images. Docker images are organized by tags that can be accessed and downloaded by users. These images can be used to create and run containers on a host machine. Image repositories can be hosted either locally or on a remote server, such as on Docker Hub, which is a public repository provided by Docker. You can also create your own private image repositories to share and distribute your images within <span class="No-Break">your organization.</span></p>
+<p>When you pull an image from a Docker image repository, the image is composed of multiple layers. Each layer represents an instruction in the Dockerfile that was used to build the image. These layers are stacked on top of each other to create the final image. Each layer is read-only and has a <span class="No-Break">unique ID.</span></p>
+<p>Thanks to UnionFS, the Docker registry shares common layers between multiple images and containers, reducing the amount of disk space required. When a container modifies a file, it creates a new layer on top of the base image, rather than modifying the files in the base image. This allows for easy rollback to previous states of the container and makes the images <span class="No-Break">highly portable.</span></p>
+<p>There are multiple image repositories you could use depending on a cloud solution you’re<a id="_idIndexMarker706"/> using (ECR for AWS or Google Container Registry for GCP, for instance) or SaaS solutions (Docker Hub is the most popular – <a href="https://hub.docker.com">https://hub.docker.com</a>). There<a id="_idIndexMarker707"/> are also a number of open source licensed <span class="No-Break">solutions available:</span></p>
+<ul>
+<li><strong class="bold">Harbor</strong>: This is available <span class="No-Break">at </span><a href="https://goharbor.io/"><span class="No-Break">https://goharbor.io/</span></a></li>
+<li><strong class="bold">Portus</strong>: This is available <span class="No-Break">at </span><a href="http://port.us.org/"><span class="No-Break">http://port.us.org/</span></a></li>
+<li><strong class="bold">Docker Registry</strong>: This is available <span class="No-Break">at </span><a href="https://docs.docker.com/registry/"><span class="No-Break">https://docs.docker.com/registry/</span></a></li>
+<li><strong class="bold">Project Quay</strong>: This is available at <a href="https://quay.io">https://quay.io</a> and on GitHub <span class="No-Break">at </span><a href="https://github.com/quay/quay%20"><span class="No-Break">https://github.com/quay/quay</span></a></li>
+</ul>
+<p>In this section, we’ve familiarized ourselves with Docker registries to store our Docker images in a remote locatio<a id="_idTextAnchor235"/>n. In the next section, we will look more into Docker networking and <span class="No-Break">its extensions.</span></p>
+<h1 id="_idParaDest-173">Docker networking</h1>
+<p>There are <a id="_idIndexMarker708"/>four types of Docker networking: none, bridge, host, <span class="No-Break">and overlay.</span></p>
+<p><em class="italic">Bridge</em> is the<a id="_idIndexMarker709"/> default network mode in Docker. Containers in the same bridge network can communicate with each other. Shortly, it creates a virtual network, in which containers are assigned IP addresses and can cummunicate using them, while anything outside of that network cannot reach any of those addresses. In the <em class="italic">Host</em> network, the<a id="_idIndexMarker710"/> container uses the host’s network stack. This means that the container shares your machine’s IP address and <span class="No-Break">network interfaces.</span></p>
+<p><em class="italic">Overlay</em> mode<a id="_idIndexMarker711"/> allows you to create a virtual network that spans multiple Docker hosts. Containers in different hosts can communicate with each other as if they are on the same host. It’s useful when running <span class="No-Break">Docker Swarm.</span></p>
+<p>Using<a id="_idTextAnchor236"/> the Docker command line, you are able to create a custom network of any of <span class="No-Break">those types.</span></p>
+<h2 id="_idParaDest-174"><a id="_idTextAnchor237"/>None network</h2>
+<p>A <strong class="bold">none network</strong> in <a id="_idIndexMarker712"/>Docker is a special type of network mode that disables all networking for a container. When a container is run in <em class="italic">none</em> network mode, it does not have access to any network resources and cannot communicate with other containers or the <span class="No-Break">host machine.</span></p>
+<p>To run a container in <em class="italic">none</em> network mode, you can use the <strong class="source-inline">--network none</strong> option when running the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">run</strong></span><span class="No-Break"> command.</span></p>
+<p>For example, to start a container running the <strong class="source-inline">nginx</strong> image in <em class="italic">none</em> network mode, you would run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run --network none -d ubuntu:20</pre>
+<p>The <em class="italic">none</em> network is useful for running workloads that aren’t suppose<a id="_idTextAnchor238"/>d to use any network connections, for example, for processing data in a <span class="No-Break">connected volume.</span></p>
+<h2 id="_idParaDest-175"><a id="_idTextAnchor239"/>Bridge mode</h2>
+<p>When using <strong class="bold">bridge mode</strong> on a <a id="_idIndexMarker713"/>container being created, a virtual interface is also created and attached to the virtual network. Each container is then assigned a unique IP address on the virtual network, allowing it to communicate with other containers and the <span class="No-Break">host machine.</span></p>
+<p>The host machine acts as a gateway for the containers, routing traffic between the containers and the outside network. When a container wants to communicate with another container or the host machine, it sends the packet to the virtual network interface. The virtual network interface then routes the packet to the <span class="No-Break">correct destination.</span></p>
+<p>By default, it’s a <strong class="source-inline">172.17.0.0/16</strong> network and it’s connected to a bridge device, <strong class="source-inline">docker0</strong>, in your machine. Within this network, all traffic between containers and the host machine <span class="No-Break">is allowed.</span></p>
+<p>All containers are attached to the default bridge network if no network was selected using the <strong class="source-inline">--network</strong> option when executing the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">run</strong></span><span class="No-Break"> command.</span></p>
+<p>You can list all available networks using the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker network ls
+NETWORK ID     NAME                   DRIVER    SCOPE
+6c898bde2c0c   bridge                 bridge    local
+926b731b94c9   host                   host      local
+b9f266305e10   none                   null      local</pre>
+<p>To get<a id="_idIndexMarker714"/> more information about the network, you can use the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$  docker inspect bridge
+[
+    {
+        "Name": "bridge",
+        "Id": "6c898bde2c0c660cd96c3017286635c943adcb152c415543373469afa0aff13a",
+        "Created": "2023-01-26T16:51:30.720499274Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.17.0.0/16",
+                    "Gateway": "172.17.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.netw<a id="_idTextAnchor240"/>ork.driver.mtu": "1500"
+        },
+        "Labels": {}
+    }
+]</pre>
+<p>Let’s move <a id="_idIndexMarker715"/>on to <span class="No-Break">HOST mode.</span></p>
+<h2 id="_idParaDest-176"><a id="_idTextAnchor241"/>Host mode</h2>
+<p>In <strong class="bold">host networking mode</strong>, the <a id="_idIndexMarker716"/>container shares the host’s network stack and network interfaces. This means that the container uses your machine’s IP address and network settings, and can directly access the same network resources as the machine it runs on, including <span class="No-Break">other containers.</span></p>
+<p>Containers running in host networking mode can also directly listen on a port of the host machine (bind <span class="No-Break">to it).</span></p>
+<p>One of <a id="_idIndexMarker717"/>the main advantages of host networking mode is that it provides better performance as the container doesn’t have to go through an additional <span class="No-Break">network stack.</span></p>
+<p>This mode is less secure than the other networking mode as the container has direct<a id="_idTextAnchor242"/> access to the host’s network resources and can listen to connections on the <span class="No-Break">host’s interface.</span></p>
+<h2 id="_idParaDest-177"><a id="_idTextAnchor243"/>Overlay</h2>
+<p>An <strong class="bold">overlay network</strong> is <a id="_idIndexMarker718"/>created by a manager node, which is responsible for maintaining the network configuration and managing the membership of worker nodes. The manager node creates a virtual network switch and assigns IP addresses to each container on <span class="No-Break">the network.</span></p>
+<p>Each worker node runs Docker Engine and a container network driver, which is responsible for connecting the containers on that host to the virtual network switch. The container network driver also ensures that packets are properly encapsulated and routed to the <span class="No-Break">correct destination.</span></p>
+<p>When a container on one host wants to communicate with a container on another host, it sends the packet to the virtual network switch. The switch then routes the packet to the correct host, where the container network driver decapsulates the packet and delivers it to the <span class="No-Break">destination container.</span></p>
+<p>The overlay network <a id="_idIndexMarker719"/>uses the <strong class="bold">Virtual eXtensible Local Area Network</strong> (<strong class="bold">VXLAN</strong>) protocol to<a id="_idTextAnchor244"/> encapsulate IP packets and make it possible to create a Layer 2 network between <span class="No-Break">multiple hosts.</span></p>
+<h1 id="_idParaDest-178">Summary</h1>
+<p>In this chapter, we have introduced one of the major building blocks of modern DevOps-led infrastructure, that is, containers. We described the most prominent container technology – Docker. We have also introduced the basics of running Docker containers and building your own. In the next chapter, we are going to build on this knowledge and introduce more advanced <span class="No-Break">Docker topics.</span></p>
+</div>
+</div></body></html>

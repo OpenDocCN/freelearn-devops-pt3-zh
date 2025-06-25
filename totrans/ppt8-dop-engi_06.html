@@ -1,0 +1,291 @@
+<html><head></head><body>
+		<div id="_idContainer031">
+			<h1 id="_idParaDest-124" class="chapter-number"><a id="_idTextAnchor185"/>6</h1>
+			<h1 id="_idParaDest-125"><a id="_idTextAnchor186"/>Relationships, Ordering, and Scope</h1>
+			<p>In this chapter, we will be discussing relationships, ordering, and scope in Puppet. These topics are often considered complicated because Puppet’s approach differs greatly from traditional languages. However, we will show you how to manage these aspects effectively and avoid <span class="No-Break">unnecessary complexities.</span></p>
+			<p>We will start by discussing Puppet’s approach to relationships and ordering. By default, Puppet treats resources as independent and can apply them in any order in the catalog. However, where ordering is necessary, we will show you how to use metaparameters such as <strong class="source-inline">before</strong>, <strong class="source-inline">after</strong>, <strong class="source-inline">notify</strong>, and <strong class="source-inline">subscribe</strong> to enforce ordering and create relationships <span class="No-Break">between resources.</span></p>
+			<p>After that, we will cover the concept of containment. We will explain that including classes are not contained within their calling classes, so relationships/dependencies made between classes do not automatically create relationships and dependencies with the resources in those classes. To address this, we will introduce the <strong class="source-inline">contain</strong> function, which allows you to contain the resources within a class and create <span class="No-Break">those relationships.</span></p>
+			<p>Finally, we will discuss scopes and how variables and resource defaults can have different visibility depending on where they are in the code and their relative scope. We will then provide best practices and pitfalls to ensure that you take the simplest path and avoid <span class="No-Break">unnecessary complexity.</span></p>
+			<p>Overall, this chapter will equip you with the knowledge and skills to effectively manage relationships, ordering, and scope <span class="No-Break">in Puppet.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Relationships <span class="No-Break">and ordering</span></li>
+				<li><span class="No-Break">Containment</span></li>
+				<li><span class="No-Break">Scope</span></li>
+				<li>Best practices <span class="No-Break">and pitfalls</span></li>
+			</ul>
+			<h1 id="_idParaDest-126"><a id="_idTextAnchor187"/>Technical requirements</h1>
+			<p>All examples and labs in this chapter can be run within your own local <span class="No-Break">dev environment.</span></p>
+			<h1 id="_idParaDest-127"><a id="_idTextAnchor188"/>Relationships and ordering</h1>
+			<p>By default, Puppet treats all resources<a id="_idIndexMarker403"/> as independent of each other, which means they can be applied<a id="_idIndexMarker404"/> in any order. This is different from traditional declarative code, which runs line by line and executes in the order it is written. One of the main advantages of Puppet’s approach is that if a single part of the code fails, Puppet will continue to apply all other resources. This eliminates the need to stop or have substantial failure handling in place to continue code. As a result, Puppet can bring a client server as close to the desired state as possible, even if some <span class="No-Break">resources fail.</span></p>
+			<p>It’s clear that some resources will be dependent on each other, such as a configuration file that can only exist after a package has been installed. Puppet provides metaparameters to create<a id="_idIndexMarker405"/> <span class="No-Break">these dependencies:</span></p>
+			<ul>
+				<li><strong class="source-inline">before</strong>: The resource should be applied before the <span class="No-Break">named resource(s).</span></li>
+				<li><strong class="source-inline">require</strong>: The resource should be applied after the <span class="No-Break">named resource(s).</span></li>
+				<li><strong class="source-inline">notify</strong>: The resource should be applied before the named resource(s). The named resource refreshes if the <span class="No-Break">resource changes.</span></li>
+				<li><strong class="source-inline">subscribe</strong>: The resource should be applied after the named resource(s). The resource refreshes if the named <span class="No-Break">resource changes.</span></li>
+			</ul>
+			<p>The <strong class="source-inline">before</strong> and <strong class="source-inline">require</strong> metaparameters can be used to enforce a dependency relationship. However, it’s important to note that a relationship only needs to be applied in one direction. Therefore, there is no need to use both <strong class="source-inline">before</strong> and <strong class="source-inline">require</strong> on either side of <span class="No-Break">a dependency.</span></p>
+			<p>For example, to indicate that the <strong class="source-inline">httpd</strong> package should be installed before managing a file, either <strong class="source-inline">before</strong> or <strong class="source-inline">require</strong> can be used, <span class="No-Break">as shown:</span></p>
+			<pre class="source-code">
+package { 'httpd':
+  ensure =&gt; latest,
+  before =&gt; File['/etc/httpd.conf'],
+}
+file { '/etc/httpd.conf':
+  ensure =&gt; file,
+  require =&gt; Package['httpd'],
+}</pre>
+			<p>A dependency<a id="_idIndexMarker406"/> chart, also known as a <strong class="bold">Directed Acyclic Graph </strong>(<strong class="bold">DAG</strong>), can be created using<a id="_idIndexMarker407"/> the Puppet validator at <a href="https://validate.puppet.com/">https://validate.puppet.com/</a> by selecting the <strong class="bold">show relationships </strong>option. Alternatively, the DAG can be generated by selecting <strong class="bold">open node graphs to the side </strong>in the <strong class="bold">Puppet Development Kit </strong>(<strong class="bold">PDK</strong>), or by using the <strong class="source-inline">--graph</strong> option with the <strong class="source-inline">puppet</strong> command to produce a dot<a id="_idIndexMarker408"/> file that can be used to create<a id="_idIndexMarker409"/> a graphic in an <span class="No-Break">appropriate</span><span class="No-Break"><a id="_idIndexMarker410"/></span><span class="No-Break"> program.</span></p>
+			<p>In <span class="No-Break"><em class="italic">Figure 6</em></span><em class="italic">.1</em>, the <strong class="source-inline">require</strong> on the file resource has been removed to produce a DAG for the <span class="No-Break">example code:</span></p>
+			<div>
+				<div id="_idContainer025" class="IMG---Figure">
+					<img src="image/B18492_06_01.jpg" alt="Figure 6.1 ﻿– A DAG of resource dependencies"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.1 – A DAG of resource dependencies</p>
+			<p>If both the <strong class="source-inline">before</strong> and <strong class="source-inline">require</strong> metaparameters were present, an extra<a id="_idIndexMarker411"/> arrow would be visible<a id="_idIndexMarker412"/> in the DAG, but it would have no effect on the compilation or resources applied. It’s worth noting that the starting and finishing classes, named <strong class="source-inline">Main</strong>, in the example code reflect that the code is not contained within a class and the code is at a global level. This will be discussed further in the <span class="No-Break"><em class="italic">Scope </em></span><span class="No-Break">section.</span></p>
+			<p>In a DAG, loops are not expected, so the flow of dependencies should only go downward. If a third resource, such<a id="_idIndexMarker413"/> as a service, is added that should be enforced before the <a id="_idIndexMarker414"/> <strong class="source-inline">httpd</strong> package after the <strong class="source-inline">/etc/httpd.conf</strong> file, the DAG would look <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+service { 'httpd':
+  ensure  =&gt; running,
+  before  =&gt; Package['httpd'],
+  require =&gt; File['/etc/httpd.conf'],
+}</pre>
+			<p>This would result in a dependency cycle, as illustrated in <span class="No-Break"><em class="italic">Figure 6</em></span><em class="italic">.2</em>. When compiled, the code would produce an error, as there would be no way to determine the order in which to apply <span class="No-Break">the resources.</span></p>
+			<div>
+				<div id="_idContainer026" class="IMG---Figure">
+					<img src="image/B18492_06_02.jpg" alt="Figure 6.2 ﻿– A DAG showing a dependency cycle"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.2 – A DAG showing a dependency cycle</p>
+			<p>It is also possible to represent<a id="_idIndexMarker415"/> multiple dependencies with an array, which can be an array of names<a id="_idIndexMarker416"/> either of the same type or of different types. For example, if a package were required by two files and two services for <strong class="source-inline">exampleapp</strong>, it could be represented <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+package { 'exampleapp':
+  ensure =&gt; latest,
+  before =&gt; [File['/opt/exampleapp.content','/var/exampleapp.variables],Service['exampleapp','exampleapp2']]
+}</pre>
+			<p>Sometimes, it can be easier to have all the resource dependencies on one side rather than on each <span class="No-Break">individual resource.</span></p>
+			<p>As was mentioned in <a href="B18492_03.xhtml#_idTextAnchor048"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, some Puppet<a id="_idIndexMarker417"/> types have automatic rules for creating dependencies, which can be found in the documentation for the Puppet type under <strong class="source-inline">Autorequires</strong> either online or using the Puppet <strong class="source-inline">describe</strong> command. For example, the user type autorequires any group under Puppet’s control, that a user resource has as its primary or <span class="No-Break">secondary group.</span></p>
+			<p>As well as an ordering<a id="_idIndexMarker418"/> concept, Puppet has the <strong class="source-inline">refresh</strong> attribute, so if a resource has a dependency on another resource, it will refresh itself. This is useful in situations such as when a configuration file is updating and the service should restart to reread the <span class="No-Break">configuration file.</span></p>
+			<p>The <strong class="source-inline">notify</strong> and <strong class="source-inline">subscribe</strong> metaparameters create the same dependency as <strong class="source-inline">before</strong> and <strong class="source-inline">require</strong> but add the <strong class="source-inline">refresh</strong> attribute to the dependent resource. Of the built-in Puppet types, <strong class="source-inline">service exec</strong> and <strong class="source-inline">package</strong> can be refreshed. If a <strong class="source-inline">notify</strong> or <strong class="source-inline">subscribe</strong> metaparameter is used with a resource type incapable of refreshing, it will just enforce the dependency and do nothing on a <span class="No-Break">refresh event.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">The <strong class="source-inline">notify</strong> metaparameter should not be confused with the <strong class="source-inline">notify</strong> resource type used to send messages to the <span class="No-Break">agents log.</span></p>
+			<p>For example, a <strong class="source-inline">service</strong> resource could use <strong class="source-inline">subscribe</strong> or <strong class="source-inline">notify</strong> from the <strong class="source-inline">file</strong> resource so that the service would be dependent on the file being created. It would also receive a refresh event if the file was updated and restart the service assuming the provider had the capability. As shown in the following code, again we show both sides of the dependency, although only one relationship attribute should <span class="No-Break">be given:</span></p>
+			<pre class="source-code">
+service { 'httpd':
+  ensure =&gt; running,
+  subscribe =&gt; File['/etc/httpd.conf'],
+}
+file { '/etc/httpd.conf':
+  ensure =&gt; file,
+  notify =&gt; Service['httpd'],
+}</pre>
+			<p>In a DAG diagram, this would be identical to using <strong class="source-inline">before</strong> and <strong class="source-inline">require</strong>, and it can use the same resource reference or arrays of <span class="No-Break">resource references.</span></p>
+			<p>The default behaviors and parameters<a id="_idIndexMarker419"/> of a refresh event for each type are shown in <em class="italic">Table 6.1</em>. Here, we see<a id="_idIndexMarker420"/> that by default, a service will use the provider’s <strong class="source-inline">restart</strong> variable if it is provided. Otherwise, <strong class="source-inline">hasrestart</strong> can define an <strong class="source-inline">init</strong> script or <strong class="source-inline">restart</strong> can define a custom restart script. If no <strong class="source-inline">init</strong> script is provided, the service name will be searched for in the process tree, but it is strongly advised to provide clear service <span class="No-Break">management scripts.</span></p>
+			<p>For the package type, the default behavior is to ignore the <strong class="source-inline">restart</strong> event, but the parameter can be set to reinstall the package as the result of a <span class="No-Break"><strong class="source-inline">refresh</strong></span><span class="No-Break"> event.</span></p>
+			<p><strong class="source-inline">Exec</strong> will rerun its command on a refresh but can be changed to run a different <strong class="source-inline">refresh</strong> command<a id="_idIndexMarker421"/> or to only run as a result of a <span class="No-Break"><strong class="source-inline">refresh</strong></span><span class="No-Break"> </span><span class="No-Break">event.</span></p>
+			<table id="table001-2" class="No-Table-Style _idGenTablePara-1">
+				<colgroup>
+					<col/>
+					<col/>
+					<col/>
+				</colgroup>
+				<tbody>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><span class="No-Break">Type</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">Default Behavior</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">Parameter(s)</span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="source-inline">Service</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>Restart the service if the provider has a restart feature; otherwise, stop <span class="No-Break">and start</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">hasrestart</span></p>
+							<p><span class="No-Break">restart</span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="source-inline">Package</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>Ignore <span class="No-Break">refresh event</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">reinstall_on_refresh</span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="source-inline">Exec</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>Rerun <span class="No-Break">the command</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">refresh</span></p>
+							<p><span class="No-Break">refresh only</span></p>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Table 6.1– Puppet native type refresh options</p>
+			<p>Metaparameter dependencies can produce three types of errors. The first is missing dependencies, where the resource is not found in the compiled catalog. This should normally be investigated for typos or logic, meaning the resource is not included. The second type of error is  failed dependencies, where an issue with a resource means none of its dependencies can be applied. Troubleshooting this resource and rerunning Puppet should then allow all dependent resources to be applied. The third type of error is the dependency cycle, which we discussed and showed in <em class="italic">figure 6.2</em>, where producing a DAG can help identify where the loop is and fix the <span class="No-Break">dependency logic.</span></p>
+			<p>Despite having said so far that resources have no order<a id="_idIndexMarker422"/> beyond dependencies, this is not quite true since Puppet runs in what is known as <strong class="bold">manifest order</strong>. So, an individual manifest file will be applied in the order it is written unless dependencies change that. Although this could allow you not to use dependencies, the main purpose is to prevent random compilations causing code to behave differently on different servers as it could do if read in <span class="No-Break">at random.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Puppet went through a strange philosophical/purity argument around ordering in earlier versions. It was viewed as necessary to break the bad habits of developers assuming ordering would be like in other languages, line by line. So, Puppet initially chose a random order. This was chaotic and resulted in code that might work in your lab but ran in a different order in production <span class="No-Break">and broke.</span></p>
+			<p>A variation<a id="_idIndexMarker423"/> of the dependency metaparameters<a id="_idIndexMarker424"/> is chaining arrows, where <strong class="source-inline">before</strong> and <strong class="source-inline">require </strong>are represented by <strong class="source-inline">-&gt;</strong> and <strong class="source-inline">&lt;-</strong> and <strong class="source-inline">notify</strong> and <strong class="source-inline">subscribe</strong> by <strong class="source-inline">~&gt;</strong> and <strong class="source-inline">&lt;~</strong>. They are generally used to show relationships between classes, such as to represent a module pattern, which will be seen in <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>. For example, if we wanted an <strong class="source-inline">install</strong> class to apply before a <strong class="source-inline">config</strong> class and then for a <strong class="source-inline">service</strong> class to be applied and refreshed if the <strong class="source-inline">config</strong> class was updated, it could be represented <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+include examplemodule::install, examplemodule::config, examplemodule::service
+Class['examplemodule::install']
+-&gt; Class['examplemodule::config']
+~&gt; Class['examplemodule::service']</pre>
+			<p>The <strong class="source-inline">include</strong> function is necessary, as discussed in <a href="B18492_03.xhtml#_idTextAnchor048"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, to ensure the classes are added to <span class="No-Break">a catalog.</span></p>
+			<p>For style purposes, only the right-facing arrows are recommended to be used, to make it consistent while reading. While dependency parameters can be used in classes and resource declarations and chaining arrows on other resource types, it is not recommended to do so to make it clearer <span class="No-Break">to read.</span></p>
+			<p>In simpler cases, the required function can also be used from within a class to create a dependency on other classes. However, no <strong class="source-inline">refresh</strong> or <strong class="source-inline">before</strong> equivalent exists, so for styling and consistency, it’s generally easier to use ordering arrows. A simple example, using the <strong class="source-inline">require</strong> function to represent that the <strong class="source-inline">install</strong> class should applied before the <strong class="source-inline">config</strong> class, would be <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+class examplemodule::config {
+  require examplemodule::install
+}</pre>
+			<p>What we have just discussed in terms<a id="_idIndexMarker425"/> of the approach to class dependency<a id="_idIndexMarker426"/> is not quite as simple as it may seem because Puppet classes do not actually contain other classes. A class will include other classes by default, so the dependencies do not cover them. We will now look at what this containment problem means and how to <span class="No-Break">handle it.</span></p>
+			<h1 id="_idParaDest-128"><a id="_idTextAnchor189"/>Containment</h1>
+			<p>Containment in Puppet means that included classes<a id="_idIndexMarker427"/> are not contained in the same way as resources in a class; so, when setting up a dependency to a class that includes another class via the <strong class="source-inline">include </strong>function or a <strong class="source-inline">class</strong> resource, the dependency will only cover the resources. For example, say we created a requirement for <strong class="source-inline">class1</strong> to be applied before <strong class="source-inline">class2</strong> and <strong class="source-inline">class2</strong> contained a <strong class="source-inline">package</strong> resource and an <strong class="source-inline">include</strong> call to <strong class="source-inline">class3</strong>, as shown in the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+include examplemodule::class1, examplemodule::class2
+Class['examplemodule::class1'] -&gt; Class['examplemodule::class2']
+class examplemodule::class2 {
+  include examplemodule::class3
+  package{'PDS':}
+}</pre>
+			<p>So, while there might be an assumption<a id="_idIndexMarker428"/> that this would ensure <strong class="source-inline">class1</strong> was before <strong class="source-inline">class3</strong> but <strong class="source-inline">class1</strong> was before <strong class="source-inline">class2</strong>, it doesn’t, as can be seen in the DAG diagram in <span class="No-Break"><em class="italic">Figure 6</em></span><span class="No-Break"><em class="italic">.3</em></span><span class="No-Break">.</span></p>
+			<div>
+				<div id="_idContainer027" class="IMG---Figure">
+					<img src="image/B18492_06_03.jpg" alt="﻿Figure 6.3 – DAG showing lack of containment"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.3 – DAG showing lack of containment</p>
+			<p>Remembering back to <a href="B18492_03.xhtml#_idTextAnchor048"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, where the <strong class="source-inline">include</strong> function was introduced, this containment is not automatic because we may want to include this class in different places for different situations and for it only to appear once in the catalog without dependency or <span class="No-Break">containment issues.</span></p>
+			<p>To contain a class, the <strong class="source-inline">contain</strong> function is used. Change the <strong class="source-inline">include</strong> line to <strong class="source-inline">contain</strong> <strong class="source-inline">examplemodule::class3</strong>, which will change the DAG diagram to contain <strong class="source-inline">examplemodule::class3</strong>, as We can see in <span class="No-Break"><em class="italic">Figure 6</em></span><span class="No-Break"><em class="italic">.4</em></span><span class="No-Break">.</span></p>
+			<div>
+				<div id="_idContainer028" class="IMG---Figure">
+					<img src="image/B18492_06_04.jpg" alt="﻿Figure 6.4 – DAG showing the use of the contain function"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.4 – DAG showing the use of the contain function</p>
+			<p>If a <strong class="source-inline">class</strong> resource is used<a id="_idIndexMarker429"/> alongside a <strong class="source-inline">contain</strong> statement, it must appear in manifest order after the <strong class="source-inline">class</strong> resource. Failure to do so will cause the <strong class="source-inline">class</strong> resource to interpret the <strong class="source-inline">contain </strong>statement as an attempt to declare a duplicate resource, resulting in an error. For example, if the following code is used, the attribute can be <span class="No-Break">passed successfully:</span></p>
+			<pre class="source-code">
+class {'examplemodule::class3':
+  attribute1 =&gt; 'value1''
+}
+contain examplemodule::class3</pre>
+			<p>The immediate question<a id="_idIndexMarker430"/> to this containment problem might be why not just use <strong class="source-inline">contain</strong> for everything? That comes down to the needless and confusing dependencies it could create. If our original example were updated to use <strong class="source-inline">contain</strong> instead of <strong class="source-inline">class</strong> and we had another class, <strong class="source-inline">anothermodule:class</strong>, which required <strong class="source-inline">examplemodule:class3</strong> to be in the catalog, we could add the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+class anothermodule::class {
+  contain examplemodule::class3
+  package{'PTOP':}
+}</pre>
+			<p>Then, the DAG would look like <span class="No-Break"><em class="italic">Figure 6</em></span><em class="italic">.5</em>. It can be immediately seen that we have created needless dependencies just with a small number <span class="No-Break">of classes.</span></p>
+			<div>
+				<div id="_idContainer029" class="IMG---Figure">
+					<img src="image/B18492_06_05.jpg" alt="Figure 6.5 ﻿– DAG showing cycle caused ﻿by the overuse ﻿of contain"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.5 – DAG showing cycle caused by the overuse of contain</p>
+			<p>Worse, it can be easy to create a cyclical <a id="_idIndexMarker431"/>dependency. If, for example, the <strong class="source-inline">security::default</strong> class were to be included in all application classes, a cyclical dependency could be created by a <strong class="source-inline">require </strong>function being used between a class, <strong class="source-inline">application2</strong>, requiring the <strong class="source-inline">application1</strong> class, as shown in the <span class="No-Break">following</span><span class="No-Break"><a id="_idIndexMarker432"/></span><span class="No-Break"> code:</span></p>
+			<pre class="source-code">
+class application1 {
+  contain security::default
+}
+class application2 {
+  contain security::default
+  require application1
+}</pre>
+			<p>This would produce the DAG shown in <span class="No-Break"><em class="italic">Figure 6</em></span><em class="italic">.6</em>. If only includes were used, we would have avoided the need for an unnecessary relationship from the application classes <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">security::default</strong></span><span class="No-Break">:</span></p>
+			<div>
+				<div id="_idContainer030" class="IMG---Figure">
+					<img src="image/B18492_06_06.jpg" alt="﻿Figure 6.6 – DAG showing how the over-use of contain causes cyclic dependencies"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.6 – DAG showing how the over-use of contain causes cyclic dependencies</p>
+			<p>In the <em class="italic">Best practices and pitfalls </em>section, we will further discuss how to avoid worrying about containment using <span class="No-Break">consistent patterns.</span></p>
+			<p>Before the <strong class="source-inline">contain</strong> function<a id="_idIndexMarker433"/> was introduced in Puppet 3.4, there was another approach, which you may see in heritage code: using <strong class="source-inline">anchor</strong> resources. This can either be done with a specific anchor resource provided by the <strong class="source-inline">stdlib</strong> module or any other pair or resources in the class. To ensure that the current class contains <strong class="source-inline">examplemodule::class3</strong>, the code using the <strong class="source-inline">anchor</strong> resource directly would look <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+anchor {['start', 'stop']: }
+include examplemodule::class3
+Anchor['start'] -&gt; Class[' examplemodule::class3'] -&gt; Anchor['stop']</pre>
+			<p>Alternatively, if the two package resources, <strong class="source-inline">pdk</strong> and <strong class="source-inline">cowsay</strong>, were in this class, they could be borrowed to create a relationship and contain <span class="No-Break">the class:</span></p>
+			<pre class="source-code">
+Package['pds'] -&gt; Class[' examplemodule::class3'] -&gt; Package['cowsay']</pre>
+			<p>The issue with this pattern is that it clutters up the DAG with extra anchor resources or unnecessary relationships, which can be confusing. Therefore, if you find that anchors are being used, it is recommended that you modernize<a id="_idIndexMarker434"/> your approach by using the <strong class="source-inline">contain</strong> <span class="No-Break">keyword instead.</span></p>
+			<p>Having discussed dependencies and the containment of resources and classes, we will now see how variables and resource defaults are scoped across the <span class="No-Break">Puppet language.</span></p>
+			<h1 id="_idParaDest-129"><a id="_idTextAnchor190"/>Scope</h1>
+			<p>In Puppet terms, scope<a id="_idIndexMarker435"/> reflects the location in the code where variables can be directly accessed without the use of namespaces and where resource defaults can <span class="No-Break">be affected.</span></p>
+			<p>There are three levels <span class="No-Break">of scope:</span></p>
+			<ul>
+				<li><strong class="bold">Top scope</strong>: Any code outside of a class, type, or<a id="_idIndexMarker436"/> node definition. Any variable or resource declaration in the top scope will be accessible to be read or <span class="No-Break">used anywhere.</span></li>
+				<li><strong class="bold">Node scope</strong>: Any code defined in a node<a id="_idIndexMarker437"/> definition. Any variables and resource defaults in the node scope will be visible to nodes that match the node definition at the node and local <span class="No-Break">scope levels.</span></li>
+				<li><strong class="bold">Local scope</strong>: Any code defined in a class, defined <a id="_idIndexMarker438"/>type, or lambda. So, any variables and resource defaults defined will only be visible within that <span class="No-Break">specific resource.</span></li>
+			</ul>
+			<p>Both <strong class="bold">External Node Classifiers </strong>(<strong class="bold">ENCs</strong>) and node definitions will be discussed in <a href="B18492_11.xhtml#_idTextAnchor272"><span class="No-Break"><em class="italic">Chapter 11</em></span></a>. All we need to understand<a id="_idIndexMarker439"/> for this section is that an ENC is an executable script that returns variables and classes to be applied to a host. This script can inject custom logic and data by performing various actions, such as performing a database<a id="_idIndexMarker440"/> lookup or using AWS Lambda. It can also be used to access third-party sources, such as <strong class="bold">Configuration Management Databases </strong>(<strong class="bold">CMDBs</strong>). The variables returned are at the top-scope level, while the classes are at the node-scope level. This allows the provided variables to be visible anywhere, but only for the classes declared to have access to node-scope variables. In contrast, a node definition is a section of code that is applied to <span class="No-Break">matching nodes.</span></p>
+			<p>Classes have what is known<a id="_idIndexMarker441"/> as a named scope, where the name of the class is used<a id="_idIndexMarker442"/> in the namespace. For example, a variable created in <strong class="source-inline">exampleclass</strong> called <strong class="source-inline">test</strong> can be accessed from anywhere via <strong class="source-inline">exampleclass::test</strong>. Variables created in the global scope, such as <strong class="source-inline">site.pp</strong>, can be accessed from an empty namespace by calling <strong class="source-inline">::variablename</strong>. However, accessing data like this is generally not recommended. In <a href="B18492_09.xhtml#_idTextAnchor233"><span class="No-Break"><em class="italic">Chapter 9</em></span></a>, we will show how to centrally <span class="No-Break">manage data.</span></p>
+			<p>Node-scope definitions and local-scope definitions on lambdas and defined types are anonymous and can only be accessed directly by name from where they are visible. It is also possible to override higher scope variables by declaring a variable in the current scope, such as a class overriding a global variable with <span class="No-Break">its own.</span></p>
+			<p>To show this, consider the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+$top='toptest'
+$test='testing123'
+notify "Top = ${top} node = ${node} local = ${local} test = ${testing}"
+notify "Access directly ${example::local}"
+node default {
+  include example
+  $test='hello world'
+  $node='nodetest'
+  notify "Top = ${top} node = ${node} local = ${local} test = ${testing}"
+  notify "Access directly ${example::local}"
+}
+class example {
+  test='an example'
+  $local ='localtest'
+  notify "Top = ${top} node = ${node} local = ${local} test = ${testing}"
+}</pre>
+			<p>The first <strong class="source-inline">notify</strong> would fail to find the local or node variable since it is in the global scope, and <strong class="source-inline">testing</strong> would be set to <strong class="source-inline">testing123</strong>. The second <strong class="source-inline">notify</strong> would directly access the local namespace, <strong class="source-inline">example</strong>, and print <strong class="source-inline">localtest</strong>. The third <strong class="source-inline">notify</strong> would be unable to access the local variable and would print <strong class="source-inline">hello world</strong>. The fourth <strong class="source-inline">notify</strong> would again access the local scope via the namespace. The final <strong class="source-inline">notify</strong> would be able to access all the variables, and <strong class="source-inline">local </strong>would be set to <strong class="source-inline">localtest</strong>. This example shows the flow of variables <span class="No-Break">between scopes.</span></p>
+			<p>Resource titles and resource references<a id="_idIndexMarker443"/> are unaffected by the scope and can be declared in any scope. For example, a resource can declare a dependency for any resource in the catalog. However, it is not good practice to rely on accessing external variables <span class="No-Break">like this.</span></p>
+			<h1 id="_idParaDest-130"><a id="_idTextAnchor191"/>Best practices and pitfalls</h1>
+			<p>In earlier versions<a id="_idIndexMarker444"/> of Puppet, scope, dependencies, and containment were some of the most challenging<a id="_idIndexMarker445"/> issues, which led to significant problems for newer developers. One major solution that largely addressed these issues was the widespread adoption of the roles and profiles method, which will be covered in full detail in <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>. Hiera data will be covered in <a href="B18492_09.xhtml#_idTextAnchor233"><span class="No-Break"><em class="italic">Chapter 9</em></span></a><span class="No-Break">.</span></p>
+			<p>The roles and profiles method<a id="_idIndexMarker446"/> involves grouping single-use component modules that perform one independent function well. For instance, a component module could install and configure Oracle. The module structure would contain a group of manifests with specific purposes, such as installing packages or managing services. This simplifies module organization and allows for the easier ordering of classes. For example, the <strong class="source-inline">install</strong> class can be applied before the <span class="No-Break"><strong class="source-inline">service</strong></span><span class="No-Break"> class.</span></p>
+			<p>Component modules should function independently of one another and have no direct dependencies across modules. The profile layer groups modules together to create technology stacks and can put modules in order if necessary. Roles abstract another layer up to create business solutions using these technology stacks and can order the profiles. In this structure, any global or node data should come from Hiera instead of being set in node or global scopes, which reduces code complexity. It may feel counterintuitive to developers to avoid setting global variables in code, but following this practice <span class="No-Break">is recommended.</span></p>
+			<p>As mentioned in <a href="B18492_03.xhtml#_idTextAnchor048"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, it is advisable to avoid using resource collectors/exported resources. However, it is worth noting that they can be used as part of chaining arrows. Using them can be risky as it may result in unpredictable outcomes and create significant dependency cycles that are difficult to map until runtime. Dependencies should always be created as required, and you should not rely on manifest ordering for this purpose. Omitting these dependencies could significantly reduce code maintainability and create complications during <span class="No-Break">future refactoring.</span></p>
+			<p>Use chaining arrows for class dependencies and contain them only where necessary, as in the roles and profiles method. Avoid enforcing resource defaults globally, such as in <strong class="source-inline">site.pp</strong> or node definitions, as this approach makes the code unpredictable for everyone, especially when working<a id="_idIndexMarker447"/> with multiple application teams who may not be aware<a id="_idIndexMarker448"/> of these defaults in their own code. In summary, avoid attempting overly complex or familiar approaches from other languages and instead follow established roles/profiles and Hiera patterns. Review roles/profiles and Hiera patterns carefully and refactor any code that does not follow <span class="No-Break">these guidelines.</span></p>
+			<h1 id="_idParaDest-131"><a id="_idTextAnchor192"/>Lab – overview of relationships, ordering, and scope</h1>
+			<p>In this lab, we will provide<a id="_idIndexMarker449"/> some code<a id="_idIndexMarker450"/> to review<a id="_idIndexMarker451"/> and run to ensure the concepts discussed are understood. All the code can be found <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch06"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch06</span></a><span class="No-Break">.</span></p>
+			<p>The code at <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch06/lab6_1.pp">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch06/lab6_1.pp</a> currently has no dependencies. To meet the following requirements, the code needs to be <span class="No-Break">adjusted accordingly:</span></p>
+			<ul>
+				<li>The <strong class="source-inline">install</strong> class and all its resources should run before <strong class="source-inline">config</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">service</strong></span></li>
+				<li>The <strong class="source-inline">config</strong> class and all its resources should run <span class="No-Break">before </span><span class="No-Break"><strong class="source-inline">service</strong></span></li>
+				<li>The <strong class="source-inline">service</strong> class and all its resources should be refreshed if any resource in the <strong class="source-inline">config </strong>class <span class="No-Break">is updated</span></li>
+				<li>The <strong class="source-inline">httpd</strong> package should be installed before the <span class="No-Break"><strong class="source-inline">exampleapp</strong></span><span class="No-Break"> package</span></li>
+				<li>The <strong class="source-inline">exampleuser</strong> user should be created after the <span class="No-Break"><strong class="source-inline">examplegroup</strong></span><span class="No-Break"> group</span></li>
+				<li>The <strong class="source-inline">/etc/exampleapp/</strong> directory should be created after the <strong class="source-inline">exampleuser</strong> user and the <span class="No-Break"><strong class="source-inline">examplegroup </strong></span><span class="No-Break">group</span></li>
+				<li>The <strong class="source-inline">/etc/exampleapp/exampleapp.conf</strong> file should be created after the <strong class="source-inline">exampleuser </strong>user, the <strong class="source-inline">examplegroup</strong> group, and the <strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">etc/exampleapp</strong></span><span class="No-Break"> directory</span></li>
+				<li>The <strong class="source-inline">httpd</strong> service should start before the <strong class="source-inline">exampleapp</strong> service, and the <strong class="source-inline">exampleapp </strong>service should refresh if the <strong class="source-inline">httpd</strong> <span class="No-Break">service restarts</span></li>
+			</ul>
+			<p>It is recommended to use <a href="https://validate.puppet.com/">https://validate.puppet.com/</a> to check your Puppet code, as you should<a id="_idIndexMarker452"/> not rely on manifest<a id="_idIndexMarker453"/> ordering alone. Additionally, it’s important to remember<a id="_idIndexMarker454"/> that some resources<a id="_idIndexMarker455"/> have auto-requirement behavior. A sample example is provided at <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch06/lab6_2.pp"/><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch06/lab6_2.pp">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch06/lab6_2.pp</a>. Examine the code and see what the <strong class="source-inline">notify</strong> function <span class="No-Break">would print.</span></p>
+			<h1 id="_idParaDest-132"><a id="_idTextAnchor193"/>Summary</h1>
+			<p>In this chapter, we discussed how resources are assumed to be applied in any order by default, and how metaparameters such as <strong class="source-inline">before</strong>, <strong class="source-inline">require</strong>, <strong class="source-inline">notify</strong>, and <strong class="source-inline">subscribe</strong> can be used to define any required order. We learned that DAGs can be used to visualize dependencies between resources, and that dependency cycles should be avoided to ensure the catalog can be applied successfully. We also discussed how certain resources automatically apply dependencies, such as a user requiring its primary group. The <strong class="source-inline">notify</strong> and <strong class="source-inline">subscribe</strong> metaparameters were explained, and their use of <strong class="source-inline">refresh</strong> was highlighted as particularly useful for resources such as <strong class="source-inline">exec</strong>, <strong class="source-inline">package</strong>, and <strong class="source-inline">service</strong>. This allows for these resources to be restarted, reinstalled, or rerun when necessary, such as when a configuration file changes. Additionally, we acknowledged that although resources should be assumed to have no order, they are in fact applied in the order they are written in a manifest to ensure consistency across environments. We also discussed the three types of errors that can occur: cyclic, missing dependencies, and dependent <span class="No-Break">resource failures.</span></p>
+			<p>After that, we discussed chaining arrows as a variation of metaparameters, allowing them to be used between classes. We emphasized that only right-facing arrows should be used to comply with the style guide. While metaparameters can be used on classes and chaining arrows on resources for consistency and styling, we recommend avoiding this practice. Instead, we showed that the <strong class="source-inline">require</strong> function can be used within a class that is dependent on another class for relatively simple <span class="No-Break">class dependencies.</span></p>
+			<p>We then discussed the issue of containment, which arises when including classes within other classes does not create resource dependencies. This was achieved using the <strong class="source-inline">contain</strong> function instead of an <strong class="source-inline">include</strong> function within a class causing this class to contain the other classes’ resources and creating the dependencies. We discussed how this may bring the temptation to contain all classes, but we demonstrated that this would create needless or cyclic dependencies. The older anchor pattern was shown since heritage code could still contain this. We highlighted that the <strong class="source-inline">anchor</strong> function is no longer a recommended approach and, where found, it should be modernized to use the <span class="No-Break"><strong class="source-inline">contain</strong></span><span class="No-Break"> function.</span></p>
+			<p>The scope was shown to affect variables and defaults for resources, where the global scope is anything set outside of the class, type, or node definition. The node scope is anything in a node definition and the local scope is anything in a class, type, <span class="No-Break">or lambda.</span></p>
+			<p>Finally, for best practice, it is recommended to follow the roles and profiles method to ensure consistency in dependencies and ordering. It is also recommended to use Hiera instead of complex variable usage and to avoid setting resource defaults in the global scope, such as <strong class="source-inline">site.pp</strong> or node definitions. It is important to never rely on manifest ordering, use explicit dependencies to <span class="No-Break">ensure consistency.</span></p>
+			<p>The next chapter will explore templates, iteration, and conditional statements in Puppet. It will demonstrate how Puppet can generate file content by leveraging variables, conditions, and text manipulation functions. Additionally, it will explain how iterative functions and lambda code sections enable Puppet to loop through and manipulate collections of data. Finally, the chapter will cover the usage of conditional statements in Puppet to create different configurations based on <span class="No-Break">conditional logic.</span></p>
+		</div>
+	</body></html>

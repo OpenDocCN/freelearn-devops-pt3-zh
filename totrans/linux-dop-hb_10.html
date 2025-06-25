@@ -1,0 +1,500 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer029">
+<h1 class="chapter-number" id="_idParaDest-199"><a id="_idTextAnchor282"/><a id="_idTextAnchor283"/>10</h1>
+<h1 id="_idParaDest-200"><a id="_idTextAnchor284"/>Monitoring, Tracing, and Distributed Logging</h1>
+<p>Applications developed nowadays tend to be running inside Docker containers or as a serverless application stack. Traditionally, applications were built as a monolithic entity—one process running on a server. All logs were stored on a disk. It made it easy to get to the right information quickly. To diagnose a problem with your application, you had to log in to a server and search through logs or stack traces to get to the bottom of the problem. But when you run your application inside a Kubernetes cluster in multiple containers that are executed on different servers, things <span class="No-Break">get complicated.</span></p>
+<p>This also makes it very difficult to store logs, let alone view them. In fact, while running applications inside a container, it’s not advisable to save any files inside it. Oftentimes, we run those containers in a read-only filesystem. This is understandable as you should treat a running container as an ephemeral identity that can be killed at <span class="No-Break">any time.</span></p>
+<p>We face an identical situation when running serverless applications; on <strong class="bold">Amazon Web Services</strong> (<strong class="bold">AWS</strong>) Lambda, the process starts when you get a request, data inside that request gets processed, and the application dies after it finishes its job. If you happen to save anything to disk, it will get deleted once processing <span class="No-Break">is concluded.</span></p>
+<p>The most logical solution is, of course, sending all logs to some external system that will save, catalog, and make your logs searchable. There are multiple solutions, including <strong class="bold">Software as a Service</strong> (<strong class="bold">SaaS</strong>) and <span class="No-Break">cloud-specific applications.</span></p>
+<p>Incidentally, sending logs to an external system is also beneficial for bare-metal servers—for analysis and alerting, or diagnosing if you happen to lose access to the server or it <span class="No-Break">stops responding.</span></p>
+<p>Along with system and application logs, we can also send application-tracing metrics. Tracing is a more in-depth form of metrics where the application will provide you with more insights into system performance and how it behaves in given circumstances. Examples of trace data are the time in which a given request was handled by your application, how many CPU cycles it took, and how long your application was waiting for a database <span class="No-Break">to respond.</span></p>
+<p>In this chapter, you will learn about <span class="No-Break">the following:</span></p>
+<ul>
+<li>What are monitoring, tracing, <span class="No-Break">and logging?</span></li>
+<li>How to choose and configure one of the cloud-ready <span class="No-Break">logging solutions</span></li>
+<li>Self-hosted solutions and how to <span class="No-Break">choose them</span></li>
+<li>SaaS solutions and how to evaluate which will be most useful for <span class="No-Break">your organization</span></li>
+</ul>
+<p>Additionally, we will be covering the <span class="No-Break">following topics:</span></p>
+<ul>
+<li>Differences between monitoring, tracing, <span class="No-Break">and logging</span></li>
+<li><span class="No-Break">Cloud solutions</span></li>
+<li>Open source solutions <span class="No-Break">for self-hosting</span></li>
+<li><span class="No-Break">SaaS solutions</span></li>
+<li>Log and <span class="No-Break">metrics retention</span></li>
+</ul>
+<p>So, let’s jump right <span class="No-Break">into it!</span></p>
+<h1 id="_idParaDest-201"><a id="_idTextAnchor285"/>Differences between monitoring, tracing, and logging</h1>
+<p>You will hear these terms being used interchangeably depending on the context and person you’re talking to, but there’s a subtle and very important difference <span class="No-Break">between them.</span></p>
+<p><strong class="bold">Monitoring</strong> refers to<a id="_idIndexMarker850"/> instrumenting your servers and applications and gathering data about them for processing, identifying problems, and, in the end, bringing results in front of interested parties. This also <span class="No-Break">includes alerting.</span></p>
+<p><strong class="bold">Tracing</strong>, on <a id="_idIndexMarker851"/>the other hand, is more specific, as we already mentioned. Trace data can tell you a lot about how your system is performing. With tracing, you can observe statistics that are very useful to developers (such as how long a function ran and whether the SQL query is fast or bottleneck), DevOps engineers (how long we were waiting for a database or network), or even the business (what was the experience of the user with our application?). So, you can see that when it’s used right, it can be a very powerful tool under <span class="No-Break">your belt.</span></p>
+<p>The purpose of <strong class="bold">logging</strong> is to<a id="_idIndexMarker852"/> bring actionable information in a centralized way, which commonly is just saving all messages to a file (it’s called a log file). These messages typically consist of the success or failure of a given operation with configurable verbosity. Logging is primarily used by system administrators or DevOps engineers to provide a better view of what’s going on in the operating system or with any <span class="No-Break">given application.</span></p>
+<p>With that cleared up, we can jump into specific implementations of the distributed monitoring solutions in the cloud, DIY solutions, or as a <span class="No-Break">SaaS applicatio<a id="_idTextAnchor286"/>n.</span></p>
+<h1 id="_idParaDest-202">Cloud solutions</h1>
+<p>Every cloud<a id="_idIndexMarker853"/> provider out there is fully aware of the need for proper monitoring and distributed logging, so they will have built their own native solutions. Sometimes it’s worth using native solutions, but not always. Let’s take a look at the major cloud providers and what they have <span class="No-Break">to offer.</span></p>
+<p>One of the first services available in AWS<a id="_idIndexMarker854"/> was <strong class="bold">CloudWatch</strong>. At first, it<a id="_idIndexMarker855"/> would just collect all kinds of metrics and allow you to create dashboards to better understand system performance and easily spot issues or simply a denial-of-service attack, which in turn allowed you to quickly react <span class="No-Break">to them.</span></p>
+<p>Another function of CloudWatch is alerting, but it’s limited to sending out emails using another Amazon <a id="_idIndexMarker856"/>service, <strong class="bold">Simple Email Service</strong>. Alerting and metrics could also trigger other actions inside your AWS account, such as scaling up or down the number of <span class="No-Break">running instances.</span></p>
+<p>As of the time of writing this book, CloudWatch can<a id="_idIndexMarker857"/> do so much more than monitoring. The developers of this service have added the ability to collect and search through logs (<strong class="bold">CloudWatch Logs Insights</strong>), monitor changes in AWS resources itself, and trigger actions. We’re also able to detect anomalies within our applications<a id="_idIndexMarker858"/> using <strong class="bold">CloudWatch </strong><span class="No-Break"><strong class="bold">anomaly detection</strong></span><span class="No-Break">.</span></p>
+<p>As for tracing, AWS has prepared a service <a id="_idIndexMarker859"/>called <strong class="bold">AWS X-Ray</strong>, which is an advanced distributed tracing system that can give you information about how your application is working in the production environment in almost real time. Unfortunately, its capabilities are limited to only a couple of languages out there: Node.js, Java, and .NET. So, you’re out of luck if your application is written <span class="No-Break">in Python.</span></p>
+<p>Looking at other popular <a id="_idIndexMarker860"/>cloud solutions, there’s Google. The <strong class="bold">Google Cloud Platform</strong> (<strong class="bold">GCP</strong>) consists of a smart solution for gathering logs, querying, and error reporting, and it’s called… <strong class="bold">Cloud Logging</strong>. If using this service <a id="_idIndexMarker861"/>within GCP, similarly to CloudWatch Logs, you will be able to send your application logs, store them, search for data you need (IP addresses, query strings, debug data, and so on), and analyze your logs by using <span class="No-Break">SQL-like queries.</span></p>
+<p>The similarities end here, though, as Google went a couple of steps further with additional features such as the ability to create log dashboards with visualizations of errors reported by your application, or creating <span class="No-Break">log-based metrics.</span></p>
+<p>In GCP, monitoring is carried out by another service entirely–Google Cloud Monitoring. It’s focused on gathering data about your application, creating <strong class="bold">Service-Level Objectives</strong> (<strong class="bold">SLOs</strong>), extensive <a id="_idIndexMarker862"/>metrics collection from<a id="_idIndexMarker863"/> Kubernetes (<strong class="bold">Google Kubernetes Engine</strong>, or <strong class="bold">GKE</strong>), and third-party integrations, for example, with <a id="_idIndexMarker864"/>a well-known service such <span class="No-Break">as </span><span class="No-Break"><strong class="bold">Prometheus</strong></span><span class="No-Break">.</span></p>
+<p>Looking at the Microsoft Cloud Platform—Azure—you<a id="_idIndexMarker865"/> will find <strong class="bold">Azure Monitor Service</strong>, which consists of several parts that cover the requirements for full-scope application monitoring and tracing. There is <strong class="bold">Azure Monitor Logs</strong> for gathering logs, obviously. There is also <strong class="bold">Azure Monitor Metrics</strong> for monitoring and visualizing all metrics you push there. You can also analyze, query, and set alerts like you would be able to in GCP or AWS. Tracing is being done by <strong class="bold">Azure Application Insights</strong>. It is being promoted by Microsoft as an <strong class="bold">Application Performance Management</strong> (<strong class="bold">APM</strong>) solution and is part of <strong class="bold">Azure Monitor</strong>. It offers a visual map of the application, real-time metrics, code analysis, usage data, and many more features. The implementation, obviously, differs between all cloud providers and their solutions. You will have to refer to the documentation on how to instrument and configure each of <span class="No-Break">those services.</span></p>
+<p>We will focus on AWS services. We will create a log group for our application and gather metrics from an EC2 instance. We will also talk about tracing with AWS X-Ray in Python, which we could use for our application running inside AWS infrastructure no matter the <span class="No-Break">und<a id="_idTextAnchor287"/>erlying service.</span></p>
+<h2 id="_idParaDest-203"><a id="_idTextAnchor288"/>CloudWatch Logs and metrics</h2>
+<p>CloudWatch Logs<a id="_idIndexMarker866"/> is a log management service provided by <a id="_idIndexMarker867"/>AWS that enables you to centralize, search, and monitor log data from various sources in a single place. It allows you to troubleshoot operational problems and security incidents, as well as monitor resource utilization <span class="No-Break">and performance.</span></p>
+<p>CloudWatch metrics are <a id="_idIndexMarker868"/>a monitoring service <a id="_idIndexMarker869"/>provided by AWS that allows you to collect, track, and monitor various metrics for your AWS resources <span class="No-Break">and applications.</span></p>
+<p>CloudWatch metrics provide users with a detailed view of how their AWS resources are performing, by collecting and displaying key metrics, such as CPU utilization, network traffic, and disk I/O, and other metrics related to AWS resources, such as EC2 instances, RDS instances, S3 buckets, and <span class="No-Break">Lambda functions.</span></p>
+<p>Users can use CloudWatch metrics to set alarms that will notify them when certain thresholds are exceeded, as well as to create custom dashboards that display important metrics in near real time. CloudWatch metrics also allow users to retrieve and analyze historical data, which can be used to identify trends and optimize <span class="No-Break">resource usage.</span></p>
+<p>To be able to <a id="_idIndexMarker870"/>send logs and metrics to CloudWatch, we will need <span class="No-Break">the following:</span></p>
+<ul>
+<li>An IAM policy that grants permissions to send logs to CloudWatch Logs. Additionally, we will allow pushing metrics data along with <span class="No-Break">the logs.</span></li>
+<li>To create an IAM role with the previously created policy attached to it. This role then can be assumed by EC2 instances, Lambda functions, or any other AWS services that require the ability to send logs to <span class="No-Break">CloudWatch Logs.</span></li>
+<li>To attach the role to a resource that we want to send logs to CloudWatch Logs. For our purpose, we will attach the role to an <span class="No-Break">EC2 instance.</span></li>
+</ul>
+<p>An <a id="_idIndexMarker871"/>example of an IAM policy is <span class="No-Break">as follows:</span></p>
+<pre class="source-code">
+{
+    “Version”: “2012-10-17”,
+    “Statement”: [
+        {
+            “Sid”: “CloudWatchLogsPermissions”,
+            “Effect”: “Allow”,
+            “Action”: [
+                “logs:CreateLogStream”,
+                “logs:CreateLogGroup”,
+                “logs:PutLogEvents”
+            ],
+            “Resource”: “arn:aws:logs:*:*:*”
+        },
+        {
+            “Sid”: “CloudWatchMetricsPermissions”,
+            “Effect”: “Allow”,
+            “Action”: [
+                “cloudwatch:PutMetricData”
+            ],
+            “Resource”: “*”
+        }
+    ]
+}</pre>
+<p>In this <a id="_idIndexMarker872"/>policy, the <strong class="source-inline">logs:CreateLogStream</strong> and <strong class="source-inline">logs:PutLogEvents</strong> actions are allowed for all CloudWatch Logs resources (<strong class="source-inline">arn:aws:logs:*:*:*</strong>), and the <strong class="source-inline">cloudwatch:PutMetricData</strong> action is allowed for all CloudWatch metric <span class="No-Break">resources (</span><span class="No-Break"><strong class="source-inline">*</strong></span><span class="No-Break">).</span></p>
+<p>We will also need a trust policy allowing EC2 to assume a role we’re going to create for it, in order to be able to send metrics and logs. The trust policy looks <span class="No-Break">like this:</span></p>
+<pre class="source-code">
+{
+  “Version”: “2012-10-17”,
+  “Statement”: [
+    {
+      “Effect”: “Allow”,
+      “Principal”: { “Service”: “ec2.amazonaws.com”},
+      “Action”: “sts:AssumeRole”
+    }
+  ]
+}</pre>
+<p>Save this to a <strong class="source-inline">trust-policy.json</strong> file, which we will use in <span class="No-Break">a moment.</span></p>
+<p>Using the<a id="_idIndexMarker873"/> AWS CLI tool, to create an instance profile and attach the preceding policy to it, you will need to run the <span class="No-Break">following commands:</span></p>
+<pre class="console">
+admin@myhome:~$ aws iam create-instance-profile --instance-profile-name DefaultInstanceProfile
+{
+    “InstanceProfile”: {
+        “Path”: “/”,
+        “InstanceProfileName”: “DefaultInstanceProfile”,
+        “InstanceProfileId”: “AIPAZZUIKRXR3HEDBS72R”,
+        “Arn”: “arn:aws:iam::673522028003:instance-profile/DefaultInstanceProfile”,
+        “CreateDate”: “2023-03-07T10:59:01+00:00”,
+        “Roles”: []
+    }
+}</pre>
+<p>We will also need a role with a trust policy attached <span class="No-Break">to it:</span></p>
+<pre class="console">
+admin@myhome:~$ aws iam create-role --role-name DefaultInstanceProfile --assume-role-policy-document file://trust-policy.json
+{
+    “Role”: {
+        “Path”: “/”,
+        “RoleName”: “DefaultInstanceProfile”,
+        “RoleId”: “AROAZZUIKRXRYB6HO35BL”,
+        “Arn”: “arn:aws:iam::673522028003:role/DefaultInstanceProfile”,
+        “CreateDate”: “2023-03-07T11:13:54+00:00”,
+        “AssumeRolePolicyDocument”: {
+            “Version”: “2012-10-17”,
+            “Statement”: [
+                {
+                    “Effect”: “Allow”,
+                    “Principal”: {
+                        “Service”: “ec2.amazonaws.com”
+                    },
+                    “Action”: “sts:AssumeRole”
+                }
+            ]
+        }
+    }
+}</pre>
+<p>Now, we can attach the role we just created to the instance profile, so we can use it in the <span class="No-Break">EC2 instance:</span></p>
+<pre class="console">
+admin@myhome:~$ aws iam add-role-to-instance-profile --role-name DefaultInstanceProfile --instance-profile-name DefaultInstanceProfile</pre>
+<p>And now, let’s <a id="_idIndexMarker874"/>attach a policy to use against the <span class="No-Break">EC2 service:</span></p>
+<pre class="console">
+admin@myhome:~$ aws iam put-role-policy --policy-name DefaultInstanceProfilePolicy --role-name DefaultInstanceProfile --policy-document file://policy.json</pre>
+<p>The <strong class="source-inline">policy.json</strong> file is the file where you’ve saved <span class="No-Break">the policy.</span></p>
+<p>An instance profile, as the name suggests, will work only with EC2 instances. To use the same policy for a Lambda function, we will need to create an IAM role instead and attach the newly created role to <span class="No-Break">a function.</span></p>
+<p>Let’s create a new instance using the AWS CLI as well, and attach the instance profile we’ve just created. This particular instance will be placed in a default VPC and in a public subnet. This will cause the instance to get a public IP address and will be available from the <span class="No-Break">public internet.</span></p>
+<p>To create an<a id="_idIndexMarker875"/> EC2 instance in a public subnet of the default VPC using <strong class="source-inline">DefaultInstanceProfile</strong>, you can follow <span class="No-Break">these steps:</span></p>
+<ol>
+<li>Get the ID of the <span class="No-Break">default VPC:</span></li>
+</ol>
+<pre class="console">
+    admin@myhome:~$ aws ec2 describe-vpcs --filters     “Name=isDefault,Values=true” --query “Vpcs[0].VpcId” --output text
+    vpc-0030a3a495df38a0e</pre>
+<p class="list-inset">This command will return the ID of the default VPC. We will need it in the <span class="No-Break">following steps.</span></p>
+<ol>
+<li value="2">Get the ID of a public subnet in the default VPC and save it for <span class="No-Break">later use:</span></li>
+</ol>
+<pre class="console">
+    admin@myhome:~$ aws ec2 describe-subnets --filters     “Name=vpc-id,Values=vpc-0030a3a495df38a0e”     “Name=map-public-ip-on-launch,Values=true” --query     “Subnets[0].SubnetId” --output text     subnet-0704b611fe8a6a169</pre>
+<p class="list-inset">To launch an <a id="_idIndexMarker876"/>EC2 instance, we will need an instance template <a id="_idIndexMarker877"/>called an <strong class="bold">Amazon Machine Image</strong> (<strong class="bold">AMI</strong>) and an SSH key that we will use to access this instance. To get an ID of an Ubuntu image, we can also use the AWS <span class="No-Break">CLI tool.</span></p>
+<ol>
+<li value="3">We will filter out the most recent AMI ID of Ubuntu 20.04 with the <span class="No-Break">following command:</span></li>
+</ol>
+<pre class="console">
+    admin@myhome:~$ aws ec2 describe-images --owners     099720109477 --filters “Name=name,Values=*ubuntu/images/    hvm-ssd/ubuntu-focal-20.04*” “Name=state,Values=available”    “Name=architecture,Values=x86_64” --query “reverse(sort_by(Images,    &amp;CreationDate))[:1].ImageId” --output text
+    ami-0a3823a4502bba678</pre>
+<p class="list-inset">This command will list all available Ubuntu 20.04 images owned by Canonical (<strong class="source-inline">099720109477</strong>) and filter them by name (<strong class="source-inline">ubuntu-focal-20.04-*</strong>), architecture (we need <strong class="source-inline">x86_64</strong>, not ARM), and whether they are available for use (state is available). It will also sort them by creation date in descending order and return the most recent (first on the list) <span class="No-Break">image ID.</span></p>
+<ol>
+<li value="4">Now, to create an SSH key, you will need to generate one for yourself or use the key you have already on your machine. We will need to upload a public part of our key to AWS. You can simply run another CLI command to <span class="No-Break">achieve this:</span></li>
+</ol>
+<pre class="console">
+admin@myhome:~$ aws ec2 import-key-pair --key-name admin-key --public-key-material fileb://home/admin/.ssh/admin-key.pub
+{
+    “KeyFingerprint”: “12:97:23:0f:d6:2f:2b:28:4d:a0:ad:62:a7:20:e3:f8”,
+    “KeyName”: “admin-key”,
+    “KeyPairId”: “key-0831b2bc5c2a08d82”
+}</pre>
+<p class="list-inset">With all <a id="_idIndexMarker878"/>that, finally, we’re ready to launch a new instance in the public subnet <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">DefaultInstanceProfile</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+admin@myhome:~$ aws ec2 run-instances --image-id ami-0abbe417ed83c0b29 --count 1 --instance-type t2.micro --key-name admin-key --subnet-id subnet-0704b611fe8a6a169 --associate-public-ip-address --iam-instance-profile Name=DefaultInstanceProfile
+{
+    “Groups”: [],
+    “Instances”: [
+        {
+            “AmiLaunchIndex”: 0,
+            “ImageId”: “ami-0abbe417ed83c0b29”,
+            “InstanceId”: “i-06f35cbb39f6e5cdb”,
+            “InstanceType”: “t2.micro”,
+            “KeyName”: “admin-key”,
+            “LaunchTime”: “2023-03-08T14:12:00+00:00”,
+            “Monitoring”: {
+                “State”: “disabled”
+            },
+            “Placement”: {
+                “AvailabilityZone”: “eu-central-1a”,
+                “GroupName”: “”,
+                “Tenancy”: “default”
+            },
+            “PrivateDnsName”: “ip-172-31-17-127.eu-central-1.compute.internal”,
+            “PrivateIpAddress”: “172.31.17.127”,
+            “ProductCodes”: [],
+            “PublicDnsName”: “”,
+            “State”: {
+                “Code”: 0,
+                “Name”: “pending”
+            },
+            “StateTransitionReason”: “”,
+            “SubnetId”: “subnet-0704b611fe8a6a169”,
+            “VpcId”: “vpc-0030a3a495df38a0e”,
+            “Architecture”: “x86_64”,
+            “BlockDeviceMappings”: [],
+            “ClientToken”: “5e4a0dd0-665b-4878-b852-0a6ff21c09d3”,
+            “EbsOptimized”: false,
+            “EnaSupport”: true,
+            “Hypervisor”: “xen”,
+            “IamInstanceProfile”: {
+                “Arn”: “arn:aws:iam::673522028003:instance-profile/DefaultInstanceProfile”,
+                “Id”: “AIPAZZUIKRXR3HEDBS72R”
+            },
+# output cut for readability</pre>
+<p class="list-inset">The output of the preceding command is information about newly launched instances you could use for scripting purposes or simply to save the instance IP address for <span class="No-Break">later use.</span></p>
+<p class="list-inset">At this point, you won’t be able to connect to the machine yet as, by default, all ports are closed. To open the SSH port (<strong class="source-inline">22</strong>), we will need to create a new <span class="No-Break">security group.</span></p>
+<ol>
+<li value="5">Use the <a id="_idIndexMarker879"/>following command to <span class="No-Break">achieve that:</span></li>
+</ol>
+<pre class="console">
+admin@myhome:~$ aws ec2 create-security-group --group-name ssh-access-sg --description “Security group for SSH access” --vpc-id vpc-0030a3a495df38a0e
+{
+    “GroupId”: “sg-076f8fad4e60192d8”
+}</pre>
+<p class="list-inset">The VPC ID we used is the one we saved earlier in the process, and the output is the ID of our new security group. We will need to add an ingress rule to it and connect it to our EC2 instance. See the <strong class="source-inline">InstanceID</strong> value in the long output once the machine is <span class="No-Break">created (</span><span class="No-Break"><strong class="source-inline">i-06f35cbb39f6e5cdb</strong></span><span class="No-Break">).</span></p>
+<ol>
+<li value="6">Use the following command to add an inbound rule to the security group that allows SSH access <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">0.0.0.0/0</strong></span><span class="No-Break">:</span></li>
+</ol>
+<pre class="console">
+admin@myhome:~$ aws ec2 authorize-security-group-ingress --group-id sg-076f8fad4e60192d8 --protocol tcp --port 22 --cidr 0.0.0.0/0
+{
+    “Return”: true,
+    “SecurityGroupRules”: [
+        {
+            “SecurityGroupRuleId”: “sgr-0f3b4be7d2b01a7f6”,
+            “GroupId”: “sg-076f8fad4e60192d8”,
+            “GroupOwnerId”: “673522028003”,
+            “IsEgress”: false,
+            “IpProtocol”: “tcp”,
+            “FromPort”: 22,
+            “ToPort”: 22,
+            “CidrIpv4”: “0.0.0.0/0”
+        }
+    ]
+}</pre>
+<p class="list-inset">We’ve used the ID of the security group that we created in a <span class="No-Break">previous step.</span></p>
+<p class="list-inset">This <a id="_idIndexMarker880"/>command added a new inbound rule to the security group that allows TCP traffic on port <strong class="source-inline">22</strong> (SSH) from any IP address (<strong class="source-inline">0.0.0.0/0</strong>). Instead of allowing full internet access to your new EC2 instance, you could choose to use your own public IP <span class="No-Break">address instead.</span></p>
+<ol>
+<li value="7">Now, we can attach this security group to <span class="No-Break">an instance:</span></li>
+</ol>
+<pre class="console">
+admin@myhome:~$ aws ec2 modify-instance-attribute --instance-id i-06f35cbb39f6e5cdb --groups  sg-076f8fad4e60192d8</pre>
+<p class="list-inset">At this point, port <strong class="source-inline">22</strong> should be open and ready to <span class="No-Break">receive connections.</span></p>
+<p class="list-inset">Let’s stop here for a moment. You’re probably wondering whether there is a better way to do this instead of with the AWS CLI. Yes, there is; there are various tools to automate the creation of the infrastructure. Those tools are generally called <strong class="bold">Infrastructure as Code</strong> (<strong class="bold">IaC</strong>) and <a id="_idIndexMarker881"/>we will talk about them in <a href="B18197_12.xhtml#_idTextAnchor365"><span class="No-Break"><em class="italic">Chapter 12</em></span></a>. There are various options we could have used in this example, from CloudFormation, which is the go-to IaC tool for AWS, to Terraform, from HashiCorp to <a id="_idIndexMarker882"/>the Pulumi project, which is <span class="No-Break">gaining traction.</span></p>
+<p class="list-inset">Now that we have an EC2 instance, we can connect to it and install the <strong class="bold">CloudWatch agent</strong>. It’s needed because AWS by default monitors only two metrics: CPU and memory usage. If you want to monitor disk space and send additional data<a id="_idIndexMarker883"/> to CloudWatch (such as logs or custom metrics), the agent is <span class="No-Break">a must.</span></p>
+<ol>
+<li value="8">After getting into the SSH console, we will need to download the CloudWatch agent <strong class="source-inline">deb</strong> package and install it using the <span class="No-Break"><strong class="source-inline">dpkg</strong></span><span class="No-Break"> tool:</span></li>
+</ol>
+<pre class="console">
+admin@myhome:~$ ssh -i ~/.ssh/admin-key ubuntu@3.121.74.46
+ubuntu@ip-172-31-17-127:~$ wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+ubuntu@ip-172-31-17-127:~$ sudo dpkg -i -E ./amazon-cloudwatch-agent.deb</pre>
+<p class="list-inset">Let’s become the <strong class="source-inline">root</strong> user so we can omit <strong class="source-inline">sudo</strong> from <span class="No-Break">every command:</span></p>
+<pre class="console">
+ubuntu@ip-172-31-17-127:~$ sudo -i
+root@ip-172-31-17-127:~# /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
+================================================================
+= Welcome to the Amazon CloudWatch Agent Configuration Manager =
+=                                                              =
+= CloudWatch Agent allows you to collect metrics and logs from =
+= your host and send them to CloudWatch. Additional CloudWatch =
+= charges may apply.                                           =
+================================================================
+On which OS are you planning to use the agent?
+1. linux
+2. windows
+3. darwin
+default choice: [1]:</pre>
+<p class="list-inset">It will <a id="_idIndexMarker884"/>ask a lot of questions, but it’s safe to leave most of them as their default and just hit <em class="italic">Enter</em>. There are some questions, however, that will require additional attention <span class="No-Break">from us:</span></p>
+<pre class="console">
+Do you want to monitor metrics from CollectD? WARNING: CollectD must be installed or the Agent will fail to start
+1. yes
+2. no
+default choice: [1]:</pre>
+<ol>
+<li value="9">If you answered <strong class="source-inline">yes</strong> (<strong class="source-inline">1</strong>) to this question, you will need to install collectd by invoking the <span class="No-Break">following command:</span></li>
+</ol>
+<pre class="console">
+root@ip-172-31-17-127:~# apt install -y collectd</pre>
+<ol>
+<li value="10">To the following question, answer <strong class="source-inline">no</strong> (<strong class="source-inline">2</strong>) unless you want some particular log file to be uploaded to <span class="No-Break">CloudWatch Logs:</span></li>
+</ol>
+<pre class="console">
+Do you want to monitor any log files?
+1. yes
+2. no
+default choice: [1]:
+2</pre>
+<ol>
+<li value="11">The final question is whether to save the agent configuration in AWS SSM, to which you can safely answer <strong class="source-inline">no</strong> (<strong class="source-inline">2</strong>) <span class="No-Break">as well:</span></li>
+</ol>
+<pre class="console">
+Do you want to store the config in the SSM parameter store?
+1. yes
+2. no
+default choice: [1]:
+2
+Program exits now.</pre>
+<p class="list-inset">The <a id="_idIndexMarker885"/>wizard will save the configuration in <strong class="source-inline">/opt/aws/amazon-cloudwatch-agent/bin/config.json</strong>. You will be able to alter it later or launch the wizard again <span class="No-Break">if needed.</span></p>
+<ol>
+<li value="12">Before we start the agent, we will need to convert the output JSON file into new <strong class="bold">Tom’s Obvious, Minimal Language</strong> (<strong class="bold">TOML</strong>) format, which<a id="_idIndexMarker886"/> is what the agent is using. Fortunately, there’s also a command for this job, too. We will use the agent control script to load the existing schema, save the TOML file, and optionally, start the agent if everything is <span class="No-Break">in order:</span></li>
+</ol>
+<pre class="console">
+root@ip-172-31-17-127:~# /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
+root@ip-172-31-17-127:~# systemctl status amazon-cloudwatch-agent
+amazon-cloudwatch-agent.service - Amazon CloudWatch Agent
+     Loaded: loaded (/etc/systemd/system/amazon-cloudwatch-agent.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2023-03-08 15:00:30 UTC; 4min 54s ago
+   Main PID: 20130 (amazon-cloudwat)
+      Tasks: 6 (limit: 1141)
+     Memory: 14.3M
+     CGroup: /system.slice/amazon-cloudwatch-agent.service
+             └─20130 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent -config /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.toml -envconfig /opt/aws/amazon-cloudwatch-agent/e&gt;
+Mar 08 15:00:30 ip-172-31-17-127 systemd[1]: Started Amazon CloudWatch Agent.
+Mar 08 15:00:30 ip-172-31-17-127 start-amazon-cloudwatch-agent[20130]: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json does not exist or cannot read. Skipping it.
+Mar 08 15:00:30 ip-172-31-17-127 start-amazon-cloudwatch-agent[20130]: I! Detecting run_as_user...</pre>
+<p>Now, we<a id="_idIndexMarker887"/> can go to the AWS web console and navigate to CloudWatch to see whether we can see the metrics coming in. It may take several minutes until <span class="No-Break">they’re shown.</span></p>
+<p>Before starting the CloudWatch agent, we will get about 17 different metrics for our EC2 instance, as seen in the <span class="No-Break">following screenshot:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer026">
+<img alt="Figure 10.1 – Basic EC2 and EBS metrics in CloudWatch without the CloudWatch agent installed" height="723" src="image/B18197_10_01.jpg" width="817"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.1 – Basic EC2 and EBS metrics in CloudWatch without the CloudWatch agent installed</p>
+<p>After we’ve started<a id="_idIndexMarker888"/> the CloudWatch agent, we will start receiving a lot more metrics and we will see an additional namespace in the CloudWatch <strong class="bold">Metrics</strong> panel. See the <span class="No-Break">following screenshot:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer027">
+<img alt="Figure 10.2 – CloudWatch metrics after successfully enabling the CloudWatch agent on the EC2 instance" height="956" src="image/B18197_10_02.jpg" width="982"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.2 – CloudWatch metrics after successfully enabling the CloudWatch agent on the EC2 instance</p>
+<p>All metrics we’re<a id="_idIndexMarker889"/> receiving can be used to create dashboards and alerts (including anomaly<a id="_idTextAnchor289"/> detection) in the <span class="No-Break">CloudWatch service.</span></p>
+<h2 id="_idParaDest-204"><a id="_idTextAnchor290"/>AWS X-Ray</h2>
+<p>AWS X-Ray is <a id="_idIndexMarker890"/>a service that enables you to trace requests through<a id="_idIndexMarker891"/> distributed systems and microservice applications. It provides an end-to-end view of requests as they travel through an application, allowing developers to identify performance bottlenecks, diagnose errors, and improve overall <span class="No-Break">application efficiency.</span></p>
+<p>With X-Ray, it’s possible to visualize the different components of your application and see how requests are being processed as they travel through each component. This includes details such as the time taken to complete each component, any errors that occur, and the cause of <span class="No-Break">those errors.</span></p>
+<p>X-Ray also provides a range of analysis tools, including statistical analysis and heat maps, to help developers identify trends and patterns in request processing. These insights can be used to optimize performance and ensure that the application is running as efficiently <span class="No-Break">as possible.</span></p>
+<p>AWS X-Ray supports a<a id="_idIndexMarker892"/> wide range of programming languages, including <span class="No-Break">the following:</span></p>
+<ul>
+<li><span class="No-Break">Node.js</span></li>
+<li><span class="No-Break">Java</span></li>
+<li>.<span class="No-Break">NET</span></li>
+<li><span class="No-Break">Go</span></li>
+<li><span class="No-Break">Python</span></li>
+<li><span class="No-Break">Ruby</span></li>
+<li><span class="No-Break">PHP</span></li>
+</ul>
+<p>To instrument your application with the diagnostic tools provided by AWS X-Ray, you can use the AWS SDK. Consider the following code (found in the GitHub repository <span class="No-Break">at </span><a href="https://github.com/Sysnove/flask-hello-world"><span class="No-Break">https://github.com/Sysnove/flask-hello-world</span></a><span class="No-Break">):</span></p>
+<pre class="source-code">
+from flask import Flask
+app = Flask(__name__)
+@app.route(‘/’)
+def hello_world():
+    return ‘Hello World!’
+if __name__ == ‘__main__’:
+    app.run()</pre>
+<p>To gather <a id="_idIndexMarker893"/>tracing data about this service, you’ll need to install the <strong class="source-inline">aws_xray_sdk</strong> package using the <strong class="source-inline">pip</strong> package manager. Then, import the <strong class="source-inline">xray_recorder</strong> subpackage into our code. In this case, we will also use this SDK's integration with the Flask framework. The modified code will look <span class="No-Break">like this:</span></p>
+<pre class="source-code">
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
+xray_recorder.configure(service=’FlaskHelloWorldApp’)
+app = Flask(__name__)
+XRayMiddleware(app, xray_recorder)</pre>
+<p>The rest<a id="_idIndexMarker894"/> of the code can remain unchanged. Here, we are configuring the X-Ray recorder to use the service name <strong class="source-inline">FlaskHelloWorldApp</strong>, which will show up in the X-Ray console as the name of our service. When the service starts running, you can go to the X-Ray console and see the service name <strong class="source-inline">FlaskHelloWorldApp</strong> with a list <span class="No-Break">of traces.</span></p>
+<p>The full documentation <a id="_idIndexMarker895"/>for the AWS X-Ray SDK can be found on this <span class="No-Break">website: </span><a href="https://docs.aws.amazon.com/xray-sdk-for-python/latest/reference/index.xhtml"><span class="No-Break">https://docs.aws.amazon.com/xray-sdk-for-python/latest/reference/index.xhtml</span></a><span class="No-Break">.</span></p>
+<p>When running the preceding application on the EC2 instance we created in a previous section, you will see a complete picture of the running environment of your application including the internals of the running <span class="No-Break">Flask processes.</span></p>
+<p>There are multiple projects that deal with application monitoring, tracing, and gathering logs. Apart from cloud-hosted solutions that are available in the cloud environment, there are commercial and open source solutions worth knowing about. This awareness might prove useful when dealing<a id="_idTextAnchor291"/> with more and more common <span class="No-Break">hybrid solutions.</span></p>
+<h1 id="_idParaDest-205">Open source solutions for self-hosting</h1>
+<p>One of the most<a id="_idIndexMarker896"/> popular projects built around monitoring that is also adopted by commercial solutions<a id="_idIndexMarker897"/> is <strong class="bold">OpenTelemetry</strong>. It’s an open source project for application monitoring and observability. It provides a set of APIs, libraries, agents, and integrations for collecting, processing, and exporting telemetry data such as traces, metrics, and logs from different sources in distributed systems. OpenTelemetry is designed to be vendor-agnostic and cloud-native, meaning it can work with various cloud providers, programming languages, frameworks, <span class="No-Break">and architectures.</span></p>
+<p>The main goal of OpenTelemetry is to provide developers and operators with a unified and standardized way to instrument, collect, and analyze telemetry data across the entire stack of their applications and services, regardless of the underlying infrastructure. OpenTelemetry supports different data formats, protocols, and export destinations, including popular observability platforms<a id="_idIndexMarker898"/> such as <strong class="bold">Prometheus</strong>, <strong class="bold">Jaeger</strong>, <strong class="bold">Zipkin</strong>, <strong class="bold">Grafana</strong>, and <strong class="bold">SigNoz</strong>. This <a id="_idIndexMarker899"/>allows users to mix and match their<a id="_idIndexMarker900"/> preferred <a id="_idIndexMarker901"/>tools <a id="_idIndexMarker902"/>and services to build a comprehensive observability pipeline that meets their <span class="No-Break">specific needs.</span></p>
+<p>Some examples of commercial software that adopts OpenTelemetry <a id="_idIndexMarker903"/>are <strong class="bold">Datadog</strong>, AWS, and <strong class="bold">New Relic</strong>. AWS <a id="_idIndexMarker904"/>provides OpenTelemetry Collector as a managed service for collecting and exporting telemetry data to AWS services such<a id="_idTextAnchor292"/> as Amazon CloudWatch, AWS X-Ray, and AWS <span class="No-Break">App Runner.</span></p>
+<h2 id="_idParaDest-206"><a id="_idTextAnchor293"/>Prometheus</h2>
+<p>Prometheus is<a id="_idIndexMarker905"/> an open source <a id="_idIndexMarker906"/>monitoring solution that is widely used for collecting and querying metrics from distributed systems. It was created by the developers at SoundCloud and is now maintained <a id="_idIndexMarker907"/>by the <strong class="bold">Cloud Native Computing Foundation</strong> (<strong class="bold">CNCF</strong>). Prometheus is designed to be highly scalable and adaptable, with support for a wide range of data sources and integration options. It allows users to define and collect custom metrics, visualize data through a built-in dashboard, and set alerts based on predefined thresholds or anomalies. Prometheus <a id="_idIndexMarker908"/>is often used in conjunction with Kubernetes and other cloud-native technologies, but it can also be used to monitor traditional infrastructure <span class="No-Break">and applications.</span></p>
+<p>One <a id="_idIndexMarker909"/>common use case is to track request latencies and error rates, which can help identify performance bottlenecks and potential issues in the application. To get started with monitoring a Flask application using Prometheus, you can use the Prometheus client library for Python. This library provides decorators that can be added to Flask routes to automatically generate metrics such as request count, request duration, and HTTP response codes. These metrics can then be collected by a Prometheus server and displayed on a Grafana dashboard for visualization <span class="No-Break">and analysis.</span></p>
+<p>Here’s an example of how you can instrument the “<em class="italic">Hello World</em>” Flask application with Prometheus to send metrics. We used the same application with AWS X-Ray in a <span class="No-Break">previous section.</span></p>
+<p>First, you’ll need to install the <strong class="source-inline">prometheus_client</strong> library <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pip</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+$ pip install prometheus_client</pre>
+<p>Next, you can modify the <strong class="source-inline">app.py</strong> file in the <strong class="source-inline">flask-hello-world</strong> repository to add the Prometheus client library and instrument the routes with metrics. Here’s <span class="No-Break">an example:</span></p>
+<pre class="source-code">
+from flask import Flask
+from prometheus_client import Counter, Histogram, start_http_server
+app = Flask(__name__)
+# Define Prometheus metrics
+REQUEST_COUNT = Counter(‘hello_world_request_count’, ‘Hello World Request Count’)
+REQUEST_LATENCY = Histogram(‘hello_world_request_latency_seconds’, ‘Hello World Request Latency’,
+                            bins=[0.1, 0.2, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0])
+# Instrument Flask routes with Prometheus metrics
+@app.route(‘/’)
+@REQUEST_LATENCY.time()
+def hello():
+    REQUEST_COUNT.inc()
+    return “Hello World!”
+# Start the Prometheus server on port 8000
+if __name__ == ‘__main__’:
+    start_http_server(8000)
+    app.run(debug=True)</pre>
+<p>In this example, we’ve defined two Prometheus metrics: <strong class="source-inline">hello_world_request_count</strong> and <strong class="source-inline">hello_world_request_latency_seconds</strong>. The <strong class="source-inline">hello()</strong> route is instrumented <a id="_idIndexMarker910"/>with these metrics using decorators. The <strong class="source-inline">REQUEST_LATENCY</strong> histogram measures<a id="_idIndexMarker911"/> the request latency for each request, while the <strong class="source-inline">REQUEST_COUNT</strong> counter increments on <span class="No-Break">each request.</span></p>
+<p>We’ve started the Prometheus server on port <strong class="source-inline">8000</strong> using <strong class="source-inline">start_http_server()</strong>. This will make the metrics available for collection by a <span class="No-Break">Prometheus server.</span></p>
+<p>To view the metrics, you can navigate to <a href="http://localhost:8000/metrics">http://localhost:8000/metrics</a> in your web browser. This will display the raw metrics data in Prometheus format. You can also use a t<a id="_idTextAnchor294"/>ool such as Grafana to visualize the metrics on <span class="No-Break">a dashboard.</span></p>
+<h2 id="_idParaDest-207"><a id="_idTextAnchor295"/>Grafana</h2>
+<p>Grafana is a <a id="_idIndexMarker912"/>popular open source dashboard <a id="_idIndexMarker913"/>and data visualization platform that enables users to create interactive and customizable dashboards for monitoring and analyzing metrics from various data sources. It is usually used <span class="No-Break">alongside Prometheus.</span></p>
+<p>With Grafana, users can create visualizations, alerting rules, and dashboards that provide insight into the performance and behavior of their applications and infrastructure. Grafana supports a wide range of data sources, including popular time-series databases such as Prometheus, InfluxDB, and Graphite, making it a versatile tool for monitoring and visualization. Once you have connected your data source, you can start creating dashboards by adding panels to visualize the data. These panels can include various types of visualizations, including line graphs, bar charts, and gauges. You can also customize the dashboard layout, add annotations, and set up alerts to notify you of anomalies or issues in your metrics. With its powerful features and flexibility, Grafana is a go-to tool for visualizing and analyzing application and <span class="No-Break">infrastructure metrics.</span></p>
+<p>Grafana Labs also created the Grafana Loki project, which can be used to extend your monitoring with logs visualization. <strong class="bold">Grafana Loki</strong> is a<a id="_idIndexMarker914"/> horizontally scalable log aggregation system that provides a way to centralize logs from various sources and quickly search and analyze them. It’s being seen as an alternative to Prometheus, but both tools have different use cases and could be complementary to <span class="No-Break">each other.</span></p>
+<p>Loki, unlike traditional log management solutions, does not index or parse logs upfront. Instead, it uses a streaming pipeline that extracts log labels and stores them in a compact and efficient format, making it ideal for ingesting and querying large volumes of logs in real time. Grafana Loki integrates seamlessly with Grafana, allowing users to correlate logs with metrics and create powerful dashboards that provide insight into the behavior of their applications <span class="No-Break">and infrastructure.</span></p>
+<p>To use Grafana Loki, you need to set up a Loki server and configure it to receive log data from your applications and infrastructure. Once Loki is set up, you can use the Grafana Explore feature to search and visualize logs in real time. Explore provides a user-friendly interface that enables you to search logs using var<a id="_idTextAnchor296"/>ious filters, such as labels, time range, and <span class="No-Break">query expressions</span></p>
+<h2 id="_idParaDest-208"><a id="_idTextAnchor297"/>SigNoz</h2>
+<p>SigNoz is <a id="_idIndexMarker915"/>an observability platform that enables <a id="_idIndexMarker916"/>users to collect, store, and analyze application metrics’ telemetry data and provides log management under a single web panel. It is built on top of the OpenTelemetry specification, which is an industry-standard framework for distributed tracing and metric collection. SigNoz provides a simple, intuitive interface for users to view real-time and historical data about their applications’ performance <span class="No-Break">and health.</span></p>
+<p>SigNoz has its own agent that you can install on your servers, but it also supports Prometheus as a data source. So, if you’re already using Prometheus, you can use SigNoz without any significant changes to your <span class="No-Break">monitoring infrastructure.</span></p>
+<p>To install SigNoz on your server, you can <a id="_idIndexMarker917"/>follow a comprehensive guide<a id="_idTextAnchor298"/> on the official project <span class="No-Break">website: </span><a href="https://signoz.io/docs/install/"><span class="No-Break">https://signoz.io/docs/install/</span></a><span class="No-Break">.</span></p>
+<h2 id="_idParaDest-209"><a id="_idTextAnchor299"/>New Relic Pixie</h2>
+<p>New Relic <a id="_idIndexMarker918"/>is a well-known monitoring SaaS solution; we <a id="_idIndexMarker919"/>will get back to it later in this chapter in the <em class="italic">SaaS solutions</em> section. Pixie is an open source project started by New Relic and was contributed <span class="No-Break">to CNCF.</span></p>
+<p>CNCF is an open <a id="_idIndexMarker920"/>source software foundation that was established in 2015 to advance the development and adoption of cloud-native technologies. CNCF is the home of many popular projects, such as Kubernetes, Prometheus, and Envoy, which are widely used in modern cloud-native applications. The foundation aims to create a vendor-neutral ecosystem for cloud-native computing, promoting interoperability and standardization among different cloud platforms and technologies. CNCF also hosts several certification programs that help developers and organizations validate their proficiency in cloud-native technologies. CNCF plays a critical role in driving innovation and standardization in the rapidly evolving <span class="No-Break">cloud-native landscape.</span></p>
+<p>New Relic Pixie <a id="_idIndexMarker921"/>is an open source, Kubernetes-native observability solution that provides real-time monitoring and tracing capabilities for modern applications. It can help developers and operations teams to quickly identify and troubleshoot performance issues in microservices-based applications running on Kubernetes clusters. Pixie can be easily deployed on any Kubernetes cluster and provides out-of-the-box support for popular open source tools such as Prometheus, Jaeger, <span class="No-Break">and OpenTelemetry.</span></p>
+<p>One of the <a id="_idIndexMarker922"/>key benefits of using New Relic Pixie is that it provides end-to-end visibility into the performance of applications and infrastructure, from the application code to the underlying Kubernetes resources. By collecting and analyzing data from various sources, including logs, metrics, and traces, Pixie can help pinpoint the root cause of performance bottlenecks and issues. This can significantly reduce the <strong class="bold">Mean Time to Resolution</strong> (<strong class="bold">MTTR</strong>) and<a id="_idIndexMarker923"/> improve application reliability <span class="No-Break">and uptime.</span></p>
+<p>Another <a id="_idIndexMarker924"/>advantage of New Relic Pixie is that it uses a unique instrumentation approach that does not require any code changes or configuration. Pixie uses <strong class="bold">extended Berkeley Packet Filter</strong> (<strong class="bold">eBPF</strong>) technology<a id="_idIndexMarker925"/> to collect performance data at the kernel level, allowing for low-overhead monitoring without adding any additional load to applications or infrastructure. This makes it an ideal solution for monitoring and tracing modern, cloud-native applications that are highly dynamic and scalable. Overall, New Relic Pixie provides a powerful and easy-to-use observability solution that can help teams to optimi<a id="_idTextAnchor300"/>ze the performance and reliability of their <span class="No-Break">Kubernetes-based applications.</span></p>
+<h2 id="_idParaDest-210"><a id="_idTextAnchor301"/>Graylog</h2>
+<p>Graylog is <a id="_idIndexMarker926"/>an open source log management <a id="_idIndexMarker927"/>platform that allows users to collect, index, and analyze log data from various sources. The platform provides a centralized location for monitoring and troubleshooting applications, systems, and network infrastructure. It is built on top of Elasticsearch, MongoDB, and Apache Kafka, which ensures high scalability <span class="No-Break">and availability.</span></p>
+<p>Graylog has the ability to scale horizontally, which means that you can add additional Graylog nodes to handle increased log data volume and query load. The system can also distribute the workload across multiple nodes, which allows for efficient use of resources and faster processing of data. This scalability makes Graylog suitable for organizations of any size, from small start-ups to <span class="No-Break">large enterprises.</span></p>
+<p>Graylog uses Elasticsearch as the primary data store for indexing and searching log data. Elasticsearch is a powerful search and analytics engine that enables fast and efficient querying of large datasets. MongoDB in Graylog is used to store metadata about log data and manage the configuration and state of <span class="No-Break">the system.</span></p>
+<p>Graylog also <a id="_idIndexMarker928"/>has a web-based user interface that allows users to search and visualize log data, as well as manage system configuration <span class="No-Break">and settings:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer028">
+<img alt="Figure 10.3 – Graylog logging system architecture" height="848" src="image/B18197_10_03.jpg" width="876"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.3 – Graylog logging system architecture</p>
+<p>The<a id="_idIndexMarker929"/> architecture o<a id="_idTextAnchor302"/>f this solution is pretty simple, as you can notice in the <span class="No-Break">preceding diagram.</span></p>
+<h2 id="_idParaDest-211"><a id="_idTextAnchor303"/>Sentry</h2>
+<p>Sentry is<a id="_idIndexMarker930"/> an open source error tracking tool that <a id="_idIndexMarker931"/>helps developers monitor and fix errors in their applications. It allows developers to track errors and exceptions in real time, enabling them to quickly diagnose and fix issues before they become critical. Sentry supports multiple programming languages, including Python, Java, JavaScript, and Ruby, <span class="No-Break">among others.</span></p>
+<p>One of the key benefits <a id="_idIndexMarker932"/>of using Sentry is its ease of setup and integration. Sentry can be easily integrated with popular frameworks and platforms, such as Django, Flask, and Rails, among others. It also provides a range of plugins and integrations with third-party tools, such as Slack and GitHub, to help developers streamline their workflows and collaborate <span class="No-Break">more effectively.</span></p>
+<p>Sentry provides developers with detailed error reports that include information about the error, such as the stack trace, environment variables, and request parameters. This allows developers to quickly identify the cause of the error and take corrective action. Sentry also provides real-time notifications when errors occur, so developers can <span class="No-Break">respond immediately.</span></p>
+<p>Another benefit of using Sentry is its ability to analyze errors over time. Sentry allows developers to track error rates and identify patterns in error occurrence, making it easier to identify and address systemic issues in the application. This data can also be used to improve the overall performance and reliability of <span class="No-Break">the application.</span></p>
+<p>Sentry provides integration with Jira, which is a popular ticketing and issue-tracking system. The integration allows developers to create Jira issues directly from within Sentry, making it easier to manage and track issues that are discovered <span class="No-Break">through Sentry.</span></p>
+<p>To set up the integration, you will first need to create a Jira API token and configure the integration settings in Sentry. Once the integration is set up, you can create Jira issues directly from Sentry by clicking the <strong class="bold">Create JIRA issue</strong> button on the <strong class="bold">Error details</strong> page. This will automatically populate the Jira issue with relevant information about the error, such as the error message, stack trace, and request parameters. You can find detailed instructions on how to do it on the official documentation page <span class="No-Break">here: </span><a href="https://docs.sentry.io/product/integrations/issue-tracking/jira/"><span class="No-Break">https://docs.sentry.io/product/integrations/issue-tracking/jira/</span></a><span class="No-Break">.</span></p>
+<p>Sentry<a id="_idIndexMarker933"/> provides integrations with several other popular ticketing and issue-tracking systems, such as GitHub, Trello, Asana, Clubhouse, and PagerDuty, which allows you to trigger PagerDuty incidents directly <span class="No-Break">from Sentry.</span></p>
+<p>In this section, we have shown you several leading solutions that are both open source and suitable for self-hosting. Self-hosting may, however, not be what you are looking for, if you <a id="_idIndexMarker934"/>wish to lower the complexity of both deployment and maintenance. The next section w<a id="_idTextAnchor304"/>ill cover monitoring and logging software hosted for you by <span class="No-Break">third-party companies.</span></p>
+<h1 id="_idParaDest-212">SaaS solutions</h1>
+<p>SaaS monitoring <a id="_idIndexMarker935"/>solutions are the easiest (and most expensive) to use. In most cases, what you’ll need to do is install and configure a small daemon (agent) on your servers or inside a cluster. And there you go, all your monitoring data is visible within minutes. SaaS is great if your team doesn’t have the capacity to implement other solutions but your budget allows you to use one. Here are some <a id="_idTextAnchor305"/>more popular applications for handling your monitoring, tracing, and <span class="No-Break">logging needs.</span></p>
+<h2 id="_idParaDest-213"><a id="_idTextAnchor306"/>Datadog</h2>
+<p><strong class="bold">Datadog</strong> is a <a id="_idIndexMarker936"/>monitoring and analytics platform that provides <a id="_idIndexMarker937"/>visibility into the performance and health of applications, infrastructure, and networks. It was founded in 2010 by Olivier Pomel and Alexis Lê-Quôc and is headquartered in New York City, with offices around the world. According to Datadog’s financial report for the fiscal year 2021 (ending December 31, 2021), their total revenue was $2.065 billion, which represents a 60% increase from the previous year (fiscal <span class="No-Break">year 2020).</span></p>
+<p>Datadog’s platform integrates with more than 450 technologies, including cloud providers, databases, and containers, allowing users to collect and correlate data from across their entire technology stack. It provides real-time monitoring, alerting, and collaboration tools that enable teams to troubleshoot issues, optimize performance, and improve the <span class="No-Break">user experience.</span></p>
+<p>Datadog allows users to monitor the health and performance of their servers, containers, and cloud services, providing insights into CPU usage, memory utilization, network traffic, <span class="No-Break">and more.</span></p>
+<p>Datadog’s APM<a id="_idIndexMarker938"/> tools provide detailed insights into the performance of <a id="_idIndexMarker939"/>web applications, microservices, and other distributed systems, allowing users to identify and diagnose bottlenecks <span class="No-Break">and issues.</span></p>
+<p>Log management tools in Datadog enable users to collect, process, and analyze logs from across their entire infrastructure, helping to troubleshoot issues and <span class="No-Break">identify trends.</span></p>
+<p>And finally, Datadog security monitoring helps detect and respond to threats by analyzing network traffic, identifying anomalies, and integrating with <span class="No-Break">security solutions.</span></p>
+<p>Dashboarding in Datadog allows users to visualize and analyze data from their applications, infrastructure, and network in a centralized location. Users can create a dashboard in Datadog by clicking on the <strong class="bold">Create Dashboard</strong> button and selecting the type of dashboard they want to create (e.g., <strong class="bold">Infrastructure</strong>, <strong class="bold">APM</strong>, <strong class="bold">Log</strong>, or <strong class="bold">Custom</strong>). They can then add widgets to the dashboard and configure their settings. There are multiple automated dashboards available; for instance, if you start sending data from a Kubernetes cluster, Datadog will show a dashboard for that. You can find more detailed information about using dashboards on the Datadog documentation <span class="No-Break">website: </span><a href="https://docs.datadoghq.com/getting_started/dashboards/"><span class="No-Break">https://docs.datadoghq.com/getting_started/dashboards/</span></a><span class="No-Break">.</span></p>
+<p>Widgets are the building blocks of a dashboard in Datadog. They can display metrics, logs, traces, events, or custom data. To add a widget, users can click on the <strong class="bold">+</strong> button and select the type of widget they want to add. They can then configure the widget’s settings, such as selecting the data source, applying filters, and setting the time range. For instance, you can view an example dashboard for the nginx web server on the Datadog web <span class="No-Break">page: </span><a href="https://www.datadoghq.com/dashboards/nginx-dashboard/"><span class="No-Break">https://www.datadoghq.com/dashboards/nginx-dashboard/</span></a><span class="No-Break">.</span></p>
+<p>In addition to displaying data on a dashboard, Datadog provides various tools for exploring and analyzing data, such as the query builder, Live Tail, and t<a id="_idTextAnchor307"/>racing. Users can use these tools to dive deeper into the data and <span class="No-Break">troubleshoot issues.</span></p>
+<h2 id="_idParaDest-214"><a id="_idTextAnchor308"/>New Relic</h2>
+<p><strong class="bold">New Relic</strong> is a<a id="_idIndexMarker940"/> cloud-based software analytics company that<a id="_idIndexMarker941"/> provides real-time insights into the performance of web and mobile applications. Founded in 2008 by Lew Cirne (a software engineer and entrepreneur with experience at companies such as Apple and Wily Technology), New Relic has become a leading player in the <strong class="bold">Application Performance Management</strong> (<strong class="bold">APM</strong>) market. The <a id="_idIndexMarker942"/>company is headquartered in San Francisco and has offices in a number of other cities around the world. New Relic went public in 2014 and is traded on the New York Stock Exchange under the <span class="No-Break">symbol </span><span class="No-Break"><em class="italic">NEWR</em></span><span class="No-Break">.</span></p>
+<p>New Relic<a id="_idIndexMarker943"/> reported its 2021 fiscal year financial results in May 2021. According to the report, New Relic’s revenue for the full fiscal year 2021 was $600.8 million, which represents a 3% increase compared to the previous <span class="No-Break">fiscal year.</span></p>
+<p>It’s worth noting <a id="_idIndexMarker944"/>that New Relic experienced some challenges in fiscal year 2021, including the impact of the COVID-19 pandemic and a strategic shift to a new <span class="No-Break">pricing model.</span></p>
+<p>New Relic’s main purpose is to help companies optimize their application performance and identify issues before they become major problems. The platform provides real-time visibility into the entire application stack, from the frontend user interface to the backend infrastructure, allowing developers and operations teams to quickly identify bottlenecks and <span class="No-Break">optimize performance.</span></p>
+<p>New Relic’s APM solution offers a variety of features, including code-level visibility, transaction tracing, real-time monitoring, and alerting. The platform also provides insights into application dependencies, database performance, and <span class="No-Break">user behavior.</span></p>
+<p>In addition to APM, New Relic also offers a range of other pro<a id="_idTextAnchor309"/>ducts and services, including infrastructure monitoring, mobile APM, and <span class="No-Break">browser monitoring.</span></p>
+<h2 id="_idParaDest-215"><a id="_idTextAnchor310"/>Ruxit</h2>
+<p><strong class="bold">Ruxit</strong> is a <a id="_idIndexMarker945"/>comprehensive APM solution that helps businesses identify <a id="_idIndexMarker946"/>and troubleshoot performance issues across complex distributed applications, microservices, and cloud-native environments. It was initially founded in 2012 as an independent company and was later acquired by Dynatrace in 2015, expanding Dynatrace’s <span class="No-Break">APM capabilities.</span></p>
+<p>One of the key features<a id="_idIndexMarker947"/> of Ruxit is its ability to provide end-to-end visibility into the performance of applications, including code-level diagnostics, user experience monitoring, and infrastructure monitoring. This means that it can help businesses quickly pinpoint the root cause of performance problems and identify opportunities <span class="No-Break">for optimization.</span></p>
+<p>Ruxit also<a id="_idIndexMarker948"/> has a range of other features designed to make monitoring and troubleshooting easier and more efficient. For example, it uses artificial intelligence and machine learning to automatically detect anomalies and performance degradations, alerting <a id="_idIndexMarker949"/>users in real time. It also provides a range of analytics and visualization tools to help users understand application performance trends and identify patterns <span class="No-Break">over time.</span></p>
+<p>In addition to its monitoring capabilities, Ruxit also provides a range of integrations with other tools and services commonly used in modern application environments. This includes integration with container orchestration pl<a id="_idTextAnchor311"/>atforms such as Kubernetes, as well as with popular application development frameworks <span class="No-Break">and tools.</span></p>
+<h2 id="_idParaDest-216"><a id="_idTextAnchor312"/>Splunk</h2>
+<p><strong class="bold">Splunk</strong> was <a id="_idIndexMarker950"/>founded in 2003 by Erik Swan, Rob Das, and Michael Baum in <a id="_idIndexMarker951"/>San Francisco, California. Since then, the company has grown significantly and is now a publicly traded company with a global presence. Splunk’s software solutions are used by organizations in various industries, including financial services, healthcare, government, and retail, to name <span class="No-Break">a few.</span></p>
+<p>Splunk, you guessed it, is a data analysis and monitoring software solution used to monitor, search, analyze, and visualize machine-generated data in real time. The software can gather and analyze data from various sources, including servers, applications, networks, and mobile devices, and provide insights into the performance and behavior of an organization’s <span class="No-Break">IT infrastructure.</span></p>
+<p>The main uses of Splunk include security monitoring, application monitoring, log management, and business analytics. With Splunk, users can identify security threats, troubleshoot application performance issues, monitor network activity, and gain insights into <span class="No-Break">business operations.</span></p>
+<p>One of the key features<a id="_idIndexMarker952"/> of Splunk is its ability to collect and analyze data from a wide range of sources, including structured and unstructured data. The software can also scale to handle large volumes of data, making it a <span class="No-Break">powerful tool.</span></p>
+<p>In this section, we have presented you with a few leading solutions hosted by third-party companies that are ready to use; they just require integration with your systems. In <a id="_idTextAnchor313"/>the next section, we are going to describe and explain retention policies for both logs <span class="No-Break">and metrics.</span></p>
+<h1 id="_idParaDest-217">Log and metrics retention</h1>
+<p><strong class="bold">Data retention</strong> refers<a id="_idIndexMarker953"/> to the practice of retaining data, or keeping data stored for a certain period of time. This can involve storing data on servers, hard drives, or other storage devices. The purpose of data retention is to ensure that data is available for future use <span class="No-Break">or analysis.</span></p>
+<p>Data retention policies are often developed by organizations to determine how long specific types of data should be retained. These policies may be driven by regulatory requirements, legal obligations, or business needs. For example, some regulations may require financial institutions to retain transaction data for a certain number of years, while businesses may choose to retain customer data for marketing or <span class="No-Break">analytics purposes.</span></p>
+<p>Data retention policies typically include guidelines for how data should be stored, how long it should be retained, and when it should be deleted. Effective data retention policies can help organizations to manage their data more efficiently, reduce storage costs, and ensure compliance with applicable regulations <span class="No-Break">and laws.</span></p>
+<p>When it comes to data retention strategies, organizations have a number of options to consider. De<a id="_idTextAnchor314"/>pending on the specific needs of the organization, different strategies may be more or <span class="No-Break">less suitable.</span></p>
+<h2 id="_idParaDest-218"><a id="_idTextAnchor315"/>Full retention</h2>
+<p>In this <a id="_idIndexMarker954"/>strategy, all data is kept indefinitely. This is often used for compliance purposes, such as for regulatory requirements that mandate data retention for a specific period of time. This strategy can be expensive as it requires a large amount of sto<a id="_idTextAnchor316"/>rage, but it can also provide significant benefits in terms of historical analysis and <span class="No-Break">trend spotting.</span></p>
+<h2 id="_idParaDest-219"><a id="_idTextAnchor317"/>Time-based retention</h2>
+<p>Time-based retention<a id="_idIndexMarker955"/> is a strategy where data is kept for a specific period of time before it is deleted. This strategy is often used to balance the need for data with storage cos<a id="_idTextAnchor318"/>ts. The retention period can be set <a id="_idIndexMarker956"/>based on regulatory requirements, business needs, or <span class="No-Break">other factors.</span></p>
+<h2 id="_idParaDest-220"><a id="_idTextAnchor319"/>Event-based retention</h2>
+<p>Event-based retention<a id="_idIndexMarker957"/> is a strategy where data is kept based on specific events or triggers. For example, data may be retained for a specific customer or transaction, or based on the severity of a<a id="_idTextAnchor320"/>n event. This strategy can help to reduce storage costs while still maintaining access to <span class="No-Break">important data.</span></p>
+<h2 id="_idParaDest-221"><a id="_idTextAnchor321"/>Selective retention</h2>
+<p>Selective retention is a <a id="_idIndexMarker958"/>strategy where only certain types of data are retained. This strategy can be used to prioritize the retention of the most important data while reducing storage costs. For example, <a id="_idTextAnchor322"/>an organization may choose to retain only data related to financial transactions or <span class="No-Break">customer interactions.</span></p>
+<h2 id="_idParaDest-222"><a id="_idTextAnchor323"/>Tiered retention</h2>
+<p>Tiered retention<a id="_idIndexMarker959"/> is a strategy where data is stored in different tiers based on its age or importance. For example, recent data may be stored on fast, expensive storage, while older data is moved to slower, less expensive storage. This strategy can help to balance the need for fast access to recent data with the need to reduce storage costs <span class="No-Break">over time.</span></p>
+<p>Each of these data retention strategies has its own benefits and drawbacks, and the best strategy for an organization will depend on its specific needs and goals. It’s important to carefully consider the trade-offs between cost, storage capacity, and the value of the data being retained when choosing a data <span class="No-Break">retention strategy.</span></p>
+<p>The most common mistake in organizations is to use full retention strategies <em class="italic">just in case</em>, which often leads to e<a id="_idTextAnchor324"/>xhausted disk space and increased cloud costs. Sometimes this strategy is justified, but not in <span class="No-Break">most cases.</span></p>
+<h1 id="_idParaDest-223">Summary</h1>
+<p>In this chapter, we covered the differences between monitoring, tracing, and logging. Monitoring is the process of observing and collecting data on a system to ensure it’s running correctly. Tracing is the process of tracking requests as they flow through a system to identify performance issues. Logging is the process of recording events and errors in a system for <span class="No-Break">later analysis.</span></p>
+<p>We also discussed cloud solutions for monitoring, logging, and tracing in Azure, GCP, and AWS. For Azure, we mentioned Azure Monitor for monitoring and Azure Application Insights for tracing. For AWS, we mentioned CloudWatch for monitoring and logging, and X-Ray <span class="No-Break">for tracing.</span></p>
+<p>We then went on to explain and provide an example of configuring the AWS CloudWatch agent on an EC2 instance. We also introduced AWS X-Ray with a code example to show how it can be used to trace requests in a <span class="No-Break">distributed system.</span></p>
+<p>Finally, we named some open source and SaaS solutions for monitoring, logging, and tracing, including Grafana, Prometheus, Datadog, New Relic, and Splunk. These solutions provide various features and capabilities for monitoring and troubleshooting systems, depending on the user’s requirements <span class="No-Break">and preferences.</span></p>
+<p>In the next chapter, we will get hands-on with automating server configuration with the use of a configuration as code <span class="No-Break">solution: Ansible.</span></p>
+</div>
+</div></body></html>

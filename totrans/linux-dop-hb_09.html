@@ -1,0 +1,773 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer022">
+<h1 class="chapter-number" id="_idParaDest-179"><a id="_idTextAnchor245"/><a id="_idTextAnchor246"/>9</h1>
+<h1 id="_idParaDest-180"><a id="_idTextAnchor247"/>A Deep Dive into Docker</h1>
+<p>The advent of Docker has revolutionized the way we run, deploy, and maintain our applications. With the rise of containerization, we’ve been able to abstract away much of the underlying infrastructure and dependencies that applications rely on, making it easier than ever to deploy and manage them across different environments. However, with great power comes great responsibility, and we must understand the internals of Docker and establish good practices to ensure that our applications are secure, reliable, <span class="No-Break">and performant.</span></p>
+<p>In this chapter, we’ll delve into the nitty-gritty of Docker, exploring its architecture, components, and key features. We’ll also examine some of the helper projects that have emerged on top of Docker, such as Docker Compose and Kubernetes, and learn how to use them to build more complex and scalable applications. Throughout, we’ll emphasize best practices for working with Docker, such as creating efficient Docker images, managing containers, and optimizing performance. By the end of this chapter, you’ll be well-equipped to confidently run your applications inside Docker and leverage its full power to build robust and <span class="No-Break">scalable systems.</span></p>
+<p>This chapter covers the <span class="No-Break">following topics:</span></p>
+<ul>
+<li>Docker advanced <span class="No-Break">use cases</span></li>
+<li><span class="No-Break">Docker Compose</span></li>
+<li>Advanced <span class="No-Break">Dockerfile techniques</span></li>
+<li><span class="No-Break">Docker orchestration</span></li>
+</ul>
+<h1 id="_idParaDest-181"><a id="_idTextAnchor248"/>Docker advanced use cases</h1>
+<p>While using <a id="_idIndexMarker720"/>Docker and its CLI, there are a lot of things we will need to take care of in terms of the life cycle of the container, build process, volumes, and networking. Some of those things you can automate by using other tools, but it’s still useful to know what’s going <span class="No-Break">on underneath.</span><a id="_idTextAnchor249"/></p>
+<h2 id="_idParaDest-182"><a id="_idTextAnchor250"/>Running public images</h2>
+<p>A lot of public <a id="_idIndexMarker721"/>images you can find on<a id="_idIndexMarker722"/> Docker Hub (<a href="https://hub.docker.com">https://hub.docker.com</a>) have initialization scripts available that take configuration from environment variables or the mounted files to a <span class="No-Break">predefined directory.</span></p>
+<p>The most commonly used image that uses both techniques is images with databases. Let’s look for an<a id="_idIndexMarker723"/> official <strong class="bold">Docker PostgreSQL</strong> image. You can find the one we’ll be using <span class="No-Break">here: </span><a href="https://hub.docker.com/_/postgres"><span class="No-Break">https://hub.docker.com/_/postgres</span></a><span class="No-Break">.</span></p>
+<p>To run the official PostgreSQL Docker image, you can use the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run --name some-postgres -e POSTGRES_PASSWORD=mysecretpassword -d postgres</pre>
+<p>In this command, we have <span class="No-Break">the following:</span></p>
+<ul>
+<li><strong class="source-inline">--name some-postgres</strong> gives the container a name <span class="No-Break">of </span><span class="No-Break"><em class="italic">some-postgres</em></span></li>
+<li><strong class="source-inline">-e POSTGRES_PASSWORD=mysecretpassword</strong> sets the password for the default PostgreSQL <span class="No-Break">user (</span><span class="No-Break"><em class="italic">postgres</em></span><span class="No-Break">)</span></li>
+<li><strong class="source-inline">-d</strong> runs the container in the background; <strong class="source-inline">postgres</strong> specifies the image <span class="No-Break">to use</span></li>
+</ul>
+<p>It’s also possible to override the default user (<em class="italic">postgres</em>) by adding a <strong class="source-inline">POSTGRES_USER</strong> environment variable. Other configuration environment variables are listed in <span class="No-Break">the documentation.</span></p>
+<p>A very useful feature you can use when working with the official PostgreSQL image is database pre-population using SQL scripts. To achieve this, you will need to bind mount a local directory with scripts to <strong class="source-inline">/docker-entrypoint-initdb.d</strong> inside the container. There are two things you will need to take care of: empty data directory and making sure all scripts are finished with success. An empty data directory is necessary as this will act as the entry point where you can load your SQL or shell scripts; it also prevents data loss. If any of the scripts finish with an error, the database won’t <span class="No-Break">be started.</span></p>
+<p>Similar features are provided for other Docker images running any other database available in <span class="No-Break">Docker Hub.</span></p>
+<p>Another useful official image you <a id="_idIndexMarker724"/>could use is <strong class="bold">nginx</strong>: it’s probably much simpler to use as you already have a configured web server inside and you will need to provide either content for it to serve (HTML files, JavaScript, or CSS) or override the <span class="No-Break">default configuration.</span></p>
+<p>Here is<a id="_idIndexMarker725"/> an example of mounting a static HTML website to <span class="No-Break">a container:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -p 8080:80 -v /your/webpage:/usr/share/nginx/html:ro -d nginx</pre>
+<p>In this command, we have <span class="No-Break">the following:</span></p>
+<ul>
+<li><strong class="source-inline">-p 8080:80</strong>: This option maps port <strong class="source-inline">8080</strong> on the host machine to port <strong class="source-inline">80</strong> inside the container. This means that when someone accesses port <strong class="source-inline">8080</strong> on the host machine, it will be redirected to port <strong class="source-inline">80</strong> in <span class="No-Break">the container.</span></li>
+<li><strong class="source-inline">-v /your/webpage:/usr/share/nginx/html:ro</strong>: This option mounts the <strong class="source-inline">/your/webpage</strong> directory on the host machine to the <strong class="source-inline">/usr/share/nginx/html</strong> directory inside the container. The <strong class="source-inline">ro</strong> option means that the mount is read-only, which means that the container cannot modify the files in the <strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">your/webpage</strong></span><span class="No-Break"> directory.</span></li>
+<li><strong class="source-inline">-d</strong>: This option tells Docker to run the container in detached mode, which means that it will run in <span class="No-Break">the background.</span></li>
+<li><strong class="source-inline">nginx</strong>: This is the name of the Docker image that will be used to run the container. In this case, it’s the official nginx image from <span class="No-Break">Docker Hub.</span></li>
+</ul>
+<p>We can override the default nginx configuration <span class="No-Break">like so:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -p 8080:80 -v ./config/nginx.conf:/etc/nginx/nginx.conf:ro -d nginx</pre>
+<p>In this command, most of the previous options repeat themselves except one: <strong class="source-inline">-v ./config/nginx.conf:/etc/nginx/nginx.conf:ro</strong>. This option mounts the <strong class="source-inline">./config/nginx.conf</strong> file on the host machine to the <strong class="source-inline">/etc/nginx/nginx.conf</strong> file inside the container. The <strong class="source-inline">ro</strong> option means that the mount is read-only, which means that the container cannot modify the <span class="No-Break"><strong class="source-inline">nginx.conf</strong></span><span class="No-Break"> <a id="_idTextAnchor251"/>file.</span></p>
+<h2 id="_idParaDest-183"><a id="_idTextAnchor252"/>Running a debugging container</h2>
+<p>Containers running <a id="_idIndexMarker726"/>in production usually have very few tools that are useful for troubleshooting installed. On top of that, those containers aren’t running as root users and have multiple security mechanisms to prevent tampering. With that in mind, how do we get into the Docker network to debug if something is <span class="No-Break">not working?</span></p>
+<p>The answer to that question is just running another container we could get into. It would have some tools pre-installed or would allow us to install whatever we need while running. There are multiple techniques we can use to <span class="No-Break">achieve this.</span></p>
+<p>First, we will need a process that will run indefinitely until we stop it manually. While this process is running, we could step in and use the <strong class="source-inline">docker exec</strong> command to get <em class="italic">inside</em> the <span class="No-Break">running Docker.</span></p>
+<p>Knowing Bash scripting, the easiest way to run this process is to create a <span class="No-Break"><strong class="source-inline">while</strong></span><span class="No-Break"> loop:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -d ubuntu while true; do sleep 1; done</pre>
+<p>Another method is to use the <span class="No-Break"><strong class="source-inline">sleep</strong></span><span class="No-Break"> program:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -d ubuntu sleep infinity</pre>
+<p>Alternatively, you could just try to <em class="italic">read</em> a special device, <strong class="source-inline">/dev/null</strong>, that is outputting nothing and the <span class="No-Break"><strong class="source-inline">tail</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -d ubuntu tail -f /dev/null</pre>
+<p>Finally, when one of these commands is running inside the network you’re trying to troubleshoot, you can run a command inside it, and effectively be able to run commands from within the environment you need <span class="No-Break">to investigate:</span></p>
+<pre class="console">
+admin@myhome:~$ docker exec -it container_name /bi<a id="_idTextAnchor253"/>n/bash</pre>
+<p>Let us now look at cleaning up <span class="No-Break">unused containers.</span></p>
+<h2 id="_idParaDest-184"><a id="_idTextAnchor254"/>Cleaning up unused containers</h2>
+<p>Docker images<a id="_idIndexMarker727"/> can accumulate over time, especially when you frequently build and experiment with containers. Some of these images may no longer be needed, and they can take up valuable disk space. To clean up these unused images, you can use the <strong class="source-inline">docker image prune</strong> command. This command removes all images that are not associated with a container, also known<a id="_idIndexMarker728"/> as <span class="No-Break"><strong class="bold">dangling images</strong></span><span class="No-Break">.</span></p>
+<p>In addition to unused images, there may also be leftover containers that were not removed properly. These containers can be identified using the <strong class="source-inline">docker ps -a</strong> command. To remove a specific container, you can use the <strong class="source-inline">docker rm &lt;container_id&gt;</strong> command, where <strong class="source-inline">&lt;container_id&gt;</strong> is the identifier of the container you want to remove. If you want to remove all stopped containers, you can use the <strong class="source-inline">docker container </strong><span class="No-Break"><strong class="source-inline">prune</strong></span><span class="No-Break"> command.</span></p>
+<p>It’s good <a id="_idIndexMarker729"/>practice to regularly perform image and container cleanup to maintain a healthy Docker environment. This not only saves disk space but also helps prevent potential security vulnerabilities associated with unused resources. It is also best practice to remove all sensitive information, such as passwords and keys, from the containers <span class="No-Break">and images.</span></p>
+<p>Here’s an example of using the <strong class="source-inline">docker image prune</strong> command to remove <span class="No-Break">dangling images:</span></p>
+<pre class="console">
+admin@myhome:~$ docker image prune
+Deleted Images:
+deleted:
+sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef
+deleted:sha256:c937c4dd0c2eaf57972d4f80f55058b3685f87420a9a9fb9ef0dfe3c7c3e60bc
+Total reclaimed space: 65.03MB</pre>
+<p>Here’s an example of using the <strong class="source-inline">docker container prune</strong> command to remove all <span class="No-Break">stopped containers:</span></p>
+<pre class="console">
+admin@myhome:~$ docker container prune
+WARNING! This will remove all stopped containers.
+Are you sure you want to continue? [y/N] y
+Deleted Containers:
+8c922b2d9708fcee6959af04c8f29d2d6850b3a3b3f3b966b0c360f6f30ed6c8
+6d90b6cbc47dd99b2f78a086e959a1d18b7e0cf4778b823d6b0c6b0f6b64b6c64
+Total reclaimed space: 0B</pre>
+<p>To automate these tasks, you can use <strong class="source-inline">crontab</strong> to schedule regular cleanups. To edit your <strong class="source-inline">crontab</strong> file, you can use the <strong class="source-inline">crontab -e</strong> command. Here’s an example of scheduling a daily cleanup of dangling images at <span class="No-Break">3 A.M.:</span></p>
+<pre class="source-code">
+0 3 * * * docker image prune -f</pre>
+<p>This<a id="_idIndexMarker730"/> line is made up of five fields separated by spaces. These fields represent the minutes, hours, days of the month, months, and days of the week when the command will be executed. In this example, the command will be executed at 3 A.M. every day. Let’s look at each element <span class="No-Break">in detail:</span></p>
+<ul>
+<li>The first field, <strong class="source-inline">0</strong>, represents the minutes. In this case, we want the command to be executed at exactly 0 minutes past <span class="No-Break">the hour.</span></li>
+<li>The second field, <strong class="source-inline">3</strong>, represents the hours. In this case, we want the command to be executed at <span class="No-Break">3 A.M.</span></li>
+<li>The third field, <strong class="source-inline">*</strong>, represents the days of the month. The asterisk means “any” day of <span class="No-Break">the month.</span></li>
+<li>The fourth field, <strong class="source-inline">*</strong>, represents the months. The asterisk means “any” month of <span class="No-Break">the year.</span></li>
+<li>The fifth field, <strong class="source-inline">*</strong>, represents the days of the week. The asterisk means “any” day of the week. <strong class="source-inline">1</strong> represents Monday, <strong class="source-inline">2</strong> represents Tuesday, and so on until <strong class="source-inline">7</strong>, which <span class="No-Break">represents Sunday.</span></li>
+</ul>
+<p>Here’s an example of scheduling a weekly cleanup of stopped containers at 4 A.M. <span class="No-Break">on Sundays:</span></p>
+<pre class="source-code">
+0 4 * * 7 docker container prune -f</pre>
+<p>The <strong class="source-inline">-f</strong> flag is<a id="_idIndexMarker731"/> used to force the removal of the images or containers without confirming this with <span class="No-Break">the user.</span></p>
+<p>To list all existing cron jobs for your user, you can use the <strong class="source-inline">crontab -l</strong> command. More about <strong class="source-inline">crontab</strong> can be found online or by using the <strong class="source-inline">man crontab</strong> command. A great how-to article about <a id="_idIndexMarker732"/>using it can be found in the Ubuntu Linux knowledge <span class="No-Break">base: </span><a href="https://help.ubuntu.com/community/CronHowto"><span class="No-Break">https://help.ubuntu.com/communit<span id="_idTextAnchor255"/>y/CronHowto</span></a><span class="No-Break">.</span></p>
+<h2 id="_idParaDest-185"><a id="_idTextAnchor256"/>Docker volumes and bind mounts</h2>
+<p>As<a id="_idIndexMarker733"/> mentioned in the previous chapter, Docker volumes and bind mounts are two different ways to persist data generated by a Docker container. Volumes are managed by Docker and exist outside the container’s filesystem. They can be shared and reused between containers, and they persist even if the original container is deleted. On the other hand, bind mounts link a file or directory on the host system to a file or directory in the container. The data in bind mounts is directly accessible from the host and the container and persists for as long as the host file or <span class="No-Break">directory remains.</span></p>
+<p>To use a Docker volume, you can use the <strong class="source-inline">-v</strong> or <strong class="source-inline">--mount</strong> flag when you run the <strong class="source-inline">docker run</strong> command and specify the host source and container destination. For example, to create a volume and mount it to the container at <strong class="source-inline">/app/data</strong>, you can run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -v my_data:/app/data &lt;image_name&gt;</pre>
+<p>To use a bind mount, you <a id="_idIndexMarker734"/>can use the same flags and specify the host source and container destination, just like with a volume. However, instead of using a volume name, you need to use the host file or directory path. For example, to bind mount the <strong class="source-inline">/host/data</strong> host directory to the container at <strong class="source-inline">/app/data</strong>, you can run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -v /host/data:/app/data &lt;image_name&gt;</pre>
+<p>When using bind mounts in Docker, you may encounter permission problems with the files and directories within the bind mount. This is <a id="_idIndexMarker735"/>because the <strong class="bold">user IDs</strong> (<strong class="bold">UIDs</strong>) and <strong class="bold">group IDs</strong> (<strong class="bold">GIDs</strong>) of the<a id="_idIndexMarker736"/> host and container may not match, leading to issues with accessing or modifying the data in the <span class="No-Break">bind mount.</span></p>
+<p>For example, if the<a id="_idIndexMarker737"/> host file or directory is owned by a user with UID 1000, and the corresponding UID in the container is different, the container may not be able to access or modify the data in the bind mount. Similarly, if the group IDs do not match, the container may not be able to access or modify the data due to <span class="No-Break">group permissions.</span></p>
+<p>To prevent these permission problems, you can specify the UID and GID of the host file or directory when you run the <strong class="source-inline">docker run</strong> command. For example, to run a container with a bind mount as the UID and GID 1000, you can run the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -v /local/data:/app/data:ro,Z --user 1000:1000 &lt;image_name&gt;</pre>
+<p>In this example, the <strong class="source-inline">:ro</strong> flag specifies that the bind mount should be read-only, and the <strong class="source-inline">,Z</strong> flag tells Docker to label the bind mount with a private label so that it cannot interact with other containers. The <strong class="source-inline">--user</strong> flag sets the UID and GID of the process running inside the container <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">1000</strong></span><span class="No-Break">.</span></p>
+<p>By specifying the UID and GID of the host file or directory in the container, you can prevent permission problems with bind mounts in Docker and ensure that the container can access and modify the <a id="_idTextAnchor257"/>data <span class="No-Break">as expected.</span></p>
+<h2 id="_idParaDest-186"><a id="_idTextAnchor258"/>Docker networking advanced use cases</h2>
+<p>Docker<a id="_idIndexMarker738"/> provides a convenient way to manage the networking of containers in a user-defined network. By using Docker networks, you can easily control the communication between containers and isolate them from the <span class="No-Break">host network.</span></p>
+<p>Docker bridge networking is a default network configuration that enables communication between containers running on the same host. It works by creating a virtual network interface on the host system that acts as a bridge between the containers and the host network. Each container on the bridge network is assigned a unique IP address that allows it to communicate with other containers and <span class="No-Break">the host.</span></p>
+<p>Bridge networks are isolated from each other, meaning that containers connected to different bridge networks cannot communicate with each other directly. To achieve communication between containers on different networks, you can use the Docker service discovery mechanism, such as connecting to a specific container IP address or using a <span class="No-Break">load balancer.</span></p>
+<p>To use <a id="_idIndexMarker739"/>bridge networking in practice, you can create a new bridge network using the Docker CLI. For example, you can use the <strong class="source-inline">docker network create --driver bridge production-network</strong> command to create a new bridge network named <em class="italic">production-network</em>. After the network is created, you can then connect your containers to the network by using the <strong class="source-inline">--network</strong> option in the <strong class="source-inline">docker run</strong> command. You can use the <strong class="source-inline">docker run --network production-network my-image</strong> command to run a container from the <em class="italic">my-image</em> image on the <span class="No-Break"><em class="italic">production-network</em></span><span class="No-Break"> network.</span></p>
+<p>In addition to creating a new bridge network, you can connect containers to the default <em class="italic">bridge</em> network that is automatically created when you install Docker. To connect a container to the default network, you do not need to specify the <strong class="source-inline">--network</strong> option in the <strong class="source-inline">docker run</strong> command. The container will automatically be connected to the default <em class="italic">bridge</em> network and assigned an IP address from the bridge <span class="No-Break">network subnet.</span></p>
+<p>Now, if you create multiple networks, by default, they will be separated and no communication will be allowed between them. To allow communication between two bridge networks, such as <em class="italic">production-network</em> and <em class="italic">shared-network</em>, you will need to create a network connection between the two networks by connecting a container of your choosing to those two networks or allowing all communication between the two networks. The latter option, if possible, is <span class="No-Break">not supported.</span></p>
+<p>The final option is to use <strong class="bold">Docker Swarm</strong> mode and overlay network mode, which we will get into a bit later in this chapter in the <em class="italic">Docker </em><span class="No-Break"><em class="italic">orchestration</em></span><span class="No-Break"> section.</span></p>
+<p>The following is an example of how to connect a container to two networks at the same time. First, let’s create a production and <span class="No-Break">shared network:</span></p>
+<pre class="console">
+admin@myhome:~$ docker network create production-network
+fd1144b9a9fb8cc2d9f65c913cef343ebd20a6b30c4b3ba94fdb1fb50aa1333c
+admin@myhome:~$ docker network create shared-network
+a544f0d39196b95d772e591b9071be38bafbfe49c0fdf54282c55e0a6ebe05ad</pre>
+<p>Now, we can start a container connected <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">production-network</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -itd --name prod-container --network production-network alpine sh
+Unable to find image 'alpine:latest' locally
+latest: Pulling from library/alpine
+8921db27df28: Pull complete
+Digest:sha256:f271e74b17ced29b915d351685fd4644785c6d1559dd1f2d4189a5e851ef753a
+Status: Downloaded newer image for alpine:latest
+287be9c1c76bd8aa058aded284124f666d7ee76c73204f9c73136aa0329d6bb8</pre>
+<p>Let’s do<a id="_idIndexMarker740"/> the same <span class="No-Break">for </span><span class="No-Break"><strong class="source-inline">shared-network</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+admin@myhome:~$ docker run -itd --name shared-container --network shared-network alpine sh
+38974225686ebe9c0049147801e5bc777e552541a9f7b2eb2e681d5da9b8060b</pre>
+<p>Let’s investigate if both containers <span class="No-Break">are running:</span></p>
+<pre class="console">
+admin@myhome:~$ docker ps
+CONTAINER ID    IMAGE    COMMAND   CREATED     STATUS    PORTS   NAMES
+38974225686e   alpine    "sh"      4 seconds ago    Up 3 seconds              shared-container
+287be9c1c76b   alpine    "sh"      16 seconds ago   Up 14 seconds             prod-container</pre>
+<p>Finally, let’s also connect <strong class="source-inline">prod-container</strong> to a <span class="No-Break">shared network:</span></p>
+<pre class="console">
+admin@myhome:~$ docker network connect shared-network prod-container</pre>
+<p>After that, we <a id="_idIndexMarker741"/>can get a shell inside <strong class="source-inline">prod-container</strong> and <span class="No-Break">ping </span><span class="No-Break"><strong class="source-inline">shared-container</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+admin@myhome:~$ docker exec -it prod-container /bin/sh
+/ # ping shared-container
+PING shared-container (172.24.0.2): 56 data bytes
+64 bytes from 172.24.0.2: seq=0 ttl=64 time=0.267 ms
+64 bytes from 172.24.0.2: seq=1 ttl=64 time=0.171 ms
+^C
+--- shared-container ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.171/0.219/0.267 ms
+/ # ping prod-container
+PING prod-container (172.23.0.2): 56 data bytes
+64 bytes from 172.23.0.2: seq=0 ttl=64 time=0.167 ms
+64 bytes from 172.23.0.2: seq=1 ttl=64 time=0.410 ms
+64 bytes from 172.23.0.2: seq=2 ttl=64 time=0.108 ms
+^C
+5 packets transmitted, 5 packets received, 0% packet loss
+round-trip min/avg/max = 0.108/0.188/0.410 ms</pre>
+<p>You can learn more <a id="_idIndexMarker742"/>about networking in Docker on the official <span class="No-Break">website: </span><a href="https://docs.docker.com/network/"><span class="No-Break">https://doc<span id="_idTextAnchor259"/>s.docker.com/network/</span></a><span class="No-Break">.</span></p>
+<h2 id="_idParaDest-187"><a id="_idTextAnchor260"/>Security features of Docker</h2>
+<p>Docker, at its core, wasn’t <a id="_idIndexMarker743"/>meant to be a security tool. This was built in at a later stage with the support of the Linux Kernel features that are still being<a id="_idIndexMarker744"/> developed, and more security features are <span class="No-Break">being added.</span></p>
+<p>There’s a lot to cover regarding this topic, but we’re going to focus on the four most frequently used <span class="No-Break">security features:</span></p>
+<ul>
+<li><span class="No-Break">Namespaces</span></li>
+<li><strong class="bold">Security computing </strong><span class="No-Break"><strong class="bold">mode</strong></span><span class="No-Break"> (</span><span class="No-Break"><strong class="bold">seccomp</strong></span><span class="No-Break">)</span></li>
+<li><span class="No-Break">Rootless m<a id="_idTextAnchor261"/>ode</span></li>
+<li>Docker <span class="No-Break">signed images</span></li>
+</ul>
+<h3>Linux kernel namespaces</h3>
+<p><strong class="bold">Kernel namespaces</strong> are <a id="_idIndexMarker745"/>an important component of Docker security as they provide isolation between containers and the<a id="_idIndexMarker746"/> host system. They allow each container to have a view of the system resources, such as the filesystem, network, and process table, without affecting the host or other containers. This means that a process running inside a container cannot access or modify the host filesystem, network configuration, or processes, which helps secure the host system from malicious or <span class="No-Break">rogue containers.</span></p>
+<p>Docker uses several Linux kernel namespaces to provide isolated environments for containers. These namespaces are used to create isolated environments for processes, networks, mount points, <span class="No-Break">and more.</span></p>
+<p>The <strong class="source-inline">USER</strong> namespace<a id="_idIndexMarker747"/> for the Docker daemon will ensure that the root inside the Docker container is running in a separate context from the host context. It’s needed to ensure that the root user inside the container is not equal to the root on <span class="No-Break">the host.</span></p>
+<p>The <strong class="source-inline">PID</strong> namespace<a id="_idIndexMarker748"/> isolates the process IDs between containers. Each container sees its own set of processes, isolated from other containers and <span class="No-Break">the host.</span></p>
+<p>The <strong class="source-inline">NET</strong> namespace’s <a id="_idIndexMarker749"/>function is to isolate the network stack of each container so that each container has a virtual network stack, with its own network devices, IP addresses, <span class="No-Break">and routes.</span></p>
+<p>The <strong class="source-inline">IPC</strong> namespace<a id="_idIndexMarker750"/> deals with the <strong class="bold">inter-process communication</strong> (<strong class="bold">IPC</strong>) resources <a id="_idIndexMarker751"/>between containers. Each container has its own private IPC resources, such as System V IPC objects, semaphores, and <span class="No-Break">message queues.</span></p>
+<p>The <strong class="source-inline">UTS</strong> namespace<a id="_idIndexMarker752"/> is about hostname <a id="_idIndexMarker753"/>and domain name isolation for each container. Here, each container has its own hostname and domain name that does not affect other containers or <span class="No-Break">the host.</span></p>
+<p>Finally, the <strong class="source-inline">MNT</strong> namespace<a id="_idIndexMarker754"/> isolates the mount points of each container. This means that each container has a private filesystem hierarchy, with its own root filesystem, mounted filesystems, and <span class="No-Break">bind mounts.</span></p>
+<p>By using these namespaces, Docker containers are isolated from each other and from the host, which helps ensure the security of containers and the <span class="No-Break">host system.</span></p>
+<p>The most confusing to use is the <strong class="source-inline">USER</strong> namespace as it requires a special UID and GID mapping configuration. It’s not enabled by default as sharing <strong class="source-inline">PID</strong> or <strong class="source-inline">NET</strong> namespaces with the host (<strong class="source-inline">–pid=host</strong> or <strong class="source-inline">–network=host</strong>) isn’t possible. Also, using the <strong class="source-inline">–privileged mode</strong> flag on <strong class="source-inline">docker run</strong> will not be possible without specifying <strong class="source-inline">–userns=host</strong> (thus disabling the <strong class="source-inline">USER</strong> namespace separation). Other namespaces listed previously are in effect mostly withou<a id="_idTextAnchor262"/>t any other <span class="No-Break">special configuration.</span></p>
+<h3>Seccomp</h3>
+<p><strong class="bold">Seccomp</strong>, short<a id="_idIndexMarker755"/> for <strong class="bold">secure computing mode</strong>, is a Linux kernel feature that allows a process to <a id="_idIndexMarker756"/>specify the system calls it is allowed to make. This makes it possible to restrict the types of system calls that can be made by a container, which can help improve the security of the host system by reducing the risk of container escape or <span class="No-Break">privilege escalation.</span></p>
+<p>When a process specifies its seccomp profile, the Linux kernel filters incoming system calls and only allows those that are specified in the profile. This means that even if an attacker were to gain access to a container, they would be limited in the types of actions they could perform, reducing the impact of <span class="No-Break">the attack.</span></p>
+<p>To create a <a id="_idIndexMarker757"/>seccomp profile for a container, you can use the <strong class="source-inline">seccomp configuration</strong> option in the <strong class="source-inline">docker run</strong> command. This allows you to specify the seccomp profile to use when starting <span class="No-Break">the container.</span></p>
+<p>There are two main ways to create a seccomp profile: using a predefined profile or creating a custom profile. Predefined profiles are available for common use cases and can be easily specified in the <strong class="source-inline">docker run</strong> command. For example, the default profile allows all <a id="_idIndexMarker758"/>system calls, while the restricted profile only allows a limited set of system calls that are considered safe for most <span class="No-Break">use cases.</span></p>
+<p>To create a custom seccomp profile, you<a id="_idIndexMarker759"/> can use the <strong class="bold">Podman</strong> (<a href="https://podman.io/blogs/2019/10/15/generate-seccomp-profiles.xhtml">https://podman.io/blogs/2019/10/15/generate-seccomp-profiles.xhtml</a>) or <strong class="bold">seccomp-gen</strong> (<a href="https://github.com/blacktop/seccomp-gen">https://github.com/blacktop/seccomp-gen</a>) tools. Both tools automate<a id="_idIndexMarker760"/> figuring out which calls are being made by the container you intend to use in production and generate a JSON file that can be used as the <span class="No-Break">seccomp profile.</span></p>
+<p>Seccomp does not guarantee security. It is important to understand the system calls that are required for your application and ensure that they are allowed in the <span class="No-Break">seccomp profile.</span></p>
+<p>The following is an example of a seccomp profile that allows a limited set of system calls for a container running a web <span class="No-Break">server application:</span></p>
+<pre class="source-code">
+{
+    "defaultAction": "SCMP_ACT_ALLOW",
+    "syscalls": [
+        {
+            "name": "accept",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "bind",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "connect",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "listen",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "sendto",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "recvfrom",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "read",
+            "action": "SCMP_ACT_ALLOW"
+        },
+        {
+            "name": "write",
+            "action": "SCMP_ACT_ALLOW"
+        }
+    ]
+}</pre>
+<p>In this<a id="_idIndexMarker761"/> example, <strong class="source-inline">defaultAction</strong> is set to <strong class="source-inline">SCMP_ACT_ALLOW</strong>, which means that all system calls not specifically listed in the <strong class="source-inline">syscalls</strong> array will be allowed. To block all not-defined calls, you can use <strong class="source-inline">SCMP_ACT_ERRNO</strong> as a default action. All available actions are described in the online manual for the <strong class="source-inline">seccomp_rule_add</strong> filter <span class="No-Break">specification: </span><a href="https://man7.org/linux/man-pages/man3/seccomp_rule_add.3.xhtml"><span class="No-Break">https://man7.org/linux/man-pages/man3/seccomp_rule_add.3.xhtml</span></a><span class="No-Break">.</span></p>
+<p>The <strong class="source-inline">syscalls</strong> <a id="_idIndexMarker762"/>array lists the system calls that should be allowed for the container and specifies the action to take for each call (in this case, all calls are allowed). This profile only allows the system calls necessary for a web server to function and blocks all other system calls, improving the security of <span class="No-Break">the container.</span></p>
+<p>More information about system calls is available <span class="No-Break">here: </span><a href="https://docs.docker.com/engine/security/seccomp/"><span class="No-Break">https:/<span id="_idTextAnchor263"/>/docs.docker.com/engine/security/seccomp/</span></a><span class="No-Break">.</span></p>
+<h3>Rootless mode</h3>
+<p><strong class="bold">Docker Rootless</strong> mode is <a id="_idIndexMarker763"/>a feature that allows users to <a id="_idIndexMarker764"/>run Docker containers without having to run the Docker daemon as the root user. This mode provides an additional layer of security by reducing the attack surface of the host system and minimizing the risk of <span class="No-Break">privilege escalation.</span></p>
+<p>Let’s set up a<a id="_idIndexMarker765"/> rootless Docker daemon on Ubuntu Linux or Debian Linux. First, make sure you’ve installed Docker from the official Docker package repository instead of the <span class="No-Break">Ubuntu/Debian package:</span></p>
+<pre class="console">
+admin@myhome:~$ sudo apt-get install -y -qq apt-transport-https ca-certificates curl
+admin@myhome:~$ sudo mkdir -p /etc/apt/keyrings &amp;&amp; sudo chmod -R 0755 /etc/apt/keyrings
+admin@myhome:~$ curl -fsSL "https://download.docker.com/linux/ubuntu/gpg" | sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+admin@myhome:~$ sudo chmod a+r /etc/apt/keyrings/docker.gpg
+admin@myhome:~$ echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" | sudo tee /etc/apt/sources.list.d/docker.list
+admin@myhome:~$ sudo apt-get update
+admin@myhome:~$ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-scan-plugin docker-compose-plugin docker-ce-rootless-extras docker-buildx-plugin</pre>
+<p><strong class="source-inline">docker-ce-rootless-extras</strong> will install a shell script in your <strong class="source-inline">/usr/bin</strong> directory <a id="_idIndexMarker766"/>named <strong class="source-inline">dockerd-rootless-setuptool.sh</strong>, which<a id="_idIndexMarker767"/> will automate the <span class="No-Break">whole process:</span></p>
+<pre class="console">
+admin@myhome~$ dockerd-rootless-setuptool.sh  --help
+Usage: /usr/bin/dockerd-rootless-setuptool.sh [OPTIONS] COMMAND
+A setup tool for Rootless Docker (dockerd-rootless.sh).
+Documentation: https://docs.docker.com/go/rootless/
+Options:
+  -f, --force                Ignore rootful Docker (/var/run/docker.sock)
+      --skip-iptables        Ignore missing iptables
+Commands:
+  check        Check prerequisites
+  install      Install systemd unit (if systemd is available) and show how to manage the service
+  uninstall    Uninstall systemd unit</pre>
+<p>To run<a id="_idIndexMarker768"/> this script, we will need a non-root user with a configured environment to be able to run the Docker daemon. Let’s create a <strong class="source-inline">dockeruser</strong> <span class="No-Break">user first:</span></p>
+<pre class="console">
+admin@myhome~$ sudo adduser dockeruser
+Adding user `dockeruser' ...
+Adding new group `dockeruser' (1001) ...
+Adding new user `dockeruser' (1001) with group `dockeruser' ...
+Creating home directory `/home/dockeruser' ...
+Copying files from `/etc/skel' ...
+New password:
+Retype new password:
+passwd: password updated successfully
+Changing the user information for dockeruser
+Enter the new value, or press ENTER for the default
+     Full Name []:
+     Room Number []:
+     Work Phone []:
+     Home Phone []:
+     Other []:
+Is the information correct? [Y/n] y</pre>
+<p>Let’s also <a id="_idIndexMarker769"/>create a UID map configuration before we proceed. To do that, we will need to install the <strong class="source-inline">uidmap</strong> package and create the <strong class="source-inline">/etc/subuid</strong> and <strong class="source-inline">/etc/subgid</strong> <span class="No-Break">configuration files:</span></p>
+<pre class="console">
+admin@myhome~$ sudo apt install -y uidmap
+admin@myhome~$ echo "dockeruser:100000:65536" | sudo tee /etc/subuid
+admin@myhome~$ echo "dockeruser:100000:65536" | sudo tee /etc/subgid</pre>
+<p>Log in as <strong class="source-inline">dockeruser</strong> and run the <span class="No-Break"><strong class="source-inline">dockerd-rootless-setuptool.sh</strong></span><span class="No-Break"> script:</span></p>
+<pre class="console">
+admin@myhome~$ sudo -i -u dockeruser</pre>
+<p>Make<a id="_idIndexMarker770"/> sure <strong class="source-inline">environment XDG_RUNTIME_DIR</strong> is set and systemd can read environment variables <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">dockeruser</strong></span><span class="No-Break">:</span></p>
+<pre class="console">
+$ export XDG_RUNTIME_DIR=/run/user/$UID
+$ echo 'export XDG_RUNTIME_DIR=/run/user/$UID' &gt;&gt; ~/.bashrc
+$ systemctl --user show-environment
+HOME=/home/dockeruser
+LANG=en_US.UTF-8
+LOGNAME=dockeruser
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin
+SHELL=/bin/bash
+SYSTEMD_EXEC_PID=720
+USER=dockeruser
+XDG_RUNTIME_DIR=/run/user/1001
+XDG_DATA_DIRS=/usr/local/share/:/usr/share/:/var/lib/snapd/desktop
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus</pre>
+<p>Now, you <a id="_idIndexMarker771"/>can install rootless Docker using the <strong class="source-inline">dockerd-rootless-setuptool.sh</strong> script (some output has been truncated <span class="No-Break">for readability):</span></p>
+<pre class="console">
+$ dockerd-rootless-setuptool.sh install
+[INFO] Creating  [condensed for brevity]
+     Active: active (running) since Fri 2023-02-17 14:19:04 UTC; 3s ago
++ DOCKER_HOST=unix:///run/user/1001/docker.sock /usr/bin/docker version
+Client: Docker Engine - Community
+ Version:           23.0.1
+[condensed for brevity]
+Server: Docker Engine - Community
+ Engine:
+  Version:          23.0.1
+ [condensed for brevity]
+ rootlesskit:
+  Version:          1.1.0
+ [condensed for brevity]
++ systemctl --user enable docker.service
+Created symlink /home/dockeruser/.config/systemd/user/default.target.wants/docker.service → /home/dockeruser/.config/systemd/user/docker.service.
+[INFO] Installed docker.service successfully.</pre>
+<p>Now, let’s verify<a id="_idIndexMarker772"/> if we can use the Docker<a id="_idIndexMarker773"/> <span class="No-Break">rootless daemon:</span></p>
+<pre class="console">
+dockeruser@vagrant:~$ export DOCKER_HOST=unix:///run/user/1001/docker.sock
+dockeruser@vagrant:~$ docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES</pre>
+<p>At this point, we<a id="_idIndexMarker774"/> have a Docker daemon running as a <em class="italic">dockeruser</em> system user instead of root. We will be able to run all services we need the same way we would in a standard configuration. There are some exceptions, such as a Docker in Docker setup, which require <span class="No-Break">further configuration.</span></p>
+<p>More detailed <a id="_idIndexMarker775"/>information about rootless mode can be foun<a id="_idTextAnchor264"/>d <span class="No-Break">at </span><a href="https://docs.docker.com/engine/security/rootless/"><span class="No-Break">https://docs.docker.com/engine/security/rootless/</span></a><span class="No-Break">.</span></p>
+<h3>Docker signed images</h3>
+<p>Docker signed images are<a id="_idIndexMarker776"/> a security measure that assures users that a Docker image has come from a<a id="_idIndexMarker777"/> trusted source and has not been tampered with. Docker uses a digital signature to sign images, which can be verified by Docker Engine to ensure that the image is exactly as it was when it was signed by <span class="No-Break">the publisher.</span></p>
+<p>Docker signed images can be verified by checking the public key of the signer from a trusted registry (such as Docker Hub). If the image is valid, Docker will allow you to pull and run the <span class="No-Break">image locally.</span></p>
+<p>The first step in signing a Docker image is to generate a <a id="_idIndexMarker778"/>signing key. A <strong class="bold">signing key</strong> is a pair of keys – a public key and a private key – that can be used to sign and verify Docker images. The private key should be kept safe and not shared with anyone, while the public key can be distributed to users who need to verify the signed images. To generate a signing key, you can use the <strong class="source-inline">docker trust key </strong><span class="No-Break"><strong class="source-inline">generate</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker trust key generate devops
+Generating key for devops...
+Enter passphrase for new devops key with ID 6b6b768:
+Repeat passphrase for new devops key with ID 6b6b768:
+Successfully generated and loaded private key. Corresponding public key available: /home/admin/devops.pub</pre>
+<p>Remember to use a strong password to secure the key from access. The private key will be saved in your home directory – for example, <strong class="source-inline">~/.docker/trust/private</strong>. The name of the file will <span class="No-Break">be hashed.</span></p>
+<p>Once you have<a id="_idIndexMarker779"/> generated the signing key, the next step is to initialize the trust metadata for the image. The trust metadata contains information about the image, including the list of keys that are authorized to sign the image. To initialize the trust metadata, you can use the <strong class="source-inline">docker trust signer add</strong> command. Note that you need to be logged into the Docker registry you’re using (via the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">login</strong></span><span class="No-Break"> command):</span></p>
+<pre class="console">
+admin@myhome:~/$ docker trust signer add --key devops.pub private-registry.mycompany.tld/registries/pythonapps
+Adding signer "devops" to private-registry.mycompany.tld/registries/pythonapps/my-python-app...
+Initializing signed repository for private-registry.mycompany.tld/registries/pythonapps/my-python-app...
+You are about to create a new root signing key passphrase. This passphrase
+will be used to protect the most sensitive key in your signing system. Please
+choose a long, complex passphrase and be careful to keep the password and the
+key file itself secure and backed up. It is highly recommended that you use a
+password manager to generate the passphrase and keep it safe. There will be no
+way to recover this key. You can find the key in your config directory.
+Enter passphrase for new root key with ID a23d653:
+Repeat passphrase for new root key with ID a23d653:
+Enter passphrase for new repository key with ID de78215:
+Repeat passphrase for new repository key with ID de78215:
+Successfully initialized "private-registry.mycompany.tld/registries/pythonapps/my-python-app"
+Successfully added signer: devops to private-registry.mycompany.tld/registries/pythonapps/my-python-app</pre>
+<p>You can <a id="_idIndexMarker780"/>sign the image by using the <strong class="source-inline">docker trust sign</strong> command after a successful Docker image build and tagging it with<a id="_idIndexMarker781"/> your registry name. This command signs the image using the authorized keys in the trust metadata and pushes this information, along with your Docker image, to <span class="No-Break">the registry:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker trust sign private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA
+Signing and pushing trust data for local image private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA, may overwrite remote trust data
+The push refers to repository [private-registry.mycompany.tld/registries/pythonapps]
+c5ff2d88f679: Mounted from library/ubuntu
+latest: digest:sha256:41c1003bfccce22a81a49062ddb088ea6478eabea1457430e6235828298593e6 size: 529
+Signing and pushing trust metadata
+Enter passphrase for devops key with ID 6b6b768:
+Successfully signed private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA</pre>
+<p>To verify<a id="_idIndexMarker782"/> that your Docker image has been signed <a id="_idIndexMarker783"/>and with which key, you can use the <strong class="source-inline">docker trust </strong><span class="No-Break"><strong class="source-inline">inspect</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker trust inspect --pretty private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA
+Signatures for private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA
+SIGNED TAG    DIGEST                  SIGNERS
+latest       41c1003bfccce22a81a49062ddb088ea6478eabea1457430e6235828298593e6   devops
+List of signers and their keys for private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA
+SIGNER    KEYS
+devops    6b6b7688a444
+Administrative keys for private-registry.mycompany.tld/registries/pythonapps/my-python-app:2.9BETA
+  Repository Key: de782153295086a2f13e432db342c879d8d8d9fdd55a77f685b79075a44a5c37
+  Root Key: c6d5d339c75b77121439a97e893bc68a804368a48d4fd167d4d9ba0114a7336b</pre>
+<p><strong class="bold">Docker Content Trust</strong> (<strong class="bold">DCT</strong>) is <a id="_idIndexMarker784"/>disabled <a id="_idIndexMarker785"/>by default in the Docker CLI, but you can enable it<a id="_idIndexMarker786"/> by setting the <strong class="source-inline">DOCKER_CONTENT_TRUST</strong> environment variable to <strong class="source-inline">1</strong>. This will prevent Docker from downloading non-signed and verified images to <span class="No-Break">local storage.</span></p>
+<p>More detailed information about DCT can be found on an<a id="_idTextAnchor265"/><a id="_idIndexMarker787"/> official <span class="No-Break">website: </span><a href="https://docs.docker.com/engine/security/trust/"><span class="No-Break">https://docs.docker.com/engine/security/trust/</span></a><span class="No-Break">.</span></p>
+<h2 id="_idParaDest-188"><a id="_idTextAnchor266"/>Docker for CI/CD pipeline integration</h2>
+<p><strong class="bold">Continuous integration</strong> (<strong class="bold">CI</strong>) and <strong class="bold">continuous deployment</strong> (<strong class="bold">CD</strong>) are popular software <a id="_idIndexMarker788"/>development practices that aim to ensure that the<a id="_idIndexMarker789"/> software development process is streamlined and the quality of code <span class="No-Break">is maintained.</span></p>
+<p>CI refers<a id="_idIndexMarker790"/> to the practice of automatically building and testing code changes in a shared repository. CD is the next step after CI, where the code changes are automatically deployed to production or a <span class="No-Break">staging environment.</span></p>
+<p>Docker is a popular tool that’s used in CI/CD pipelines as it provides an efficient way to package and distribute applications. In this subsection, we will show you how to build and push a Docker image<a id="_idIndexMarker791"/> to AWS <strong class="bold">Elastic Container Registry</strong> (<strong class="bold">ECR</strong>) using <span class="No-Break">GitHub Actions.</span></p>
+<p>Let’s look at an example of how to set up a GitHub Action to build and push a Docker image to <span class="No-Break">AWS ECR.</span></p>
+<p>Create a new GitHub Actions workflow by creating a new file named <strong class="source-inline">main.yml</strong> in the <strong class="source-inline">.github/workflows</strong> directory of your repository. After adding and pushing it to the main branch, it’ll be available and triggered after any new push to <span class="No-Break">this branch.</span></p>
+<p>In the <strong class="source-inline">main.yml</strong> file, define the steps for the workflow, <span class="No-Break">like so:</span></p>
+<pre class="source-code">
+name: Build and Push Docker Image
+on:
+  push:
+    branches:
+      - main
+env:
+  AWS_REGION: eu-central-1
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Build Docker image
+      uses: docker/build-push-action@v2
+      with:
+        push: true
+        tags: ${{ env.AWS_REGION }}/my-image:${{ env.GITHUB_SHA }}
+    - name: Push Docker image to AWS ECR
+      uses: aws-actions/amazon-ecr-push-action@v1
+      with:
+        region: ${{ env.AWS_REGION }}
+        registry-url: ${{ env.AWS_REGISTRY_URL }}
+        tags: ${{ env.AWS_REGION }}/my-image:${{ env.GITHUB_SHA }}</pre>
+<p>Replace <a id="_idIndexMarker792"/>the <strong class="source-inline">AWS_REGION</strong> and <strong class="source-inline">AWS_REGISTRY_URL</strong> environment variables with your specific values. You should also replace <strong class="source-inline">my-image</strong> with the name of your <span class="No-Break">Docker image.</span></p>
+<p>In your GitHub repository settings, create two secrets named <strong class="source-inline">AWS_ACCESS_KEY_ID</strong> and <strong class="source-inline">AWS_SECRET_ACCESS_KEY</strong> with the AWS credentials that have the necessary permissions to push to AWS ECR. Alternatively, you could use your own runner and AWS IAM role attached to the runner or GitHub OIDC, which will authenticate itself with the AWS account. You can find the relevant documentation <span class="No-Break">here: </span><a href="https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services"><span class="No-Break">https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services</span></a><span class="No-Break">.</span></p>
+<p>With these steps in place, your GitHub Action will now automatically build and push your Docker image to AWS ECR every time you push code changes to the main branch. After the push, you could trigger another process on the server side to evaluate and deploy a new Docker image to one of your environments without further manual interaction. This helps streamline your CI/CD pipeline and ensures that your code changes are deployed to production <span class="No-Break">with confidence.</span></p>
+<p>It’s also possible to integrate the same pipeline with GitLab or other CI/CD tools in a <span class="No-Break">similar manner.</span></p>
+<p>In this section, we’ve learned about some not-so-common use cases for containers, such as rootless mode, secure computing mode, networking advanced use cases, and how to start a debugging container. In the next section, we will focus on automating the process of setting up Docker containers even further and how to o<a id="_idTextAnchor267"/>rchestrate it a bit better than manually starting containers one <span class="No-Break">by one.</span></p>
+<h1 id="_idParaDest-189">Docker Compose</h1>
+<p><strong class="bold">Docker Compose</strong> is a<a id="_idIndexMarker793"/> console tool for running multiple containers using one command. It provides an easy way to manage and coordinate multiple containers, making it easier to build, test, and deploy complex applications. With Docker Compose, you can define your application’s services, networks, and volumes in a single YAML file, and then start and stop all services from the <span class="No-Break">command line.</span></p>
+<p>To use Docker Compose, you first need to define your application’s services in a <strong class="source-inline">docker-compose.yml</strong> file. This file should include information about the services you want to run, their configuration, and how they are connected. The file should also specify which Docker images to use for <span class="No-Break">each service.</span></p>
+<p>The <strong class="source-inline">docker-compose.yaml</strong> file is a central configuration file that’s used by Docker Compose to manage the deployment and running of applications. It is written in <span class="No-Break">YAML syntax.</span></p>
+<p>The structure of the <strong class="source-inline">docker-compose.yaml</strong> file is divided into several sections, each of which defines a different aspect of the deployment. The first section, <strong class="source-inline">version</strong>, specifies the version of the Docker Compose file format being used. The second section, <strong class="source-inline">services</strong>, defines the services that make up the application, including their image names, environment variables, ports, and other <span class="No-Break">configuration options.</span></p>
+<p>The <strong class="source-inline">services</strong> section is the most important part of the <strong class="source-inline">docker-compose.yaml</strong> file as it defines how the application is built, run, and connected. Each service is defined by its own set of key-value pairs, which specify its configuration options. For example, the <strong class="source-inline">image</strong> key is used to specify the name of the Docker image to be used for the service, while the <strong class="source-inline">ports</strong> key is used to specify the port mappings for <span class="No-Break">the service.</span></p>
+<p>The <strong class="source-inline">docker-compose.yaml</strong> file can also include other sections, such as <strong class="source-inline">volumes</strong> and <strong class="source-inline">networks</strong>, which allow you to define shared data storage and network configurations for your application. Overall, the <strong class="source-inline">docker-compose.yaml</strong> file provides a centralized, declarative way to define, configure, and run multi-container applications with Docker Compose. With its simple syntax and powerful features, it is a key tool for streamlining the development and deployment of <span class="No-Break">complex applications.</span></p>
+<p>Environment variables are key-value pairs that allow you to pass configuration information to your services when they are run. In the <strong class="source-inline">docker-compose.yaml</strong> file, environment variables can be specified using the environment key within the <span class="No-Break">service definition.</span></p>
+<p>One way <a id="_idIndexMarker794"/>to specify environment variables in the <strong class="source-inline">docker-compose.yaml</strong> file is to simply list them as key-value pairs within the environment section. Here’s <span class="No-Break">an example:</span></p>
+<pre class="source-code">
+version: '3'
+services:
+  db:
+    image: mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: example_db</pre>
+<p>In addition to specifying environment variables directly in the <strong class="source-inline">docker-compose.yaml</strong> file, you can store them in an external file and reference that file within the <strong class="source-inline">docker-compose.yaml</strong> file using the <strong class="source-inline">env_file</strong> key. Here’s <span class="No-Break">an example:</span></p>
+<pre class="source-code">
+version: '3'
+services:
+  db:
+    image: mariadb
+    env_file:
+      - db.env</pre>
+<p>The contents of the <strong class="source-inline">db.env</strong> file might look <span class="No-Break">like this:</span></p>
+<pre class="source-code">
+MYSQL_ROOT_PASSWORD=example
+MYSQL_DATABASE=example_db</pre>
+<p>By using an external <strong class="source-inline">env_file</strong> key, you can keep sensitive information separate from your <strong class="source-inline">docker-compose.yaml</strong> file and easily manage environment variables across <span class="No-Break">different environments.</span></p>
+<p>As an example, consider a MariaDB Docker image. The MariaDB image requires several environment variables to be set to configure the database, such as <strong class="source-inline">MYSQL_ROOT_PASSWORD</strong> for the root password, <strong class="source-inline">MYSQL_DATABASE</strong> for the name of the default database, and others. These environment variables can be defined in the <strong class="source-inline">docker-compose.yaml</strong> file to configure the <span class="No-Break">MariaDB service.</span></p>
+<p>Let’s look at an example of<a id="_idIndexMarker795"/> using Docker Compose to set up a nginx container, a PHP-FPM container, a WordPress container, and a MySQL container. We’ll start by defining our services in the <strong class="source-inline">docker-compose.yml</strong> file and break it down into smaller blocks <span class="No-Break">with comments:</span></p>
+<pre class="source-code">
+version: '3'</pre>
+<p>The preceding line defines the version of the Docker Compose file syntax. Next, we will define all Docker images to be run and interact with <span class="No-Break">each other:</span></p>
+<pre class="source-code">
+services:
+  web:
+    image: nginx:latest
+    depends_on:
+      - wordpress
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - wordpress:/var/www/html
+    networks:
+      - wordpress</pre>
+<p>This defines a component of our application stack named <strong class="source-inline">web</strong>. It will use a Docker image from Docker Hub named <strong class="source-inline">nginx</strong> with the <strong class="source-inline">latest</strong> tag. Here are some other <span class="No-Break">important settings:</span></p>
+<ul>
+<li><strong class="source-inline">depends_on</strong>: This tells Docker Compose to start this component after the <span class="No-Break"><strong class="source-inline">wordpress</strong></span><span class="No-Break"> service.</span></li>
+<li><strong class="source-inline">ports</strong>: This forwards your host port to a Docker port; in this case, it’ll open port <strong class="source-inline">80</strong> on your computer and forward all incoming traffic to the same port inside the Docker image, the same way the <strong class="source-inline">–p</strong> setting does when starting a single Docker container using the <span class="No-Break">command line.</span></li>
+<li><strong class="source-inline">volumes</strong>: This setting is equivalent to the <strong class="source-inline">-v</strong> option in the Docker command-line tool, so it’ll mount a <strong class="source-inline">nginx.conf</strong> file from the local directory to the <strong class="source-inline">/etc/nginx/conf.d/default.conf</strong> file inside a <span class="No-Break">Docker image.</span></li>
+<li><strong class="source-inline">wordpress:/var/www/html</strong>: This line will mount a Docker volume named <strong class="source-inline">wordpress</strong> to the directory inside the Docker image. The volume will be <span class="No-Break">defined ahead.</span></li>
+<li><strong class="source-inline">networks</strong>: Here, we’re <a id="_idIndexMarker796"/>connecting this service to a Docker network named <strong class="source-inline">wordpress</strong>, which is defined <span class="No-Break">as follows:</span></li>
+</ul>
+<pre class="source-code">
+  wordpress:
+    image: wordpress:php8.2-fpm-alpine
+    depends_on:
+      - db
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: example_user
+      WORDPRESS_DB_NAME: example_database
+      WORDPRESS_DB_PASSWORD: example_password
+    restart: unless-stopped
+    volumes:
+      - wordpress:/var/www/html
+    networks:
+      - wordpress</pre>
+<p>The preceding service is very similar to a <em class="italic">web</em> service, with the <span class="No-Break">following additions:</span></p>
+<ul>
+<li><strong class="source-inline">environment</strong>: This defines environment variables present inside the <span class="No-Break">Docker image.</span></li>
+<li><strong class="source-inline">restart</strong>: This configures the service so that it’s automatically restarted if the process stops working for some reason. Docker Compose will not attempt to restart this service if we’ve manually <span class="No-Break">stopped it.</span></li>
+<li><strong class="source-inline">depends_on</strong>: This <a id="_idIndexMarker797"/>server will only be started after the <strong class="source-inline">db</strong> service <span class="No-Break">is up.</span></li>
+</ul>
+<p>Let’s look at the <span class="No-Break"><strong class="source-inline">db</strong></span><span class="No-Break"> service:</span></p>
+<pre class="source-code">
+  db:
+    image: mariadb:10.4
+    environment:
+      MYSQL_ROOT_PASSWORD: example_password
+      MYSQL_DATABASE: example_database
+      MYSQL_USER: example_user
+      MYSQL_PASSWORD: example_password
+    restart: unless-stopped
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      - wordpress</pre>
+<p>This service is setting up the MariaDB database so that it can store WordPress data. Note that all environment variables we can use for MariaDB or WordPress images are documented on their respective Docker <span class="No-Break">Hub pages:</span></p>
+<pre class="source-code">
+volumes:
+  wordpress:
+  dbdata:</pre>
+<p>Here, we’re defining the Docker volumes we are using for WordPress and MariaDB. These are regular Docker volumes that are stored locally, but by installing Docker Engine plugins, those could be distributed filesystems, such as GlusterFS <span class="No-Break">or MooseFS:</span></p>
+<pre class="source-code">
+networks:
+  wordpress:
+    name: wordpress
+    driver: bridge</pre>
+<p>Finally, we’re <a id="_idIndexMarker798"/>defining a <strong class="source-inline">wordpress</strong> network with a <strong class="source-inline">bridge</strong> driver that allows communication between all preceding services with isolation from the Docker images running on a machine you will run <span class="No-Break">it on.</span></p>
+<p>In the preceding example, in addition to the options already covered in this section, we have a services dependency (<strong class="source-inline">depends_on</strong>), which will allow us to force the order in which containers will <span class="No-Break">be started.</span></p>
+<p>The two volumes we’re defining (<strong class="source-inline">wordpress</strong> and <strong class="source-inline">dbdata</strong>) are used for data persistence. The <strong class="source-inline">wordpress</strong> volume is being used to host all WordPress files and it’s also mounted to the web container that is running the nginx web server. That way, the web server will be able to serve static files such as CSS, images, and JavaScript, as well as forward requests to the <span class="No-Break">PHP-FPM server.</span></p>
+<p>Here’s the nginx configuration, which uses <strong class="source-inline">fastcgi</strong> to connect to the WordPress container running the <span class="No-Break">PHP-FPM daemon:</span></p>
+<pre class="source-code">
+server {
+    listen 80;
+    listen [::]:80;
+    index index.php index.htm index.xhtml;
+    server_name _;
+    error_log  /dev/stderr;
+    access_log /dev/stdout;
+    root /var/www/html;
+    location / {
+        try_files $uri $uri/ /index.php;
+    }
+    location ~ \.php$ {
+      include fastcgi_params;
+      fastcgi_intercept_errors on;
+      fastcgi_pass wordpress:9000;
+      fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
+      expires max;
+      log_not_found off;
+    }
+}</pre>
+<p>With this <strong class="source-inline">docker-compose.yml</strong> file, you can start and stop all the services defined in the file by<a id="_idIndexMarker799"/> using the <strong class="source-inline">docker-compose up</strong> and <strong class="source-inline">docker-compose down</strong> commands, respectively. When you run <strong class="source-inline">docker-compose up</strong>, Docker will download the necessary images and start the containers, and you’ll be able to access your WordPress website <span class="No-Break">at </span><a href="http://localhost"><span class="No-Break">http://localhost</span></a><span class="No-Break">.</span></p>
+<p><strong class="source-inline">docker-compose</strong> is a very useful tool for running applications that require multiple services in an easy and repeatable way. It’s most commonly used when running applications locally for development, but some organizations decide to use <strong class="source-inline">docker-compose</strong> in production systems where it serves <span class="No-Break">its purpose.</span></p>
+<p>It’s extremely rare if you can use a ready-made Docker image for local development or production. Using <a id="_idIndexMarker800"/>public images as a base for your customization is a practice applied in, dare we claim it, all organizations using Docker. With that in mind, in the next section, we will learn how to build Docker <a id="_idTextAnchor268"/>images using multi-stage builds and how to use each Dockerfile <span class="No-Break">command properly.</span></p>
+<h1 id="_idParaDest-190">Advanced Dockerfile techniques</h1>
+<p>Dockerfiles are<a id="_idIndexMarker801"/> used to define how an application should be built inside a Docker container. We covered most of the available commands in <a href="B18197_08.xhtml#_idTextAnchor166"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>. Here, we will introduce more a<a id="_idTextAnchor269"/>dvanced techniques, such as multi-stage builds or not-so-common <strong class="source-inline">ADD</strong> <span class="No-Break">command uses.</span></p>
+<h2 id="_idParaDest-191"><a id="_idTextAnchor270"/>Multi-stage build</h2>
+<p>Multi-stage builds <a id="_idIndexMarker802"/>are a feature of <a id="_idIndexMarker803"/>Docker that allows you to use multiple Docker images to create a single final image. By creating multiple stages, you can separate the build process into distinct steps and reduce the size of the final image. Multi-stage builds are particularly useful when building complex applications that require multiple dependencies as they allow developers to keep the necessary dependencies in one stage and the application <span class="No-Break">in another.</span></p>
+<p>One example of using multi-stage builds with a Golang application involves creating two stages: one for building the application and one for running it. In the first stage, the Dockerfile pulls in the necessary dependencies and compiles the application code. In the second stage, only the compiled binary is copied over from the first stage, reducing the size of the final image. Here’s an example Dockerfile for a <span class="No-Break">Golang application:</span></p>
+<pre class="source-code">
+# Build stage
+FROM golang:alpine AS build
+RUN apk add --no-cache git
+WORKDIR /app
+COPY . .
+RUN go mod download
+RUN go build -o /go/bin/app
+# Final stage
+FROM alpine
+COPY --from=build /go/bin/app /go/bin/app
+EXPOSE 8080
+ENTRYPOINT ["/go/bin/app"]</pre>
+<p>In the <a id="_idIndexMarker804"/>preceding example, the Dockerfile creates two <a id="_idIndexMarker805"/>stages. The first stage uses the <strong class="source-inline">golang:alpine</strong> image and installs the necessary dependencies. Then, it compiles the application and places the binary in the <strong class="source-inline">/go/bin/app</strong> directory. The second stage uses the smaller Alpine image and copies the binary from the first s<a id="_idTextAnchor271"/>tage into the <strong class="source-inline">/go/bin/app</strong> directory. Finally, it sets the entry point <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">/go/bin/app</strong></span><span class="No-Break">.</span></p>
+<h2 id="_idParaDest-192"><a id="_idTextAnchor272"/>ADD command use cases</h2>
+<p>The <strong class="source-inline">ADD</strong> command<a id="_idIndexMarker806"/> in a Docker file is used to add files or directories to the Docker image. It works in the same way as <strong class="source-inline">COPY</strong> but <a id="_idIndexMarker807"/>with some additional features. We’ve talked about basic uses before, but there are other use <span class="No-Break">cases too.</span></p>
+<p>The second use case allows you to unpack files compressed with ZIP or TAR and gzip tools on the fly. While adding a compressed file to the image, the file will be uncompressed and all the files inside it will be extracted to the destination folder. Here’s <span class="No-Break">an example:</span></p>
+<pre class="source-code">
+ADD my-tar-file.tar.gz /app</pre>
+<p>The third way of using the <strong class="source-inline">ADD</strong> command is to copy a remote file from a URL to the Docker image. For example, to download a file named <strong class="source-inline">file.txt</strong> from a URL, <a href="https://yourdomain.tld/configurations/nginx.conf">https://yourdomain.tld/configurations/nginx.conf</a>, and copy it to the nginx configuration directory, <strong class="source-inline">/etc/nginx</strong>, inside the Docker image, you can use the following <span class="No-Break"><strong class="source-inline">ADD</strong></span><span class="No-Break"> command:</span></p>
+<pre class="source-code">
+ADD https://yourdomain.tld/configurations/nginx.conf /etc/nginx/nginx.conf</pre>
+<p>You can also use a Git repository to add <span class="No-Break">your code:</span></p>
+<pre class="source-code">
+ADD --keep-git-dir=true https://github.com/your-user-or-organization/some-repo.git#main /app/code</pre>
+<p>To clone a <a id="_idIndexMarker808"/>Git repository over SSH, you will need to allow the <strong class="source-inline">ssh</strong> command inside Docker to access a private key <a id="_idIndexMarker809"/>with access to the repository you’re trying to access. You can achieve this by adding a private key in a multi-stage build and removing it at the end of the stage where you’re cloning a repository. This is generally not recommended if you have a choice. You can do this more securely by using Docker secrets and mounting the secret while running <span class="No-Break">the build.</span></p>
+<p>Here’s an example of using <strong class="source-inline">ARG</strong> with a <span class="No-Break">private key:</span></p>
+<pre class="source-code">
+ARG SSH_PRIVATE_KEY
+RUN mkdir /root/.ssh/
+RUN echo "${SSH_PRIVATE_KEY}" &gt; /root/.ssh/id_rsa
+# make sure your domain is accepted
+RUN touch /root/.ssh/known_hosts
+RUN ssh-keyscan gitlab.com &gt;&gt; /root/.ssh/known_hosts
+RUN git clone git@gitlab.com:your-user/your-repo.git</pre>
+<p>Here’s an example of using a Docker secret and <span class="No-Break">a mount:</span></p>
+<pre class="source-code">
+FROM python:3.9-alpine
+WORKDIR /app
+RUN --mount=type=secret,id=ssh_id_rsa,dst=~/id_rsa chmod 400 ~/id_rsa \
+  &amp;&amp; ssh-agent bash -c 'ssh-add ~/id_rsa; git clone git@gitlab.com:your-user/your-repo.git' &amp;&amp; rm -f ~/id_rsa
+  # Rest of the build process follows…</pre>
+<p>In the preceding example, we’re assuming your private key isn’t protected by the password and your key is being saved in the <span class="No-Break"><strong class="source-inline">ssh_id_rsa</strong></span><span class="No-Break"> file.</span></p>
+<p>The final way of using the <strong class="source-inline">ADD</strong> command is to extract a TAR archive from the host machine and copy<a id="_idIndexMarker810"/> its contents to the Docker image. For example, to extract a TAR archive <a id="_idIndexMarker811"/>named <strong class="source-inline">data.tar.gz</strong> from the host machine and copy its contents to the <strong class="source-inline">/data</strong> direc<a id="_idTextAnchor273"/>tory inside the Docker image, you can use the following <span class="No-Break"><strong class="source-inline">ADD</strong></span><span class="No-Break"> command:</span></p>
+<pre class="console">
+ADD data.tar.gz /data/</pre>
+<h2 id="_idParaDest-193"><a id="_idTextAnchor274"/>Secrets management</h2>
+<p>Docker secrets management is<a id="_idIndexMarker812"/> an<a id="_idIndexMarker813"/> important aspect of building secure and reliable <span class="No-Break">containerized applications.</span></p>
+<p>Secrets are <a id="_idIndexMarker814"/>sensitive pieces of information that an application needs to function, but they should not be exposed to unauthorized users or processes. Examples of secrets include passwords, API keys, SSL certificates, and other authentication or authorization tokens. These secrets are often required by applications at runtime, but storing them in plaintext in code or configuration files can be a <span class="No-Break">security risk.</span></p>
+<p>Securing secrets is crucial to ensuring the security and reliability of applications. Leaking secrets can lead to data breaches, service disruptions, and other <span class="No-Break">security incidents.</span></p>
+<p>In the basic Docker setup, it’s only possible to provide secrets to a Docker image using environment variables, as we covered in <a href="B18197_08.xhtml#_idTextAnchor166"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>. Docker also provides a built-in secrets management mechanism that allows you to securely store and manage secrets. However, it’s only available when Swarm mode needs to be enabled (we will get back to Swarm later in this chapter in the <em class="italic">Docker </em><span class="No-Break"><em class="italic">orchestration</em></span><span class="No-Break"> section).</span></p>
+<p>To make secrets available to applications running inside Docker, you can use the <strong class="source-inline">docker secret create</strong> command. For example, to create a secret for a MySQL database password, you can use the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~/$ echo "mysecretpassword" | docker secret create mysql_password -</pre>
+<p>This command creates a secret named <strong class="source-inline">mysql_password</strong> with a value <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">mysecretpassword</strong></span><span class="No-Break">.</span></p>
+<p>To use a secret in a service, you need to define the secret in the service configuration file. For <a id="_idIndexMarker815"/>example, to use the <strong class="source-inline">mysql_password</strong> secret in a service, you can define it in the <strong class="source-inline">docker-compose.yml</strong> file, <span class="No-Break">as follows:</span></p>
+<pre class="source-code">
+version: '3'
+services:
+  db:
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_password
+    secrets:
+      - mysql_password
+    volumes:
+      - db_data:/var/lib/mysql
+secrets:
+  mysql_password:
+    external: true
+volumes:
+  db_data:</pre>
+<p>In this <a id="_idIndexMarker816"/>configuration file, the <strong class="source-inline">mysql_password</strong> secret is defined in the <strong class="source-inline">secrets</strong> section, and the <strong class="source-inline">MYSQL_ROOT_PASSWORD_FILE</strong> environment variable is set to the path of the secret file, which <span class="No-Break">is </span><span class="No-Break"><strong class="source-inline">/run/secrets/mysql_password</strong></span><span class="No-Break">.</span></p>
+<p>To deploy <a id="_idIndexMarker817"/>the service, you can use the <strong class="source-inline">docker stack deploy</strong> command. For example, to deploy the service defined in the <strong class="source-inline">docker-compose.yml</strong> file, you can use the <span class="No-Break">following command:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker stack deploy -c docker-compose.yml myapp</pre>
+<p>Handling secrets with care is extremely important from a security perspective. The most common mistake is putting a secret directly inside a Docker image, environment file, or application configuration file that is committed into the Git repository. There are existing contingencies <a id="_idIndexMarker818"/>that prevent users from doing that (such as Dependabot in GitHub), but if they should fail, it’s extremely hard to remove <a id="_idIndexMarker819"/>them from the Git <span class="No-Break">history afterward.</span></p>
+<p>In this section, we<a id="_idIndexMarker820"/> covered how to handle different aspects of building a container and advanced build techniques. With this knowledge and with the use of Docker Compose, you will be able to build and run your application with a decent dose of automation. What if you have 10 of those applications? 100? Or <span class="No-Break">even more?</span></p>
+<p>In the next section, we will dig into cluster<a id="_idTextAnchor275"/>s, which will automate things further and deploy your applications to multiple <span class="No-Break">hosts simultaneously.</span></p>
+<h1 id="_idParaDest-194">Docker orchestration</h1>
+<p>In the world<a id="_idIndexMarker821"/> of containerization, <strong class="bold">orchestration</strong> is the process of <a id="_idIndexMarker822"/>automating deployment and managing and scaling your applications across multiple hosts. Orchestration solutions help simplify the management of containerized applications, increase availability, and improve scalability by providing a layer of abstraction that allows you to manage containers at a higher level, instead of manually managing <span class="No-Break">individual containers.</span></p>
+<p><strong class="bold">Docker Swarm</strong> is a <a id="_idIndexMarker823"/>Docker-native clustering and orchestration tool that allows you<a id="_idIndexMarker824"/> to create and manage a cluster of Docker nodes, allowing users to deploy and manage Docker containers across a large number of hosts. Docker Swarm is an easy-to-use solution that comes built-in with Docker, making it a popular choice for those who are already familiar <span class="No-Break">with Docker.</span></p>
+<p><strong class="bold">Kubernetes</strong> is an <a id="_idIndexMarker825"/>open source container orchestration platform that was<a id="_idIndexMarker826"/> originally developed by Google. Kubernetes allows you to deploy, scale, and manage containerized applications across multiple hosts, while also providing advanced features such as self-healing, automated rollouts, and rollbacks. Kubernetes is one of the most popular orchestration solutions in use today and is widely used in <span class="No-Break">production environments.</span></p>
+<p><strong class="bold">OpenShift</strong> is a <a id="_idIndexMarker827"/>container application platform that is built on top of Kubernetes<a id="_idIndexMarker828"/> and it’s developed by Red Hat. This platform provides a complete solution for deploying, managing, and scaling containerized applications, with additional features such as built-in CI/CD pipelines, integrated monitoring, and automatic scaling. OpenShift is designed to be enterprise-grade, with features such as multi-tenancy and <strong class="bold">role-based access control</strong> (<strong class="bold">RBAC</strong>), making<a id="_idIndexMarker829"/> it a popular choice for large organizations that need to manage complex <span class="No-Break">containerized environments.</span></p>
+<p>There is a wide variety of orchestration solutions available, each with its strengths and weaknesses. The choice of which solution to use ultimately depends on your specific needs, but Docker Swarm, Kubernetes, and OpenShift are al<a id="_idTextAnchor276"/>l popular choices that provide robust and reliable orchestration capabilities for <span class="No-Break">containerized applications.</span></p>
+<h2 id="_idParaDest-195"><a id="_idTextAnchor277"/>Docker Swarm</h2>
+<p>Docker Swarm<a id="_idIndexMarker830"/> is a native clustering and orchestration <a id="_idIndexMarker831"/>solution for Docker containers. It provides a simple yet powerful way to manage and scale Dockerized applications across a cluster of hosts. With Docker Swarm, users can create and manage a swarm of Docker nodes that act as a single <span class="No-Break">virtual system.</span></p>
+<p>The base components of Docker Swarm are <span class="No-Break">as follows:</span></p>
+<ul>
+<li><strong class="bold">Nodes</strong>: These <a id="_idIndexMarker832"/>are the Docker hosts that form the Swarm. Nodes can be physical or virtual machines running the Docker daemon, and they can join or leave the Swarm <span class="No-Break">as needed.</span></li>
+<li><strong class="bold">Services</strong>: These <a id="_idIndexMarker833"/>are the applications that run on the Swarm. A service is a scalable unit of work that defines how many replicas of the application should run, and how to deploy and manage them across <span class="No-Break">the Swarm.</span></li>
+<li><strong class="bold">Managers</strong>: These <a id="_idIndexMarker834"/>are the nodes responsible for managing the Swarm state and orchestrating the deployment of services. Managers are in charge of maintaining the desired state of the services and ensuring they are running <span class="No-Break">as intended.</span></li>
+<li><strong class="bold">Workers</strong>: These<a id="_idIndexMarker835"/> are the nodes that run the actual containers. Workers receive instructions from the managers and run the desired replicas of <span class="No-Break">the service.</span></li>
+<li><strong class="bold">Overlay networks</strong>: These<a id="_idIndexMarker836"/> are the networks that allow the services to communicate with each other, regardless of the node they are running on. Overlay networks provide a transparent network that spans the <span class="No-Break">entire Swarm.</span></li>
+</ul>
+<p>Docker Swarm provides a simple and easy-to-use way to manage containerized applications. It is tightly integrated with the Docker ecosystem and provides a familiar interface for Docker users. With its built-in features for service discovery, load balancing, rolling updates, and scaling, Docker Swarm is a popular choice for organizations that are just starting with <span class="No-Break">container orchestration.</span></p>
+<p>To initialize Docker Swarm mode <a id="_idIndexMarker837"/>and add two workers to the cluster, you will need to initialize <span class="No-Break">Swarm mode:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker swarm init
+Swarm initialized: current node (i050z7b0tjoew7hxlz419cd8l) is now a manager.
+To add a worker to this swarm, run the following command:
+    docker swarm join --token SWMTKN-1-0hu2dmht259tb4skyetrpzl2qhxgeddij3bc1wof3jxh7febmd-6pzkhrh4ak345m8022hauviil 10.0.2.15:2377
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.</pre>
+<p>This will create a new Swarm and make the current node the <span class="No-Break">Swarm manager.</span></p>
+<p>Once the<a id="_idIndexMarker838"/> Swarm has been initialized, you can add worker nodes to the cluster. To do this, you need to run the following command on each <span class="No-Break">worker node:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker swarm join --token &lt;token&gt; &lt;manager-ip&gt;</pre>
+<p>Here, <strong class="source-inline">&lt;token&gt;</strong> is the <a id="_idIndexMarker839"/>token generated by the <strong class="source-inline">docker swarm init</strong> command output, which you can find in the preceding code block, and <strong class="source-inline">&lt;manager-ip&gt;</strong> is the IP address of the <span class="No-Break">Swarm manager.</span></p>
+<p>For example, if the token is <strong class="source-inline">SWMTKN-1-0hu2dmht259tb4skyetrpzl2qhxgeddij3bc1wof3jxh7febmd-6pzkhrh4ak345m8022hauviil</strong> and the manager IP is <strong class="source-inline">10.0.2.15</strong>, the command would be <span class="No-Break">as follows:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker swarm join --token SWMTKN-1-0hu2dmht259tb4skyetrpzl2qhxgeddij3bc1wof3jxh7febmd-6pzkhrh4ak345m8022hauviil 10.0.2.15</pre>
+<p>After running the <strong class="source-inline">docker swarm join</strong> command on each worker node, you can verify that they have joined the Swarm by running the following command on the Swarm <span class="No-Break">manager node:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker node ls
+ID                      HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+i050z7b0tjoew7hxlz419cd8l *   myhome    Ready     Active         Leader           23.0.1</pre>
+<p>This will show a list of all the nodes in the Swarm, including the manager and any workers you <span class="No-Break">have added.</span></p>
+<p>After that, you can add more nodes and start deploying applications to Docker Swarm. It’s possible to reuse any Docker Compose you’re using or <span class="No-Break">Kubernetes manifests.</span></p>
+<p>To deploy a <a id="_idIndexMarker840"/>sample application, we can reuse a Docker Compose template by deploying a <strong class="source-inline">wordpress</strong> service, but we will need to update it slightly by using MySQL user and password files in the <span class="No-Break">environment variables:</span></p>
+<pre class="source-code">
+  wordpress:
+    image: wordpress:php8.2-fpm-alpine
+    depends_on:
+      - db
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER_FILE: /run/secrets/mysql_user
+      WORDPRESS_DB_NAME: example_database
+      WORDPRESS_DB_PASSWORD_FILE: /run/secrets/mysql_password</pre>
+<p>Here’s an <a id="_idIndexMarker841"/>example of adding secrets to both the <strong class="source-inline">wordpress</strong> and <span class="No-Break"><strong class="source-inline">db</strong></span><span class="No-Break"> services:</span></p>
+<pre class="source-code">
+    secrets:
+      - mysql_user
+      - mysql_password
+  db:
+    image: mariadb:10.4
+    environment:
+      MYSQL_ROOT_PASSWORD: example_password
+      MYSQL_DATABASE: example_database
+      MYSQL_USER_FILE: /run/secrets/mysql_user
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password</pre>
+<p>Here’s an example of adding a secrets definition at the bottom <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">docker-compose.yml:secrets</strong></span><span class="No-Break">:</span></p>
+<pre class="source-code">
+  mysql_user:
+    external: true
+  mysql_password:
+    external: true</pre>
+<p>The <strong class="source-inline">external: true</strong> setting is telling <strong class="source-inline">docker-compose</strong> that secrets are already present and that it should not try to update or recreate them on <span class="No-Break">its own.</span></p>
+<p>In this version of the Compose file, we use secrets to store the MySQL user and password for both the <strong class="source-inline">wordpress</strong> and <span class="No-Break"><strong class="source-inline">db</strong></span><span class="No-Break"> services.</span></p>
+<p>To deploy<a id="_idIndexMarker842"/> this file to Docker Swarm, we can use the <span class="No-Break">following commands:</span></p>
+<pre class="console">
+admin@myhome:~/$ echo "root" | docker secret create mysql_user -
+vhjhswo2qg3bug9w7id08y34f
+echo "mysqlpwd" | docker secret create mysql_password -
+oy9hsbzmzrh0jrgjo6bgsydol</pre>
+<p>Then, we can deploy <span class="No-Break">the stack:</span></p>
+<pre class="console">
+admin@myhome:~/$ docker stack deploy -c docker-compose.yml wordpress
+Ignoring unsupported options: restart
+Creating network wordpress_wordpress
+Creating service wordpress_web
+Creating service wordpress_wordpress
+Creating service wordpress_db</pre>
+<p>Here, <strong class="source-inline">docker-compose.yaml</strong> is the name of the Compose file and <strong class="source-inline">my-stack-name</strong> is the name of the <span class="No-Break">Docker stack.</span></p>
+<p>Once the stack has been deployed, the <strong class="source-inline">wordpress</strong>, <strong class="source-inline">web</strong>, and <strong class="source-inline">db</strong> services will be running with the MySQL user and password specified in the secrets. You can verify this by listing stacks and checking if containers <span class="No-Break">are running:</span></p>
+<pre class="console">
+admin@myhome:~/$ root@vagrant:~# docker stack ls
+NAME        SERVICES
+wordpress   3
+root@vagrant:~# docker ps
+CONTAINER ID     IMAGE     CREATED      STATUS       PORTS      NAMES
+7ea803c289b0   mariadb:10.4                  "docker-entrypoint.s…"   28 seconds ago   Up 27 seconds   3306/tcp   wordpress_db.1.dogyh5rf52zzsiq0t95nrhuhc
+ed25de3273a2   wordpress:php8.2-fpm-alpine   "docker-entrypoint.s…"   33 seconds ago   Up 31 seconds   9000/tcp   wordpress_wordpress.1.xmmljnd640ff9xs1249jpym45</pre>
+<p>Docker Swarm is <a id="_idIndexMarker843"/>a great project to start your adventure with Docker orchestration methods. <a id="_idTextAnchor278"/>It’s possible to use it with a production-grade system by using various plugins that will extend its <span class="No-Break">default functionality.</span></p>
+<h2 id="_idParaDest-196"><a id="_idTextAnchor279"/>Kubernetes and OpenShift</h2>
+<p>Two <a id="_idIndexMarker844"/>of the <a id="_idIndexMarker845"/>most popular tools for orchestrating Docker <a id="_idIndexMarker846"/>containers are Kubernetes and OpenShift. Although they share some similarities, they also have some significant differences. Here are the <a id="_idIndexMarker847"/>main differences between Kubernetes <span class="No-Break">and OpenShift:</span></p>
+<ul>
+<li><strong class="bold">Architecture</strong>: Kubernetes is a standalone orchestration platform that is designed to work with multiple container runtimes, including Docker. OpenShift, on the other hand, is a platform that is built on top of Kubernetes. It provides additional features and tools, such as source code management, continuous integration, and deployment. These additional features make OpenShift a more comprehensive solution for enterprises that require end-to-end <span class="No-Break">DevOps capabilities.</span></li>
+<li><strong class="bold">Ease of use</strong>: Kubernetes is a powerful orchestration tool that requires a high level of technical expertise to set up and operate. OpenShift, on the other hand, is designed to be more user-friendly and accessible to developers with varying levels of technical knowledge. OpenShift provides a web-based interface for managing applications and can be integrated with various development tools, making it easier for developers to <span class="No-Break">work with.</span></li>
+<li><strong class="bold">Cost</strong>: Kubernetes<a id="_idIndexMarker848"/> is an open source project that is free to use, but enterprises may need to invest in additional tools and resources to set it up and operate it. OpenShift is an enterprise platform that requires a subscription for full access to its features and support. The cost of OpenShift <a id="_idIndexMarker849"/>may be higher than Kubernetes, but it provides additional features and support that may be worth the investment for enterprises that require advanced <span class="No-Break">DevOps capabilities.</span></li>
+</ul>
+<p>Both solutions are powerful Docker orchestration tools that offer different benefits and trade-offs. Kubernetes is highly customizable and suitable for more technical users. OpenShift, on the other hand, provides a more comprehensive solution with additional features and a user-friendly interface but comes at a higher cost. You should consider specific needs in your organization when choosing between these two tools, keeping in mind that Dock<a id="_idTextAnchor280"/>er Swarm is also an option. Cloud providers also developed their own solutions, with Elastic Container Service being one <span class="No-Break">of them.</span></p>
+<h1 id="_idParaDest-197">Summary</h1>
+<p>In this chapter, we covered more advanced topics around Docker, only touching topics around orchestration. Kubernetes, OpenShift, and SaaS solutions provided by cloud operators are driving the creation of new tools that will further ease Docker’s use in <span class="No-Break">modern applications.</span></p>
+<p>Docker has had a profound impact on the world of software development and deployment, enabling us to build, ship, and run applications more efficiently and reliably than ever before. By understanding the internals of Docker and following best practices for working with it, we can ensure that our applications are secure, performant, and scalable across a wide range <span class="No-Break">of environments.</span></p>
+<p>In the next chapter, we will look into challenges on how to monitor and gather logs in a distributed environment built on top of <span class="No-Break">Docker containers.</span></p>
+</div>
+</div>
+
+<div id="sbo-rt-content"><div class="Content" id="_idContainer023">
+<h1 id="_idParaDest-198" lang="en-US" xml:lang="en-US"><a id="_idTextAnchor281"/>Part 3: DevOps Cloud Toolkit</h1>
+<p>This last part of the book will focus more on automation using <strong class="bold">Configuration as Code</strong> (<strong class="bold">CaC</strong>) and <strong class="bold">Infrastructure as Code</strong> (<strong class="bold">IaC</strong>). We will also talk about monitoring and tracing as a crucial part of modern application development and maintenance. In the last chapter, we will talk about DevOps pitfalls we’ve experienced in many projects we’ve been <span class="No-Break">involved with.</span></p>
+<p>This part has the <span class="No-Break">following chapters:</span></p>
+<ul>
+<li><a href="B18197_10.xhtml#_idTextAnchor282"><em class="italic">Chapter 10</em></a>, <em class="italic">Monitoring, Tracing, and Distributed Logging</em></li>
+<li><a href="B18197_11.xhtml#_idTextAnchor325"><em class="italic">Chapter 11</em></a>, <em class="italic">Using Ansible for Configuration as Code</em></li>
+<li><a href="B18197_12.xhtml#_idTextAnchor365"><em class="italic">Chapter 12</em></a>, <em class="italic">Leveraging Infrastructure as Code</em></li>
+<li><a href="B18197_13.xhtml#_idTextAnchor412"><em class="italic">Chapter 13</em></a>, <em class="italic">CI/CD with Terraform, GitHub, and Atlantis</em></li>
+<li><a href="B18197_14.xhtml#_idTextAnchor443"><em class="italic">Chapter 14</em></a>, <em class="italic">Avoiding Pitfalls in DevOps</em></li>
+</ul>
+</div>
+<div>
+<div id="_idContainer024">
+</div>
+</div>
+<div>
+<div class="Basic-Graphics-Frame" id="_idContainer025">
+</div>
+</div>
+</div></body></html>

@@ -1,0 +1,897 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer138">
+			<h1 id="_idParaDest-341" class="chapter-number"><a id="_idTextAnchor1679"/>13</h1>
+			<h1 id="_idParaDest-342"><a id="_idTextAnchor1680"/>Securing and Testing Your CI/CD Pipeline</h1>
+			<p>In<a id="_idIndexMarker1394"/> the previous chapters, we looked at <strong class="bold">Continuous Integration</strong> (<strong class="bold">CI</strong>) and <strong class="bold">Continuous Deployment/Delivery</strong> (<strong class="bold">CD</strong>) with GitOps as the central concept. Both concepts <a id="_idIndexMarker1395"/>and the tooling surrounding them help us deliver better software faster. However, one of the most critical aspects of technology is security and quality assurance. Though security was not considered in DevOps’ initial days, with the advent of <strong class="bold">DevSecOps</strong>, modern DevOps now places a great emphasis on it. In this chapter, we’ll <a id="_idIndexMarker1396"/>try to understand the concepts surrounding container applications’ security and testing and how to apply them within CI <span class="No-Break">and CD.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Securing and testing <span class="No-Break">CI/CD pipelines</span></li>
+				<li>Revisiting the <span class="No-Break">Blog Application</span></li>
+				<li>Container <span class="No-Break">vulnerability scanning</span></li>
+				<li><span class="No-Break">Managing secrets</span></li>
+				<li><span class="No-Break">Binary authorization</span></li>
+				<li>Release gating with pull requests and deploying our application <span class="No-Break">in production</span></li>
+				<li>Security and testing best practices for modern <span class="No-Break">DevOps pipelin<a id="_idTextAnchor1681"/><a id="_idTextAnchor1682"/>es</span></li>
+			</ul>
+			<h1 id="_idParaDest-343"><a id="_idTextAnchor1683"/>Technical requirements</h1>
+			<p>For this chapter, we will spin up<a id="_idIndexMarker1397"/> a cloud-based Kubernetes cluster, <strong class="bold">Google Kubernetes Engine</strong> (<strong class="bold">GKE</strong>), for the exercises. Currently, <strong class="bold">Google Cloud Platform </strong>(<strong class="bold">GCP</strong>) provides a<a id="_idIndexMarker1398"/> free $300 trial for 90 days, so you can go ahead and sign up for one <span class="No-Break">at </span><a href="https://console.cloud.google.com/"><span class="No-Break">https://console.cloud.google.com/</span></a><span class="No-Break">.</span></p>
+			<p>You will also need to clone the following GitHub repository for some of <span class="No-Break">the exercises:</span></p>
+			<p><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a><span class="No-Break">.</span></p>
+			<p>You can use the Cloud Shell offering available on GCP to follow this chapter. Go to Cloud Shell and start a new session. Run the following commands to clone the repository into your home directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \
+modern-devops</pre>			<p>We also need to set the project ID and enable a few GCP APIs that we will use in this chapter. To do so, run the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ PROJECT_ID=&lt;YOUR_PROJECT_ID&gt;
+$ gcloud services enable iam.googleapis.com \
+ container.googleapis.com \
+ binaryauthorization.googleapis.com \
+ containeranalysis.googleapis.com \
+ secretmanager.googleapis.com \
+ cloudresourcemanager.googleapis.com \
+ cloudkms.googleapis.com</pre>			<p>Now, in the next section, let’s look at how to secure and test <span class="No-Break">CI/CD pipel<a id="_idTextAnchor1684"/><a id="_idTextAnchor1685"/>ines.</span></p>
+			<h1 id="_idParaDest-344"><a id="_idTextAnchor1686"/>Securing and testing CI/CD pipelines</h1>
+			<p>With<a id="_idIndexMarker1399"/> continuous <a id="_idIndexMarker1400"/>cyber threats and the ongoing war between cybersecurity experts and cybercriminals, security has always been the top priority for most organizations, and it also forms a significan<a id="_idTextAnchor1687"/>t part of a mature <span class="No-Break">organization’s investment.</span></p>
+			<p>However, security comes with its costs. Most organizations have cybersecurity teams that audit their code regularly and give feedback. However, that process is generally slow and happens when most of the code is already developed and difficult <span class="No-Break">to modify.</span></p>
+			<p>Similarly, while <a id="_idIndexMarker1401"/>most organizations significantly emphasize<a id="_idIndexMarker1402"/> automated testing, many still heavily depend on manual testing. Manual testing is not only labor-intensive but also lacks repeatability. DevOps places great importance on automating tests to ensure that they can be repeated with every release, enabling the detection of existing issues and thorough testing of new features. Additionally, automation is essential for efficiently conducting regression testing on bug fixes, as manual testing in such cases <span class="No-Break">is inefficient.</span></p>
+			<p>Therefore, embedding security and testing at the early stages of development is an essential goal for modern DevOps. Embedding security with DevOps has led to the concept of DevSecOps, where developers, cybersecurity experts, and operations teams work together to create better and more secure <span class="No-Break">software faster.</span></p>
+			<p>Securing and testing your software using CI/CD pipelines offers various significant business advantages. Firstly, it ensures security by protecting sensitive data, preventing vulnerabilities, and ensuring compliance. Secondly, it improves quality and reliability through early issue detection, consistency, and higher product quality. This leads to cost reduction by reducing rework, speeding up time to market, and optimizing resource usage. Additionally, it mitigates risks by increasing resilience and enabling stress testing. Moreover, it ensures business continuity through disaster recovery and efficient rollback procedures. Furthermore, it provides a competitive advantage by fostering faster innovation and market responsiveness. Finally, it enhances reputation and customer trust by building confidence in your products and services and safeguarding your brand’s reputation. In essence, securing and testing CI/CD pipelines is both a technical necessity and a strategic business imperative that enhances security, quality, and reliability while reducing costs and risks, ultimately leading to improved customer satisfaction, business continuity, and a competitive edge in <span class="No-Break">the market.</span></p>
+			<p>There are many ways of embedding security within the software supply chain. Some of these might include static code analysis, security testing, and applying organization-specific security policies within the process, but the idea of security is not to slow down development. Instead of human input, we can always use tools that can significantly improve the security posture of the software we develop. Similarly, testing need not be manual and slow and, instead, should use automation to plug in seamlessly with the <span class="No-Break">CI/CD process.</span></p>
+			<p><strong class="bold">CI/CD pipelines</strong> are one <a id="_idIndexMarker1403"/>of the essential features of modern DevOps, and they<a id="_idIndexMarker1404"/> o<a id="_idTextAnchor1688"/>rchestrate all processes and combine all tools to deliver better software faster, but how would you secure them? You may want to ask the <span class="No-Break">following questions:</span></p>
+			<ul>
+				<li>How do I scan a container image <span class="No-Break">for vulnerabilities?</span></li>
+				<li>How do I store and manage sensitive information and <span class="No-Break">secrets securely?</span></li>
+				<li>How do I ensure that my application is tested before deployment <span class="No-Break">to production?</span></li>
+				<li>How do I ensure that only tested and approved container images are deployed <span class="No-Break">in production?</span></li>
+			</ul>
+			<p>Throughout this chapter, we will try to answer these using best practices and tooling. For reference, look at the following <span class="No-Break">workflow<a id="_idTextAnchor1689"/> diagram:</span></p>
+			<div>
+				<div id="_idContainer122" class="IMG---Figure">
+					<img src="image/B19877_13_1.jpg" alt="Figure 13.1 – Secure CI/CD workflow" width="1648" height="1118"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.1 – Secure CI/CD workflow</p>
+			<p>As depicted<a id="_idIndexMarker1405"/> in the previous figure, we need to modify the CI pipeline<a id="_idIndexMarker1406"/> to include an additional step for vulnerability scanning. We also require two CD pipelines, one for the Dev environment and another for Prod. To enhance reusability, we’ll restructure our GitHub Actions workflow. We’ll divide the workflows into parent and child workflows. Let’s begin by examining the CD workflow for the Dev environment to get <span class="No-Break">an overview:</span></p>
+			<pre class="console">
+name: Dev Continuous Delivery Workflow
+on:
+  push:
+    branches: [ dev ]
+jobs:
+  create-environment-and-deploy-app:
+    name: Create Environment and Deploy App
+    uses: ./.github/workflows/create-cluster.yml
+    secrets: inherit
+  run-tests:
+    name: Run Integration Tests
+    needs: [create-environment-and-deploy-app]
+    uses: ./.github/workflows/run-tests.yml
+    secrets: inherit
+  binary-auth:
+    name: Attest Images
+    needs: [run-tests]
+    uses: ./.github/workflows/attest-images.yml
+    secrets: inherit
+  raise-pull-request:
+    name: Raise Pull Request
+    needs: [binary-auth]
+    uses: ./.github/workflows/raise-pr.yml
+    secrets: inherit</pre>			<p>The workflow begins with a <strong class="source-inline">name</strong>, followed by a declaration of <strong class="source-inline">on push branches dev</strong>. This configuration ensures that the workflow triggers with every push to the <strong class="source-inline">dev</strong> branch. We define multiple jobs in sequence, each depending on the previous one using the <strong class="source-inline">needs</strong> attribute. Each job invokes a child workflow specified by the <strong class="source-inline">uses</strong> attribute, and it provides GitHub secrets to these child workflows by setting <strong class="source-inline">inherit</strong> for the <span class="No-Break"><strong class="source-inline">secrets</strong></span><span class="No-Break"> attribute.</span></p>
+			<p>The<a id="_idIndexMarker1407"/> workflow <a id="_idIndexMarker1408"/>accomplishes the <span class="No-Break">following tasks:</span></p>
+			<ol>
+				<li>Sets up the Dev Kubernetes cluster, configures Argo CD and supporting tools to establish the environment, and deploys the sample <span class="No-Break">Blog App.</span></li>
+				<li>Executes integration tests on the deployed <span class="No-Break">Blog App.</span></li>
+				<li>If the tests pass, it utilizes binary authorization (more details to follow) to attest images, ensuring that only tested artifacts are allowed for deployment <span class="No-Break">to production.</span></li>
+				<li>Initiates a pull request for deployment to the <span class="No-Break">Prod environment.</span></li>
+			</ol>
+			<p>In a similar manner, we have the following Prod CD <span class="No-Break">Workflow file:</span></p>
+			<pre class="console">
+name: Prod Continuous Delivery Workflow
+on:
+  push:
+    branches: [ prod ]
+jobs:
+  create-environment-and-deploy-app:
+    name: Create Environment and Deploy App
+    uses: ./.github/workflows/create-cluster.yml
+    secrets: inherit
+  run-tests:
+    name: Run Integration Tests
+    needs: [create-environment-and-deploy-app]
+    uses: ./.github/workflows/run-tests.yml
+    secrets: inherit</pre>			<p>This<a id="_idIndexMarker1409"/> workflow is similar to the Dev workflow but does not <a id="_idIndexMarker1410"/>include the <strong class="source-inline">binary-auth</strong> and <strong class="source-inline">raise-pull-request</strong> steps, as they are unnecessary at this stage. To understand it better, let’s begin by examining the Dev workflow. The initial step of the Dev workflow involves creating the environment and deploying the application. However, before we proceed, let’s revisit the Blog App in th<a id="_idTextAnchor1690"/>e <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-345"><a id="_idTextAnchor1691"/>Revisiting the Blog Application</h1>
+			<p>As we already discussed the <a id="_idIndexMarker1411"/>Blog App in the last chapter, let’s look at the services and their interactions again in the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer123" class="IMG---Figure">
+					<img src="image/B19877_13_2.jpg" alt="Figure 13.2 – The Blog App services and interactions" width="1628" height="488"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.2 – The Blog App services and interactions</p>
+			<p>We’ve already created CI and CD pipelines for building, testing, and pushing our Blog Application microservices containers using GitHub Actions and deploying them using Argo CD in a <span class="No-Break">GKE cluster.</span></p>
+			<p>If you remember, we created the following resources for the application to <span class="No-Break">run seamlessly:</span></p>
+			<ul>
+				<li><strong class="bold">MongoDB</strong> – We<a id="_idIndexMarker1412"/> deployed an auth-enabled MongoDB database with root credentials. The credentials were injected via environment variables sourced from a <a id="_idIndexMarker1413"/>Kubernetes <strong class="bold">Secret</strong> resource. To persist our database data, we created<a id="_idIndexMarker1414"/> a <strong class="bold">PersistentVolume</strong> mounted to the container, which we provisioned dynamically using<a id="_idIndexMarker1415"/> a <strong class="bold">PersistentVolumeClaim</strong>. As the container is stateful, we<a id="_idIndexMarker1416"/> used a <strong class="bold">StatefulSet</strong> to manage it and, therefore, a headless Service to expose <span class="No-Break">the database.</span></li>
+				<li><strong class="bold">Posts, reviews, ratings, and users</strong> – The posts, reviews, ratings, and users microservices interacted with MongoDB through the root credentials injected via environment variables sourced from the same <strong class="bold">Secret</strong> resource<a id="_idIndexMarker1417"/> as MongoDB. We deployed them using their respective <strong class="bold">Deployment</strong> resources<a id="_idIndexMarker1418"/> and <a id="_idIndexMarker1419"/>exposed all of them via individual <span class="No-Break"><strong class="bold">ClusterIP</strong></span><span class="No-Break"> Services.</span></li>
+				<li><strong class="bold">Frontend</strong> – The frontend microservice does not need to interact with MongoDB, so there was no interaction with <a id="_idIndexMarker1420"/>the <strong class="bold">Secret</strong> resource. We deployed this service as well using<a id="_idIndexMarker1421"/> a <strong class="bold">Deployment</strong> resource. As we wanted to expose the service on the internet, we created a <strong class="bold">LoadBalancer</strong> Service<a id="_idIndexMarker1422"/> <span class="No-Break">for it.</span></li>
+			</ul>
+			<p>We can summarize them in the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer124" class="IMG---Figure">
+					<img src="image/B19877_13_3.jpg" alt="Figure 13.3 – The Blog App – Kubernetes resources and interactions" width="883" height="749"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.3 – The Blog App – Kubernetes resources and interactions</p>
+			<p>In subsequent sections, we will cover all aspects of implementing this workflow, starting wit<a id="_idTextAnchor1692"/>h <span class="No-Break">vulnerability scanning.</span></p>
+			<h1 id="_idParaDest-346"><a id="_idTextAnchor1693"/>Container vulnerability scanning</h1>
+			<p>Perfect software is costly to <a id="_idIndexMarker1423"/>write and maintain, and every tim<a id="_idTextAnchor1694"/>e someone makes changes to running software, the chances of breaking something are high. Apart from other bugs, changes also add a lot of software vulnerabilities. You cannot avoid these as software developers. Cybersecurity experts and cybercriminals are at constant war with each other, evolving with time. Every day, a new set of vulnerabilities are found <span class="No-Break">and reported.</span></p>
+			<p>In containers, vulnerabilities can exist on multiple fronts and may be completely unrelated to what you’re responsible for. Well, developers write code, and excellent ones do it securely. Still, you never know whether a base image may contain vulnerabilities your developers might completely overlook. In modern DevOps, vulnerabilities are expected, and the idea is to mitigate them as much as possible. We should reduce vulnerabilities, but doing so manually is time-consuming, lead<a id="_idTextAnchor1695"/>ing <span class="No-Break">to toil.</span></p>
+			<p>S<a id="_idTextAnchor1696"/>everal <a id="_idIndexMarker1424"/>tools <a id="_idIndexMarker1425"/>are <a id="_idIndexMarker1426"/>available<a id="_idIndexMarker1427"/> on<a id="_idIndexMarker1428"/> th<a id="_idTextAnchor1697"/>e<a id="_idIndexMarker1429"/> market<a id="_idIndexMarker1430"/> tha<a id="_idTextAnchor1698"/>t <a id="_idIndexMarker1431"/>provide container vulnerability scanning. <a id="_idTextAnchor1699"/>Some of them are open source tools such as <strong class="bold">Anchore</strong>, <strong class="bold">Clair</strong>, <strong class="bold">Dagda</strong>, <strong class="bold">OpenSCAP</strong>, Sysdig’s <strong class="bold">Falco</strong>, or <strong class="bold">Sof<a id="_idTextAnchor1700"/>tware-as-a-Service</strong> (<strong class="bold">SaaS</strong>) services available with <strong class="bold">Google Container Registry</strong> (<strong class="bold">GCR</strong>), <strong class="bold">Amazon Elastic Container Registry</strong> (<a id="_idTextAnchor1701"/><strong class="bold">ECR</strong>), and <strong class="bold">Azure<a id="_idTextAnchor1702"/> Defender</strong>. For<a id="_idIndexMarker1432"/> this chapter, we’ll<a id="_idIndexMarker1433"/> discuss <span class="No-Break"><strong class="bold">Anchore Grype</strong></span><span class="No-Break">.</span></p>
+			<p>Anchore <a id="_idIndexMarker1434"/>Grype (<a href="https://github.com/anchore/grype">https://github.com/anchore/grype</a>) is a conta<a id="_idTextAnchor1703"/>iner vulnerability scanner that scans your images for known vulnerabilities and reports their severity. Based on that, you can take appropria<a id="_idTextAnchor1704"/>te actions to prevent vulnerabilities by including a different base image or modifying the layers to remove <span class="No-Break">vulnerable components.</span></p>
+			<p>Anchore Grype is a simple <strong class="bold">Command-Line Interface</strong> (<strong class="bold">CLI</strong>)<a id="_idTextAnchor1705"/>-based tool that you can install as a binary and run anywhere—within your local system or your CI/CD pipelines. You can also configure it to fail your pipeline if the vulnerability level increases above a particular threshold, thereby embedding security within your automation—all this happening without troubling your development or <span class="No-Break">security team.</span></p>
+			<p>Now, let’s go a<a id="_idTextAnchor1706"/><a id="_idTextAnchor1707"/>head and see Anchore Grype <span class="No-Break">in action.</span></p>
+			<h2 id="_idParaDest-347"><a id="_idTextAnchor1708"/>Installing Anchore Grype</h2>
+			<p>As we want to implement<a id="_idIndexMarker1435"/> vulnerability scanning within our CI pipelines, let’s modify the <strong class="source-inline">mdo-posts</strong> repository we created in <a href="B19877_11.xhtml#_idTextAnchor1412"><span class="No-Break"><em class="italic">Chapter 11</em></span></a><span class="No-Break">.</span></p>
+			<p>Let’s clone the repository first using the following command and <strong class="source-inline">cd</strong> into the <span class="No-Break"><strong class="source-inline">workflows</strong></span><span class="No-Break"> directory:</span></p>
+			<pre class="console">
+$ git clone git@github.com:&lt;your_github_user&gt;/mdo-posts.git
+$ cd mdo-posts/.github/workflows/</pre>			<p>Anchore Grype offers an installation script within its G<a id="_idTextAnchor1709"/>itHub repository that you can download and run, and it should set it up for you. We’ll modify the <strong class="source-inline">build.yaml</strong> file to include the <a id="_idIndexMarker1436"/>following step before the <strong class="source-inline">Login to Docker Hub</strong> step so that we can install Grype within our <span class="No-Break">CI workflow:</span></p>
+			<pre class="console">
+- name: Install Grype
+  id: install-grype
+  run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s 
+-- -b /usr/local/bin</pre>			<p>Next, we need to use Grype <a id="_idTextAnchor1710"/><a id="_idTextAnchor1711"/>to scan our images <span class="No-Break">for vulnerabilities.</span></p>
+			<h2 id="_idParaDest-348"><a id="_idTextAnchor1712"/>Scanning images</h2>
+			<p>To run container <a id="_idIndexMarker1437"/>vulnerability scanning, we can use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ grype &lt;container-image&gt;</pre>			<p>This will report a list of vulnerabilities with severities—<strong class="source-inline">Negligible</strong>, <strong class="source-inline">Low</strong>, <strong class="source-inline">Medium</strong>, <strong class="source-inline">High</strong>, <strong class="source-inline">Critical</strong>, or <strong class="source-inline">Unknown</strong>—within the image. We can also set a threshold within Grype to fail when any vulnerabilities are equal to or worse than it. For example, if we don’t want to allow any <strong class="source-inline">Critical</strong> vulnerabilities in the container, we can use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ grype -f critical &lt;container-image&gt;</pre>			<p>To do so, we will add the following step within the <strong class="source-inline">build.yaml</strong> file after the <strong class="source-inline">Build the Docker </strong><span class="No-Break"><strong class="source-inline">image</strong></span><span class="No-Break"> step:</span></p>
+			<pre class="console">
+- name: Scan Image for Vulnerabilities
+  id: vul-scan
+  run: grype -f critical ${{ secrets.DOCKER_USER  }}/mdo-posts:$(git rev-parse --short 
+"$GITHUB_SHA")</pre>			<p>As we’ve made all the changes, let’s push the modified CI pipeline using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/ch13/grype/build.yaml .
+$ git add --all
+$ git commit -m "Added grype"
+$ git push</pre>			<p>As soon as we push<a id="_idIndexMarker1438"/> the image, we will see the following in the GitHub <span class="No-Break">Actions tab:</span></p>
+			<div>
+				<div id="_idContainer125" class="IMG---Figure">
+					<img src="image/B19877_13_4.jpg" alt="Figure 13.4 – Vulnerability scan failure" width="1190" height="802"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.4 – Vulnerability scan failure</p>
+			<p>As we can see, Grype has reported several vulnerabilities with one being <strong class="source-inline">Critical</strong>. It has also failed the CI pipeline. That is automated vulnerability scanning in action. This will discover vulnerabilities and only allow builds to end up in your container registry if they meet minimum <span class="No-Break">security standards.</span></p>
+			<p>We need to fix the issue here, so let’s look at a more recent image and see whether it can fix the problem. Therefore, instead of using <strong class="source-inline">python:3.7-alpine</strong>, we will use <strong class="source-inline">python:alpine3.18</strong>. Let’s do that and push our code to GitHub using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~/mdo-posts &amp;&amp; cp ~/modern-devops/ch13/grype/Dockerfile .
+$ git add --all
+$ git commit -m "Updated base image"
+$ git push</pre>			<p>Let’s revisit GitHub Actions and see what we get in the <span class="No-Break"><strong class="source-inline">build</strong></span><span class="No-Break"> output:</span></p>
+			<div>
+				<div id="_idContainer126" class="IMG---Figure">
+					<img src="image/B19877_13_5.jpg" alt="Figure 13.5 – Vulnerability scan success" width="1003" height="530"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.5 – Vulnerability scan success</p>
+			<p>The vulnerability<a id="_idIndexMarker1439"/> scan did not stop our CI build this time, as no <strong class="source-inline">Critical</strong> vulnerabilities <span class="No-Break">were found.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Continually update the base image with time, as newer ones contain fewer vulnerabilities and fix <span class="No-Break">older ones.</span></p>
+			<p>Now that we’ve secured the image for vulnerabilities, our CI pipeline is complete. You can replicate this process for other microservices as needed. Let’s proceed to discuss <span class="No-Break">CD pipelines.</span></p>
+			<p>If you remember, in the last chapter, following the GitOps model, we stored the manifests of all resources on Git. However, due to security concerns with Kubernetes Secrets, we used <strong class="bold">SealedSecrets</strong> to <a id="_idIndexMarker1440"/>manage <span class="No-Break">them securely.</span></p>
+			<p>However, this may not be the ideal solution for all teams due to the following <span class="No-Break">inherent issues:</span></p>
+			<ul>
+				<li>SealedSecrets are reliant on the controller that encrypts them. If we lose this controller, we also lose the ability to recreate the secret, essentially losing the <span class="No-Break">Secret forever.</span></li>
+				<li>Access to the Secret is limited to logging in to the cluster and using <strong class="source-inline">kubectl</strong>, which doesn’t provide non-admins with the ability to manage secrets. While this approach might suit some teams, it may not <span class="No-Break">suit others.</span></li>
+			</ul>
+			<p>Therefore, we will explore managing secrets using a Secrets management tool to establish a standardized method for centrally managing secrets with more granular control over access. Let’s d<a id="_idTextAnchor1713"/><a id="_idTextAnchor1714"/>elve into this topic in the <span class="No-Break">next <a id="_idTextAnchor1715"/>section.</span></p>
+			<h1 id="_idParaDest-349"><a id="_idTextAnchor1716"/>Managing secrets</h1>
+			<p>Software always requires access to sensitive <a id="_idIndexMarker1441"/>information such as user data, credentials, <strong class="bold">Open Authorization</strong> (<strong class="bold">OAuth</strong>) tokens, passwords, and other information known as secrets. Developing <a id="_idIndexMarker1442"/>and managing software while keeping all these aspects secure has always been a concern. The CI/CD pipelines might deal with them as they build and deliver working software by combining code and other dependencies from various sources that may include sensitive information. Keeping these bits secure is of utmost importance; therefore, the need arises to use modern DevOps tools and techniques to embed security within the CI/CD <span class="No-Break">pipelines themselves.</span></p>
+			<p>Most application code requires access to sensitive i<a id="_idTextAnchor1717"/>nformation. These are called <strong class="bold">secrets</strong> in the DevOps wor<a id="_idTextAnchor1718"/>ld. A secret<a id="_idIndexMarker1443"/> is any data that helps someone prove their identity, authenticate, and authorize privileged accounts, applications, and services. Some of the potential candidates that constitute secrets a<a id="_idTextAnchor1719"/>re <span class="No-Break">listed here:</span></p>
+			<ul>
+				<li><span class="No-Break">Passwords</span></li>
+				<li>API tokens, GitHub tokens, and any other <span class="No-Break">application key</span></li>
+				<li><strong class="bold">Secure Shell</strong> (<span class="No-Break"><strong class="bold">SSH</strong></span><span class="No-Break">) keys</span></li>
+				<li><strong class="bold">Transport Layer Security</strong> (<strong class="bold">TLS</strong>), <strong class="bold">Secure Sockets Layer</strong> (<strong class="bold">SSL</strong>), and <strong class="bold">Pretty Good Privacy</strong> (<strong class="bold">PGP</strong>) <span class="No-Break">pr<a id="_idTextAnchor1720"/>ivate keys</span></li>
+				<li><span class="No-Break">One-time passwords</span></li>
+			</ul>
+			<p>A good example <a id="_idIndexMarker1444"/>could be a container r<a id="_idTextAnchor1721"/>equiring access to an API key to authenticate with a third-party API or a username and password to authenticate with a backend database. Developers need to understand where and how to store secrets so that they are not exposed inadvertently to people who are not supposed to <span class="No-Break">view them.</span></p>
+			<p>When we run a CI/CD pipeline, it becomes imperative to understand how we place those secrets as, in CI/CD pipelines, we build everything from the source. “<em class="italic">Do not store secrets with code</em>” is a prominent piece of advice we’ve <span class="No-Break">all heard.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Never store hardcoded secrets within CI/CD pipelines or store secrets in a s<a id="_idTextAnchor1722"/>ource code repository such <span class="No-Break">as Git.</span></p>
+			<p>How can we access secrets without including them in our code to run a fully automated GitOps-based CI/CD pipeline? Well, that’s something we need to <span class="No-Break">figure out.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">When using containers, the thing to avoid is baking the secrets within an image. While this is a prominent piece of advice, many developers do this inadvertently, leading to many security holes. It is very insecure, and you should avoid doing it at <span class="No-Break">all costs.</span></p>
+			<p>You can overcome this problem by using<a id="_idIndexMarker1445"/> some form of <strong class="bold">secrets management solution</strong>. A secrets management solution or a <strong class="bold">key management solution</strong> helps<a id="_idIndexMarker1446"/> sto<a id="_idTextAnchor1723"/>re and manage your secrets and secure them with encryption at re<a id="_idTextAnchor1724"/>st and in transit. There are secrets management tools within cloud providers, such <a id="_idIndexMarker1447"/>as <strong class="bold">Secret Mana<a id="_idTextAnchor1725"/>ger</strong> in GCP<a id="_idIndexMarker1448"/> and <strong class="bold">Amazon Web Services</strong> (<strong class="bold">AWS</strong>), or you can use a third<a id="_idTextAnchor1726"/>-party tool, such as <strong class="bold">HashiCorp Vault</strong>, if <a id="_idIndexMarker1449"/>you want to go cloud agnostic. All these solutions provide APIs to create and query secrets at runtime, and<a id="_idTextAnchor1727"/> they secure the API via HTTPS to allow encryption in transit. That way, you don’t need to store your secrets with code or bake it within <span class="No-Break">an image.</span></p>
+			<p>In this discussion, we’ll use<a id="_idIndexMarker1450"/> the <strong class="bold">Secret Manager</strong> solution offered by GCP to store secrets, and we will access them while running the CI/CD pipeline. Secret Manager is Google Cloud’s secrets management system, which helps you s<a id="_idTextAnchor1728"/>tore and manage secrets centrally. It is incredibly secure and uses <strong class="bold">Hardware Security Modules</strong> (<strong class="bold">HSMs</strong>) to <a id="_idIndexMarker1451"/>harden your <span class="No-Break">secrets further.</span></p>
+			<p>In this chapter, we will look at improving the CI/CD pipeline of our Blog Application, which we discussed in the las<a id="_idTextAnchor1729"/>t chapter, and will use the same sample application. Therefore, let’s go ahead and create the <strong class="source-inline">mong<a id="_idTextAnchor1730"/><a id="_idTextAnchor1731"/><a id="_idTextAnchor1732"/>odb-creds</strong> Secret in Google Cloud <span class="No-Break">Secret Manager.</span></p>
+			<h2 id="_idParaDest-350">Creating a Se<a id="_idTextAnchor1733"/>cret in Google Cloud Secret Manager</h2>
+			<p>Let’s create a <a id="_idIndexMarker1452"/>secret called <strong class="source-inline">external-secrets</strong>, where we <a id="_idIndexMarker1453"/>will pass the MongoDB credentials in JSON format. To do so, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ echo -ne \
+'{"MONGO_INITDB_ROOT_USERNAME": "root", "MONGO_INITDB_ROOT_PASSWORD": "itsasecret"}'  \
+| gcloud secrets create external-secrets --locations=us-central1 \
+--replication-policy=user-managed --data-file=-
+Created version [1] of the secret [external-secrets].</pre>			<p>In the preceding command, we echo a JSON containing <strong class="source-inline">MONGO_INITDB_ROOT_USERNAME</strong> and <strong class="source-inline">PASSWORD</strong> directly into the <strong class="source-inline">gcloud secrets create</strong> command. We have specified a particular location to avoid replicating it in other regions as a cost-saving measure. However, it’s highly recommended to replicate secrets to prevent potential loss in case of a zonal outage. The JSON is stored as a new version of our secret. Secret Manager utilizes versioning for secrets, so any new value assigned to the secret (<strong class="source-inline">external-secrets</strong>) is versioned and stored within Secret Manager. You can reference a specific version either by its version number or by using the <strong class="source-inline">latest</strong> keyword to access the most <span class="No-Break">recent version.</span></p>
+			<p>As seen in <a id="_idIndexMarker1454"/>the output, we’ve created the first<a id="_idIndexMarker1455"/> version of our secret (<strong class="source-inline">version 1</strong>). Typically, this is done during development and should remain outside the CI/CD process. Instead of storing the Secret resource manifest in your source code repository, you can keep it in <span class="No-Break">Secret Manager.</span></p>
+			<p>Now that we’ve created the secret, we must access it within our application. To achieve this, we require a tool to access the secret stored in Secret Manager from the Kubernetes cluster. <a id="_idTextAnchor1734"/><a id="_idTextAnchor1735"/>For this purpose, we will use <strong class="bold">External </strong><span class="No-Break"><strong class="bold">Secrets Operator</strong></span><span class="No-Break"><strong class="bold"><a id="_idIndexMarker1456"/></strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-351"><a id="_idTextAnchor1736"/>Accessing external secrets using External Secrets Operator</h2>
+			<p>External Secrets Operator (<a href="https://external-secrets.io/latest/">https://external-secrets.io/latest/</a>) is a Kubernetes operator used in Kubernetes clusters <a id="_idIndexMarker1457"/>to manage external secrets securely. It is<a id="_idIndexMarker1458"/> designed to automate the retrieval and management of secrets stored in external secret stores such as AWS Secret Manager, GCP Secret Manager, Hashicorp Vault, and so on, and inject them into Kubernetes pods as Kubernetes Secrets. Operators are a way to extend Kubernetes functionality and <span class="No-Break">automate tasks.</span></p>
+			<h3>How it works</h3>
+			<p>External Secrets Operator serves as a bridge between the Kubernetes cluster and external secret management systems. We define an <strong class="source-inline">ExternalSecret</strong> custom resource within the Kubernetes cluster, which the operator monitors. When an <strong class="source-inline">ExternalSecret</strong> resource is created or updated, the operator interacts with the external secret store specified in the <strong class="source-inline">ClusterSecretStore</strong> CRD to retrieve the secret data. It then creates or updates the corresponding Kubernetes Secrets. This process is illustrated in the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer127" class="IMG---Figure">
+					<img src="image/B19877_13_6.jpg" alt="Figure 13.6 – External Secret Operator" width="521" height="291"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.6 – External Secret Operator</p>
+			<p>Now, this <a id="_idIndexMarker1459"/>process has a lot of benefits, some of which are <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li><strong class="bold">Enhanced Security</strong>: Secrets remain in a dedicated, secure <span class="No-Break">secret store</span></li>
+				<li><strong class="bold">Automation</strong>: Automates the retrieval and rotation <span class="No-Break">of secrets</span></li>
+				<li><strong class="bold">Simplified Deployment</strong>: Eases the management of secrets within <span class="No-Break">Kubernetes applications</span></li>
+				<li><strong class="bold">Compatibility</strong>: Works with various external secret stores, making <span class="No-Break">it versatile</span></li>
+			</ul>
+			<p>Now, let’s go ahead and install External Secrets Operator on our <span class="No-Break">Kubernetes cluster.</span></p>
+			<h3>Installing External Secrets Operator</h3>
+			<p>External Secrets Operator <a id="_idIndexMarker1460"/>is available as a <strong class="bold">Helm chart</strong>, and Argo CD supports it. A Helm chart<a id="_idIndexMarker1461"/> is a collection of preconfigured Kubernetes resources (such as Deployments, Services, ConfigMaps, and more) organized into a package that makes it easy to deploy and manage applications in Kubernetes. Helm is a package manager for Kubernetes that allows you to define, install, and upgrade even the most complex Kubernetes <a id="_idIndexMarker1462"/>applications in a repeatable and standardized way. Therefore, we must create an Argo CD application pointing to the Helm chart to install it. To do so, we will create the following <strong class="source-inline">manifests/argocd/external-secrets.yaml</strong> <span class="No-Break">manifest file:</span></p>
+			<pre class="console">
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: external-secrets/external-secrets
+    repoURL: https://charts.external-secrets.io
+    targetRevision: 0.9.4
+    helm:
+      releaseName: external-secrets
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: external-secrets</pre>			<p>The application <a id="_idIndexMarker1463"/>manifest creates an <strong class="source-inline">external-secrets</strong> application on the <strong class="source-inline">argocd</strong> namespace within the <strong class="source-inline">default</strong> project. It downloads the <strong class="source-inline">0.9.4</strong> revision from the <strong class="source-inline">external-secrets</strong> Helm chart repository and deploys the chart on the Kubernetes cluster on the <span class="No-Break"><strong class="source-inline">external-secrets</strong></span><span class="No-Break"> namespace.</span></p>
+			<p>To install this application, we need to apply this manifest using Terraform. Therefore, to do so, we make the following entry in the <span class="No-Break"><strong class="source-inline">app.tf</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+data "kubectl_file_documents" "external-secrets" {
+    content = file("../manifests/argocd/external-secrets.yaml")
+}
+resource "kubectl_manifest" "external-secrets" {
+  depends_on = [
+    kubectl_manifest.argocd,
+  ]
+  for_each  = data.kubectl_file_documents.external-secrets.manifests
+  yaml_body = each.value
+  override_namespace = "argocd"
+}</pre>			<p>To deploy this, we must <a id="_idIndexMarker1464"/>check these files into source control. Let’s clone the <strong class="source-inline">mdo-environments</strong> repository that we created in the <span class="No-Break">last chapters.</span></p>
+			<p>If you haven’t followed the last chapters, you can do the following to set a baseline. Feel free to skip the next section if you’ve already set up your environment in <a href="B19877_12.xhtml#_idTextAnchor1554"><span class="No-Break"><em class="italic">Chapter 12</em></span></a><em class="italic">, Continuous Deployment/Delivery with </em><span class="No-Break"><em class="italic">Argo CD</em></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-352"><a id="_idTextAnchor1737"/>Setting up the baseline</h2>
+			<p>To ensure <a id="_idIndexMarker1465"/>continuity with the last chapters, let’s start by creating a service account for Terraform to interact with our GCP project using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ gcloud iam service-accounts create terraform \
+ --description="Service Account for terraform" \
+ --display-name="Terraform"
+$ gcloud projects add-iam-policy-binding $PROJECT_ID \
+--member="serviceAccount:terraform@$PROJECT_ID.iam.gserviceaccount.com" \ 
+--role="roles/editor"
+$ gcloud iam service-accounts keys create key-file \
+--iam-account=terraform@$PROJECT_ID.iam.gserviceaccount.com</pre>			<p>You will <a id="_idIndexMarker1466"/>see a file called <strong class="source-inline">key-file</strong> created within your working directory. Now, create a new repository called <strong class="source-inline">mdo-environments</strong> with a <strong class="source-inline">README.md</strong> file on GitHub, rename the <strong class="source-inline">main</strong> branch to <strong class="source-inline">prod</strong>, and create a new branch called <strong class="source-inline">dev</strong> using GitHub. Navigate to <strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/settings/secrets/actions/new</strong> and create a secret named <strong class="source-inline">GCP_CREDENTIALS</strong>. For the value, print the <strong class="source-inline">key-file</strong> file, copy its contents, and paste it into the <strong class="bold">values</strong> field of the <span class="No-Break">GitHub secret.</span></p>
+			<p>Next, create another secret, <strong class="source-inline">PROJECT_ID</strong>, and specify your GCP project ID within the <span class="No-Break"><strong class="bold">values</strong></span><span class="No-Break"> field.</span></p>
+			<p>Next, we need to create a GCS bucket for Terraform to use as a remote backend. To do this, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gsutil mb gs://tf-state-mdo-terraform-${PROJECT_ID}</pre>			<p>So, now that all the prerequisites are met, we can clone our repository and copy the baseline code. Run the following commands to <span class="No-Break">do this:</span></p>
+			<pre class="console">
+$ cd ~ &amp;&amp; git clone git@github.com:&lt;your_github_user&gt;/mdo-environments.git
+$ cd mdo-environments/
+$ git checkout dev
+$ cp -r ~/modern-devops/ch13/baseline/* .
+$ cp -r ~/modern-devops/ch13/baseline/.github .</pre>			<p>As we’re now on the baseline, let’s proceed further to install external secrets <span class="No-Break">with Terraform.</span></p>
+			<h2 id="_idParaDest-353"><a id="_idTextAnchor1738"/>Installing external secrets with Terraform</h2>
+			<p>Let’s configure our <a id="_idIndexMarker1467"/>local repository to install the external <a id="_idIndexMarker1468"/>secrets manifest. To do so, copy the application manifest and <strong class="source-inline">app.tf</strong> file using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/ch13/install-external-secrets/app.tf terraform/app.tf
+$ cp ~/modern-devops/ch13/install-external-secrets/external-secrets.yaml \
+  manifests/argocd/</pre>			<p>Now that we’re all set up and ready, let’s go ahead and commit and push our code using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ git add --all
+$ git commit -m "Install external secrets operator"
+$ git push</pre>			<p>As soon as we push the code, we’ll see that the GitHub Actions workflow has been triggered. To access the workflow, go to <strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/actions</strong>. Soon, the workflow will apply the configuration, create the Kubernetes cluster, and deploy Argo CD, the Sealed Secrets controller, and External <span class="No-Break">Secrets Operator.</span></p>
+			<p>Once the workflow is successful, we can do the following to access the Argo <span class="No-Break">Web UI.</span></p>
+			<p>We must first authenticate with the GKE cluster. To do so, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud container clusters get-credentials \
+ mdo-cluster-dev --zone us-central1-a --project $PROJECT_ID</pre>			<p>To utilize the Argo CD Web UI, you will require the external IP address of the <strong class="source-inline">argo-server</strong> service. To get that, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get svc argocd-server -n argocd
+NAME          TYPE        EXTERNAL-IP  PORTS          AGE
+argocd-server LoadBalaner 34.122.51.25 80/TCP,443/TCP 6m15s</pre>			<p>So, now we know that Argo CD is accessible <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">https://34.122.51.25/</strong></span><span class="No-Break">.</span></p>
+			<p>Next, we will run the following commands to reset the <span class="No-Break">admin password:</span></p>
+			<pre class="console">
+$ kubectl patch secret argocd-secret -n argocd \
+-p '{"data": {"admin.password": null, "admin.passwordMtime": null}}'
+$ kubectl scale deployment argocd-server --replicas 0 -n argocd
+$ kubectl scale deployment argocd-server --replicas 1 -n argocd</pre>			<p>Now, allow two minutes for the new credentials to be generated. After that, execute the following command to retrieve <span class="No-Break">the password:</span></p>
+			<pre class="console">
+$ kubectl -n argocd get secret argocd-initial-admin-secret \
+ -o jsonpath="{.data.password}" | base64 -d &amp;&amp; echo</pre>			<p>As we now have<a id="_idIndexMarker1469"/> the credentials, log in, and you will see the <a id="_idIndexMarker1470"/><span class="No-Break">following page:</span></p>
+			<div>
+				<div id="_idContainer128" class="IMG---Figure">
+					<img src="image/B19877_13_7.jpg" alt="Figure 13.7 – Argo CD Web UI – home page" width="1639" height="842"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.7 – Argo CD Web UI – home page</p>
+			<p>As we can see, there are three applications – <strong class="bold">sealed-secrets</strong>, <strong class="bold">external-secrets</strong>, and <strong class="bold">blog-app</strong>. While the <strong class="bold">sealed-secrets</strong> and <strong class="bold">external-secrets</strong> apps are all synced up and green, <strong class="bold">blog-app</strong> has degraded. That is because, in my case, I’ve started fresh and created a new cluster. Therefore, there is no way the Sealed Secrets operator can decrypt the <strong class="source-inline">SealedSecret</strong> manifest that we created in the last chapter, as it was generated by a different Sealed <span class="No-Break">Secrets controller.</span></p>
+			<p>We don’t need the <a id="_idIndexMarker1471"/>Sealed Secrets operator; we will use <a id="_idIndexMarker1472"/>Google Cloud Secret Manager instead. So, let’s remove it from our cluster using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ rm -rf manifests/sealed-secrets
+$ git add --all
+$ git commit -m "Removed sealed secrets"
+$ git push</pre>			<p>We’ve removed the Sealed Secrets operator, and the Argo CD Web UI should reflect that shortly. However, the Blog Application will remain degraded as the <strong class="source-inline">mongodb-creds</strong> Secret is still missing. In the next section, we will use External Secrets Operator to generate the <span class="No-Break"><strong class="source-inline">mongodb-creds</strong></span><span class="No-Break"> Secret.</span></p>
+			<h3>Generating the MongoDB Kubernetes Secret using External Secrets Operator</h3>
+			<p>To <a id="_idIndexMarker1473"/>generate the <strong class="source-inline">mongodb-creds</strong> secret, we <a id="_idIndexMarker1474"/>would need to create the following  <span class="No-Break">resources:</span></p>
+			<ul>
+				<li>A <strong class="source-inline">Secret</strong> resource – This is a standard Kubernetes Secret resource containing the service account credentials for Kubernetes to connect with GCP <span class="No-Break">Secret Manager.</span></li>
+				<li>A <strong class="source-inline">ClusterSecretStore</strong> resource – This resource contains configuration for connecting with the secret store (GCP Secret Manager in this case) and uses the <strong class="source-inline">Secret</strong> resource for the service <span class="No-Break">account credentials.</span></li>
+				<li>An <strong class="source-inline">ExternalSecret</strong> resource – This resource contains configuration to generate the required Kubernetes Secret (<strong class="source-inline">mongodb-creds</strong>) out of the extracted Secret from the <span class="No-Break">secret store.</span></li>
+			</ul>
+			<p>So, let’s go ahead and define the <strong class="source-inline">Secret</strong> <span class="No-Break">resource first:</span></p>
+			<p>To <a id="_idIndexMarker1475"/>create<a id="_idIndexMarker1476"/> the <strong class="source-inline">Secret</strong> resource, we first need to create a GCP service account to interact with Secret Manager using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~
+$ gcloud iam service-accounts create external-secrets</pre>			<p>As we’re following the principle of least privilege, we will add the following role-binding to provide access only to the <strong class="source-inline">external-secrets</strong> secret, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+$ gcloud secrets add-iam-policy-binding external-secrets \
+ --member "serviceAccount:external-secrets@$PROJECT_ID.iam.gserviceaccount.com" \
+ --role "roles/secretmanager.secretAccessor"</pre>			<p>Now, let’s generate the service account key file using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud iam service-accounts keys create key.json \
+--iam-account=external-secrets@$PROJECT_ID.iam.gserviceaccount.com</pre>			<p>Now, copy the contents of the <strong class="source-inline">key.json</strong> file into a new GitHub Actions secret called <strong class="source-inline">GCP_SM_CREDENTIALS</strong>. We will use GitHub Actions to set this value during runtime dynamically; therefore, the following secret manifest will contain <span class="No-Break">a placeholder:</span></p>
+			<pre class="console">
+apiVersion: v1
+data:
+  secret-access-credentials: SECRET_ACCESS_CREDS_PH
+kind: Secret
+metadata:
+  name: gcpsm-secret
+type: Opaque</pre>			<p>Let’s <a id="_idIndexMarker1477"/>look <a id="_idIndexMarker1478"/>at the <strong class="source-inline">ClusterSecretStore</strong> <span class="No-Break">resource next:</span></p>
+			<pre class="console">
+apiVersion: external-secrets.io/v1alpha1
+kind: ClusterSecretStore
+metadata:
+  name: gcp-backend
+spec:
+  provider:
+      gcpsm:
+        auth:
+          secretRef:
+            secretAccessKeySecretRef:
+              name: gcpsm-secret
+              key: secret-access-credentials
+        projectID: PROJECT_ID_PH</pre>			<p>The manifest defines <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>A <strong class="source-inline">ClusterSecretStore</strong> resource <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">gcp-backend</strong></span></li>
+				<li>A provider configuration of the <strong class="source-inline">gcpsm</strong> type using auth information in the <strong class="source-inline">gcpsm-secret</strong> secret we <span class="No-Break">defined before</span></li>
+			</ul>
+			<p>Now, let’s look at the <strong class="source-inline">ExternalSecret</strong> <span class="No-Break">resource manifest:</span></p>
+			<pre class="console">
+apiVersion: external-secrets.io/v1alpha1
+kind: ExternalSecret
+metadata:
+  name: mongodb-creds
+  namespace: blog-app
+spec:
+  secretStoreRef:
+    kind: SecretStore
+    name: gcp-backend
+  target:
+    name: mongodb-creds
+  data:
+  - secretKey: MONGO_INITDB_ROOT_USERNAME
+    remoteRef:
+      key: external-secrets
+      property:  MONGO_INITDB_ROOT_USERNAME
+  - secretKey: MONGO_INITDB_ROOT_PASSWORD
+    remoteRef:
+      key: external-secrets
+      property:  MONGO_INITDB_ROOT_PASSWORD</pre>			<p>The manifest <a id="_idIndexMarker1479"/>defines<a id="_idIndexMarker1480"/> an <strong class="source-inline">ExternalSecret</strong> resource with the <span class="No-Break">following specs:</span></p>
+			<ul>
+				<li>It is named <strong class="source-inline">mongodb-creds</strong> in the <span class="No-Break"><strong class="source-inline">blog-app</strong></span><span class="No-Break"> namespace.</span></li>
+				<li>It refers to the <strong class="source-inline">gcp-backend</strong> <strong class="source-inline">ClusterSecretStore</strong> that <span class="No-Break">we defined.</span></li>
+				<li>It maps <strong class="source-inline">MONGO_INITDB_ROOT_USERNAME</strong> from the <strong class="source-inline">external-secrets</strong> Secret Manager secret to the <strong class="source-inline">MONGO_INITDB_ROOT_USERNAME</strong> key of the <strong class="source-inline">mongodb-creds</strong> Kubernetes secret. It does the same <span class="No-Break">for </span><span class="No-Break"><strong class="source-inline">MONGO_INITDB_ROOT_PASSWORD</strong></span><span class="No-Break">.</span></li>
+			</ul>
+			<p>Now, let’s <a id="_idIndexMarker1481"/>deploy these <a id="_idIndexMarker1482"/>resources by using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~/mdo-environments
+$ cp ~/modern-devops/ch13/configure-external-secrets/app.tf terraform/app.tf
+$ cp ~/modern-devops/ch13/configure-external-secrets/gcpsm-secret.yaml \
+manifests/argocd/
+$ cp ~/modern-devops/ch13/configure-external-secrets/mongodb-creds-external.yaml \
+manifests/blog-app/ 
+$ cp -r ~/modern-devops/ch13/configure-external-secrets/.github .
+$ git add --all
+$ git commit -m "Configure External Secrets"
+$ git push</pre>			<p>This should trigger a GitHub Actions workflow again, and soon, we should see <strong class="source-inline">ClusterSecretStore</strong> and <strong class="source-inline">ExternalSecret</strong> created. To check that, run the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl get secret gcpsm-secret
+NAME           TYPE     DATA   AGE
+gcpsm-secret   Opaque   1      1m
+$ kubectl get clustersecretstore gcp-backend
+NAME          AGE   STATUS   CAPABILITIES   READY
+gcp-backend   19m   Valid    ReadWrite      True
+$ kubectl get externalsecret -n blog-app mongodb-creds
+NAME          STORE       REFRESHINTERVAL STATUS      READY
+mongodb-creds gcp-backend 1h0m0s          SecretSynced True
+$ kubectl get secret -n blog-app mongodb-creds
+NAME            TYPE     DATA   AGE
+mongodb-creds   Opaque   2      4m45s</pre>			<p>The same <a id="_idIndexMarker1483"/>should be<a id="_idIndexMarker1484"/> reflected in the <strong class="source-inline">blog-app</strong> application on Argo CD, and the application should come up clean, as shown in the <span class="No-Break">following screenshot:</span></p>
+			<div>
+				<div id="_idContainer129" class="IMG---Figure">
+					<img src="image/B19877_13_8.jpg" alt="Figure 13.8 – blog-app showing as Healthy" width="1632" height="868"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.8 – blog-app showing as Healthy</p>
+			<p>You can then access the application by getting the frontend service external IP using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get svc -n blog-app frontend
+NAME     TYPE         EXTERNAL-IP  PORT(S)      AGE
+frontend LoadBalancer 34.122.58.73 80:30867/TCP 153m</pre>			<p>You can access the application by visiting <strong class="source-inline">http://&lt;EXTERNAL_IP&gt;</strong> from <span class="No-Break">a browser:</span></p>
+			<div>
+				<div id="_idContainer130" class="IMG---Figure">
+					<img src="image/B19877_13_9.jpg" alt="Figure 13.9 – Blog App home page" width="1026" height="147"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.9 – Blog A<a id="_idTextAnchor1739"/>pp home page</p>
+			<p>And as we<a id="_idIndexMarker1485"/> can see, we<a id="_idIndexMarker1486"/> can access the Blog App successfully. That is proper secret management, as we did not store the secret in the source code repository (Git). We did not view or log the secret while applying it, meaning there is no trace of this secret anywhere in the logs, and only the application or people who have access to the namespace where this application is running can access it. Now, let’s look at another crucial aspect: testing <span class="No-Break">your application.</span></p>
+			<h1 id="_idParaDest-354"><a id="_idTextAnchor1740"/>Testing your application within the CD pipeline</h1>
+			<p>Until now, we’ve<a id="_idIndexMarker1487"/> deployed our application on a Kubernetes cluster and manually verified that it is running. We have two options moving forward: either proceed with manual testing or create automated tests, also known <a id="_idIndexMarker1488"/>as a <strong class="bold">test suite</strong>. While manual testing is the traditional approach, DevOps heavily emphasizes automating tests to integrate them into your CD pipeline. This way, we can eliminate many repetitive tasks, often <a id="_idIndexMarker1489"/><span class="No-Break">called </span><span class="No-Break"><strong class="bold">toil</strong></span><span class="No-Break">.</span></p>
+			<p>We’ve developed a Python-based integration test suite for our application, covering various scenarios. One significant advantage of this test suite is that it treats the application as a black box. It remains unaware of how the application is implemented, focusing solely on simulating end user interactions. This approach provides valuable insights into the application’s <span class="No-Break">functional aspects.</span></p>
+			<p>Furthermore, since this is an integration test, it assesses the entire application as a cohesive unit, in contrast to the unit tests we ran in our CI pipeline, where we tested each microservice <span class="No-Break">in</span><span class="No-Break"><a id="_idIndexMarker1490"/></span><span class="No-Break"> isolation.</span></p>
+			<p>Without further delay, let’s integrate the integration test into our <span class="No-Break">CD pipeline.</span></p>
+			<h2 id="_idParaDest-355"><a id="_idTextAnchor1741"/>CD workflow changes</h2>
+			<p>Till now, we have the following <a id="_idIndexMarker1491"/>within our <span class="No-Break">CD workflow:</span></p>
+			<pre class="console">
+.
+├── create-cluster.yml
+├── dev-cd-workflow.yaml
+└── prod-cd-workflow.yaml</pre>			<p>Both the Dev and Prod CD workflows contain the <span class="No-Break">following jobs:</span></p>
+			<pre class="console">
+jobs:
+  create-environment-and-deploy-app:
+    name: Create Environment and Deploy App
+    uses: ./.github/workflows/create-cluster.yml
+    secrets: inherit</pre>			<p>As we can see, they are both calling the <strong class="source-inline">create-cluster.yml</strong> workflow, which creates our environment and deploys our application. We need to run integration tests both within the Dev and Prod environments; therefore, we need to change both workflows to include the <strong class="source-inline">Run Integration Tests</strong> step <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+  run-tests:
+    name: Run Integration Tests
+    needs: [deploy-app]
+    uses: ./.github/workflows/run-tests.yml
+    secrets: inherit</pre>			<p>As we can see, the<a id="_idIndexMarker1492"/> step calls the <strong class="source-inline">run-tests.yml</strong> workflow. That is the workflow that will be doing the integration tests. Let’s look at the workflow to understand <span class="No-Break">it better:</span></p>
+			<pre class="console">
+name: Run Integration Tests
+on: [workflow_call]
+jobs:
+  test-application:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./tests
+    steps:
+    - uses: actions/checkout@v2
+    - name: Extract branch name
+      run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" &gt;&gt; $GITHUB_OUTPUT
+      id: extract_branch
+    - id: gcloud-auth
+      name: Authenticate with gcloud
+      uses: 'google-github-actions/auth@v1'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+    - name: Set up Cloud SDK
+      id: setup-gcloud-sdk
+      uses: 'google-github-actions/setup-gcloud@v1'
+    - name: Get kubectl credentials
+      id: 'get-credentials'
+      uses: 'google-github-actions/get-gke-credentials@v1'
+      with:
+        cluster_name: mdo-cluster-${{ steps.extract_branch.outputs.branch }}
+        location: ${{ secrets.CLUSTER_LOCATION }}
+    - name: Compute Application URL
+      id: compute-application-url
+      run: external_ip=$(kubectl get svc -n blog-app frontend --output jsonpath='{.status.
+loadBalancer.ingress[0].ip}') &amp;&amp; echo ${external_ip} &amp;&amp; sed -i "s/localhost/${external_
+ip}/g" integration-test.py
+    - id: run-integration-test
+      name: Run Integration Test
+      run: python3 integration-test.py</pre>			<p>The workflow <a id="_idIndexMarker1493"/>performs the <span class="No-Break">following tasks:</span></p>
+			<ol>
+				<li>It is triggered exclusively through a <span class="No-Break"><strong class="source-inline">workflow</strong></span><span class="No-Break"> call.</span></li>
+				<li>It has the <strong class="source-inline">./tests</strong> <span class="No-Break">working directory.</span></li>
+				<li>It checks out the <span class="No-Break">committed code.</span></li>
+				<li>It installs the <strong class="source-inline">gcloud</strong> CLI and authenticates with Google Cloud using the <strong class="source-inline">GCP_CREDENTIALS</strong> service <span class="No-Break">account credentials.</span></li>
+				<li>It connects <strong class="source-inline">kubectl</strong> to the Kubernetes cluster to retrieve the <span class="No-Break">application URL.</span></li>
+				<li>Using the application URL, it executes the <span class="No-Break">integration test.</span></li>
+			</ol>
+			<p>Now, let’s proceed to update the workflow and add tests using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp -r ~/modern-devops/ch13/integration-tests/.github .
+$ cp -r ~/modern-devops/ch13/integration-tests/tests .
+$ git add --all
+$ git commit -m "Added tests"
+$ git push</pre>			<p>This should trigger the Dev CD GitHub Actions workflow again. You should see something like <span class="No-Break">the following:</span></p>
+			<div>
+				<div id="_idContainer131" class="IMG---Figure">
+					<img src="image/B19877_13_10.jpg" alt="Figure 13.10 – Added tests workflow run" width="1157" height="487"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.10 – Added tests workflow run</p>
+			<p>As we can see, there<a id="_idIndexMarker1494"/> are two steps in our workflow, and both are now successful. To explore what was tested, you can click on the <strong class="bold">Run Integration Tests</strong> step, and it should show you the <span class="No-Break">following output:</span></p>
+			<div>
+				<div id="_idContainer132" class="IMG---Figure">
+					<img src="image/B19877_13_11.jpg" alt="Figure 13.11 – The Run Integration Tests workflow step" width="842" height="521"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.11 – The Run Integration Tests workflow step</p>
+			<p>As we <a id="_idIndexMarker1495"/>can see, the <strong class="bold">Run Integration Tests</strong> step reports that all tests <span class="No-Break">have passed.</span></p>
+			<p>While images are being built, deployed, and tested using your CI/CD toolchain, there is nothing in between to prevent someone from deploying an image in your Kubernetes cluster. You might be scanning all your images for vulnerabilities and mitigating them, but somewhere, someone might bypass all controls and deploy containers directly to your cluster. So, how can you prevent such a situation? The answer<a id="_idTextAnchor1742"/><a id="_idTextAnchor1743"/><a id="_idTextAnchor1744"/> to that question is through binary authorization. Let’s explore this in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-356"><a id="_idTextAnchor1745"/>Binary authorization</h1>
+			<p><strong class="bold">Bina<a id="_idTextAnchor1746"/>ry authorization</strong> is a <a id="_idIndexMarker1496"/>deploy-time security mechanism that ensures that only trusted binary files are deployed within your environments. In the context of containers and Kubernetes, binary authorization uses signature validation and ensures that only container images signed by a trusted authority are deployed within your <span class="No-Break">Kubernetes cluster.</span></p>
+			<p>Using binary authorization gives you tighter control over what is deployed in your cluster. It ensures that only tested containers and those approved and verified by a particular authority (such as security tooling or personnel) are present in <span class="No-Break">your cluster.</span></p>
+			<p>Binary authorization works by enforcing rules within your cluster via an admission c<a id="_idTextAnchor1747"/>ontroller. This means you can create rulesets only to allow images signed by an attestation authority to be deployed in your cluster. Your <strong class="bold">quality assurance</strong> (<strong class="bold">QA</strong>) team<a id="_idIndexMarker1497"/> can be a good attestor in a practical scenario. You can also embed the attestation within your CI/CD pipelines. The attestation means your images have been tested and scanned for vulnerabilities<a id="_idTextAnchor1748"/> and have passed a minimum standard to be ready to be deployed to <span class="No-Break">the cluster.</span></p>
+			<p>GCP provides binary authorization embedded within <a id="_idIndexMarker1498"/>GKE, based on the open source project <strong class="bold">Kritis</strong> (<a href="https://github.com/grafeas/kritis">https://github.com/grafeas/kritis</a>). It uses a <strong class="bold">public key infrastructure</strong> (<strong class="bold">PKI</strong>) to<a id="_idIndexMarker1499"/> attest and verify images—so your images are signed by an attestor authority using the private key, and Kubernetes verifies the images by using the public key. The following diagram explains <span class="No-Break">this beautifully:</span></p>
+			<div>
+				<div id="_idContainer133" class="IMG---Figure">
+					<img src="image/B19877_13_12.jpg" alt="Figure 13.12 – Binary authorization process" width="931" height="521"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.12 – Binary authorization process</p>
+			<p>In the hands-on exercise, we will<a id="_idIndexMarker1500"/> set up binary authorization and a PKI using Google Cloud KMS. Next, we will create a QA attestor and an attestation policy for all binary auth-enabled GKE clusters, ensuring that only attested images can be deployed. Since our application is now tested, the next step is to attest the tested images. So<a id="_idTextAnchor1749"/><a id="_idTextAnchor1750"/>, let’s proceed to set up binary authorization within our Dev CD workflow in the <span class="No-Break">next section.</span></p>
+			<h2 id="_idParaDest-357"><a id="_idTextAnchor1751"/>Setting up binary authorization</h2>
+			<p>As we’re using GitOps right from the<a id="_idIndexMarker1501"/> beginning, we will use Terraform to set up binary authorization for us. We’ll start by setting up some GitHub Actions secrets. Go to <strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/settings/secrets/actions</strong> and create the <span class="No-Break">following secrets:</span></p>
+			<pre class="console">
+ATTESTOR_NAME=quality-assurance-attestor
+KMS_KEY_LOCATION=us-central1
+KMS_KEYRING_NAME=qa-attestor-keyring
+KMS_KEY_NAME=quality-assurance-attestor-key
+KMS_KEY_VERSION=1</pre>			<p>We’ll then create a <strong class="source-inline">binaryauth.tf</strong> file with the <span class="No-Break">following resources.</span></p>
+			<p>We’ll begin by<a id="_idIndexMarker1502"/> creating a Google KMS key ring. Since binary authorization utilizes PKI for creating and verifying attestations, this key ring will enable our attestor to digitally sign attestations for images. Please note the <strong class="source-inline">count</strong> attribute defined in the following code. This ensures that it is created exclusively in the <strong class="source-inline">dev</strong> environment, where we intend to use the attestor for attesting images after testing <span class="No-Break">our app:</span></p>
+			<pre class="console">
+resource "google_kms_key_ring" "qa-attestor-keyring" {
+  count = var.branch == "dev" ? 1 : 0
+  name     = "qa-attestor-keyring"
+  location = var.region
+  lifecycle {
+    prevent_destroy = false
+  }
+}</pre>			<p>We will then use a Google-provided <strong class="source-inline">binary-authorization</strong> Terraform module to create our <strong class="source-inline">quality-assurance</strong> attestor. That attestor uses the Google KMS key ring we <span class="No-Break">created before:</span></p>
+			<pre class="console">
+module "qa-attestor" {
+  count = var.branch == "dev" ? 1 : 0
+  source = "terraform-google-modules/kubernetes-engine/google//modules/binary-
+authorization"
+  attestor-name = "quality-assurance"
+  project_id    = var.project_id
+  keyring-id    = google_kms_key_ring.qa-attestor-keyring[0].id
+}</pre>			<p>Finally, we will create a binary authorization policy that specifies the cluster’s behavior when deploying a container. In this scenario, our objective is to deploy only attested images. However, we will make a few exceptions, allowing Google-provided system images, Argo CD, and External Secrets Operator images. We will set the <strong class="source-inline">global_policy_evaluation_mode</strong> attribute to <strong class="source-inline">ENABLE</strong> to avoid enforcing the policy on system images managed <span class="No-Break">by Google.</span></p>
+			<p>The <strong class="source-inline">admission_whitelist_patterns</strong> section defines container image patterns permitted to be deployed without attestations. This includes patterns for Google-managed system images, the Argo CD registry, the External Secrets registry, and the Redis container used by <span class="No-Break">Argo CD.</span></p>
+			<p>The <strong class="source-inline">defaultAdmissionRule</strong> section mandates attestation using the attestor we created. Therefore, any <a id="_idIndexMarker1503"/>other images would require attestation to run on <span class="No-Break">the cluster:</span></p>
+			<pre class="console">
+resource "google_binary_authorization_policy" "policy" {
+  count = var.branch == "dev" ? 1 : 0
+  admission_whitelist_patterns {
+    name_pattern = "gcr.io/google_containers/*"...
+    name_pattern = "gcr.io/google-containers/*"...
+    name_pattern = "k8s.gcr.io/**"...
+    name_pattern = "gke.gcr.io/**"...
+    name_pattern = "gcr.io/stackdriver-agents/*"...
+    name_pattern = "quay.io/argoproj/*"...
+    name_pattern = "ghcr.io/dexidp/*"...
+    name_pattern = "docker.io/redis[@:]*"...
+    name_pattern = "ghcr.io/external-secrets/*"
+  }
+  global_policy_evaluation_mode = "ENABLE"
+  default_admission_rule {
+    evaluation_mode  = "REQUIRE_ATTESTATION"
+    enforcement_mode = "ENFORCED_BLOCK_AND_AUDIT_LOG"
+    require_attestations_by = [
+      module.qa-attestor[0].attestor
+    ]
+  }
+}</pre>			<p>To enforce the binary <a id="_idIndexMarker1504"/>authorization policy within a cluster, we must also enable binary authorization. To do so, we add the following block within the <span class="No-Break"><strong class="source-inline">cluster.tf</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+resource "google_container_cluster" "main" {
+...
+  dynamic "binary_authorization" {
+    for_each = var.branch == "prod" ? [1] : []
+    content {
+      evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE"
+    }
+  }
+...
+}</pre>			<p>This dynamic block is created exclusively when the branch name is <strong class="source-inline">prod</strong>. The reason for this approach is our intention to deploy our code to the Dev environment without image attestation, conduct testing, and then attest the images if the tests succeed. Therefore, only the Prod cluster should disallow unattested images. To achieve this, we will include the following steps in the Dev <span class="No-Break">CD workflow:</span></p>
+			<pre class="console">
+  binary-auth:
+    name: Attest Images
+    needs: [run-tests]
+    uses: ./.github/workflows/attest-images.yml
+    secrets: inherit</pre>			<p>As you can see, this <a id="_idIndexMarker1505"/>calls the <strong class="source-inline">attest-images.yml</strong> workflow. Let’s look at <span class="No-Break">that now:</span></p>
+			<pre class="console">
+...
+    steps:
+    - uses: actions/checkout@v2
+    - id: gcloud-auth ...
+    - name: Set up Cloud SDK ...
+    - name: Install gcloud beta
+      id: install-gcloud-beta
+      run: gcloud components install beta
+    - name: Attest Images
+      run: |
+        for image in $(cat ./images); do
+          no_of_slash=$(echo $image | tr -cd '/' | wc -c)
+          prefix=""
+          if [ $no_of_slash -eq 1 ]; then
+            prefix="docker.io/"
+          fi
+          if [ $no_of_slash -eq 0 ]; then
+            prefix="docker.io/library/"
+          fi
+          image_to_attest=$image
+          if [[ $image =~ "@" ]]; then
+            echo "Image $image has DIGEST"
+            image_to_attest="${prefix}${image}"
+          else
+            echo "All images should be in the SHA256 digest format"
+            exit 1
+          fi
+          echo "Processing $image"
+          attestation_present=$(gcloud beta container binauthz attestations list 
+--attestor-project="${{ secrets.PROJECT_ID }}" --attestor="${{ secrets.ATTESTOR_NAME }}" 
+--artifact-url="${image_to_attest}")
+          if [ -z "${attestation_present// }" ]; then
+            gcloud beta container binauthz attestations sign-and-create --artifact-
+url="${image_to_attest}" --attestor="${{ secrets.ATTESTOR_NAME }}" --attestor-project="${{ 
+secrets.PROJECT_ID }}" --keyversion-project="${{ secrets.PROJECT_ID }}" --keyversion-
+location="${{ secrets.KMS_KEY_LOCATION }}" --keyversion-keyring="${{ secrets.KMS_KEYRING_
+NAME }}" --keyversion-key="${{ secrets.KMS_KEY_NAME }}" --keyversion="${{ secrets.KMS_KEY_
+VERSION }}"
+          fi
+        done</pre>			<p>The YAML file performs<a id="_idIndexMarker1506"/> several tasks, including the installation of <strong class="source-inline">gcloud</strong> and authentication with GCP. It also installs the <strong class="source-inline">gcloud beta</strong> CLI and, importantly, <span class="No-Break">attests images.</span></p>
+			<p>To attest images, it searches the <strong class="source-inline">blog-app.yaml</strong> manifest for all images. For each image, it checks whether the image is in the <strong class="source-inline">sha256</strong> digest format. If yes, it proceeds to attest <span class="No-Break">the image.</span></p>
+			<p>It’s worth noting that<a id="_idIndexMarker1507"/> the workflow verifies that images are specified using a <strong class="source-inline">sha256</strong> digest format rather than a tag in the image definition. This choice is crucial when working with binary authorization. Why? Because binary authorization requires deploying images with their <strong class="source-inline">sha256</strong> digest instead of a tag. This precaution is essential because, with tags, anyone can associate a different image with the same tag as the attested image and push it to the container registry. In contrast, a digest is a hash generated from a Docker image. Therefore, as long as the image’s content remains unchanged, the digest remains the same. This prevents any attempts to bypass binary <span class="No-Break">authorization controls.</span></p>
+			<p>The format for specifying images in this manner is <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+&lt;repo_url&gt;/&lt;image_name&gt;@sha256:&lt;sha256-digest&gt;</pre>			<p>Therefore, before pushing the changes to the remote repository, let’s replace the image tags with <strong class="source-inline">sha256</strong> digests. Use the following commands to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+$ grep -ir "image:" ./manifests/blog-app |\
+ awk {'print $3'} | sort -t: -u -k1,1 &gt; ./images
+$ for image in $(cat ./images); do
+  no_of_slash=$(echo $image | tr -cd '/' | wc -c)
+  prefix=""
+  if [ $no_of_slash -eq 1 ]; then
+    prefix="docker.io/"
+  fi
+  if [ $no_of_slash -eq 0 ]; then
+    prefix="docker.io/library/"
+  fi
+  image_to_attest=$image
+  if [[ $image =~ "@" ]]; then
+    echo "Image $image has DIGEST"
+    image_to_attest="${prefix}${image}"
+  else
+    DIGEST=$(docker pull $image | grep Digest | awk {'print $2'})
+    image_name=$(echo $image | awk -F ':' {'print $1'})
+    image_to_attest="${prefix}${image_name}@${DIGEST}"
+  fi
+  escaped_image=$(printf '%s\n' "${image}" | sed -e 's/[]\/$*.^[]/\\&amp;/g')
+  escaped_image_to_attest=$(printf '%s\n' "${image_to_attest}" | \
+ sed -e 's/[]\/$*.^[]/\\&amp;/g')
+  echo "Processing $image"
+grep -rl $image ./manifests | \
+xargs sed -i "s/${escaped_image}/${escaped_image_to_attest}/g"
+done</pre>			<p>To verify whether the <a id="_idIndexMarker1508"/>changes were successful, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ cat manifests/blog-app/blog-app.yaml | grep "image:"
+image: docker.io/library/mongo@sha256:2a1093b275d9bc...
+image: docker.io/bharamicrosystems/mdo-posts@sha256:b5bc...
+image: docker.io/bharamicrosystems/mdo-reviews@sha256:073..
+image: docker.io/bharamicrosystems/mdo-ratings@sha256:271..
+image: docker.io/bharamicrosystems/mdo-users@sha256:5f5a...
+image: docker.io/bharamicrosystems/mdo-frontend@sha256:87..</pre>			<p>As we can see, the images<a id="_idIndexMarker1509"/> have been updated. Now, let’s proceed to push the changes to the remote repository using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cp ~/modern-devops/ch13/binaryauth/binaryauth.tf terraform/
+$ cp ~/modern-devops/ch13/binaryauth/cluster.tf terraform/
+$ cp ~/modern-devops/ch13/binaryauth/variables.tf terraform/
+$ cp -r ~/modern-devops/ch13/binaryauth/.github .
+$ git add --all
+$ git commit -m "Enabled Binary Auth"
+$ git push</pre>			<p>Now, let’s review the Dev CD workflow on GitHub Actions, where we should observe <span class="No-Break">the following:</span></p>
+			<div>
+				<div id="_idContainer134" class="IMG---Figure">
+					<img src="image/B19877_13_13.jpg" alt="Figure 13.13 – Dev CD workflow – Attest Images" width="838" height="409"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.13 – Dev CD workflow – Attest Images</p>
+			<p>As is evident, the workflow<a id="_idIndexMarker1510"/> has successfully configured binary authorization and attested our images. To verify, execute the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud beta container binauthz attestations list \
+ --attestor-project="$PROJECT_ID" \
+ --attestor="quality-assurance-attestor" | grep resourceUri
+resourceUri: docker.io/bharamicrosystems/mdo-ratings@
+sha256:271981faefafb86c2d30f7d3ce39cd8b977b7dd07...
+resourceUri: docker.io/library/mongo@sha256:2a1093b275d9bc546135ec2e2...
+resourceUri: docker.io/bharamicrosystems/mdo-posts@
+sha256:b5bc1fc976a93a88cc312d24916bd1423dbb3efe25e...
+resourceUri: docker.io/bharamicrosystems/mdo-frontend@
+sha256:873526fe6de10e04c42566bbaa47b76c18f265fd...
+resourceUri: docker.io/bharamicrosystems/mdo-users@
+sha256:5f5aa595bc03c53b86dadf39c928eff4b3f05533239...
+resourceUri: docker.io/bharamicrosystems/mdo-reviews@
+sha256:07370e90859000ff809b1cd1fd2fc45a14c5ad46e...</pre>			<p>As we can see, the <a id="_idIndexMarker1511"/>attestations have been successfully created. Having deployed our application in the Dev environment, tested it, and attested all the images within, we can now proceed with deploying the code to the Prod environment. This inv<a id="_idTextAnchor1752"/><a id="_idTextAnchor1753"/>olves merging our code with the <strong class="source-inline">prod</strong> branch, and we will implement pull request gating for <span class="No-Break">this purpose.</span></p>
+			<h1 id="_idParaDest-358"><a id="_idTextAnchor1754"/>Release gating with pull requests and deployment to production</h1>
+			<p>The process of pull request gating<a id="_idIndexMarker1512"/> is straightforward. At the end of the Dev CD workflow, we’ll introduce a step to initiate a pull request to merge <strong class="source-inline">dev</strong> into the <strong class="source-inline">prod</strong> branch. Human approval is required to proceed with merging the pull request. This step highlights how various organizations may adopt different methods to verify and promote tested code. Some may opt for automated merging, while others may prioritize human-triggered actions. Once the code is successfully merged into the <strong class="source-inline">prod</strong> branch, it triggers the Prod CD workflow. This workflow creates the Prod environment and deploys our application. It also executes the same integration test we ran in the Dev environment to ensure the deployed application in Prod <span class="No-Break">remains intact.</span></p>
+			<p>Here’s the step we’ll add to the Dev <span class="No-Break">CD workflow:</span></p>
+			<pre class="console">
+  raise-pull-request:
+    name: Raise Pull Request
+    needs: [binary-auth]
+    uses: ./.github/workflows/raise-pr.yml
+    secrets: inherit</pre>			<p>As we can see, this step invokes the <strong class="source-inline">raise-pr.yml</strong> file. Let’s look <span class="No-Break">at that:</span></p>
+			<pre class="console">
+...
+    steps:
+      - uses: actions/checkout@v2
+      - name: Raise a Pull Request
+        id: pull-request
+        uses: repo-sync/pull-request@v2
+        with:
+          destination_branch: prod
+          github_token: ${{ s<a id="_idTextAnchor1755"/>ecrets.GH_TOKEN }}</pre>			<p>This workflow does <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>Checks out the code from <span class="No-Break">the repository</span></li>
+				<li>Raises a pull request to <a id="_idIndexMarker1513"/>merge with the <strong class="source-inline">prod</strong> branch using the <span class="No-Break"><strong class="source-inline">GH_TOKEN</strong></span><span class="No-Break"> secret</span></li>
+			</ul>
+			<p>To enable the workflow’s functionality, we need to define a GitHub token. This token allows the workflow to act on behalf of the current user when creating the pull request. Here are <span class="No-Break">the steps:</span></p>
+			<ol>
+				<li>Go <span class="No-Break">to </span><a href="https://github.com/settings/personal-access-tokens/new"><span class="No-Break">https://github.com/settings/personal-access-tokens/new</span></a><span class="No-Break">.</span></li>
+				<li>Create a new token with <strong class="bold">Repository</strong> access for the <strong class="source-inline">mdo-environments</strong> repository, granting it the <strong class="source-inline">read-write</strong> pull request permission. This approach aligns with the principle of least privilege, offering more <span class="No-Break">granular control.</span></li>
+				<li>Once the token is created, <span class="No-Break">copy it.</span></li>
+				<li>Now, create a GitHub Actions secret named <strong class="source-inline">GH_TOKEN</strong> and paste the copied token as the value. You can do this by <span class="No-Break">visiting </span><span class="No-Break"><strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/settings/secrets/actions</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<p>Next, let’s proceed to copy the workflow files using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ cd ~/mdo-environments/.github/workflows
+$ cp ~/modern-devops/ch13/raise-pr/.github/workflows/dev-cd-workflow.yml .
+$ cp ~/modern-devops/ch13/raise-pr/.github/workflows/raise-pr.yml .</pre>			<p>We’re ready to push this code to GitHub. Run the following commands to commit and push the changes to your <span class="No-Break">GitHub repository:</span></p>
+			<pre class="console">
+$ git add --all
+$ git commit -m "Added PR Gating"
+$ git push</pre>			<p>This should trigger a GitH<a id="_idTextAnchor1756"/>ub<a id="_idIndexMarker1514"/> Actions workflow in your GitHub repository, and you should observe something similar to <span class="No-Break">the following:</span></p>
+			<div>
+				<div id="_idContainer135" class="IMG---Figure">
+					<img src="image/B19877_13_14.jpg" alt="Figure 13.14 – Raising a pull request" width="1626" height="866"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.14 – Raising a pull request</p>
+			<p>GitHub has generated a pull request to merge the code into the <strong class="source-inline">prod</strong> branch, and the Dev CD workf<a id="_idTextAnchor1757"/><a id="_idTextAnchor1758"/>low is running as anticipated. We can now review the pull request and merge the code into the <span class="No-Break"><strong class="source-inline">prod</strong></span><span class="No-Break"> branch.</span></p>
+			<h1 id="_idParaDest-359"><a id="_idTextAnchor1759"/>Merging code and deploying to prod</h1>
+			<p>As demonstrated in the previous section, the Dev CD workflow created our environment, deployed the application, tested it, and attested application images. It then automatically initiated a pull request to merge the code into the <span class="No-Break"><strong class="source-inline">prod</strong></span><span class="No-Break"> branch.</span></p>
+			<p>We’ve entered the <strong class="bold">release gating phase,</strong> where <a id="_idIndexMarker1515"/>we require manual verification to determine whether the code is ready for merging into the <span class="No-Break"><strong class="source-inline">prod</strong></span><span class="No-Break"> branch.</span></p>
+			<p>Since we know the pull request has been created, let’s proceed to inspect and approve it. To do so, go to <strong class="source-inline">https://github.com/&lt;your_github_user&gt;/mdo-environments/pul<a id="_idTextAnchor1760"/>ls</strong>, where you will find the pull request. Click on the pull request, and you will encounter <span class="No-Break">the following:</span></p>
+			<div>
+				<div id="_idContainer136" class="IMG---Figure">
+					<img src="image/B19877_13_15.jpg" alt="Figure 13.15 – Pull request" width="1537" height="571"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.15 – Pull request</p>
+			<p>We see that the pull request is ready to merge. Click on <strong class="bold">Merge pull request</strong>, and you will see that the changes will reflect on the <span class="No-Break"><strong class="source-inline">prod</strong></span><span class="No-Break"> branch.</span></p>
+			<p><a id="_idTextAnchor1761"/>If you go to <strong class="source-inline">https://github.com/&lt;your_user&gt;/mdo-environments/actions</strong>, you’ll find that the <a id="_idIndexMarker1516"/>Prod CD wo<a id="_idTextAnchor1762"/>rkflow has been triggered. When you click on the workflow, you will see a workflow run like <span class="No-Break">the following:</span></p>
+			<div>
+				<div id="_idContainer137" class="IMG---Figure">
+					<img src="image/B19877_13_16.jpg" alt="Figure 13.16 – Prod CD workflow" width="1650" height="550"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 13.16 – Prod CD workflow</p>
+			<p>When we merged the pull request, it automatically triggered the Prod CD workflow as it would react to any new changes in the <strong class="source-inline">prod</strong> branch. The workflow did its job by building the Prod environment, deploying our application, and testing it. Note that binary authorization is <a id="_idIndexMarker1517"/>enabled for <span class="No-Break">this cluster.</span></p>
+			<p>To confirm that binary authorization is functioning correctly, let’s perform some checks to ensure unattested images cannot <span class="No-Break">be deployed.</span></p>
+			<p>First, let’s establish a connection to the <strong class="source-inline">prod</strong> cluster using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud container clusters get-credentials \
+mdo-cluster-prod --zone us-central1-a --project ${PROJECT_ID}</pre>			<p>Let’s attempt to deploy a pod to your cluster using an <strong class="source-inline">nginx</strong> image. Please use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl run nginx --image=nginx
+Error from server (VIOLATES_POLICY): admission webhook "imagepolicywebhook.image-policy.
+k8s.io" denied the request: Image nginx denied by Binary Authorization default admission 
+rule. Image nginx denied by attestor projects/&lt;PROJECT_ID&gt;/attestors/quality-assurance-
+attestor: Expected digest with sha256 scheme, but got tag or malformed digest</pre>			<p>Now, as expected, the deployment failed, but there’s something else to note if you examine the reason. The failure happened because we specified a tag instead of a <strong class="source-inline">sha256</strong> digest. Let’s attempt to deploy the image again, but this time, with <span class="No-Break">a digest.</span></p>
+			<p>To do so, let’s retrieve the image digest and set it as a variable called <strong class="source-inline">DIGEST</strong> using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ DIGEST=$(docker pull nginx | grep Digest | awk {'print $2'})</pre>			<p>Now, let’s redeploy the image using the digest with the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl run nginx --image=nginx@$DIGEST
+Error from server (VIOLATES_POLICY): admission webhook "imagepolicywebhook.image-
+policy.k8s.io" denied the request: Image nginx@sha256:6926dd8... denied by Binary 
+Authorization default admission rule. Image nginx@sha256:6926dd8... denied by attestor 
+projects/&lt;PROJECT_ID&gt;/attestors/quality-assurance-attestor: No attestations found that 
+were valid and signed by a key trusted by the attestor</pre>			<p>This time, the deployment was denied for a valid reason, confirming that binary authorization functions correctly. This ensures the security of your Kubernetes cluster, preventing the deployment of unattested images and giving you complete control over your environment. With this in place, any issues that arise won’t stem from deploying untested or <span class="No-Break">vulnerable images.</span></p>
+			<p>We’ve covered a lot of ground in integrating security and QA into our CI/CD pipelines. Now, let’s explore some best practices for se<a id="_idTextAnchor1763"/>curing modern <span class="No-Break">DevOps pipelines.</span></p>
+			<h1 id="_idParaDest-360"><a id="_idTextAnchor1764"/>Security and testing best practices for modern DevOps pipelines</h1>
+			<p>Tooling is not the only<a id="_idIndexMarker1518"/> thing that will help you in your DevSecOps journey. Here are some he<a id="_idTextAnchor1765"/><a id="_idTextAnchor1766"/>lpful tips that can help you addres<a id="_idTextAnchor1767"/>s security risks and have a more secure culture within <span class="No-Break">your organization.</span></p>
+			<h2 id="_idParaDest-361"><a id="_idTextAnchor1768"/>Adopt a DevSecOps culture</h2>
+			<p>Adopting a<a id="_idIndexMarker1519"/> DevSecOps approach is critical in implementing modern DevOps. Therefore, it is vital to embed security within an organization’s culture. You can achieve that by implementing effective communication and collaboration between the <em class="italic">development</em>, <em class="italic">operations</em>, and <em class="italic">security</em> teams. While most organizations have a security policy, it mus<a id="_idTextAnchor1769"/>tn’t be followed just to comply with rules and regulations. Instead, employees should cross-skill and upskill themselves to adopt a DevSecOps approach and embed security early on during development. Security teams need to learn how to wr<a id="_idTextAnchor1770"/><a id="_idTextAnchor1771"/>ite code and work with APIs, while developers need to understand security and use automation to <span class="No-Break">achieve this.</span></p>
+			<h2 id="_idParaDest-362">Establish access control<a id="_idTextAnchor1772"/></h2>
+			<p>You <a id="_idIndexMarker1520"/>have heard abou<a id="_idTextAnchor1773"/>t the <strong class="bold">Principle of Least Privilege</strong> (<strong class="bold">PoLP</strong>) several times in this book. Well, that is what you need <a id="_idIndexMarker1521"/>to implement for a better security posture, which means you should make all attempts to grant only the required privileges to people to do their job, and nothing more. Reduce the just-in-case syndrome by making the process of giving access <a id="_idTextAnchor1774"/><a id="_idTextAnchor1775"/>easier so that people don’t feel hindered, and as a result, they do not seek more privileges than <span class="No-Break">they require.</span></p>
+			<h2 id="_idParaDest-363"><a id="_idTextAnchor1776"/>Implement shift left</h2>
+			<p>Shifting left<a id="_idIndexMarker1522"/> means embedding security into software at the ea<a id="_idTextAnchor1777"/>rlier stages of software development. This means security experts need to work closely with developers to enable them to build secure software right from the start. The security function should not be rev<a id="_idTextAnchor1778"/><a id="_idTextAnchor1779"/>iew-only but should actively work with develop<a id="_idTextAnchor1780"/>ers and architects t<a id="_idTextAnchor1781"/>o develop a security-hardened design <span class="No-Break">and code.</span></p>
+			<h2 id="_idParaDest-364"><a id="_idTextAnchor1782"/>Manage security risks consistently</h2>
+			<p>You should<a id="_idIndexMarker1523"/> accept risks, which are inevita<a id="_idTextAnchor1783"/>ble, and should have a <strong class="bold">Standard Operating Procedure</strong> (<strong class="bold">SOP</strong>) shou<a id="_idTextAnchor1784"/>ld <a id="_idIndexMarker1524"/>an atta<a id="_idTextAnchor1785"/>ck occur. You should have <a id="_idIndexMarker1525"/><a id="_idTextAnchor1786"/>straightforw<a id="_idTextAnchor1787"/>ard and easy-to-understand<a id="_idIndexMarker1526"/> policies and practices from a security <a id="_idIndexMarker1527"/>standpoint in all aspects of software<a id="_idIndexMarker1528"/> development and <a id="_idIndexMarker1529"/>infrastru<a id="_idTextAnchor1788"/><a id="_idTextAnchor1789"/>cture<a id="_idIndexMarker1530"/> management, such as <strong class="bold">configuration management</strong>, <strong class="bold">access controls</strong>, <strong class="bold">vulnerability testing</strong>, <strong class="bold">code review</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="bold">firewalls</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-365">Implemen<a id="_idTextAnchor1790"/>t vulnerability scanning</h2>
+			<p>Open <a id="_idIndexMarker1531"/>source software today is snowballing, and most software implementations rely on ready-made open source frameworks, software libraries, and third-party software that don’t come with a guarantee or liability of any kind. While the open source ecosystem is building the technological world like never before, it does have its own share of vulnerabilities, which you don’t want to insert within your software through no fault of your own. Vulnerability scann<a id="_idTextAnchor1791"/><a id="_idTextAnchor1792"/>ing is crucial, as scans can discover any third-party dependency with vulnerabilities and alert you at the <span class="No-Break">i<a id="_idTextAnchor1793"/>nitial stage.</span></p>
+			<h2 id="_idParaDest-366"><a id="_idTextAnchor1794"/>Automate security</h2>
+			<p>Security <a id="_idIndexMarker1532"/>should not hinder the speed of your DevOps teams; therefore, to keep up with the fast pace of DevOps, you should look at embedding security within your CI/CD processes. You can do code analysis, vulnerability scanning, configuration management, and infrastructure scanning with policy as code and binary authorization to allow only tested and secure software to be deployed. Automation helps identify potential vulnerabilities early on in the software development life cycle, thereby bringing down the cost of software development <span class="No-Break">and rework.</span></p>
+			<p>Similarly, QA is the backbone of software delivery, and modern DevSecOps heavily emphasizes automating it. Here are some tips you can follow to implement a modern <span class="No-Break">testing approach.</span></p>
+			<h2 id="_idParaDest-367"><a id="_idTextAnchor1795"/>Test automation within your CI/CD pipelines</h2>
+			<p>Automating<a id="_idIndexMarker1533"/> testing across the board is key. This means encompassing a wide spectrum, from unit and integration testing to functional, security, and performance testing. The goal is to seamlessly embed these tests within your CI/CD pipeline, ensuring a constant stream of validation. In this journey, creating isolated and reproducible test environments becomes crucial to thwart any interference among tests. Here, methods such as containerization and virtualization are valuable tools for <span class="No-Break">environment isolation.</span></p>
+			<h2 id="_idParaDest-368"><a id="_idTextAnchor1796"/>Manage your test data effectively</h2>
+			<p>Test data <a id="_idIndexMarker1534"/>management is another pivotal aspect. It’s imperative to handle your test data effectively, not only ensuring its consistency but also safeguarding data privacy. Leveraging data generation tools can be a game-changer in this regard, allowing you to create relevant datasets for your testing needs. Moreover, when dealing with sensitive information, the consideration of data anonymization is prudent. This ensures that you maintain the highest standards of data protection while still benefiting from comprehensive <span class="No-Break">testing procedures.</span></p>
+			<h2 id="_idParaDest-369"><a id="_idTextAnchor1797"/>Test all aspects of your application</h2>
+			<p>CI is all <a id="_idIndexMarker1535"/>about keeping the development process flowing smoothly. This involves frequently merging code and running tests automatically, ensuring the code base remains stable. When tests fail, immediate attention is crucial to rectify the <span class="No-Break">issues promptly.</span></p>
+			<p>End-to-end testing is your compass to ensure the entire application workflow functions as expected. Automation frameworks play a pivotal role in replicating real user interactions, making it possible to assess your <span class="No-Break">application thoroughly.</span></p>
+			<p>Load testing is an essential part of the process, as it evaluates how your application performs under varying loads, providing insights into its robustness and capacity. Additionally, scalability testing ensures that the system is well-equipped to handle growth, an important factor for the long-term health of <span class="No-Break">your application.</span></p>
+			<h2 id="_idParaDest-370"><a id="_idTextAnchor1798"/>Implement chaos engineering</h2>
+			<p>Incorporating <a id="_idIndexMarker1536"/>chaos engineering practices is a proactive strategy to uncover and address potential system weaknesses. By conducting controlled experiments, you can gauge the resilience of your system and better prepare it for unexpected challenges. These experiments involve intentionally introducing chaos into your environment to observe how your system responds. This not only helps you identify weaknesses but also provides valuable insights into how to make your system more robust <span class="No-Break">and reliable.</span></p>
+			<h2 id="_idParaDest-371"><a id="_idTextAnchor1799"/>Monitor and observe your application when it is being tested</h2>
+			<p>Setting up <a id="_idIndexMarker1537"/>robust monitoring and observability tools is crucial for gaining deep insights into your system’s performance and behavior. These tools allow you to collect essential metrics, logs, and traces, providing a comprehensive view of your application’s health <span class="No-Break">and performance.</span></p>
+			<h2 id="_idParaDest-372"><a id="_idTextAnchor1800"/>Effective testing in production</h2>
+			<p>Implementing<a id="_idIndexMarker1538"/> feature flags and canary releases is a prudent strategy for testing new functionality in a real production environment while minimizing risks. Feature flags allow you to enable or disable certain features at runtime, giving you control over their activation. Canary releases involve rolling out new features to a small subset of users, allowing you to monitor their impact before a <span class="No-Break">full-scale release.</span></p>
+			<p>By utilizing feature flags, you can introduce new features to a limited audience without affecting the entire user base. This controlled approach lets you observe user interactions, collect feedback, and assess the feature’s performance in a real-world scenario. Simultaneously, canary releases enable you to deploy these features to a small, representative group of users, allowing you to monitor their behavior, collect performance metrics, and identify <span class="No-Break">potential issues.</span></p>
+			<p>Crucially, continuous monitoring is essential during this process. By closely observing the impact of the new functionality, you can quickly detect any issues that may arise. If problems occur, you have the flexibility to roll back the changes by simply turning off the feature flags or reverting to the previous version. This iterative and cautious approach minimizes the impact of potential problems, ensuring a smoother user experience and maintaining the stability of your <span class="No-Break">production environment.</span></p>
+			<h2 id="_idParaDest-373"><a id="_idTextAnchor1801"/>Documentation and knowledge sharing</h2>
+			<p>Documenting <a id="_idIndexMarker1539"/>testing procedures, test cases, and best practices is essential for ensuring consistency and reliability within the development and testing processes. Comprehensive documentation serves as a reference for team members, providing clear guidelines on how to conduct tests, the expected outcomes, and the best practices to follow. This documentation acts as a valuable resource for both new and existing team members, fostering a shared understanding of the <span class="No-Break">testing procedures.</span></p>
+			<p>Encouraging knowledge sharing among team members further enhances the collective expertise of the team. By promoting open communication and sharing experiences, team members can learn from one another, gain insights into different testing scenarios, and discover innovative solutions to common challenges. This collaborative environment promotes continuous learning and ensures that the team stays updated on the latest developments and techniques in the field of <span class="No-Break">software testing.</span></p>
+			<p>By adhering to these best practices, teams can enhance the security and reliability of their CI/CD pipelines. Properly documented procedures and test cases enable consistent testing, reducing the likelihood of introducing errors into the code base. Knowledge sharing ensures that the team benefits from the collective wisdom and experiences of its members, leading to more informed decision-making and <span class="No-Break">efficient problem-solving.</span></p>
+			<p>In addition, managing security risks effectively becomes possible through well-documented testing procedures and disseminating best practices. Teams can identify potential security vulnerabilities early in the development process, enabling them to address these issues before they escalate into significant threats. Regular knowledge-sharing sessions can also include discussions about security best practices, ensuring that team members are<a id="_idIndexMarker1540"/> aware of the latest security threats <span class="No-Break">and countermeasures.</span></p>
+			<p>Ultimately, these best practices contribute to a robust testing and development culture. They empower teams to deliver software faster and with confidenc<a id="_idTextAnchor1802"/><a id="_idTextAnchor1803"/>e, knowing that their CI/CD pipelines are secure, reliable, and capable of handling the challenges of modern <span class="No-Break">software development.</span></p>
+			<h1 id="_idParaDest-374"><a id="_idTextAnchor1804"/>Summary</h1>
+			<p>This chapter has covered CI/CD pipeline security and testing, and we have understood various tools, techniques, and best practices surrounding it. We looked at a secure CI/CD workflow for reference. We then understood, using hands-on exercises, the aspects that made it secure, such as secret management, container vulnerability scanning, and <span class="No-Break">binary authorization.</span></p>
+			<p>Using the skills learned in this chapter, you can now appropriately secure your CI/CD p<a id="_idTextAnchor1805"/><a id="_idTextAnchor1806"/>ipelines and make your application <span class="No-Break">more secure.</span></p>
+			<p>In the next chapter, we will explore the operational elements along with key performance indicators for running our application <span class="No-Break">in production.</span></p>
+			<h1 id="_idParaDest-375"><a id="_idTextAnchor1807"/>Questions</h1>
+			<ol>
+				<li>Which of these is the recommended place for <span class="No-Break">storing secrets?</span><p class="list-inset">A. Private <span class="No-Break">Git repository</span></p><p class="list-inset">B. Public <span class="No-Break">Git repository</span></p><p class="list-inset">C. <span class="No-Break">Docker image</span></p><p class="list-inset">D. Secret <span class="No-Break">management system</span></p></li>
+				<li>Which one of the following is an open source secret <span class="No-Break">management system?</span><p class="list-inset">A. <span class="No-Break">Secret Manager</span></p><p class="list-inset">B. <span class="No-Break">HashiCorp Vault</span></p><p class="list-inset">C. <span class="No-Break">Anchore Grype</span></p></li>
+				<li>Is it a good practice to download a secret within your CD <span class="No-Break">pipeline’s filesystem?</span></li>
+				<li>Which base image is generally considered more secure and consists of the <span class="No-Break">fewest vulnerabilities?</span><p class="list-inset"><span class="No-Break">A. Alpine</span></p><p class="list-inset"><span class="No-Break">B. Slim</span></p><p class="list-inset"><span class="No-Break">C. Buster</span></p><p class="list-inset"><span class="No-Break">D. Default</span></p></li>
+				<li>Which of the following answers are true about binary authorization? (<span class="No-Break">Choose two)</span><p class="list-inset">A. It scans your image<a id="_idTextAnchor1808"/><a id="_idTextAnchor1809"/>s <span class="No-Break">for vulnerabilities.</span></p><p class="list-inset">B. It allows only attested images to <span class="No-Break">be deployed.</span></p><p class="list-inset">C. It prevents people from bypassing your <span class="No-Break">CI/CD pipeline.</span></p></li>
+			</ol>
+			<h1 id="_idParaDest-376"><a id="_idTextAnchor1810"/>Answers</h1>
+			<ol>
+				<li value="1"> D</li>
+				<li> B</li>
+				<li> <span class="No-Break">No</span></li>
+				<li> A</li>
+				<li> B <span class="No-Break">and C</span></li>
+			</ol>
+		</div>
+	</div>
+</div>
+
+
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer139" class="Content">
+			<h1 id="_idParaDest-377" lang="en-US" xml:lang="en-US"><a id="_idTextAnchor1811"/>Part 5:Operating Applications in Production</h1>
+			<p>This part provides a comprehensive guide to managing containers in production. We will start by covering key performance indicators and reliability principles and then explore Istio for advanced security, traffic management, and observability. This section will equip you with crucial skills to optimize container-based applications <span class="No-Break">in production.</span></p>
+			<p>This part has the <span class="No-Break">following chapters:</span></p>
+			<ul>
+				<li><a href="B19877_14.xhtml#_idTextAnchor1812"><em class="italic">Chapter 14</em></a>, <em class="italic">Understanding Key Performance Indicators (KPIs) for Your Production Service </em></li>
+				<li><a href="B19877_15.xhtml#_idTextAnchor1834"><em class="italic">Chapter 15</em></a>, <em class="italic">Operating Containers in Production with Istio</em></li>
+			</ul>
+		</div>
+		<div>
+			<div id="_idContainer140" class="Basic-Graphics-Frame">
+			</div>
+		</div>
+	</div>
+</div>
+</body></html>

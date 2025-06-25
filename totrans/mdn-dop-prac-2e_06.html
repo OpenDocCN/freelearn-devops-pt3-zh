@@ -1,0 +1,1074 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer061">
+			<h1 id="_idParaDest-150" class="chapter-number"><a id="_idTextAnchor668"/>6</h1>
+			<h1 id="_idParaDest-151"><a id="_idTextAnchor669"/>Managing Advanced Kubernetes Resources</h1>
+			<p>In the previous chapter, we covered Kubernetes and why we need it and then discussed bootstrapping a Kubernetes cluster using MiniKube and KinD. We then looked at the <strong class="source-inline">Pod</strong> resource and discussed how to create and manage pods, how to troubleshoot them, and how to ensure your application’s reliability using probes, along with multi-container design patterns to appreciate why Kubernetes uses pods in the first place instead of containers. We also looked at <strong class="source-inline">Secrets</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">ConfigMaps</strong></span><span class="No-Break">.</span></p>
+			<p>Now, we will dive deep into the advanced aspects of Kubernetes and Kubernetes command-line <span class="No-Break">best practices.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>The need for advanced <span class="No-Break">Kubernetes resources</span></li>
+				<li><span class="No-Break">Kubernetes Deployments</span></li>
+				<li>Kubernetes Services <span class="No-Break">and Ingresses</span></li>
+				<li>Horizontal <span class="No-Break">pod autoscaling</span></li>
+				<li>Managing <span class="No-Break">stateful applications</span></li>
+				<li>Kubernetes command-line best practices, tips, <span class="No-Break">and tricks</span></li>
+			</ul>
+			<p>So, let’s <span class="No-Break">dive in!</span></p>
+			<h1 id="_idParaDest-152"><a id="_idTextAnchor670"/><a id="_idTextAnchor671"/>Technical requirements</h1>
+			<p>For this chapter, we will spin up <a id="_idIndexMarker580"/>a cloud-based Kubernetes cluster, <strong class="bold">Google Kubernetes Engine</strong> (<strong class="bold">GKE</strong>), for the exercises. That is because you will not be able to spin up load balancers and PersistentVolumes within your local system, and therefore, we cannot use KinD and MiniKube in <span class="No-Break">this chapter.</span></p>
+			<p>Currently, <strong class="bold">Google Cloud Platform</strong> (<strong class="bold">GCP</strong>) provides a free $300 trial for 90 days, so you can go ahead and sign up for<a id="_idIndexMarker581"/> one <span class="No-Break">at </span><a href="https://cloud.google.com/free"><span class="No-Break">https://cloud.google.com/free</span></a><span class="No-Break"><a id="_idTextAnchor672"/><a id="_idTextAnchor673"/></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-153"><a id="_idTextAnchor674"/>Spinning up GKE</h2>
+			<p>Once <a id="_idIndexMarker582"/>you’ve signed up and logged in to your console, you can open the Google Cloud Shell CLI to run <span class="No-Break">the commands.</span></p>
+			<p>You need <a id="_idTextAnchor675"/>to enable the GKE API first using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud services enable container.googleapis.com</pre>			<p>To create a three-node GKE cluster, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud container clusters create cluster-1 --zone us-central1-a</pre>			<p>And that’s it! The cluster is up <span class="No-Break">and running.</span></p>
+			<p>You will also need to clone the following GitHub repository for some <span class="No-Break">exercises: </span><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a><span class="No-Break">.</span></p>
+			<p>Run the following command to clone the repository into your home directory and <strong class="source-inline">cd</strong> into the <strong class="source-inline">ch6</strong> directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \
+modern-devops 
+$ cd modern-devops/ch6</pre>			<p>Now, let’s understand why we need advanced <span class="No-Break">Kubernetes resource<a id="_idTextAnchor676"/><a id="_idTextAnchor677"/>s.</span></p>
+			<h1 id="_idParaDest-154"><a id="_idTextAnchor678"/>The need for advanced Kubernetes resources</h1>
+			<p>In the <a id="_idIndexMarker583"/>last chapter, we looked at pods, the basic building blocks of Kubernetes that provide everything for your containers to run within a Kubernetes environment. However, pods on their own are not that effective. The reason is that while they define a container application and its specification, they do not replicate, auto-heal, or maintain a particular state. When you delete a pod, the pod is gone. You cannot maintain multiple versions of your code or roll out and roll back releases using a pod. You also cannot autoscale your application with traffic with pods alone. Pods do not allow you to expose your containers to the outside world, and they do not provide traffic management capabilities such as load balancing, content and path-based routing, storing persistent data to externally attached storage, and so on. To solve these problems, Kubernetes provides us with specific advanced resources, such as <a id="_idIndexMarker584"/>Deployments, Services, Ingresses, PersistentVolumes and claims, and StatefulSets. Let’s start with Kubernetes Deployments in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-155"><a id="_idTextAnchor679"/>Kubernetes Deployments</h1>
+			<p>Let’s understand<a id="_idIndexMarker585"/> Kubernetes Deployments using a <span class="No-Break">simple analogy.</span></p>
+			<p>Imagine you’re a chef preparing a particular dish in your kitchen. You want to make sure that it is consistently perfect every time you serve it, and you want to be able to change the recipe without causing a <span class="No-Break">chaotic mess.</span></p>
+			<p>In the world of Kubernetes, a “Deployment” is like your sous chef. It helps you create and manage copies of your <span class="No-Break">pods effortlessly.</span></p>
+			<p>Here’s how <span class="No-Break">it works:</span></p>
+			<ul>
+				<li><strong class="bold">Creating consistency</strong>: You want to serve your dish to many guests. Therefore, instead of cooking each plate separately, you prepare a bunch of them at once. All of them should taste the same and strictly as intended. A Kubernetes Deployment does the same for your pod. It creates multiple identical copies of your pod, ensuring they all have the <span class="No-Break">same setup.</span></li>
+				<li><strong class="bold">Updating safely</strong>: Now, imagine you have a new twist for your dish. You want to try it out, but you want your guests only to eat something if it turns out right. Similarly, when you want to update your app in Kubernetes, the <strong class="source-inline">Deployment</strong> resource slowly and carefully replaces old copies with new ones individually, so your app is always available, and your guests (or users) don’t notice <span class="No-Break">any hiccups.</span></li>
+				<li><strong class="bold">Rolling back gracefully</strong>: Sometimes, experiments don’t go as planned, and you must revert to the original recipe. Just as in your kitchen, Kubernetes lets you roll back to the previous version of your pod if things don’t work out with the <span class="No-Break">new one.</span></li>
+				<li><strong class="bold">Scaling easily</strong>: Imagine your restaurant suddenly gets a rush of customers, and you need more plates for your special dish. A Kubernetes Deployment helps with that, too. It can quickly create more copies of your pod to handle the increased demand and remove them when things <span class="No-Break">quieten down.</span></li>
+				<li><strong class="bold">Managing multiple kitchens</strong>: If you have multiple restaurants, you’d want your signature dish to taste the same in all of them. Similarly, if you’re using Kubernetes across different environments such as testing, development, and production, Deployments help keep <span class="No-Break">things consistent.</span></li>
+			</ul>
+			<p>In essence, Kubernetes Deployments<a id="_idIndexMarker586"/> help manage your pod, like a sous chef manages the dishes served from a kitchen. They ensure consistency, safety, and flexibility, ensuring your application runs smoothly and can be updated without causing a mess in your <span class="No-Break"><em class="italic">software kitchen</em></span><span class="No-Break">.</span></p>
+			<p>Container appli<a id="_idTextAnchor680"/>cation Deployments within Kubernetes are done through <strong class="source-inline">Deployment</strong> resources. <strong class="source-inline">Deployment</strong> resources employ <strong class="source-inline">ReplicaSet</strong> resources behind the scenes, so it would be good to look at <strong class="source-inline">ReplicaSet</strong> resources before we move on to understand <span class="No-Break"><strong class="source-inline">Deployment</strong></span><span class="No-Break"> reso<a id="_idTextAnchor681"/><a id="_idTextAnchor682"/>urces.</span></p>
+			<h2 id="_idParaDest-156"><a id="_idTextAnchor683"/>ReplicaSet resources</h2>
+			<p><strong class="source-inline">ReplicaSet</strong> resources are<a id="_idIndexMarker587"/> Kubernetes controllers that help you run multiple pod replicas at a given time. They provide ho<a id="_idTextAnchor684"/>rizontal scaling for your container workloads, forming the basic building block of a horizontal scale set for your containers, a group of similar containers tied together to run as <span class="No-Break">a unit.</span></p>
+			<p><strong class="source-inline">ReplicaSet</strong> resources define the number of pod replicas to run at a given time. The Kubernetes controller then tries to maintain the replicas and recreates a pod if it <span class="No-Break">goes down.</span></p>
+			<p>You should never use <strong class="source-inline">ReplicaSet</strong> resources on their own, but instead, they should act as a backend to a <span class="No-Break"><strong class="source-inline">Deployment</strong></span><span class="No-Break"> resource.</span></p>
+			<p>For <a id="_idIndexMarker588"/>understanding, however, let’s look at an example. To access the <a id="_idIndexMarker589"/>resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch6/deployments/</pre>			<p>The <strong class="source-inline">ReplicaSet</strong> resource manifest, <strong class="source-inline">nginx-replica-set.yaml</strong>, looks <span class="No-Break">like this:</span></p>
+			<pre class="console">
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx</pre>			<p>Th<a id="_idTextAnchor685"/>e <a id="_idIndexMarker590"/>resource manifest includes <strong class="source-inline">apiVersion</strong> and <strong class="source-inline">kind</strong>, as with <a id="_idIndexMarker591"/>any other resource. It also contains a <strong class="source-inline">metadata</strong> section that defines the resource’s <strong class="source-inline">name</strong> and <strong class="source-inline">labels</strong> attributes, similar to any other <span class="No-Break">Kubernetes resource.</span></p>
+			<p>The <strong class="source-inline">spec</strong> section contains the <span class="No-Break">following attributes:</span></p>
+			<ul>
+				<li><strong class="source-inline">replicas</strong>: This defines the number of pod replicas matched by the selector to run at a <span class="No-Break">given time.</span></li>
+				<li><strong class="source-inline">selector</strong>: This defines the basis on which the <strong class="source-inline">ReplicaSet</strong> resource will <span class="No-Break">include pods.</span></li>
+				<li><strong class="source-inline">selector.matchLabels</strong>: This defines labels and their values to select pods. Therefore, the <strong class="source-inline">ReplicaSet</strong> resource will select any pod with the <strong class="source-inline">app: </strong><span class="No-Break"><strong class="source-inline">nginx</strong></span><span class="No-Break"> label.</span></li>
+				<li><strong class="source-inline">template</strong>: This is an optional section that you can use to define the pod template. This section’s contents are very similar to defining a pod, except it lacks the <strong class="source-inline">name</strong> attribute, as the <strong class="source-inline">ReplicaSet</strong> resource will generate dynamic names for pods. If you don’t include this section, the <strong class="source-inline">ReplicaSet</strong> resource will still try to acquire existing pods with matching labels. However, it cannot create new pods because of the missing template. Therefore, it is best practice to specify a template for a <span class="No-Break"><strong class="source-inline">ReplicaSet</strong></span><span class="No-Break"> resource.</span></li>
+			</ul>
+			<p>Let’s go ahead and apply this manifest to see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-replica-set.yaml</pre>			<p>Now, let’s <a id="_idIndexMarker592"/>run the following<a id="_idIndexMarker593"/> command to list the <span class="No-Break"><strong class="source-inline">ReplicaSet</strong></span><span class="No-Break"> resources:</span></p>
+			<pre class="console">
+$ kubectl get replicaset
+NAME    DESIRED   CURRENT   READY   AGE
+nginx   3         3         0       9s</pre>			<p>Right—so, we see that there are three desired replicas. Currently, <strong class="source-inline">3</strong> replicas are running, but <strong class="source-inline">0</strong> are ready. Let’s wait for a while and then rerun the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get replicaset
+NAME    DESIRED   CURRENT   READY   AGE
+nginx   3         3         3       1m1<a id="_idTextAnchor686"/>0s</pre>			<p>And now, we see <strong class="source-inline">3</strong> ready pods that are awaiting a connection. Now, let’s list the pods and see what the <strong class="source-inline">ReplicaSet</strong> resource has done behind the scenes using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod
+NAME          READY   STATUS    RESTARTS   AGE
+nginx-6qr9j   1/1     Running   0          1m32s
+nginx-7hkqv   1/1     Running   0          1m32s
+nginx-9kvkj   1/1     Running   0          1m32s</pre>			<p>There are three <strong class="source-inline">nginx</strong> pods, each with a name that starts with <strong class="source-inline">nginx</strong> but ends with a random hash. The <strong class="source-inline">ReplicaSet</strong> resource has appended a random hash to generate unique pods at the end of the <strong class="source-inline">ReplicaSet</strong> resource name. Yes—the name of every resource of a particular kind in Kubernetes should <span class="No-Break">be unique.</span></p>
+			<p>Let’s go ahead and <a id="_idIndexMarker594"/>use the following command to delete one of the pods from <a id="_idIndexMarker595"/>the <strong class="source-inline">ReplicaSet</strong> resource and see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ kubectl delete pod nginx-9kvkj &amp;&amp; kubectl get pod
+pod "nginx-9kvkj" deleted
+NAME          READY   STATUS    RESTARTS   AGE
+nginx-6qr9j   1/1     Running   0          8m34s
+nginx-7hkqv   1/1     Running   0          8m34s
+nginx-9xbdf   1/1     Running   0          5s</pre>			<p>We see that even though we deleted the <strong class="source-inline">nginx-9kvkj</strong> pod, the <strong class="source-inline">ReplicaSet</strong> resource has replaced it with a new pod, <strong class="source-inline">nginx-9xbdf</strong>. That is how <strong class="source-inline">ReplicaSet</strong> <span class="No-Break">resources work.</span></p>
+			<p>You can delete a <strong class="source-inline">ReplicaSet</strong> resource just like any other Kubernetes resource. You can run the <strong class="source-inline">kubectl delete replicaset &lt;ReplicaSet name&gt;</strong> command for an imperative approach or use <strong class="source-inline">kubectl delete -f &lt;manifest_file&gt;</strong> for a <span class="No-Break">declarative approac<a id="_idTextAnchor687"/>h.</span></p>
+			<p>Let’s use the former approach and delete the <strong class="source-inline">ReplicaSet</strong> resource by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl delete replicaset nginx</pre>			<p>Let’s check whether the <strong class="source-inline">ReplicaSet</strong> resource has been deleted by running the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get replicaset
+No resources found in default namespace.</pre>			<p>We don’t have<a id="_idIndexMarker596"/> anything in the <strong class="source-inline">default</strong> namespace. This means that <a id="_idIndexMarker597"/>the <strong class="source-inline">ReplicaSet</strong> resource <span class="No-Break">is deleted.</span></p>
+			<p>As we discussed, <strong class="source-inline">ReplicaSet</strong> resources should not be used on their own but should instead be the backend of <strong class="source-inline">Deployment</strong> resources. Let’s now look at Kubernetes <span class="No-Break"><strong class="source-inline">Dep<a id="_idTextAnchor688"/><a id="_idTextAnchor689"/>loyment</strong></span><span class="No-Break"> resources.</span></p>
+			<h2 id="_idParaDest-157"><a id="_idTextAnchor690"/>Deployment resources</h2>
+			<p>Kubernetes <strong class="source-inline">Deployment</strong> resources <a id="_idIndexMarker598"/>help to manage deployments for container<a id="_idTextAnchor691"/> applications. They<a id="_idIndexMarker599"/> ar<a id="_idTextAnchor692"/>e typically used for managing stateless workloads. You can still use them to manage stateful applications, but the recommended approach for stateful applications is to use <span class="No-Break"><strong class="source-inline">StatefulSet</strong></span><span class="No-Break"> resources.</span></p>
+			<p>Kubernetes Deployments use <strong class="source-inline">ReplicaSet</strong> resources as a backend, and the chain of resources looks like what’s shown in the<a id="_idTextAnchor693"/> <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer051" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.01.jpg" alt="Figure 6.1 – Deployment chain" width="1586" height="215"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.1 – Deployme<a id="_idTextAnchor694"/>nt chain</p>
+			<p>Let’s take the pr<a id="_idTextAnchor695"/>eceding example and create an nginx <strong class="source-inline">Deployment</strong> <span class="No-Break">resource manifest—</span><span class="No-Break"><strong class="source-inline">nginx-deployment.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx</pre>			<p>The <a id="_idIndexMarker600"/>manifest is very similar to the <strong class="source-inline">ReplicaSet</strong> resource, except <a id="_idIndexMarker601"/>for the <strong class="source-inline">kind</strong> attribute—<strong class="source-inline">Deployment</strong>, in <span class="No-Break">this case.</span></p>
+			<p>Let’s apply the manifest by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-deployment.yaml</pre>			<p>So, as the <strong class="source-inline">Deployment</strong> resource has been created, let’s look at the chain of resources it created. Let’s run <strong class="source-inline">kubectl get</strong> to list the <strong class="source-inline">Deployment</strong> resources using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get deployment
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+nginx   3/3     3            3           6s</pre>			<p>And we see <a id="_idIndexMarker602"/>there is one <strong class="source-inline">Deployment</strong> resource called <strong class="source-inline">nginx</strong>, with <strong class="source-inline">3/3</strong> ready<a id="_idIndexMarker603"/> pods and <strong class="source-inline">3</strong> up-to-date pods. <a id="_idTextAnchor696"/>As <strong class="source-inline">Deployment</strong> resources manage multi<a id="_idTextAnchor697"/>ple versions, <strong class="source-inline">UP-TO-DATE</strong> signifies whether the latest <strong class="source-inline">Deployment</strong> resource has rolled out successfully. We will look into the details of this in the subsequent sections. It also shows <strong class="source-inline">3</strong> available pods at <span class="No-Break">that time.</span></p>
+			<p>As we know <strong class="source-inline">Deployment</strong> resources create <strong class="source-inline">ReplicaSet</strong> resources in the background, let’s get the <strong class="source-inline">ReplicaSet</strong> resources using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get replicaset
+NAME               DESIRED   CURRENT   READY   AGE
+nginx-6799fc88d8   3         3         3       11s</pre>			<p>And we see that the <strong class="source-inline">Deployment</strong> resource has created a <strong class="source-inline">ReplicaSet</strong> resource, which starts with <strong class="source-inline">nginx</strong> and ends with a random hash. That is required as a <strong class="source-inline">Deployment</strong> resource might contain one or more <strong class="source-inline">ReplicaSet</strong> resources. We will look at how in the <span class="No-Break">subsequent sections.</span></p>
+			<p>Next in the chain are pods, so let’s get the pods using the following command to see <span class="No-Break">for ourselves:</span></p>
+			<pre class="console">
+$ kubectl get pod
+NAME                     READY   STATUS    RESTARTS   AGE
+nginx-6799fc88d8-d52mj   1/1     Running   0          15s
+nginx-6799fc88d8-dmpbn   1/1     Running   0          15s
+nginx-6799fc88d8-msvxw   1/1     Running   0          15s</pre>			<p>And, as expected, we have three pods. Each begins with the <strong class="source-inline">ReplicaSet</strong> resource name and ends with a random hash. That’s why you see two hashes<a id="_idTextAnchor698"/> in the <span class="No-Break">pod name.</span></p>
+			<p>Let’s assume<a id="_idTextAnchor699"/> you have a new release and want to deploy a new version of your container image. So, let’s update the <strong class="source-inline">Deployment</strong> resource with a new image using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl set image deployment/nginx nginx=nginx:1.16.1
+deployment.apps/nginx image updated</pre>			<p>To check the deployment status, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl rollout status deployment nginx
+deployment "nginx" successfully rolled out</pre>			<p>Imperative <a id="_idIndexMarker604"/>commands such as those just shown are normally not<a id="_idIndexMarker605"/> used in production environments because they lack the audit trail you would get with declarative manifests using Git to version them. However, if you do choose to use imperative commands, you can always record the change cause of the previous rollout using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl annotate deployment nginx kubernetes.io/change-cause\
+="Updated nginx version to 1.16.1" --overwrite=true
+deployment.apps/nginx annotated</pre>			<p>To check the Deployment history, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl rollout history deployment nginx
+deployment.apps/nginx
+REVISION  CHANGE-CAUSE
+1         &lt;none&gt;
+2         Updated nginx version to 1.16.1</pre>			<p>As we can see, there are two revisions in the Deployment history. Revision <strong class="source-inline">1</strong> was the initial Deployment, and revision <strong class="source-inline">2</strong> was because of the <strong class="source-inline">kubectl set image</strong> command we ran, as evident from the <span class="No-Break"><strong class="source-inline">CHANGE-CAUSE</strong></span><span class="No-Break"> column.</span></p>
+			<p>Let’s say you find an issue after Deployment and want to roll it back to the previous version. To do so and also recheck the status of the Deployment, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl rollout undo deployment nginx &amp;&amp; kubectl rollout status deployment nginx
+deployment.apps/nginx rolled back
+Waiting for deployment "nginx" rollout to finish: 2 out of 3 new replicas have been 
+updated...
+Waiting for deployment "nginx" rollout to finish: 1 old replicas are pending 
+termination...
+deployment "nginx" successfully roll<a id="_idTextAnchor700"/>ed out</pre>			<p>And finally, let’s recheck the deployment history using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl rollout history deployment nginx
+deployment.apps/nginx
+REVISION  CHANGE-CAUSE
+2         Updated nginx version to 1.16.<a id="_idTextAnchor701"/>1
+3         &lt;none&gt;</pre>			<p>And we <a id="_idIndexMarker606"/>get revision <strong class="source-inline">3</strong> with a <strong class="source-inline">CHANGE-CAUSE</strong> value of <strong class="source-inline">&lt;none&gt;</strong>. In this<a id="_idIndexMarker607"/> case, we did not annotate the rollback as in the <span class="No-Break">last command.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always annotate Deployment updates as it becomes easier to peek into the history to see what <span class="No-Break">got deployed.</span></p>
+			<p>Now, let’s look at some common Kubernetes Deployment strategies to understand how to u<a id="_idTextAnchor702"/><a id="_idTextAnchor703"/>se <span class="No-Break">Deployments effectively.</span></p>
+			<h2 id="_idParaDest-158">Kubernetes Deploy<a id="_idTextAnchor704"/>ment strategies</h2>
+			<p>Updating an existing <a id="_idIndexMarker608"/>Deployment requires you to specify a new container image. That is why we version container images in the first place so that you can roll out, and roll back, application changes as required. As we run everything in containers—and containers, by definition, are ephemeral—this enables a host of different deployment strategies that we can implement. There are several deployment strategies, and some<a id="_idIndexMarker609"/> of these are set out <span class="No-Break">as f<a id="_idTextAnchor705"/>ollows:</span></p>
+			<ul>
+				<li><strong class="bold">Recreate</strong>: This is<a id="_idIndexMarker610"/> the simplest of all. Delete the old pod and deploy a <span class="No-Break">new on<a id="_idTextAnchor706"/>e.</span></li>
+				<li><strong class="bold">Rolling update</strong>: Slowly roll <a id="_idIndexMarker611"/>out the pods of the new version while still running the old version, and slowly remove the old pods as the new pods <span class="No-Break">g<a id="_idTextAnchor707"/>et ready.</span></li>
+				<li><strong class="bold">Blue/green</strong>: This is a<a id="_idIndexMarker612"/> derived deployment strategy where we keep both versions running simultaneously and switch the traffic to the newer version wh<a id="_idTextAnchor708"/>en <span class="No-Break">we want.</span></li>
+				<li><strong class="bold">Canary</strong>: This applies<a id="_idIndexMarker613"/> to Blue/Green Deployments where we switch a percentage of traffic to the newer version of the application before fully rolling out <span class="No-Break">the release.</span></li>
+				<li><strong class="bold">A/B testing</strong>: A/B testing is <a id="_idIndexMarker614"/>more of a technique to apply <a id="_idTextAnchor709"/>to Blue/Green Deployments. This is w<a id="_idTextAnchor710"/>hen you want to roll out the newer version to a subset of willing users and study the usage patterns before completely rolling out the newer version. You do not get A/B testing out of the box with Kubernetes but instead should rely on<a id="_idIndexMarker615"/> service mesh technologies that<a id="_idIndexMarker616"/> plug in well with Kubernetes, such <a id="_idIndexMarker617"/>as <strong class="bold">Istio</strong>, <strong class="bold">Linkerd</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="bold">Traefik</strong></span><span class="No-Break">.</span></li>
+			</ul>
+			<p>Kubernetes provides two deployment strategies out of the box—<strong class="source-inline">Recreate</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">RollingU<a id="_idTextAnchor711"/>pdate</strong></span><span class="No-Break">.</span></p>
+			<h3>Recre<a id="_idTextAnchor712"/>ate</h3>
+			<p>The <strong class="source-inline">Recreate</strong> strategy is <a id="_idIndexMarker618"/>the most straightforward <a id="_idIndexMarker619"/>deployment strategy. When you update the <strong class="source-inline">Deployment</strong> resource with the <strong class="source-inline">Recreate</strong> strategy, Kubernetes immediately spins down the old <strong class="source-inline">ReplicaSet</strong> resource and creates a new one with the required number of replicas alo<a id="_idTextAnchor713"/>ng the lines of the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer052" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.02.jpg" alt="Figure 6.2 – Recreate strategy" width="972" height="582"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.2 – Recreate strategy</p>
+			<p>Kubernetes<a id="_idIndexMarker620"/> does not delete the old <strong class="source-inline">ReplicaSet</strong> resource <a id="_idIndexMarker621"/>but instead sets <strong class="source-inline">replicas</strong> to <strong class="source-inline">0</strong>. That is required to roll back to the old version quickly. This approach results in downtime and is something you want to use only in case of a c<a id="_idTextAnchor714"/>onstraint. Thus, this strategy isn’t the default deployment strategy <span class="No-Break">in Kubernetes.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">You can use the <strong class="source-inline">Recreate</strong> strategy if your application does not support multiple replicas, if it does not support more than a certain number of replicas (such as applications that need to maintain a quorum), or if it does not support multiple versions <span class="No-Break">at once.</span></p>
+			<p>Let’s update <strong class="source-inline">nginx-deployment</strong> with the <strong class="source-inline">Recreate</strong> strategy. Let’s look at the <span class="No-Break"><strong class="source-inline">nginx-recreate.yaml</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+...
+spec:
+  replicas: 3
+  strate<a id="_idTextAnchor715"/>gy:
+    type: Recreate
+.<a id="_idTextAnchor716"/>..</pre>			<p>The <a id="_idIndexMarker622"/>YAML file now contains a <strong class="source-inline">strategy</strong> section <a id="_idIndexMarker623"/>with a <strong class="source-inline">Recreate</strong> type. Now, let’s apply the <strong class="source-inline">nginx-recreate.yaml</strong> file and watch the <strong class="source-inline">ReplicaSet</strong> resources using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-recreate.yaml &amp;&amp; kubectl get replicaset -w
+deployment.apps/nginx configured
+NAME               DESIRED   CURRENT   READY   AGE
+nginx-6799fc88d8   0         0         0       0s
+nginx-6889dfccd5   0         3         3       7m42s
+nginx-6889dfccd5   0         0         0       7m42s
+nginx-6799fc88d8   3         0         0       1s
+nginx-6799fc88d8   3         3         0       2s
+nginx-6799fc88d8   3         3         3       6s</pre>			<p>The <strong class="source-inline">Deployment</strong> resource creates a new <strong class="source-inline">ReplicaSe<a id="_idTextAnchor717"/>t</strong> resource—<strong class="source-inline">nginx-6799fc88d8</strong>—with <strong class="source-inline">0</strong> desired replicas. It then sets <strong class="source-inline">0</strong> desired replicas to the old <strong class="source-inline">ReplicaSet</strong> resource and waits for the old <strong class="source-inline">ReplicaSet</strong> <a id="_idTextAnchor718"/>resource to be completely evicted. It then starts <a id="_idIndexMarker624"/>automatically rolling out the new <strong class="source-inline">ReplicaSet</strong> resource to<a id="_idTextAnchor719"/> the <span class="No-Break">desired </span><span class="No-Break"><a id="_idIndexMarker625"/></span><span class="No-Break">images.</span></p>
+			<h3>RollingUpdate</h3>
+			<p>When you<a id="_idIndexMarker626"/> update the Deployment with<a id="_idIndexMarker627"/> a <strong class="source-inline">RollingUpdate</strong> strategy, Kubern<a id="_idTextAnchor720"/>etes creates a new <strong class="source-inline">ReplicaSet</strong> resource, and it simultaneously spins up the required number of pods on the new <strong class="source-inline">ReplicaSet</strong> resource while slowly spinning down the old <strong class="source-inline">ReplicaSet</strong> res<a id="_idTextAnchor721"/>ource, as evident from the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer053" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.03.jpg" alt="Figure 6.3 – RollingUpdate strategy" width="1023" height="615"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.3 – RollingUpdate strategy</p>
+			<p><strong class="source-inline">RollingUpdate</strong> is the default deployment strategy. You can use the <strong class="source-inline">RollingUpdate</strong> strategy in most applications, apart from ones that cannot tolerate more than one version of the application at a <span class="No-Break">given time.</span></p>
+			<p>Let’s<a id="_idIndexMarker628"/> update the <strong class="source-inline">nginx</strong> <strong class="source-inline">Deployment</strong> resource <a id="_idIndexMarker629"/>using the <strong class="source-inline">RollingUpdate</strong> strategy. We will reuse the standard <strong class="source-inline">nginx-deployment.yaml</strong> file that we used before. Use the following command and see what happens to the <span class="No-Break"><strong class="source-inline">ReplicaSet</strong></span><span class="No-Break"> resources:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-deployment.yaml &amp;&amp; kubectl get replicaset -w
+deployment.apps/nginx configured 
+NAME               DESIRED   CURRENT   READY   AGE
+nginx-6799fc88d8   3         3         3       49s
+nginx-6889dfccd5   1         1         1       4s
+nginx-6799fc88d8   2         2         2       53s
+nginx-6889dfccd5   2         2         2       8s
+nginx-6799fc88d8   1         1         1       57s
+nginx-6889dfccd5   3         3         3       11s
+nginx-679<a id="_idTextAnchor722"/>9fc88d8   0         0         0       60s</pre>			<p>As we see, the<a id="_idIndexMarker630"/> old <strong class="source-inline">ReplicaSet</strong> resource—<strong class="source-inline">nginx-6799fc88d8</strong>—is being rolled down, and the new <strong class="source-inline">ReplicaSet</strong> resource—<strong class="source-inline">nginx-6889dfccd5</strong>—is being rolled <span class="No-Break">out simultaneously.</span></p>
+			<p>The <strong class="source-inline">RollingUpdate</strong> strategy also has two options—<strong class="source-inline">maxUnavailable</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">maxSurge</strong></span><span class="No-Break">.</span></p>
+			<p>While <strong class="source-inline">maxSurge</strong> defines <a id="_idIndexMarker631"/>the maximum<a id="_idTextAnchor723"/> number of additional pods we can have at a given time, <strong class="source-inline">maxUnavailable</strong> defines the maximum<a id="_idIndexMarker632"/> number of unavailable pods we can have at a <span class="No-Break">given time.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Set <strong class="source-inline">maxSurge</strong> to <strong class="source-inline">0</strong> if your application cannot tolerate more than a certain number of replicas. Set <strong class="source-inline">maxUnavailable</strong> to <strong class="source-inline">0</strong> if you want to maintain reliability and your application can tolerate more than the set replicas. You cannot specify <strong class="source-inline">0</strong> for both parameters, as that will make any rollout attempts impossible. While setting <strong class="source-inline">maxSurge</strong>, ensure your cluster has spare capacity to spin up additional pods, or the rollout <span class="No-Break">will fail.</span></p>
+			<p>Using these settings, we can create different kinds of custom rollout strategies—some popular ones are discussed in the <span class="No-Break">following sections.</span></p>
+			<h3>Ramped slow rollout</h3>
+			<p>If you have numerous<a id="_idIndexMarker633"/> replicas but <a id="_idIndexMarker634"/>want to roll out the release slowly, observe the application for any issues, and roll back your deployment if needed, you should use <span class="No-Break">this strategy.</span></p>
+			<p>Let’s create an <strong class="source-inline">nginx</strong> deployment, <strong class="source-inline">nginx-ramped-slow-rollout.yaml</strong>, using the <strong class="bold">ramped slow </strong><span class="No-Break"><strong class="bold">rollout</strong></span><span class="No-Break"> strategy:</span></p>
+			<pre class="console">
+...
+spec:
+  replicas: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      <a id="_idTextAnchor724"/>maxSurge: 1
+    <a id="_idTextAnchor725"/>  maxUnavailable: 0
+...</pre>			<p>The manifest is very similar to the generic Deployment, except that it contains <strong class="source-inline">10</strong> replicas and a <span class="No-Break"><strong class="source-inline">strategy</strong></span><span class="No-Break"> section.</span></p>
+			<p>The <strong class="source-inline">strategy</strong> section contains <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><span class="No-Break"><strong class="source-inline">type</strong></span><span class="No-Break">: </span><span class="No-Break"><strong class="source-inline">RollingUpdate</strong></span></li>
+				<li><strong class="source-inline">rollingUpdate</strong>: The section describing rolling update attributes –<strong class="source-inline">maxSurge</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">maxUnavailable</strong></span></li>
+			</ul>
+			<p>Now, let’s apply the YAML file and wait for the deployment to completely roll out to <strong class="source-inline">10</strong> replicas using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-ramped-slow-rollout.yaml \
+&amp;&amp; kubectl rollout status deployment nginx
+deployment.apps/nginx configured
+...<a id="_idTextAnchor726"/>
+deployment "nginx" successfully rolled out</pre>			<p>As we see, the<a id="_idIndexMarker635"/> pods have rolled out completely. Let’s now update<a id="_idIndexMarker636"/> the <strong class="source-inline">Deployment</strong> resource with a different <strong class="source-inline">nginx</strong> image version and see what we get using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl set image deployment nginx nginx=nginx:1.16.1 \
+&amp;&amp; kubectl get replicaset -w
+deployment.apps/nginx image updated
+NAME               DESIRED   CURRENT   READY   AGE
+nginx-6799fc88d8   10        10        10      3m51s
+nginx-6889dfccd5   1         1         0       0s
+nginx-6799fc88d8   9         10        10      4m
+. . . . . . . . . .  . .  . .  .
+nginx-6889dfccd5   8         8         8       47s
+nginx-6799fc88d8   2         3         3       4m38s
+nginx-6889dfccd5   9         9         8       47s
+nginx-6799fc88d8   2         2         2       4m38s
+nginx-6889dfccd5   9         9         9       51s
+nginx-6889dfccd5   10        9         9       51s
+nginx-6799fc88d8   1         2         2       4m42s
+nginx-6889dfccd5   10        10        10      55s
+nginx-6799fc88d8   0         1         1       4m46s
+nginx-679<a id="_idTextAnchor727"/>9fc88d8   0         0         0       4m46s</pre>			<p>So, we see<a id="_idIndexMarker637"/> two <strong class="source-inline">ReplicaSet</strong> resources here—<strong class="source-inline">nginx-6799fc88d8</strong> and <strong class="source-inline">nginx-6889dfccd5</strong>. While the <strong class="source-inline">nginx-6799fc88d8</strong> pod is slowly <a id="_idIndexMarker638"/>rolling down from <strong class="source-inline">10</strong> pods to <strong class="source-inline">0</strong>, one at a time, simultaneously, the <strong class="source-inline">nginx-6889d<a id="_idTextAnchor728"/>fccd5</strong> pod is slowly rolling up from <strong class="source-inline">0</strong> pods to <strong class="source-inline">10</strong>. At any given time, the number of pods never exceeds <strong class="source-inline">11</strong>. That is because <strong class="source-inline">maxSurge</strong> is set to <strong class="source-inline">1</strong>, and <strong class="source-inline">maxUnavailable</strong> is <strong class="source-inline">0</strong>. This is a slow rollout <span class="No-Break">in action.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Ramped slow rollout is useful when we want to be cautious before we impact many users, but this strategy is extremely slow and may only suit <span class="No-Break">some applications.</span></p>
+			<p>Let’s look at the best-effort controlled rollout strategy for a faster rollout without compromising <span class="No-Break">application availability.</span></p>
+			<h3>Best-effort controlled rollout</h3>
+			<p><strong class="bold">Best-effort controlled rollout</strong> helps <a id="_idTextAnchor729"/>you <a id="_idIndexMarker639"/>roll out your deployment on a best-<a id="_idTextAnchor730"/>effort basis, and you can use<a id="_idIndexMarker640"/> it to roll out your release faster and ensure that your application is available. It can also help with applications that do not tolerate more than a certain number of replicas at a <span class="No-Break">given point.</span></p>
+			<p>We will set <strong class="source-inline">maxSurge</strong> to <strong class="source-inline">0</strong> and <strong class="source-inline">maxUnavailable</strong> to any percentage we find suitable for remaining unavailable at a given time to implement this. It can be specified using the number of pods or as <span class="No-Break">a percentage.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Using a percentage is a better option since, with this, you don’t have to recalculate y<a id="_idTextAnchor731"/>our <strong class="source-inline">maxU<a id="_idTextAnchor732"/>navailable</strong> parameter if the <span class="No-Break">replicas change.</span></p>
+			<p>Let’s look at <span class="No-Break">the manifest—</span><span class="No-Break"><strong class="source-inline">nginx-best-effort-controlled-rollout.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+...
+spec:
+  replicas: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpd<a id="_idTextAnchor733"/>ate:
+      maxSurge: 0
+      maxUnavailable: 25%
+...</pre>			<p>Let’s now apply the YAML file and see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-best-effort-controlled-rollout.yaml \ 
+&amp;&amp; kubectl get replicaset -w
+deployment.apps/nginx configured
+NAME               DESIRED   CURRENT   READY   AGE
+nginx-6799fc88d8   2         0         0       20m
+nginx-6889dfccd5   8         8         8       16m
+nginx-6799fc88d8   2         2         1       20m
+nginx-6889dfccd5   7         8         8       16m
+. . . . . . . . . . . . . . . .
+nginx-6889dfccd5   1         1         1       16m
+nginx-6799fc88d8   9         9         8       20m
+nginx-6889dfccd5   0         1         1       16m
+nginx-6799fc88d8   10        9         8       20m
+nginx-6889dfccd5   0         0         0       16m
+nginx-6799fc88d8   10        10        10      20m</pre>			<p>So, we see the <strong class="source-inline">ReplicaSet</strong> resource rolling out such that the total pods are at most <strong class="source-inline">10</strong> at any point, and the total unavailable pods are never more than <strong class="source-inline">25%</strong>. You may also notice that instead of creating a new <strong class="source-inline">ReplicaSet</strong> resource, the <strong class="source-inline">Depl<a id="_idTextAnchor734"/>oyment</strong> resource uses an old <strong class="source-inline">ReplicaSet</strong> resource containing the <strong class="source-inline">nginx:latest</strong> image. Remember when I said the old <strong class="source-inline">ReplicaSet</strong> resource is not deleted w<a id="_idTextAnchor735"/>hen you update a <span class="No-Break"><strong class="source-inline">Deployment</strong></span><span class="No-Break"> resource?</span></p>
+			<p><strong class="source-inline">Deployment</strong> resources<a id="_idIndexMarker641"/> on their own are great ways of scheduling and<a id="_idIndexMarker642"/> managing pods. However, we have overlooked an essential part of running containers in Kubernetes—exposing them to the internal or external world. Kubernetes provides several resources to help expose your workloads appropriately—primarily, <strong class="source-inline">Service</strong> and <strong class="source-inline">Ingres<a id="_idTextAnchor736"/><a id="_idTextAnchor737"/>s</strong> resources. Let’s have a look at these in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-159"><a id="_idTextAnchor738"/>Kubernetes Services and Ingresses</h1>
+			<p>It’s story time! Let’s simplify<a id="_idIndexMarker643"/> <span class="No-Break">Kubernetes Services.</span></p>
+			<p>Imagine you have a group of friends who love to order food from your restaurant. Instead of delivering each order to their houses separately, you set up a central delivery point in their neighborhood. This delivery point (or hub) is <span class="No-Break">your “service.”</span></p>
+			<p>In Kubernetes, a Service is like that central hub. It’s a way for the different parts of your application (such as your website, database, or other things) to talk to each other, even if they’re in separate containers or machines. It gives them easy-to-remember addresses to find each other without <span class="No-Break">getting lost.</span></p>
+			<p>The <strong class="source-inline">Service</strong> resource helps expose Kubernetes workloads to the internal or external world. As we know, pods are ephem<a id="_idTextAnchor739"/>eral resources—they can come and go. Every pod is allocated a unique IP address and hostname, but once a pod is gone, the pod’s <a id="_idTextAnchor740"/>IP address and hostname change. Consider a scenario where one of your pods wants to interact with another. However, because of its transient nature, you cannot configure a proper endpoint. If you use the IP address or the hostname as the endpoint of a pod and the pod is destroyed, you will no longer be able to connect to it. Therefore, exposing a pod on its own is not a <span class="No-Break">great idea.</span></p>
+			<p>Kubernetes provides<a id="_idIndexMarker644"/> the <strong class="source-inline">Service</strong> resource to provide a static IP address to a group of pods. Apart from exposing the pods on a single static IP address, it also provides load balancing of traffic between pods in a round-robin configuration. It helps distribute traffic equally between the pods and is th<a id="_idTextAnchor741"/>e default method of exposing <span class="No-Break">your workloads.</span></p>
+			<p><strong class="source-inline">Service</strong> resources are also allocated a<a id="_idIndexMarker645"/> static <strong class="bold">fully qualified domain name</strong> (<strong class="bold">FQDN</strong>) (based on the Service name). Therefore, you can use the <strong class="source-inline">Service</strong> resource FQDN instead of the IP address wi<a id="_idTextAnchor742"/>thin your cluster to make your <span class="No-Break">endpoints fail-safe.</span></p>
+			<p>Now, coming<a id="_idTextAnchor743"/> back to <strong class="source-inline">Service</strong> resources, there are multiple <strong class="source-inline">Service</strong> resource types— <strong class="source-inline">ClusterIP</strong>, <strong class="source-inline">No<a id="_idTextAnchor744"/>dePort</strong>, and <strong class="source-inline">LoadBalancer</strong>, each having its own respective <span class="No-Break">use case:</span></p>
+			<div>
+				<div id="_idContainer054" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.04.jpg" alt="Figure 6.4 – Kubernetes Services" width="1636" height="1096"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.4 – Kubernetes Serv<a id="_idTextAnchor745"/><a id="_idTextAnchor746"/>ices</p>
+			<p>Let’s understand each of these with the help <span class="No-Break">of examples.</span></p>
+			<h2 id="_idParaDest-160"><a id="_idTextAnchor747"/>ClusterIP Service resources</h2>
+			<p><strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resources<a id="_idIndexMarker646"/> are the default <strong class="source-inline">Service</strong> resource type that<a id="_idTextAnchor748"/> exposes <a id="_idIndexMarker647"/>pods within the Kubernetes c<a id="_idTextAnchor749"/>luster. It is not possible to access <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resources outside the cluster; therefore, they are never used to expose your pods to the external world. <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resources generally expose backend apps such as data stores and databases—the business and data layers—in a <span class="No-Break">three-tier architecture.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">When choosing between <strong class="source-inline">Service</strong> resource types, as a general rule of thumb, always start with the <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resource and change it if needed. This will ensure that only the required Services are <span class="No-Break">exposed externally.</span></p>
+			<p>To understand <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resources better, let’s create a <strong class="source-inline">redis Deployment</strong> resource first using the imperative method with the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl create deployment redis --image=redis</pre>			<p>Let’s try exposing the <strong class="source-inline">redis</strong> deployment pods using a <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resource. To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch6/services/</pre>			<p>Let’s look<a id="_idIndexMarker648"/> at the <strong class="source-inline">Service</strong> resource <a id="_idIndexMarker649"/>manifest, <span class="No-Break"><strong class="source-inline">redis-clusterip.yaml</strong></span><span class="No-Break">, first:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: redis
+  name: redis
+spec:
+  ports:
+  - port: 6379
+    protocol: TCP
+    targetPort: 6379
+  selector:
+    app: redis</pre>			<p>The <strong class="source-inline">Service</strong> resource manifest starts with <strong class="source-inline">apiVersion</strong> and <strong class="source-inline">kind</strong> as any other resource. It has a <strong class="source-inline">metadata</strong> section that contains <strong class="source-inline">name</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">labels</strong></span><span class="No-Break">.</span></p>
+			<p>The <strong class="source-inline">spec</strong> section contains <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="source-inline">ports</strong>: This section includes a list of ports that we want to expose via the <span class="No-Break"><strong class="source-inline">Service</strong></span><span class="No-Break"> resource:</span><p class="list-inset">A. <strong class="source-inline">port</strong>: The port we wish <span class="No-Break">to expose.</span></p><p class="list-inset">B. <strong class="source-inline">protocol</strong>: The protocol of the port we <span class="No-Break">expose (TCP/UDP).</span></p><p class="list-inset">C. <strong class="source-inline">targetPort</strong>: The target container port where the exposed port will forward the connection. This allows us to have a port mapping similar <span class="No-Break">to Docker.</span></p></li>
+				<li><strong class="source-inline">selector</strong>: This section con<a id="_idTextAnchor750"/>tains <strong class="source-inline">labels</strong> based on which pod <a id="_idTextAnchor751"/>group <span class="No-Break">is selected.</span></li>
+			</ul>
+			<p>Let’s apply<a id="_idIndexMarker650"/> the <strong class="source-inline">Service</strong> resource manifest using the following command and<a id="_idIndexMarker651"/> see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ kubectl apply -f redis-clusterip.yaml</pre>			<p>Let’s run <strong class="source-inline">kubectl get</strong> to list the <strong class="source-inline">Service</strong> resource and get the <span class="No-Break">cluster IP:</span></p>
+			<pre class="console">
+$ kubectl get service redis
+NAME   TYPE       CLUSTER-IP    EXTERNAL-IP  PORT(S)    AGE
+redis  ClusterIP  10.12.6.109   &lt;none&gt;       6379/TCP   16s</pre>			<p>We see a <strong class="source-inline">redis</strong> <strong class="source-inline">Service</strong> resource running with a <strong class="source-inline">ClusterIP</strong> type. But as this pod is not exposed externally, the only way to access it is through a second pod running within <span class="No-Break">the cluster.</span></p>
+			<p>Let’s create a <strong class="source-inline">busybox</strong> pod in interactive mode to inspect the <strong class="source-inline">Service</strong> resource and run some tests using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl run busybox --rm --restart Never -it --image=busybox
+/ #</pre>			<p>And with this, we see a prompt. We have launched the <strong class="source-inline">busybox</strong> container and are currently within that. We will use the <strong class="source-inline">telnet</strong> application to check the connectivity <span class="No-Break">between pods.</span></p>
+			<p>Let’s telnet the cluster IP and port to see whether it’s reachable using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+/ #<a id="_idTextAnchor752"/> telnet 10.96.118.99 6379
+Connected <a id="_idTextAnchor753"/>to 10.96.118.99</pre>			<p>The IP/port pair<a id="_idIndexMarker652"/> is reachable from there. Kubernetes also provides an <a id="_idIndexMarker653"/>internal DNS to promote service discovery and connect to the <strong class="source-inline">Service</strong> resource. We can do a reverse <strong class="source-inline">nslookup</strong> on the cluster IP to get the <strong class="source-inline">Service</strong> resource’s FQDN using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+/ # nslookup 10.96.118.99
+Server:         10.96.0.10
+Address:        10.96.0.10:53
+99.118.96.10.arpa name = redis.default.svc.cluster.local</pre>			<p>As we can see, the IP address is accessible from the FQDN—<strong class="source-inline">redis.default.svc.cluster.local</strong>. We can use the entire domain or parts of it based on our location. The FQDN is formed of these <span class="No-Break">parts: </span><span class="No-Break"><strong class="source-inline">&lt;service_name&gt;.&lt;namespace&gt;.svc.&lt;cluster-domain&gt;.local</strong></span><span class="No-Break">.</span></p>
+			<p>Kubernetes uses <strong class="bold">namespaces</strong> to <a id="_idIndexMarker654"/>segregate resources. You can visualize namespaces as multiple virtual clusters within the same physical Kubernetes cluster. You can use them if many users work in multiple teams or projects. We have been working in the <strong class="source-inline">default</strong> namespace till now and will continue doing so. If your source pod is located in the same namespace as the <strong class="source-inline">Service</strong> resource, you can use <strong class="source-inline">service_name</strong> to connect to your <strong class="source-inline">Service</strong> resource—something like the <span class="No-Break">following example:</span></p>
+			<pre class="console">
+/ # telnet redis 6379
+Connected to redis</pre>			<p>If you want to call a <strong class="source-inline">Service</strong> resource from a pod situated in a different namespace, you can use <strong class="source-inline">&lt;service_name&gt;.&lt;namespace&gt;</strong> instead—something like the <span class="No-Break">following example:</span></p>
+			<pre class="console">
+/ # telnet redis.default 6379
+Connected to redis.default</pre>			<p>Some service meshes, such as Istio, allow multi-cluster communication. In that situation, you can also use the cluster name for connecting to the <strong class="source-inline">Service</strong> resource, but as this is an advanced topic, it is beyond the scope of <span class="No-Break">this discussion.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always use the shortest domain name possible for endpoints, as it allows for more flexibility in moving<a id="_idTextAnchor754"/> your Kubernetes resources a<a id="_idTextAnchor755"/>cross <span class="No-Break">your environments.</span></p>
+			<p><strong class="source-inline">ClusterIP</strong> Services <a id="_idIndexMarker655"/>work very well for exposing internal pods, but what if we want to expose our pods to the external world? Kubernetes offers <a id="_idIndexMarker656"/>various <strong class="source-inline">Service</strong> resourc<a id="_idTextAnchor756"/><a id="_idTextAnchor757"/>e types for that; let’s look at the <strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> r<a id="_idTextAnchor758"/>esource <span class="No-Break">type first.</span></p>
+			<h2 id="_idParaDest-161">NodePort Service resource<a id="_idTextAnchor759"/>s</h2>
+			<p><strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> resources are <a id="_idIndexMarker657"/>used to expose your pods to the external world. Creating<a id="_idIndexMarker658"/> a <strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> resource spins up a <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resource and maps the <strong class="source-inline">ClusterIP</strong> port to a random high port number (default: <strong class="source-inline">30000</strong>-<strong class="source-inline">32767</strong>) on all cluster nodes. You can also specify a static <strong class="source-inline">NodePort</strong> number if you so desire. So, with a <strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> resource, you can access your pods using the IP address of any node within your cluster and the <strong class="source-inline">NodePort</strong> of <span class="No-Break">the service.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Though it is possible to specify a static <strong class="source-inline">NodePort</strong> number, you should avoid using it. That is because you might end up in port conflicts with other <strong class="source-inline">Service</strong> resources and put a high dependency on config and change management. Instead, keep things simple and use <span class="No-Break">dynamic ports.</span></p>
+			<p>Going by the Flask application example, let’s create a <strong class="source-inline">flask-app</strong> pod with the <strong class="source-inline">redis</strong> <strong class="source-inline">Service</strong> resource we created before, acting as its backend, and then we will expose the pod <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">NodePort</strong></span><span class="No-Break">.</span></p>
+			<p>Use the following command to create a <span class="No-Break">pod imperatively:</span></p>
+			<pre class="console">
+$ kubectl run flask-app --image=&lt;your_dockerhub_user&gt;/python-flask-redis</pre>			<p>Now, as we’ve created the <strong class="source-inline">flask-app</strong> pod, let’s check its status using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod flask-app
+NAME        READY   STATUS    RESTA<a id="_idTextAnchor760"/>RTS   AGE
+flask-app   1/1     Running   0          19s</pre>			<p>The <strong class="source-inline">flask-app</strong> pod is<a id="_idIndexMarker659"/> running successfully and is ready to accept requests. It’s time to understand the resource<a id="_idIndexMarker660"/> manifest for the <strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> <span class="No-Break">resource, </span><span class="No-Break"><strong class="source-inline">flask-nodeport.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+...
+spec:
+  ports:
+  - port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    run: flask-app
+  type: NodePort</pre>			<p>The manifest is similar to the <strong class="source-inline">ClusterIP</strong> manifest but contains a <strong class="source-inline">type</strong> attribute specifying the <strong class="source-inline">Service</strong> <span class="No-Break">resource type—</span><span class="No-Break"><strong class="source-inline">NodePort</strong></span><span class="No-Break">.</span></p>
+			<p>Let’s apply this manifest to see what we get using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f flask-nodeport.yaml</pre>			<p>Now, let’s list the <strong class="source-inline">Service</strong> resource to get the <strong class="source-inline">NodePort</strong> Service using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get service flask-app
+NAME       TYPE      CLUSTER-IP    EXTERNAL-IP  PORT(S)         AGE
+flask-app  NodePort  10.3.240.246  &lt;none&gt;       5000:32618/TCP  9s</pre>			<p>And we see that the type is now <strong class="source-inline">NodePort</strong>, and the container port <strong class="source-inline">5000</strong> is mapped to node <span class="No-Break">port </span><span class="No-Break"><strong class="source-inline">32618</strong></span><span class="No-Break">.</span></p>
+			<p>If you are logged in to any Kubernetes node, you can access the <strong class="source-inline">Service</strong> resource using <strong class="source-inline">localhost:32618</strong>. But as we are using Google Cloud Shell, we need to SSH into a node to access the <span class="No-Break"><strong class="source-inline">Service</strong></span><span class="No-Break"> resource.</span></p>
+			<p>Let’s list the nodes first using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get nodes
+NAME            STATUS   ROLES    AGE   VERSION
+gke-node-1dhh   Ready    &lt;none&gt;   17m   v1.26.15-gke.4901
+gke-node-7lhl   Ready    &lt;none&gt;   17m   v1.26.15<a id="_idTextAnchor761"/>-gke.4901
+gke-node-zwg1   Ready    &lt;none&gt;   17m   v1.26.15-gke.4901</pre>			<p>And as we can see, we<a id="_idIndexMarker661"/> have three nodes. Let’s SSH into <a id="_idIndexMarker662"/>the <strong class="source-inline">gke-node-1dhh</strong> <a id="_idTextAnchor762"/>node using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud compute ssh gke-node-1dhh</pre>			<p>Now, as we are within the <strong class="source-inline">gke-node-1dhh</strong> node, let’s curl <strong class="source-inline">localhost:32618</strong> using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl localhost:32618
+Hi there! This page was last visited on 2023-06-26, 08:37:50.</pre>			<p>And we get a response back! You can SSH into any node and curl the endpoint and should get a <span class="No-Break">similar response.</span></p>
+			<p>To exit from the node and get back to the Cloud Shell prompt, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ exit
+Connection to 35.202.82.74 closed.</pre>			<p>And you are back at the Cloud <span class="No-Break">Shell prompt.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">A <strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> resource <a id="_idIndexMarker663"/>is an intermediate kind of resource. This means that while it forms an essential building block of providing external services, it is not used on its own most of the time. When you are running on the cloud, you can use <strong class="source-inline">LoadBalancer</strong> <strong class="source-inline">Service</strong> resources instead. Even<a id="_idIndexMarker664"/> for an on-premises setup, it makes sense not to use <a id="_idTextAnchor763"/><strong class="source-inline">NodePort</strong> for every <strong class="source-inline">Service</strong> resource and instead use <span class="No-Break"><strong class="source-inline">Ingress</strong></span><span class="No-Break"> re<a id="_idTextAnchor764"/>sources.</span></p>
+			<p>Now, let’s look at the <strong class="source-inline">LoadBalancer</strong> <a id="_idTextAnchor765"/><a id="_idTextAnchor766"/><strong class="source-inline">Service</strong> resource used extensively to expose your Kubernetes <span class="No-Break">workloads externally.</span></p>
+			<h2 id="_idParaDest-162"><a id="_idTextAnchor767"/>LoadBalancer Service resources</h2>
+			<p><strong class="source-inline">LoadBalancer</strong> <strong class="source-inline">Service</strong> resources<a id="_idIndexMarker665"/> help expose your pods on a single load-balanced<a id="_idIndexMarker666"/> endp<a id="_idTextAnchor768"/>oint. These <strong class="source-inline">Service</strong> resources can on<a id="_idTextAnchor769"/>ly be used within cloud platforms and platforms that provide Kubernetes controllers with access to spin up external network resources. A <strong class="source-inline">LoadBalancer</strong> Service practically spins up a <strong class="source-inline">NodePort</strong> <strong class="source-inline">Service</strong> resource and then requests the Cloud API to spin up a load balancer in front of the node ports. That way, it provides a single endpoint to access your <strong class="source-inline">Service</strong> resource from the <span class="No-Break">external world.</span></p>
+			<p>Spinning up a <strong class="source-inline">LoadBalancer</strong> <strong class="source-inline">Service</strong> resource is simple—just set the type <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">LoadBalancer</strong></span><span class="No-Break">.</span></p>
+			<p>Let’s expose the Flask application as a load balancer using the <span class="No-Break">following manifest—</span><span class="No-Break"><strong class="source-inline">flask-loadbalancer.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+...
+spec:
+  type: LoadBalancer
+...</pre>			<p>Now, let’s apply the manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f flask-loadbalancer.yaml</pre>			<p>Let’s get the <strong class="source-inline">Service</strong> resource to notice the changes using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get svc flask-app
+NAME      TYPE         CLUSTER-IP   EXTERNAL-IP PORT<a id="_idTextAnchor770"/>(S)
+flask-app LoadBalancer 10.3.2<a id="_idTextAnchor771"/>40.246 34.71.95.96 5000:32618</pre>			<p>The <strong class="source-inline">Service</strong> resource<a id="_idIndexMarker667"/> type is now <strong class="source-inline">LoadBalancer</strong>. As you can <a id="_idIndexMarker668"/>see, it now contains an external IP along with the <span class="No-Break">cluster IP.</span></p>
+			<p>You can then curl on the external IP on port <strong class="source-inline">5000</strong> using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl 34.71.95.96:5000
+Hi there! This page was last visited on 2023-06-26, 08:37:50.</pre>			<p>And you get the same response as before. Your <strong class="source-inline">Service</strong> resource is now <span class="No-Break">running externally.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout"><strong class="source-inline">LoadBalancer</strong> <strong class="source-inline">Service</strong> resources tend to be expensive as every new resource spins up a network load balancer within your cloud provider. If you have HTTP-based workloads, use <strong class="source-inline">Ingress</strong> resources instead of <strong class="source-inline">LoadBalancer</strong> to save on resource costs and optimize traffic as they spin up an application load <span class="No-Break">balancer instead.</span></p>
+			<p>While Kubernetes Services form the basic building block of exposing your container applications internally and externally, Kubernetes also provides <strong class="source-inline">Ingress</strong> resources for additio<a id="_idTextAnchor772"/><a id="_idTextAnchor773"/>nal fine-grained control over traffic. Let’s have a look at this in the <span class="No-Break">next section.</span></p>
+			<h2 id="_idParaDest-163"><a id="_idTextAnchor774"/>Ingress resources</h2>
+			<p>Imagine you have a beautiful<a id="_idIndexMarker669"/> front entrance to your restaurant where customers come in. They walk through this main entrance to reach different parts of your restaurant, such as the dining area or the bar. This entrance is like <span class="No-Break">your “ingress.”</span></p>
+			<p>In Kubernetes, an Ingress is like that front entrance. It helps manage external access to the Services inside your cluster. Instead of exposing each Service individually, you can use an Ingress to decide how people from the outside can reach different parts of <span class="No-Break">your application.</span></p>
+			<p>In simple terms, a Kubernetes Service is like a central delivery point for your application’s different parts, and an Ingress is like a front entrance that helps people from the outside find and access those <span class="No-Break">parts easily.</span></p>
+			<p><strong class="source-inline">Ingres<a id="_idTextAnchor775"/>s</strong> resources act<a id="_idIndexMarker670"/> as reverse proxies into Kubernetes. You don’t need a load balancer for every application you run within your estate, as load balancers normally forward traffic and don’t require high levels of computing power. Therefore, spinning up a load balancer for everything does not <span class="No-Break">make sense.</span></p>
+			<p>Therefore, Kubernetes provides a way of routing external traffic into your cluster via <strong class="source-inline">Ingress</strong> resources. These resources help you subdivide traffic according to multiple conditions. Some of these are set <span class="No-Break">out here:</span></p>
+			<ul>
+				<li>Based on the <span class="No-Break">URL path</span></li>
+				<li>Based on <span class="No-Break">the hostname</span></li>
+				<li><a id="_idTextAnchor776"/>A combination of <span class="No-Break">the two</span></li>
+			</ul>
+			<p>The following diagram illustrates how <strong class="source-inline">Ingress</strong> <span class="No-Break">resources work:</span></p>
+			<div>
+				<div id="_idContainer055" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.05.jpg" alt="Figure 6.5 – Kubernetes Ingress resources" width="1524" height="284"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.5 – Kubernetes Ingress resources</p>
+			<p><strong class="source-inline">Ingress</strong> resources require an ingress controller to work. While most cloud providers have a controller installed, you must install an ingress controller on-premises or in a self-managed Kubernetes cluster. For more details on installing an ingress controller, refer to <a href="https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/">https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/</a>. You can install more than one ingress controller, but you will have to annotate your manifests to denote explicitly which controller the <strong class="source-inline">Ingress</strong> resource <span class="No-Break">should use.</span></p>
+			<p>For this chapter, we will use <a id="_idIndexMarker671"/>the <strong class="bold">nginx ingress controller </strong>(<a href="https://github.com/kubernetes/ingress-nginx">https://github.com/kubernetes/ingress-nginx</a>), which is actively maintained by the Kubernetes open source community. The reason we use this instead of the native GKE ingress controller is that we want to make our setup as cloud-agnostic as possible. The nginx ingress controller is also feature-packed and runs the same irrespective of the environment. So, if we want to migrate to another cloud provider, we will retain all the features we had with <strong class="source-inline">Ingress</strong> resources before and do an exact <span class="No-Break">like-for-like migration.</span></p>
+			<p>To understand <a id="_idIndexMarker672"/>how the nginx ingress controller works on GKE (or any other cloud), let’s look at the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer056" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.06.jpg" alt="Figure 6.6 – nginx ingress controller on GKE" width="1652" height="1046"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.6 – nginx ingress controller on GKE</p>
+			<p>The client connects to the <strong class="source-inline">Ingress</strong> resource via an ingress-managed load balancer, and the traffic moves to the ingress controllers that act as the load balancer’s backend. The ingress controllers then route the traffic to the correct <strong class="source-inline">Service</strong> resource via routing rules defined on the <span class="No-Break"><strong class="source-inline">Ingress</strong></span><span class="No-Break"> resource.</span></p>
+			<p>Now, let’s go ahead and install the <strong class="source-inline">nginx</strong> ingress controller using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f \
+https://raw.githubusercontent.com/kubernetes/ingress-nginx\
+/controller-v1.8.0/deploy/static/provider/cloud/deploy.yaml</pre>			<p>This will boot up several resources under the <strong class="source-inline">ingress-nginx</strong> namespace. Most notable is the <strong class="source-inline">ingress-nginx-controller</strong> <strong class="source-inline">Deploy<a id="_idTextAnchor777"/>ment</strong>, which is exposed via the <strong class="source-inline">ingress-nginx-controller</strong> <span class="No-Break"><strong class="source-inline">LoadBalancer</strong></span><span class="No-Break"> </span><span class="No-Break"><strong class="source-inline">Service</strong></span><span class="No-Break">.</span></p>
+			<p>Let’s now expose the <strong class="source-inline">flask-app</strong> <strong class="source-inline">Service</strong> via an <strong class="source-inline">Ingress</strong> resource, but before we do that, we will have to expose the <strong class="source-inline">flask-app</strong> <strong class="source-inline">Service</strong> on a <strong class="source-inline">ClusterIP</strong> instead, so let’s apply the relevant manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f flask-clusterip.yaml</pre>			<p>The next step is to define an <strong class="source-inline">Ingress</strong> resource. Remember that as GKE is running on a public cloud, it has the ingress controllers installed and running. So, we can simply go and create an <span class="No-Break">ingress</span><span class="No-Break"><a id="_idIndexMarker673"/></span><span class="No-Break"> manifest—</span><span class="No-Break"><strong class="source-inline">flask-basic-ingress.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flask-app
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  defaultBackend:
+    service:
+      name: flask-app
+      port:
+        number: 5000</pre>			<p>This resource defines a default backend that passes all traffic to the <strong class="source-inline">flask-app</strong> pod, so it is counter-productive, but let’s look at it <span class="No-Break">for simplicity.</span></p>
+			<p>Apply the manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f flask-basic-ingress.yaml</pre>			<p>Now, let’s list the <strong class="source-inline">Ingress</strong> resources using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get ingress flask-app
+NAME        CLASS    HOSTS   ADDRESS   PORTS   AGE
+flask-app   &lt;none&gt;   *                 80      40s</pre>			<p>We can see that the <strong class="source-inline">flask-app</strong> <strong class="source-inline">Ingress</strong> resource is now listed with <strong class="source-inline">HOSTS *</strong>. That means that this would listen on all hosts on all addresses. So, anything that does not match other Ingress rules will be routed here. As mentioned, we need the <strong class="source-inline">nginx-ingress-controller</strong> Service external IP address to invoke all Services exposed via Ingress. To get the external IP of the <strong class="source-inline">nginx-ingress-controller</strong> Service, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get svc ingress-nginx-controller -n ingress-nginx
+NAME                     TYPE         EXTERNAL-IP
+ingress-nginx-controller LoadBalancer 34.120.27.34</pre>			<p>We see an external IP allocated to it, which we will <span class="No-Break">use further.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">Remember that Ingress rules take a while to propagate across the cluster, so if you receive an error initially when you curl the endpoint, wait for 5 minutes, and you should get the <span class="No-Break">response back.</span></p>
+			<p>Let’s curl this IP and see <a id="_idIndexMarker674"/>what we get using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl 34<a id="_idTextAnchor778"/>.120.27.34
+Hi there! This page was last visited on 2023-06-26, 09:28:26.</pre>			<p>Now, let’s clean up the <strong class="source-inline">Ingress</strong> resource using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl delete ingress flask-app</pre>			<p>The simple Ingress rule is counterproductive as it routes all traffic to a single <strong class="source-inline">Service</strong> resource. The idea of Ingress is to use a single load balancer to route traffic to multiple targets. Let’s look at<a id="_idTextAnchor779"/> two ways to do this—<strong class="bold">path-based</strong> and <span class="No-Break"><strong class="bold">name-based</strong></span><span class="No-Break"> routing<a id="_idTextAnchor780"/>.</span></p>
+			<h3>Path-based routing</h3>
+			<p>Let’s consider an application <a id="_idIndexMarker675"/>with two versions, <strong class="source-inline">v1</strong> and <strong class="source-inline">v2</strong>, and you want both to co-exist on a single endpoint. You can use <strong class="bold">path-based routing</strong> for such<a id="_idIndexMarker676"/> <span class="No-Break">a scenario.</span></p>
+			<p>Let’s create the two application versions first using the imperative method by running the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl run nginx-v1 --image=bharamicrosystems/nginx:v1
+$ kubectl run nginx-v2 --image=bharamicrosystems/nginx:v2</pre>			<p>Now, expose the two pods as <strong class="source-inline">ClusterIP</strong> <strong class="source-inline">Service</strong> resources using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl expose pod nginx-v1 --port=80
+$ kubectl expose pod nginx-v2 --port=80</pre>			<p>We will then create an <strong class="source-inline">Ingress</strong> resource using the following manifest file, <strong class="source-inline">nginx-app-path-ingress.yaml</strong>, which will expose two endpoints—<strong class="source-inline">&lt;external-ip&gt;/v1</strong>, which routes to the <strong class="source-inline">v1</strong> <strong class="source-inline">Service</strong> resource, and <strong class="source-inline">&lt;external-ip&gt;/v2</strong>, which routes to the <strong class="source-inline">v2</strong> <span class="No-Break"><strong class="source-inline">Service</strong></span><span class="No-Break"> resource:</span></p>
+			<pre class="console">
+...
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /v1
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-v1
+            port:
+              number: 80
+      - path: /v2
+        pathType: Prefix
+        backend:
+          <a id="_idTextAnchor781"/>service:
+            name: nginx-v2
+      <a id="_idTextAnchor782"/>      port:
+              number: 80</pre>			<p>The Ingress manifest contains several rules. The <strong class="source-inline">http</strong> rule has two paths—<strong class="source-inline">/v1</strong> and <strong class="source-inline">/v2</strong>, having the <strong class="source-inline">pathType</strong> value set to <strong class="source-inline">Prefix</strong>. Therefore, any traffic arriving on a URL that starts with  <strong class="source-inline">/v1</strong> is routed to the <strong class="source-inline">nginx-v1</strong> <strong class="source-inline">Service</strong> resource on port <strong class="source-inline">80</strong>, and traffic arriving on <strong class="source-inline">/v2</strong> is routed to the <strong class="source-inline">nginx-v2</strong> <strong class="source-inline">Service</strong> resource on <span class="No-Break">port </span><span class="No-Break"><strong class="source-inline">80</strong></span><span class="No-Break">.</span></p>
+			<p>Let’s apply the manifest by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-app-path-ingress.yaml</pre>			<p>Now, let’s list the <strong class="source-inline">Ingress</strong> resources by<a id="_idIndexMarker677"/> running the<a id="_idIndexMarker678"/> <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get ingress nginx-app -w
+NAME        CLASS    HOSTS   ADDRESS         PORTS   AGE
+nginx-app   &lt;none&gt;   *       34.120.27.34    80      114s</pre>			<p>Now that we have the external IP, we can <strong class="source-inline">curl</strong> both endpoints to see what we get using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ curl 34.120.27.34/v1/
+This is version 1
+$ curl 34.120.27.34/v2/
+This is version 2</pre>			<p>Somet<a id="_idTextAnchor783"/>imes, a path-based<a id="_idIndexMarker679"/> route is not always feasible, as you m<a id="_idTextAnchor784"/>ight not want <a id="_idIndexMarker680"/>your users to remember the path of multiple applications. However, you can still run multiple applications using a single Ingress endpoint—that is, by using <span class="No-Break"><strong class="bold">name-based routi<a id="_idTextAnchor785"/>ng</strong></span><span class="No-Break">.</span></p>
+			<h3>Name-based routing</h3>
+			<p><strong class="bold">Name-based</strong> or<a id="_idTextAnchor786"/> <strong class="bold">FQDN-based routing</strong> relies<a id="_idIndexMarker681"/> on the <strong class="source-inline">host</strong> header we pass whil<a id="_idTextAnchor787"/>e making an HTTP<a id="_idIndexMarker682"/> request. The <strong class="source-inline">Ingress</strong> resource can route based on <a id="_idIndexMarker683"/>the header. For example, if we want to access the <strong class="source-inline">v1</strong> <strong class="source-inline">Service</strong> resource, we can use <strong class="source-inline">v1.example.com</strong>, and for the <strong class="source-inline">v2</strong> <strong class="source-inline">Service</strong> resource, we can use the <span class="No-Break"><strong class="source-inline">v2.example.com</strong></span><span class="No-Break"> URL.</span></p>
+			<p>Let’s now have a look at the <strong class="source-inline">nginx-app-host-ingress.yaml</strong> manifest to understand this <span class="No-Break">concept further:</span></p>
+			<pre class="console">
+...
+spec:
+  rules:
+  - host: v1.example.com
+    http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-v1
+            port:
+              number: 80
+  - host: v2.example.com
+    http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-v2
+            port:
+              number: 80</pre>			<p>The manifest now contains mul<a id="_idTextAnchor788"/>tiple hosts<a id="_idTextAnchor789"/>—<strong class="source-inline">v1.example.com</strong> routing to <strong class="source-inline">nginx-v1</strong>, and <strong class="source-inline">v2.example.com</strong> routing <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">nginx-v2</strong></span><span class="No-Break">.</span></p>
+			<p>Now, let’s apply this manifest and <a id="_idIndexMarker684"/>get the Ingress using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-app-host-ingress.yaml
+$ kubectl get ingress
+NAME       HOSTS                          ADDRESS       PORTS
+nginx-app  v1.example.com,v2.example.com  34.120.27.34  80</pre>			<p>This time, we can see that<a id="_idIndexMarker685"/> two hosts are defined, <strong class="source-inline">v1.example.com</strong> and <strong class="source-inline">v2.example.com</strong>, running on the same address. Before we hit those endpoints, we need to make an entry on the <strong class="source-inline">/etc/hosts</strong> file to allow our machine to resolve <strong class="source-inline">v1.example.com</strong> and <strong class="source-inline">v2.example.com</strong> to the <span class="No-Break">Ingress address.</span></p>
+			<p>Edit the <strong class="source-inline">/etc/hosts</strong> file and add the following entry at <span class="No-Break">the end:</span></p>
+			<pre class="console">
+&lt;Ingress_External_IP&gt; v1.example.com v2.example.com</pre>			<p>Now, let’s <strong class="source-inline">curl</strong> both endpoints and see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ curl v1.example.com
+This is version 1
+$ curl v2.example.com
+This is version 2</pre>			<p>And, as we can see, the <a id="_idIndexMarker686"/>name-based routing is working correctly! You <a id="_idIndexMarker687"/>can create a more dynamic setup by combining multiple hosts and <span class="No-Break">path-based<a id="_idTextAnchor790"/> routing.</span></p>
+			<p><strong class="source-inline">Service</strong>, <strong class="source-inline">Ingress</strong>, <strong class="source-inline">Pod</strong>, <strong class="source-inline">Deployment</strong>, and <strong class="source-inline">ReplicaSet</strong> r<a id="_idTextAnchor791"/>esources help us to maintain a set number of replic<a id="_idTextAnchor792"/>as within Kubernetes and help to serve them under a single endpoint. As you may have noticed, they are linked together using a com<a id="_idTextAnchor793"/>bination of <strong class="source-inline">labels</strong> and <strong class="source-inline">matchLabels</strong> attributes. The following diagram will help you <span class="No-Break">visualize this:</span></p>
+			<div>
+				<div id="_idContainer057" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.07.jpg" alt="Figure 6.7 – Linking Deployment, Service, and Ingress" width="1617" height="743"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.7 – Linking Deployment, Service, and Ingress</p>
+			<p>Till now, we have been scaling our pods manually, but a better way would be to autoscale the replicas based on resource utilization a<a id="_idTextAnchor794"/><a id="_idTextAnchor795"/>nd traffic. Kubernetes provides a resource called <strong class="source-inline">HorizontalPodAutoscaler</strong> to handle <span class="No-Break">that requirement.</span></p>
+			<h1 id="_idParaDest-164"><a id="_idTextAnchor796"/>Horizontal Pod autoscaling</h1>
+			<p>Imagine you’re the manager of a <a id="_idIndexMarker688"/>snack bar at a park. On a sunny day, lots of people come to enjoy the park, and they all want snacks. Now, you have a few workers at your snack bar who make and serve <span class="No-Break">the snacks.</span></p>
+			<p>Horizontal Pod autoscaling in Kubernetes is like having magical helpers who adjust the number of snack makers (pods) based on how many people want <span class="No-Break">snacks (traffic).</span></p>
+			<p>Here’s how <span class="No-Break">it works:</span></p>
+			<ul>
+				<li><strong class="bold">Average days</strong>: You might only need one or two snack makers on regular days with fewer people. In Kubernetes terms, you have a few pods running <span class="No-Break">your application.</span></li>
+				<li><strong class="bold">Busy days</strong>: But when it’s a sunny weekend, and everyone rushes to the park, more people want snacks. Your magical helpers (Horizontal Pod autoscaling) notice the increase in demand. They say, “<em class="italic">We need more snack makers!</em>” So, more snack makers (pods) are added automatically to handle <span class="No-Break">the rush.</span></li>
+				<li><strong class="bold">Scaling down</strong>: Once the sun sets and the crowd leaves, you don’t need as many snack makers anymore. Your magical helpers see the decrease in demand and say, “<em class="italic">We can have fewer snack makers now.</em>” So, extra snack makers (pods) are removed, <span class="No-Break">saving resources.</span></li>
+				<li><strong class="bold">Automatic adjustment</strong>: These magical helpers monitor the crowd and adjust the number of snack makers (pods) in real time. When the demand goes up, they deploy more. When it goes down, they <span class="No-Break">remove some.</span></li>
+			</ul>
+			<p>In the same way, Kubernetes Horizontal pod autoscaling watches how busy your application is. If there’s more traffic (more people wanting your app), it automatically adds more pods. If things quieten down, it scales down the number of pods. This helps your app handle varied traffic without you manually <span class="No-Break">doing everything.</span></p>
+			<p>So, Horizontal pod autoscaling<a id="_idIndexMarker689"/> is like having magical assistants that ensure your application has the correct number of workers (pods) to handle the crowd (<span class="No-Break">t<a id="_idTextAnchor797"/>raffic) efficiently.</span></p>
+			<p><strong class="source-inline">HorizontalPodAutoscaler</strong> is a Kubernetes resource that helps you to update replicas within <a id="_idTextAnchor798"/>your <strong class="source-inline">ReplicaSet</strong> resources based on defined factors, the most common being CPU <span class="No-Break">and memory.</span></p>
+			<p>To understand this better, let’s create an <strong class="source-inline">nginx</strong> Deployment, and this time, we will set the resource limits within the pod. Resource limits are a vital element that enables <strong class="source-inline">HorizontalPodAutoscaler</strong> resources to function. It relies on the percentage utilization of the limits to decide when to spin up a new replica. We will use the following <strong class="source-inline">nginx-autoscale-deployment.yaml</strong> manifest under <strong class="source-inline">~/modern-devops/ch6/deployments</strong> for <span class="No-Break">this exercise:</span></p>
+			<pre class="console">
+...
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+...</pre>			<p>Use the following command to perform a <span class="No-Break">new deployment:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-autoscale-deployment.yaml</pre>			<p>Let’s expose this <a id="_idIndexMarker690"/>deployment with a <strong class="source-inline">LoadBalancer</strong> <strong class="source-inline">Service</strong> resource and get the <span class="No-Break">external IP:</span></p>
+			<pre class="console">
+$ kubectl expose deployment nginx --port 80 --type LoadBalancer
+$ kubectl get svc nginx
+NAME  TYPE         CLUSTER-IP   EXTERNAL-IP   PORT(S)
+nginx LoadBalancer 10.3.243.225 34.123.234.57 8<a id="_idTextAnchor799"/>0:30099/TCP</pre>			<p>Now, let’s autoscale this deployment. The <strong class="source-inline">Deployment</strong> resource needs at least 1 pod replica and can have a maximum of 5 pod replicas while maintaining an average CPU utilization of <strong class="source-inline">25%</strong>. Use the following command to create a <span class="No-Break"><strong class="source-inline">HorizontalPodAutoscaler</strong></span><span class="No-Break"> resource:</span></p>
+			<pre class="console">
+$ kubectl autoscale deployment nginx --cpu-percent=25 --min=1 --max=5</pre>			<p>Now that we have the <strong class="source-inline">HorizontalPodAutoscaler</strong> resource created, we can load test the application using the <strong class="source-inline">hey</strong> load testing utility preinstalled in Google Cloud Shell. But before you fire the load test, open a duplicate shell session and watch the <strong class="source-inline">Deployment</strong> resource using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get deployment nginx -w</pre>			<p>Open another duplicate shell session and watch the <strong class="source-inline">HorizontalPodAutoscaler</strong> resource using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get hpa nginx -w</pre>			<p>Now, in the original window, run the following command to fire a <span class="No-Break">load test:</span></p>
+			<pre class="console">
+$ hey -z 120s -c 100 http://34.123.234.57</pre>			<p>It will start a load test for 2 minutes, with 10 concurrent users continuously hammering the <strong class="source-inline">Service</strong>. You will see the following output if you open the window where you’re watching the <strong class="source-inline">HorizontalPodAutoscaler</strong> resource. As soon as we start firing the load t<a id="_idTextAnchor800"/>est, the average utilization reaches <strong class="source-inline">46%</strong>. The <strong class="source-inline">HorizontalPodAutoscaler</strong> resource waits for some time, then it increases the replicas, first to <strong class="source-inline">2</strong>, then to <strong class="source-inline">4</strong>, and finally to <strong class="source-inline">5</strong>. When the test is complete, the utilization drops quickly to <strong class="source-inline">27%</strong>, <strong class="source-inline">25%</strong>, and finally, <strong class="source-inline">0%</strong>. When the utilization goes to <strong class="source-inline">0%</strong>, the <strong class="source-inline">HorizontalPodAutoscaler</strong> resource spins down the <a id="_idIndexMarker691"/>replicas from <strong class="source-inline">5</strong> to <span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break"> gradually:</span></p>
+			<pre class="console">
+$ kubectl get hpa nginx -w
+NAME    REFERENCE          TARGETS         MINPODS   MAXPODS   REPLICAS   AGE
+nginx   deployment/nginx   &lt;unknown&gt;/25%   1         5         1          32s
+nginx   deployment/nginx   46%/25%         1         5         1          71s
+nginx   deployment/nginx   46%/25%         1         5         2          92s
+nginx   deployment/nginx   92%/25%         1         5         4          2m2s
+nginx   deployment/nginx   66%/25%         1         5         5          2m32s
+nginx   deployment/nginx   57%/25%         1         5         5          2m41s
+nginx   deployment/nginx   27%/25%         1         5         5          3m11s
+nginx   deployment/nginx   23%/25%         1         5         5          3m41s
+nginx   deployment/nginx   0%/25%          1         5         4          4m23s
+nginx   deployment/nginx   0%/25%          1         5         2          5m53s
+nginx   deployment/nginx   0%/25%          1         5         1          6m30s</pre>			<p>Likewise, we will see the replicas <a id="_idIndexMarker692"/>of the <strong class="source-inline">Deployment</strong> changing when the <strong class="source-inline">HorizontalPodAutoscaler</strong> resource actions <span class="No-Break">the changes:</span></p>
+			<pre class="console">
+$ kubectl get deployment nginx -w
+NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+nginx   1/1     1            1           18s
+nginx   1/2     1            1           77s
+nginx   2/2     2            2           79s
+nginx   2/4     2            2           107s
+nginx   3/4     4            3           108s
+nginx   4/4     4            4           109s
+nginx   4/5     4            4           2m17s
+nginx   5/5     5            5           2m19s
+nginx   4/4     4            4           4m23s
+nginx   2/2     2            2           5m53s
+nginx   1/1     1            1           6m30s</pre>			<p>Besides CPU and memory, you<a id="_idIndexMarker693"/> can use other parameters to scale your workloads, such as network traffic. You can also use external metrics such as latency and other factors that you can use to decide when to scale <span class="No-Break">your traffic.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">While you should use the <strong class="source-inline">HorizontalPodAutoscaler</strong> resource with CPU and memory, you should also consider scaling on external metrics such as response time and network latency. That will ensure better <a id="_idTextAnchor801"/>reliability as they directly impact customer experience and are crucial to <span class="No-Break">your business.</span></p>
+			<p>Till now, we have been dealing with stateless workloads. However, pragmatically speaking, some<a id="_idTextAnchor802"/><a id="_idTextAnchor803"/> applications need to save the state. Let’s look at some considerations for managing <span class="No-Break">stateful applications.</span></p>
+			<h1 id="_idParaDest-165"><a id="_idTextAnchor804"/>Managing stateful applications</h1>
+			<p>Imagine you’re a librarian in a<a id="_idIndexMarker694"/> magical library. You have a bunch of enchanted books that store valuable knowledge. Each book has a unique story and is kept in a specific spot on the shelf. These books are like your “stateful applications,” and managing them requires <span class="No-Break">extra care.</span></p>
+			<p>Managing stateful applications in the world of technology is like taking care of these magical books in <span class="No-Break">your library.</span></p>
+			<p>Here’s how <span class="No-Break">it works:</span></p>
+			<ul>
+				<li><strong class="bold">Stateful books</strong>: Some books in your library are “stateful.” This means they hold vital information that changes over time, such as bookmarks or notes <span class="No-Break">from readers.</span></li>
+				<li><strong class="bold">Fixed locations</strong>: Just as each book has a specific place on the shelf, stateful applications must also be in particular locations. They might need to be on certain machines or use specific storage to keep their <span class="No-Break">data safe.</span></li>
+				<li><strong class="bold">Maintaining inventory</strong>: You must remember where each book is placed. Similarly, managing stateful applications means remembering their exact locations <span class="No-Break">and configurations.</span></li>
+				<li><strong class="bold">Careful handling</strong>: When someone borrows a stateful book, you must ensure they return it in good condition. With stateful applications, you must handle updates and changes carefully to avoid losing <span class="No-Break">important data.</span></li>
+				<li><strong class="bold">Backup spells</strong>: Sometimes, you cast a spell to create a copy of a book, just in case something happens to the original. With stateful applications, you back up your data to restore it if anything <span class="No-Break">goes wrong.</span></li>
+				<li><strong class="bold">Moving with caution</strong>: If you need to rearrange the library, you move books one at a time so that nothing gets lost. Similarly, with stateful applications, if you need to move them <a id="_idIndexMarker695"/>between machines or storage, it’s done cautiously to avoid <span class="No-Break">data loss.</span></li>
+			</ul>
+			<p>In the world of technology, managing stateful applications means taking extra care of applications that hold important data. You ensure they’re placed in the right spots, handle updates carefully, and create backups to keep valuable <a id="_idTextAnchor805"/>information safe, just like how you protect your enchanted books in the <span class="No-Break">magical library!</span></p>
+			<p><strong class="source-inline">Deployment</strong> resources are beneficial for stateless workloads, as they do not need to add any state considerations while updating <strong class="source-inline">ReplicaSet</strong> resources, but they c<a id="_idTextAnchor806"/><a id="_idTextAnchor807"/>annot work effectively with stateful workloads. To manage such workloads, you can use a <span class="No-Break"><strong class="source-inline">StatefulSet</strong></span><span class="No-Break"> resource.</span></p>
+			<h2 id="_idParaDest-166">StatefulSet res<a id="_idTextAnchor808"/>ources</h2>
+			<p><strong class="source-inline">StatefulSet</strong> resources<a id="_idIndexMarker696"/> help manag<a id="_idTextAnchor809"/>e stateful applications. They are similar to <strong class="source-inline">Deployment</strong> resources, but unlike a <strong class="source-inline">Deployment</strong> resource, they also keep track of state and require <strong class="source-inline">Volume</strong> and <strong class="source-inline">Service</strong> resources to operate. <strong class="source-inline">StatefulSet</strong> resources maintain a sticky identity for each pod. This means that the volume mounted on one pod cannot be used by the other. In a <strong class="source-inline">StatefulSet</strong> resource, Kubernetes orders pods by numbering them instead of generating a random hash. Pods within a <strong class="source-inline">StatefulSet</strong> resource are also rolled out and scaled-in in order. If a particular pod goes down and i<a id="_idTextAnchor810"/>s recreated, the same volume is mounted to <span class="No-Break">the pod.</span></p>
+			<p>The fol<a id="_idTextAnchor811"/>lowing diagram illustrates a <span class="No-Break"><strong class="source-inline">StatefulSet</strong></span><span class="No-Break"> resource:</span></p>
+			<div>
+				<div id="_idContainer058" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.08.jpg" alt="Figure 6.8 – StatefulSet resource" width="974" height="1033"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.8 – StatefulSet resource</p>
+			<p>A <strong class="source-inline">StatefulSet</strong> resource <a id="_idIndexMarker697"/>has a stable and unique network identifier, therefore, it requires a headless <strong class="source-inline">Service</strong> resource. Headless Services are <strong class="source-inline">Service</strong> resources that do not have a cluster IP. Instead, the Kubernetes DNS resolves the <strong class="source-inline">Service</strong> resource’s FQDN directly to <span class="No-Break">the pods.</span></p>
+			<p>As a <strong class="source-inline">StatefulSet</strong> resource is supposed to persist data<a id="_idTextAnchor812"/><a id="_idTextAnchor813"/>, it requires Persistent Volumes to operate. Therefore, let’s look at how to manage volumes <span class="No-Break">using Kubernetes.</span></p>
+			<h2 id="_idParaDest-167"><a id="_idTextAnchor814"/>Managing Persistent Volumes</h2>
+			<p><strong class="bold">Persistent Volumes</strong> are<a id="_idIndexMarker698"/> Kubernetes resources that deal with storage. They can help you manage and <a id="_idIndexMarker699"/>mount <strong class="bold">hard disks</strong>, <strong class="bold">SSDs</strong>, <strong class="bold">filestores</strong>, and <a id="_idIndexMarker700"/>other<a id="_idIndexMarker701"/> block and network storage entities. You can provision Persistent Volumes manually or use dynamic provisioning within Kubernetes. When you use dynamic provisioning, Kubernetes will request the cloud provider via the cloud controller manager to provide the requir<a id="_idTextAnchor815"/>ed storage. Let’s look at both meth<a id="_idTextAnchor816"/>ods to understand how <span class="No-Break">they work.</span></p>
+			<h3>Static provisioning</h3>
+			<p><strong class="bold">Static provisioning</strong> is the traditional method of provisioning volumes. It <a id="_idIndexMarker702"/>requires someone (typically an administrator) to manually provision a disk and create a <strong class="source-inline">PersistentVolume</strong> resource using the disk information. The de<a id="_idTextAnchor817"/>veloper can then use the <strong class="source-inline">PersistentVolume</strong> resource within their <strong class="source-inline">StatefulSet</strong> resource, as in the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer059" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.09.jpg" alt="Figure 6.9 – Static provisioning" width="1003" height="680"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.9 – Static provisioning</p>
+			<p>Let’s now look at a static <span class="No-Break">provisioning example.</span></p>
+			<p>To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch6/statefulsets/</pre>			<p>So, we first need to create a disk within the cloud platform. Since we’re using Google Cloud, let’s proceed and use the <strong class="source-inline">gcloud</strong> commands to <span class="No-Break">do so.</span></p>
+			<p>Use the following command to create a persistent zonal disk. Ensure that you use the same zone as your Kubernetes cluster. As we are using the <strong class="source-inline">us-central1-a</strong> zone for the Kubernetes cluster, we will use the same in the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ gcloud compute disks create nginx-manual \
+--size 50GB --type pd-ssd --zone us-central1-a
+Created [https://www.googleapis.com/compute/v1/projects/&lt;project_id&gt;/zones/us-central1-a/
+disks/nginx-manual].
+NA<a id="_idTextAnchor818"/>ME          ZONE           SIZE_GB  TYPE    STATUS
+nginx-manual  us-central1-a  50       pd-ssd  READY</pre>			<p>As the disk is <a id="_idIndexMarker703"/>now ready, we can then create a <strong class="source-inline">PersistentVolume</strong> resource <span class="No-Break">from it.</span></p>
+			<p>The manifest file, <strong class="source-inline">nginx-manual-pv.yaml</strong>, looks <span class="No-Break">like this:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nginx-manual-pv
+  labels:
+    usage: nginx-manual-disk
+spec:
+  capacity:
+    storage: 50G
+  accessModes:
+    - ReadWriteOnce
+  gcePersistentDisk:
+    pdName: nginx-manual
+    fsType: ext4</pre>			<p>The <strong class="source-inline">spec</strong> section contains <strong class="source-inline">capacity</strong>, <strong class="source-inline">accessModes</strong>, and the kind of disk it needs to provision. You can specify one or more access modes to <span class="No-Break">a PersistentVolumes:</span></p>
+			<ul>
+				<li><strong class="source-inline">ReadWriteOnce</strong>: Only one pod can read and write to the disk at a time; therefore, you cannot mount such a volume to <span class="No-Break">multiple pods</span></li>
+				<li><strong class="source-inline">ReadOnlyMany</strong>: Multiple pods can read from the same volume simultaneously, but no pod can write to <span class="No-Break">the disk</span></li>
+				<li><strong class="source-inline">ReadWriteMany</strong>: Multiple pods can read and write to the same volume <span class="No-Break">at once</span></li>
+			</ul>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Not all kinds of storage support all access modes. You need<a id="_idTextAnchor819"/> to decide the volume type during the initial requirement analysis and architectural <span class="No-Break">assessment phase.</span></p>
+			<p>OK—let’s <a id="_idIndexMarker704"/>now go and apply the manifest to provision the <strong class="source-inline">PersistentVolume</strong> resource using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-manual-pv.yaml</pre>			<p>Let’s now check whether the Persistent Volume is available by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pv
+NAME             CAPACITY  ACCESS MODES  RECLAIM POLICY  STATUS
+nginx-manual-pv  50G       RWO           Retain          Available</pre>			<p>As the Persistent Volume is now available, we must create a headless <strong class="source-inline">Service</strong> resource to help maintain network identity in the <strong class="source-inline">StatefulSet</strong> resource. The following <strong class="source-inline">nginx-manual-service.yaml</strong> manifest <span class="No-Break">describes it:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-manual
+  labels:
+    app: n<a id="_idTextAnchor820"/>ginx-manual
+spec:
+  ports:
+  - port: 80
+    name<a id="_idTextAnchor821"/>: web
+  clusterIP: None
+  selector:
+    app: nginx-manual</pre>			<p>It is very similar to the regular <strong class="source-inline">Service</strong> resource, except that we have specified <strong class="source-inline">clusterIP</strong> <span class="No-Break">as </span><span class="No-Break"><strong class="source-inline">None</strong></span><span class="No-Break">.</span></p>
+			<p>Now, let’s go and apply the manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-manual-service.yaml</pre>			<p>As the <strong class="source-inline">Service</strong> resource is created, we can create a <strong class="source-inline">StatefulSet</strong> resource that uses the <a id="_idIndexMarker705"/>created <strong class="source-inline">PersistentVolume</strong> and <strong class="source-inline">Service</strong> resources. The <strong class="source-inline">StatefulSet</strong> resource manifest, <strong class="source-inline">nginx-manual-statefulset.yaml</strong>, looks <span class="No-Break">like this:</span></p>
+			<pre class="console">
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-manual
+spec:
+  selector:
+    matchLabels:
+      app: nginx-manual
+  serviceName: "nginx-manual"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nginx-manual
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: html
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 40Gi
+      selector:
+        matchLabels:
+          usage: nginx-manual-disk</pre>			<p>The manifest <a id="_idIndexMarker706"/>contains various sections. While most are similar to the <strong class="source-inline">Deployment</strong> resource manifest, this requires a <strong class="source-inline">volume</strong> definition and a separate <strong class="source-inline">volumeClaimTemplates</strong> section. The <strong class="source-inline">volumeClaimTemplates</strong> section consists of the <strong class="source-inline">accessModes</strong>, <strong class="source-inline">resources</strong>, and <strong class="source-inline">selector</strong> sections. The <strong class="source-inline">selector</strong> section defines the <strong class="source-inline">matchLabels</strong> attribute, which helps to select a particular <strong class="source-inline">PersistentVolume</strong> resource. In this case, it selects the <strong class="source-inline">PersistentVolume</strong> resource we defined previo<a id="_idTextAnchor822"/>usly. It also contains the <strong class="source-inline">se<a id="_idTextAnchor823"/>rviceName</strong> attribute that defines the headless <strong class="source-inline">Service</strong> resource it <span class="No-Break">will use.</span></p>
+			<p>Now, let’s go ahead and apply the manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-manual-statefulset.yaml</pre>			<p>Now, let’s inspect a few elements to see where we are. The <strong class="source-inline">StatefulSet</strong> resource creates a <strong class="source-inline">PersistentVolumeClaim</strong> resource to claim the <strong class="source-inline">PersistentVolume</strong> resource we <span class="No-Break">created before.</span></p>
+			<p>Get the <strong class="source-inline">PersistentVolumeClaim</strong> resource using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pvc
+NAME                 STATUS VOLUME           CAPACITY  ACCESS MODES
+html-nginx-manual-0  Bound  nginx-manual-pv  50G       RWO</pre>			<p>As we can <a id="_idIndexMarker707"/>see, the <strong class="source-inline">StatefulSet</strong> resource has created a <strong class="source-inline">PersistentVolumeClaim</strong> resource called <strong class="source-inline">html-nginx-manual-0</strong> that is bound to the <strong class="source-inline">nginx-manual-pv</strong> <strong class="source-inline">PersistentVolume</strong> resource. Therefore, manual provisioning has <span class="No-Break">worked correctly.</span></p>
+			<p>If we query the <strong class="source-inline">PersistentVolume</strong> resource using the following command, we will see that the status is now showing <span class="No-Break">as </span><span class="No-Break"><strong class="source-inline">Bound</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+$ kubectl get pv
+NAME             CAPACITY  ACCESS MODES  RECLAIM POLICY  STATUS
+nginx-manual-pv  50G       RWO           Retain          Bound</pre>			<p>Now, let’s have a look at the pods using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod
+NAME             READY   STATUS    RESTARTS   AGE
+nginx-manual-0   1/1     Running   0          14s</pre>			<p>As we see, the <strong class="source-inline">StatefulSet</strong> resource has created a pod and appended it with a serial number instead of a random hash. It wants to maintain ordering between the pods and mount the same volumes to the pods they <span class="No-Break">previously mounted.</span></p>
+			<p>Now, let’s open a shell into the pod and create a file within the <strong class="source-inline">/usr/share/nginx/html</strong> directory using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl exec -it nginx-manual-0 -- /bin/bash
+root@nginx-manual-0:/# cd /usr/share/nginx/html/
+root@nginx-manual-0:/usr/share/nginx/html# echo 'Hello, world' &gt; index.html
+root@nginx-manual-0:/usr/share/nginx/html# exit</pre>			<p>Great! So, let’s go ahead and delete the pod and see whether we can get the file in the same location again using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl delete pod nginx-manual-0
+$ kubectl get pod
+NAME             READY   STATUS              RESTARTS   AGE
+nginx-manual-0   1/1     Running             0          3s
+$ kubectl exec -it nginx-manual-0 -- /bin/bash
+root@nginx-manual-0:/# cd /usr/share/nginx/html/ &amp;&amp; cat index.html
+Hello, world
+root@nginx-manual-0:/usr/share/nginx/html# exit</pre>			<p>And, as we can see, the file still exists, even after we deleted <span class="No-Break">the pod.</span></p>
+			<p>Static provisioning<a id="_idIndexMarker708"/> isn’t one of the best ways of doing things, as you must manually keep track and provision volumes. That involves a lot of manual activities and may be error-prone. Some organizations that want to keep a line between Dev and Ops can use this technique. Kubernetes allows this provision. However, for more DevOps-friendly organizations, <strong class="bold">dynamic provisioning</strong> is a better way of <span class="No-Break">doing it.</span></p>
+			<h3>Dynamic provisioning</h3>
+			<p>Dynamic provisioning <a id="_idIndexMarker709"/>is when Kubernetes provid<a id="_idTextAnchor824"/>es storage resources for you by interacting with the cloud provider. When we provisioned the disk manually, we interacted with the cloud API<a id="_idTextAnchor825"/>s using the <strong class="source-inline">gcloud</strong> command line. What if your organization decides to move to some other cloud provider later? That would break many existing scripts, and you would have to rewrite the storage provisioning steps. Kubernetes is inherently portable and platform-independent. You can provision resources in the same way on any <span class="No-Break">cloud platform.</span></p>
+			<p>But then, different <a id="_idIndexMarker710"/>cloud providers have different storage offerings. How would Kubernetes know what kind of storage it needs to provision? Well, Kubernetes uses <strong class="source-inline">StorageClass</strong> resources for that. <strong class="source-inline">StorageClass</strong> resources are Kubernetes resources that defi<a id="_idTextAnchor826"/>ne the type of storage they need to provide when someone <span class="No-Break">uses it.</span></p>
+			<p>The following diagram illustrates <span class="No-Break">dynamic provisioning:</span></p>
+			<div>
+				<div id="_idContainer060" class="IMG---Figure">
+					<img src="image/B19877_Figure_6.010.jpg" alt="Figure 6.10 – Dynamic provisioning" width="1650" height="629"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.10 – Dynamic provisioning</p>
+			<p>Let’s see an example storage class manifest, <strong class="source-inline">fast-storage-class.yaml</strong>, that provisions an SSD <span class="No-Break">within GCP:</span></p>
+			<pre class="console">
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast
+provisioner: kubernetes.io/gce-pd
+paramet<a id="_idTextAnchor827"/>ers:
+  type: pd-ssd</pre>			<p>The <strong class="source-inline">StorageClass</strong> resource contains a provisioner and any parameters the<a id="_idTextAnchor828"/> provisioner requires. You may have noticed that I have kept the name <strong class="source-inline">fast</strong> instead of <strong class="source-inline">gce-ssd</strong> or similar. That is because we want to keep the names as generic <span class="No-Break">as possible.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Keep generic storage class names such as <strong class="source-inline">fast</strong>, <strong class="source-inline">standard</strong>, <strong class="source-inline">block</strong>, and <strong class="source-inline">shared</strong>, and avoid names specific to the cloud platform. Because storage class names are used in Persistent Volume claims, if you migrate to another cloud provider, you may end up changing a lot of manifests just to <span class="No-Break">avoid confusion.</span></p>
+			<p>Let’s go ahead and apply the manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f fast-storage-class.yaml</pre>			<p>As the <strong class="source-inline">StorageClass</strong> resource is created, let’s use it to provision an <strong class="source-inline">nginx</strong> <strong class="source-inline">StatefulSet</strong> <span class="No-Break">resource dynamically.</span></p>
+			<p>We need to create a <strong class="source-inline">Service</strong> resource <a id="_idIndexMarker711"/>manifest, <span class="No-Break"><strong class="source-inline">nginx-dynamic-service.yaml</strong></span><span class="No-Break">, first:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-dynamic
+  labels:
+    app:<a id="_idTextAnchor829"/> nginx-dynamic
+spec:
+  ports:
+  - port: 80
+    name: web
+  clusterIP: None
+  selector:
+    app: nginx-dynamic</pre>			<p>The manifest is very similar to the manual <strong class="source-inline">Service</strong> r<a id="_idTextAnchor830"/>esource. Let’s go ahead and apply it using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-dynamic-service.yaml</pre>			<p>Now, let’s look at<a id="_idIndexMarker712"/> the <strong class="source-inline">StatefulSet</strong> resource <span class="No-Break">manifest, </span><span class="No-Break"><strong class="source-inline">nginx-dynamic-statefulset.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-dynamic
+spec:
+...
+  serviceName: "nginx-dynamic"
+  template:
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+...
+  volumeClaimTemplates:
+  - metadata:
+      name: html
+    spec:
+      storageClass<a id="_idTextAnchor831"/>Name: "fast"
+      accessModes: [ "Read<a id="_idTextAnchor832"/>WriteOnce" ]
+      resources:
+        requests:
+          storage: 40Gi</pre>			<p>The manifest is similar <a id="_idIndexMarker713"/>to the manual one, but this one contains the <strong class="source-inline">storageClassName</strong> attribute in the <strong class="source-inline">volumeClaimTemplates</strong> section and lacks the <strong class="source-inline">selector</strong> section, as we are dynamically provisioning the storage. Use the following command to apply <span class="No-Break">the manifest:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-dynamic-statefulset.yaml</pre>			<p>As the <strong class="source-inline">StatefulSet</strong> resource is created, let’s go ahead and check the <strong class="source-inline">PersistentVolumeClaim</strong> and <strong class="source-inline">PersistentVolume</strong> resources using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl get pvc
+NAME                  STATUS  VOLUME    CAPACITY  ACCESS MODES  STORAGECLASS
+html-nginx-dynamic-0  Bound   pvc-6b78  40Gi      RWO           fast
+$ kubectl get pv
+NAME      CAPACITY  ACCESS MODES  RECLAIM POLICY  STATUS  CLAIM
+pvc-6b78  40Gi      RWO           Delete          Bound   default/html-nginx-dynamic-0</pre>			<p>And we can see that the claim is bound to a Persistent Volume that is dynamically pr<a id="_idTextAnchor833"/>ovisioned. Now, let’s proceed and run the following command to do similar tests with this <span class="No-Break"><strong class="source-inline">StatefulSet</strong></span><span class="No-Break"> resource.</span></p>
+			<p>Let’s create a file in the <strong class="source-inline">nginx-dynamic-0</strong> pod using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl exec -it nginx-dynamic-0 -- bash
+root@nginx-dynamic-0:/# cd /usr/share/nginx/html/
+root@nginx-dynamic-0:/u<a id="_idTextAnchor834"/>sr/share/nginx/html# echo 'Hello, dynamic world' &gt; index.html
+root@nginx-dynamic-0:/usr/share/nginx/html# exit</pre>			<p>Now, delete the pod and open a shell session again to check whether the file exists by using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl delete pod nginx-dynamic-0
+$ kubectl get pod nginx-dynamic-0
+NAME              READY   STATUS    RESTARTS   AGE
+nginx-dynamic-0   1/1     Running   0          13s
+$ kubectl exec -it nginx-dynamic-0 -- bash
+root@nginx-dynamic-0:/# cd /usr/share/nginx/html/
+root@nginx-dynamic-0:/usr/share/nginx/html# cat index.html
+Hello, dynamic world
+root@nginx-dynamic-0:/usr/share/nginx/html# exit</pre>			<p>And as we can see, the<a id="_idIndexMarker714"/> file exists in the volume, even if the pod was deleted. That is dynamic provisioning in <a id="_idTextAnchor835"/>action <span class="No-Break">for you!</span></p>
+			<p>You will have <a id="_idTextAnchor836"/>observed that we have used the <strong class="source-inline">kubectl</strong> command multiple times throughout this chapter. When you perform activities throughout the<a id="_idTextAnchor837"/><a id="_idTextAnchor838"/> day, using shortcuts and best practices wherever you can makes sense. Let’s look at some best practices while <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">kubectl</strong></span><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-168">Kubernetes command-line <a id="_idTextAnchor839"/>best practices, tips, and tricks</h1>
+			<p>For seasoned Kubernetes developers and administrators, <strong class="source-inline">kubectl</strong> is a command they run most of the time. The following steps <a id="_idTextAnchor840"/><a id="_idTextAnchor841"/>will simplify your life, save you a ton of time, let you focus on more essential activities, and set you apart fr<a id="_idTextAnchor842"/>om <span class="No-Break">the rest.</span></p>
+			<h2 id="_idParaDest-169">Using a<a id="_idTextAnchor843"/>liases</h2>
+			<p>Most system administrators use aliases <a id="_idIndexMarker715"/>for an excellent reason—they save valuable time. Aliases in Linux are different names for commands, and they are mostly used to shorten the most frequently used commands; for example,<a id="_idTextAnchor844"/> <strong class="source-inline">ls -l</strong> <span class="No-Break">becomes </span><span class="No-Break"><strong class="source-inline">ll</strong></span><span class="No-Break">.</span></p>
+			<p>You can use the following aliases with <strong class="source-inline">kubectl</strong> to make your <span class="No-Break">life easier.</span></p>
+			<h3>k for kubectl</h3>
+			<p>Yes—that’s right. By using the following<a id="_idIndexMarker716"/> alias, you can use <strong class="source-inline">k</strong> instead of <span class="No-Break">typing </span><span class="No-Break"><strong class="source-inline">kubectl</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+$ alias k='kubectl'
+$ k get node
+NAME                 STATUS   ROLES    AGE     VERSION
+kind-control-plane   Ready    master   5m7s    v1.26.1
+kind-worker          Ready    &lt;none&gt;   4m33s   v1.26.1</pre>			<p>That will save a lot of time <span class="No-Break">and hassle.</span></p>
+			<h3>Using kubectl --dry-run</h3>
+			<p><strong class="source-inline">kubectl --dry-run</strong> helps <a id="_idIndexMarker717"/>you to generate YAML m<a id="_idTextAnchor845"/>anifests from imperative commands and saves you a lot of typing time. You can write an imperative command to generate a resource and append that with a <strong class="source-inline">--dry-run=client -o yaml</strong> string to generate a YAML manifest from the imperative command. The command does not create the resource within the cluster, but instead just outputs the manifest. The following command will generate a <strong class="source-inline">Pod</strong> manifest <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">--dry-run</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+$ kubectl run nginx --image=nginx --dry-run=client -o yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}</pre>			<p>And you now have the skeleton YAML file that you can edit according to <span class="No-Break">your liking.</span></p>
+			<p>Now, imagine typing this command multiple times during the day! At some point, it becomes tiring. Why not shorten it by using the <span class="No-Break">following alias?</span></p>
+			<pre class="console">
+$ alias kdr='kubectl --dry-run=client -o yaml'</pre>			<p>You can then use the alias to generate <span class="No-Break">other manifests.</span></p>
+			<p>To generate a <strong class="source-inline">Deployment</strong> resource manifest, use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kdr create deploymen<a id="_idTextAnchor846"/>t nginx --image=nginx</pre>			<p>You can use the dry run to <a id="_idIndexMarker718"/>generate almost all resources from imperative commands. However, some resources do not have an imperative command, such as a <strong class="source-inline">DaemonSet</strong> resource. You can generate a manifest for the closest resource and modify it for such resources. A <strong class="source-inline">DaemonSet</strong> manifest is very similar to a <strong class="source-inline">Deployment</strong> manifest, so you can generate a <strong class="source-inline">Deployment</strong> manifest and change it to match the <span class="No-Break"><strong class="source-inline">DameonSet</strong></span><span class="No-Break"> manifest.</span></p>
+			<p>Now, let’s look at some of the most frequently used <strong class="source-inline">kubectl</strong> commands and their <span class="No-Break">possible a<a id="_idTextAnchor847"/>liases.</span></p>
+			<h3>kubectl apply and delete aliases</h3>
+			<p>If you use manifests, you will use<a id="_idIndexMarker719"/> the <strong class="source-inline">kubectl apply</strong> and <strong class="source-inline">kubectl delete</strong> commands most of the time<a id="_idIndexMarker720"/> within y<a id="_idTextAnchor848"/>our cluster, so it makes sense to use the <span class="No-Break">following aliases:</span></p>
+			<pre class="console">
+$ alias kap='kubectl apply -f'
+$ alias kad='kubectl delete -f'</pre>			<p>You can then use them to apply or delete resources using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kap nginx-deployment.yaml
+$ kad nginx-deployment.yaml</pre>			<p>While troubleshoot<a id="_idTextAnchor849"/>ing containers, most of us use <a id="_idTextAnchor850"/><strong class="source-inline">busybox</strong>. Let’s see how to <span class="No-Break">optimize it.</span></p>
+			<h3>Troubleshooting containers with busybox using an alias</h3>
+			<p>We use the following commands to <a id="_idIndexMarker721"/>open a <span class="No-Break"><strong class="source-inline">busybox</strong></span><span class="No-Break"> session:</span></p>
+			<pre class="console">
+$ kubectl run busybox-test --image=busybox -it --rm --restart=Never -- &lt;cmd&gt;</pre>			<p>Now, opening several <strong class="source-inline">busybox</strong> sessions during the day can be tiring. How about minimizing the overhead by using the <span class="No-Break">following alias?</span></p>
+			<pre class="console">
+$ alias kbb='kubectl run busybox-test --image=busybox -it --rm --restart=Never --'</pre>			<p>We can then ope<a id="_idTextAnchor851"/>n a shell session to a new <strong class="source-inline">busybox</strong> pod using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kbb sh
+/ #</pre>			<p>Now, that is much cleaner and easier. Likewise, you can also create aliases of other commands that you use frequently. Here’s <span class="No-Break">an example:</span></p>
+			<pre class="console">
+$ alias kgp='kubectl get pods'
+$ alias kgn='kubectl get nodes'
+$ alias kgs='kubectl get svc'
+$ alias kdb='kubectl describe'
+$ alias kl='kubectl logs'
+$ alias ke='kubectl exec -it'</pre>			<p>And so on, according to your needs. You may also be used to autocompletion within <strong class="source-inline">bash</strong>, where your commands autocomplete when you press <em class="italic">Tab</em> after typing a few words. <strong class="source-inline">kubec<a id="_idTextAnchor852"/><a id="_idTextAnchor853"/>tl</strong> also provides autocompletion of commands, but not by <a id="_idTextAnchor854"/>default. Let’s now look at how to enable <strong class="source-inline">kubectl</strong> autocompletion <span class="No-Break">within </span><span class="No-Break"><strong class="source-inline">bash</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-170"><a id="_idTextAnchor855"/>Using kubectl bash autocompletion</h2>
+			<p>T<a id="_idTextAnchor856"/>o <a id="_idIndexMarker722"/>enable <strong class="source-inline">kubectl</strong> <strong class="source-inline">bash</strong> autocompletion, use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ echo "source &lt;(kubectl completion bash)" &gt;&gt; ~/.bashrc</pre>			<p>The command adds the <strong class="source-inline">kubectl</strong> completion <strong class="source-inline">bash</strong> command as a source to your <strong class="source-inline">.bashrc</strong> file. So, the next <a id="_idTextAnchor857"/><a id="_idTextAnchor858"/>time you log in to your shell, you should be able to use <strong class="source-inline">kubectl</strong> autocomplete. That will save you a ton of time when <span class="No-Break">typing commands.</span></p>
+			<h1 id="_idParaDest-171"><a id="_idTextAnchor859"/>Summary</h1>
+			<p>We began this chapter by managing pods with <strong class="source-inline">Deployment</strong> and <strong class="source-inline">ReplicaSet</strong> resources and discussed some critical Kubernetes deployment strategies. We then looked into Kubernetes service discovery and models and understood why we required a separate entity to expose containers to the internal or external world. We then looked at different <strong class="source-inline">Service</strong> resources and where to use them. We talked about <strong class="source-inline">Ingress</strong> resources and how to use them to create reverse proxies for our container workloads. We then delved into Horizontal Pod autoscaling and used multiple metrics to scale our <span class="No-Break">pods automatically.</span></p>
+			<p>We looked at state considerations and learned about static and dynamic storage provisioning using <strong class="source-inline">PersistentVolume</strong>, <strong class="source-inline">PersistentVolumeClaim</strong>, and <strong class="source-inline">StorageClass</strong> resources, and talked about some best practices surrounding them. We looked at <strong class="source-inline">StatefulSet</strong> resources as essential resources that help you schedule and manage stateful containers. Finally, we looked at some best practices, tips, and tricks surrounding the <strong class="source-inline">kubectl</strong> command line and how to use <span class="No-Break">them effectively.</span></p>
+			<p>The topics covered in this and the previous chapter are just the core of Kubernetes. Kubernetes is a vast tool with enough functionality to write an entire book, so these chapters only give you the gist of what it is all about. Please feel free to read about the resources in detail in the Kubernetes official documentation <span class="No-Break">at </span><a href="https://kubernetes.io"><span class="No-Break">https://kubernetes.io</span></a><span class="No-Break">.</span></p>
+			<p>In the next <a id="_idTextAnchor860"/><a id="_idTextAnchor861"/>chapter, we will delve into the world of the cloud and look at <strong class="bold">Container-as-a-Service</strong> (<strong class="bold">CaaS</strong>) and serverless offerings <span class="No-Break">for containers.</span></p>
+			<h1 id="_idParaDest-172"><a id="_idTextAnchor862"/>Questions</h1>
+			<ol>
+				<li>A Kubernetes Deployment deletes an old <strong class="source-inline">ReplicaSet</strong> resource when the image is <span class="No-Break">updated. </span><span class="No-Break">(True/False)</span></li>
+				<li>What are the primary deployment strategies supported by Kubernetes? (<span class="No-Break">Choose two)</span><p class="list-inset"><span class="No-Break">A. Recreate</span></p><p class="list-inset">B. <span class="No-Break">Rolling update</span></p><p class="list-inset">C. Ramped <span class="No-Break">slow rollout</span></p><p class="list-inset">D. Best-effort <span class="No-Break">controlled rollout</span></p></li>
+				<li>Which types of resources can you use to expose containers externally? (<span class="No-Break">Choose three)</span><p class="list-inset">A. <span class="No-Break"><strong class="source-inline">ClusterIP Service</strong></span></p><p class="list-inset">B. <span class="No-Break"><strong class="source-inline">NodePort Service</strong></span></p><p class="list-inset">C. <span class="No-Break"><strong class="source-inline">LoadBalancer Service</strong></span></p><p class="list-inset"><span class="No-Break">D. </span><span class="No-Break"><strong class="source-inline">Ingress</strong></span></p></li>
+				<li>It is a best practice to start with a <strong class="source-inline">ClusterIP</strong> Service and change the Service type later if <span class="No-Break">needed. </span><span class="No-Break">(True/False)</span></li>
+				<li><strong class="source-inline">Deployment</strong> resources are suitable for stateful <span class="No-Break">workloads. </span><span class="No-Break">(True/False)</span></li>
+				<li>Which kinds of workloads can you run <span class="No-Break">with Ingresses?</span><p class="list-inset"><span class="No-Break">A. HTTP</span></p><p class="list-inset"><span class="No-Break">B. TCP</span></p><p class="list-inset"><span class="No-Break">C. FTP</span></p><p class="list-inset"><span class="No-Break">D. SMTP</span></p></li>
+				<li>Which resources would you define for dynamic volume provisioning? (<span class="No-Break">Choose two)</span><p class="list-inset"><span class="No-Break">A. </span><span class="No-Break"><strong class="source-inline">StorageClass</strong></span></p><p class="list-inset"><span class="No-Break">B. </span><span class="No-Break"><strong class="source-inline">PersistentVolumeClaim</strong></span></p><p class="list-inset"><span class="No-Break">C. </span><span class="No-Break"><strong class="source-inline">PersistentVolume</strong></span></p><p class="list-inset"><span class="No-Break">D. </span><span class="No-Break"><strong class="source-inline">StatefulSet</strong></span></p></li>
+				<li>To make your horizontal scaling more meaningful, what parameters should you use to scale your pods? (<span class="No-Break">Choose three)</span><p class="list-inset"><span class="No-Break">A. CPU</span></p><p class="list-inset"><span class="No-Break">B. Memory</span></p><p class="list-inset">C. External metrics, such as <span class="No-Break">response time</span></p><p class="list-inset">D<a id="_idTextAnchor863"/><a id="_idTextAnchor864"/>. Packets per <span class="No-Break">second (PPS)</span></p></li>
+				<li>What are the forms of routing within an <strong class="source-inline">Ingress</strong> resource? (<span class="No-Break">Choose two)</span><p class="list-inset"><span class="No-Break">A. Simple</span></p><p class="list-inset"><span class="No-Break">B. Path-based</span></p><p class="list-inset"><span class="No-Break">C. Name-based</span></p><p class="list-inset"><span class="No-Break">D. Complex</span></p></li>
+			</ol>
+			<h1 id="_idParaDest-173"><a id="_idTextAnchor865"/>Answers</h1>
+			<ol>
+				<li value="1">False. An image Deployment just scales the old <strong class="source-inline">ReplicaSet</strong> resource <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">0</strong></span><span class="No-Break">.</span></li>
+				<li>A <span class="No-Break">and B</span></li>
+				<li>B, C, <span class="No-Break">and D</span></li>
+				<li><span class="No-Break">True</span></li>
+				<li>False. Use <strong class="source-inline">StatefulSet</strong> <span class="No-Break">resources instead.</span></li>
+				<li>A</li>
+				<li>A <span class="No-Break">and B</span></li>
+				<li>A, B, <span class="No-Break">and C</span></li>
+				<li>B <span class="No-Break">and C</span></li>
+			</ol>
+		</div>
+	</div>
+</div>
+</body></html>

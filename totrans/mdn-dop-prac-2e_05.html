@@ -1,0 +1,762 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer050">
+			<h1 id="_idParaDest-133" class="chapter-number"><a id="_idTextAnchor536"/>5</h1>
+			<h1 id="_idParaDest-134"><a id="_idTextAnchor537"/>Container Orchestration with Kubernetes</h1>
+			<p>In the previous chapter, we covered creating and managing container images, where we discussed container images, Dockerfiles, and their directives and components. We also looked at the best practices for writing a Dockerfile and building and managing efficient images. We then looked at flattening Docker images and investigated in detail distroless images to improve container security. Finally, we created a private <span class="No-Break">Docker registry.</span></p>
+			<p>Now, we will deep dive into container orchestration. We will learn how to schedule and run containers using the most popular container orchestrator – <span class="No-Break">Kubernetes.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>What is Kubernetes, and why do I <span class="No-Break">need it?</span></li>
+				<li><span class="No-Break">Kubernetes architecture</span></li>
+				<li>Installing Kubernetes (Minikube <span class="No-Break">and KinD)</span></li>
+				<li>Understanding <span class="No-Break">Kubernetes pods</span></li>
+			</ul>
+			<h1 id="_idParaDest-135"><a id="_idTextAnchor538"/><a id="_idTextAnchor539"/>Technical requirements</h1>
+			<p>For this chapter, we assume you have Docker installed on a Linux machine running <strong class="bold">Ubuntu 18.04 Bionic LTS</strong> or <a id="_idIndexMarker463"/>later, with <strong class="source-inline">sudo</strong> access. You can follow <a href="B19877_03.xhtml#_idTextAnchor220"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, <em class="italic">Containerization with Docker</em>, for more details on how to <span class="No-Break">do that.</span></p>
+			<p>You will also need to clone the following GitHub repository for some <span class="No-Break">exercises: </span><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a><span class="No-Break">.</span></p>
+			<p>Run the following command to clone the repository into your home directory, and <strong class="source-inline">cd</strong> into the <strong class="source-inline">ch5</strong> directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \
+  modern-devops
+$ cd modern-devops/ch5</pre>			<p>As the repository contains files with placeholders, you must replace the <strong class="source-inline">&lt;your_dockerhub_user&gt;</strong> string with your actual Docker Hub user. Use the following commands to substitute <span class="No-Break">the placeholders:</span></p>
+			<pre class="console">
+$ grep -rl '&lt;your_dockerhub_user&gt;' . | xargs sed -i -e \
+ 's/&lt;your_dockerhub_user&gt;/&lt;your actual docker hub user&gt;/g'<a id="_idTextAnchor540"/><a id="_idTextAnchor541"/></pre>			<h1 id="_idParaDest-136"><a id="_idTextAnchor542"/>What is Kubernetes, and why do I need it?</h1>
+			<p>By now, you should understand what containers are and how to build and run containers using Docker. However, how we ran containers using Docker was not optimal from a production standpoint. Let me give you a few<a id="_idTextAnchor543"/> considerations to <span class="No-Break">think about:</span></p>
+			<ul>
+				<li>As portable containers can run on any Docker machine just fine, multiple containers also share server resources to optimize resource consumption. Now, think of a microservices application that comprises hundreds of containers. How will you choose what machine to run the containers on? What if you want to dynamically schedule the containers to another machine based on <span class="No-Break">resource consumption?</span></li>
+				<li>Containers provide horizontal scalability as you can create a copy of the container and use a <strong class="bold">load balancer</strong> in front<a id="_idTextAnchor544"/> <a id="_idIndexMarker464"/>of a pool of containers. One way of doing this is to decide upfront and deploy the desired number of containers, but that isn’t optimal resource utilization. What if I tell you that you need to horizontally scale your containers dynamically with traffic – in other words, by creating additional container instances to handle the extra load when there is more traffic and reducing them when there <span class="No-Break">is less?</span></li>
+				<li>There are container health check reports on the containers’ health. What if the container is unhealthy, and you want to auto-heal it? What would happen if an entire server goes down and you want to schedule all containers running on that server <span class="No-Break">to another?</span></li>
+				<li>As containers mostly run within a server and can see each other, how would I ensure that only the required containers can interact with the other, something we usually do with VMs? We cannot compromise <span class="No-Break">on security.</span></li>
+				<li>Modern cloud platforms allow us to run autoscaling VMs. How can we utilize that from the perspective of containers? For example, if I need just one VM for my containers during the night and five during the day, how can I ensure that the machines are dynamically allocated when we <span class="No-Break">need them?</span></li>
+				<li>How do you manage the networking between multiple containers if they are part of a more comprehensive <span class="No-Break">service mesh?</span></li>
+			</ul>
+			<p>The answer to all these questions is a container orchestrator, and the most popular and <em class="italic">de facto</em> standard for that <span class="No-Break">is Kubernetes.</span></p>
+			<p>Kubernetes is <a id="_idIndexMarker465"/>an open sour<a id="_idTextAnchor545"/>ce container orchestrator. A bunch of Google engineers first developed it and <a id="_idIndexMarker466"/>then open sourced it to the <strong class="bold">Cloud Native Computing Foundation</strong> (<strong class="bold">CNCF</strong>). Since then, <a id="_idTextAnchor546"/>the buzz around Kubernetes has not subsided, and for an excellent reason – Kubernetes with containers has changed the technology mindset and how we look at infrastructure entirely. Instead of treating servers as dedicated machines to an application or as part of an application, Kubernetes has allowed visualizing servers as an entity with a container runtime installed. When we treat servers as a standard setup, we can run virtually<a id="_idIndexMarker467"/> anything in a cluster of servers. So, you don’t have to plan for <strong class="bold">high availability</strong> (<strong class="bold">HA</strong>), <strong class="bold">disaster recovery</strong> (<strong class="bold">DR</strong>), and o<a id="_idTextAnchor547"/>ther operational aspect<a id="_idTextAnchor548"/>s for every application on your tech <a id="_idIndexMarker468"/>stack. Instead, you can cluster all your servers into a single unit – a Kubernetes cluster – and containerize all your applications. You can then offload all container management functions to Kubernetes. You can run Kubernetes on bare-metal servers, VMs, and as a managed service in the cloud through multiple <span class="No-Break">Kubernetes-as-a-Service offerings.</span></p>
+			<p>Kubernetes<a id="_idIndexMarker469"/> solves these problems by providing HA, scalability, and zero downtime out of the box. It essentially perfo<a id="_idTextAnchor549"/>rms the following functions to <span class="No-Break">provide them:</span></p>
+			<ul>
+				<li><strong class="bold">Provides a centralized control plane for interacting with it</strong>: The API server exposes a list of useful APIs that you can interact with to invoke many Kubernetes functions. It also provides a Kubernetes command line called <strong class="bold">kubectl</strong> to <a id="_idIndexMarker470"/>interact with the API using simple commands. Having a centralized control plane ensures that you can interact with <span class="No-Break">Kubernetes seamlessly.</span></li>
+				<li><strong class="bold">Interacts with the container runtime to schedule containers</strong>: When we send the request to schedule a container<a id="_idIndexMarker471"/> to <strong class="bold">kube-apiserver</strong>, Kubernetes decides what server to schedule the container based on various factors and then interacts with the<a id="_idIndexMarker472"/> server’s container runtime through the <span class="No-Break"><strong class="bold">kubelet</strong></span><span class="No-Break"> component.</span></li>
+				<li><strong class="bold">Stores the expected configuration in a key-value data store</strong>: Kubernetes applies the cluster’s anticipated configuration and stores that in a key-value data store – <strong class="bold">etcd</strong>. That <a id="_idIndexMarker473"/>way, Kubernetes continuously ensures that the containers within the cluster remain in the desired state. If there is any deviation from the expected state, Kubernetes will take every action to bring it back to the desired configuration. That way, Kubernetes ensures that your containers are up and running <span class="No-Break">and healthy.</span></li>
+				<li><strong class="bold">Provides a network abstraction layer and service discovery</strong>:<strong class="bold"> </strong>Kubern<a id="_idTextAnchor550"/>etes uses a<a id="_idIndexMarker474"/> network abstraction layer to allow communication between your containers. Therefore, every container is allocated a virtual IP, and Kubernetes ensures a container is reachable from another container running on a different server. It provides the necessary networking by using an <strong class="bold">overlay network</strong> between<a id="_idIndexMarker475"/> the servers. From the container’s perspective, all containers in the cluster behave as if they are running on the same server. Kubernetes also <a id="_idIndexMarker476"/>uses a <strong class="bold">DNS</strong> to allow communication between containers through a domain name. That way, containers can interact with each other by using a domain name instead of an IP address to ensure that you don’t need to change the configuration if a container is recreated and the IP <span class="No-Break">address changes.</span></li>
+				<li><strong class="bold">Interacts with the cloud provider</strong>: Kubernetes interacts with the cloud provider to commission objects such <a id="_idIndexMarker477"/>as <strong class="bold">load balancers</strong> and <strong class="bold">persistent disks</strong>. <a id="_idTextAnchor551"/>So, if <a id="_idIndexMarker478"/>you tell Kubernetes that your application needs to persist data and define<a id="_idIndexMarker479"/> a <strong class="bold">volume</strong>, Kubernetes will automatically request a disk from your cloud provider and mount it to your container wherever it runs. You can also expose your application on an external load balancer by requesting Kubernetes. Kubernetes will interact with your c<a id="_idTextAnchor552"/>loud provider to spin up a load balancer and point it to your containers. That way, you can do everything related to containers <a id="_idIndexMarker480"/>by merely interacting with your Kubernetes <span class="No-Break">API server.</span></li>
+			</ul>
+			<p>Kubernetes comprises multiple moving parts that take over each function we’ve discussed. Now, let’s look at the Kubernetes architecture to underst<a id="_idTextAnchor553"/><a id="_idTextAnchor554"/>and each <span class="No-Break">of them.</span></p>
+			<h1 id="_idParaDest-137"><a id="_idTextAnchor555"/>Kubernetes architecture</h1>
+			<p>Kubernetes is<a id="_idTextAnchor556"/> made of a cluster of nodes. There are two possible roles for nodes in Kubernetes – <strong class="bold">control plane</strong> nodes<a id="_idIndexMarker481"/> and <strong class="bold">worker</strong> nodes. The control plane nodes control the Kubernetes cluster, scheduling the <a id="_idIndexMarker482"/>workloads, listening to requests, and other aspects that help run your workloads and make the cluster function. They typically form the brain of <span class="No-Break">the cluster.</span></p>
+			<p>On the other hand, the worker nodes are the powerhouses of the Kubernetes cluster and provide raw computing for running your <span class="No-Break">container workloads.</span></p>
+			<p>Kubernetes <a id="_idTextAnchor557"/><a id="_idIndexMarker483"/>architecture follows the client-server model via an API server. Any interaction, including internal interactions between components, happens via the Kubernetes API server. Therefore, the Kubernetes API server is known as the brain of the Kubernetes <span class="No-Break">control plane.</span></p>
+			<p>There are other components of Kubernetes as well, but before we delve into the details, let’s look at the following diagram to understand the high-level <span class="No-Break">Kuber<a id="_idTextAnchor558"/>netes architecture:</span></p>
+			<div>
+				<div id="_idContainer043" class="IMG---Figure">
+					<img src="image/B19877_05_1.jpg" alt="Figure 5.1 – Kubernetes cluster architecture" width="1650" height="742"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.1 – Kubernetes cluster architecture</p>
+			<p>The control plane <a id="_idIndexMarker484"/>comprises the <span class="No-Break">following components:</span></p>
+			<ul>
+				<li><strong class="bold">API server</strong>: As discussed<a id="_idTextAnchor559"/> previously, the API server<a id="_idIndexMarker485"/> exposes a set of APIs for external and internal actors to interact with Kubernetes. All interactions with Kubernetes happen via the API server, as evident from the preceding diagram. If you visualize the Kubernetes cluster as a ship, the API server is the <span class="No-Break">ship’s captain.</span></li>
+				<li><strong class="bold">Controller ma<a id="_idTextAnchor560"/>nager</strong>: The controller manager<a id="_idIndexMarker486"/> is the ship’s executive officer and is tasked with ensuring that the captain’s orders are followed in the cluster. From a technical perspective, the controller manager reads the current and desired states and takes all actions necessary to move the current state to the desired state. It contains a set of controllers that interact with the Kubernetes components via the API server as and when needed. Some of these are <span class="No-Break">as follows:</span><ul><li><strong class="bold">Node controller</strong>: This watches<a id="_idIndexMarker487"/> for when the node goes down and responds by interacting with<a id="_idIndexMarker488"/> the <strong class="bold">Kube scheduler</strong> via the <strong class="bold">Kube API server</strong> to <a id="_idIndexMarker489"/>schedule the pods to a <span class="No-Break">healthy node.</span></li><li><strong class="bold">Replication controller</strong>: This<a id="_idIndexMarker490"/> ensures that the correct amount of container replicas defined by replication controller objects in the <span class="No-Break">cluster exist.</span></li><li><strong class="bold">Endpoints c<a id="_idTextAnchor561"/>ontroller</strong>: These <a id="_idIndexMarker491"/>assist in providing endpoints to your containers <span class="No-Break">via services.</span></li><li><strong class="bold">Service account and token controllers</strong>: These<a id="_idIndexMarker492"/> create <a id="_idIndexMarker493"/>default <strong class="bold">accounts</strong> and <strong class="bold">tokens</strong> for <span class="No-Break">new </span><span class="No-Break"><strong class="bold">namespaces</strong></span><span class="No-Break">.</span></li></ul></li>
+				<li><strong class="bold">Cloud controller manager</strong>: This is an <a id="_idIndexMarker494"/>optional controller manager<a id="_idTextAnchor562"/> that you would <a id="_idIndexMarker495"/>run if you run Kubernetes in a public cloud, such <a id="_idIndexMarker496"/>as <strong class="bold">AWS</strong>, <strong class="bold">Azure</strong>, or <strong class="bold">GCP</strong>. The cloud controller manager interacts with the cloud <a id="_idIndexMarker497"/>provider APIs to provision resources such<a id="_idIndexMarker498"/> as <strong class="bold">persistent disks</strong> and <strong class="bold">load balancers</strong> that you<a id="_idIndexMarker499"/> declare in your <span class="No-Break">Kubernetes configuration.</span></li>
+				<li><strong class="bold">etcd</strong>: <strong class="bold">etcd</strong> is the log<a id="_idIndexMarker500"/> book of the ship. That is where all the details about the<a id="_idTextAnchor563"/> expected configuration exist. From a technical perspective, this is a key-value store where all the desired Kubernetes configuration is stored. The controller manager refers to the information in this database to action changes in <span class="No-Break">t<a id="_idTextAnchor564"/>he cluster.</span></li>
+				<li><strong class="bold">Scheduler</strong>: The schedulers<a id="_idIndexMarker501"/> are the boatswain of the ship. They are tasked with supervising the process of loading and unloading containers on the ship. A Kubernetes scheduler schedules containers in a worker node it finds fit after considering the availability of resources to run it, the HA of your application, and <span class="No-Break">other aspects.</span></li>
+				<li><strong class="bold">kubelet</strong>: kubelets are<a id="_idIndexMarker502"/> the seamen of the ship. They carry out the act<a id="_idTextAnchor565"/>ual loading and unloading of containers from a ship. From a technical perspective, the kubelet interacts with the underlying container runtime to run containers on the scheduler’s instruction. While most Kubernetes components can run as a container, the kubelet is the only component that runs as a <strong class="bold">systemd</strong> service. They<a id="_idIndexMarker503"/> usually run on worker nodes, but if you plan to run the control plane components as containers instead, the kubelet will also run on the control <span class="No-Break">plan<a id="_idTextAnchor566"/>e nodes.</span></li>
+				<li><strong class="bold">kube-proxy</strong>: <strong class="bold">kube-proxy</strong> runs<a id="_idIndexMarker504"/> on each worker node and provi<a id="_idTextAnchor567"/>des the components for your containers to interact with the network components inside and outside your cluster. They are vital components that facilitate <span class="No-Break">Kubernetes networking.</span></li>
+			</ul>
+			<p>Well, that’s a lot of moving parts, but the good news is that tools are available to set that up for you, and provisioning a Kubernetes cluster is very simple. If you are running on a public cloud, it is only a few clicks away, and you can use your cloud’s web UI or CLI to provision it very quickly. You can use <strong class="bold">kubeadm</strong> for <a id="_idIndexMarker505"/>the setup if you have an on-premises installation. The steps are well documented and understood and won’t be <a id="_idTextAnchor568"/>too much of <span class="No-Break">a hassle.</span></p>
+			<p>For development and your CI/CD environments, you can<a id="_idIndexMarker506"/> use <strong class="bold">Minikube</strong> or <strong class="bold">Kubernetes in Docker</strong> (<strong class="bold">KinD</strong>). While<a id="_idIndexMarker507"/> Minikube can run a single-node Kubernetes cluster on your development machine directly by using your machine as the node, it can also run a multi-node cluster by running Kubernetes nodes as containers. KinD, on the other hand, exclusively runs your nodes as containers on both single-node and multi-node configurations. You need a VM with the requisite resources in both cases, and you’ll be good <span class="No-Break">to go.</span></p>
+			<p>In the next section, we’ll boot a si<a id="_idTextAnchor569"/><a id="_idTextAnchor570"/>ngle-node Kubernetes cluster <span class="No-Break">with Minikube.</span></p>
+			<h1 id="_idParaDest-138"><a id="_idTextAnchor571"/>Installing Kubernetes (Minikube and KinD)</h1>
+			<p>Now, let’s move on and install Kubernetes for your development environment. We will begin with Minikube to get you started quickly and then look into KinD. We will <a id="_idTextAnchor572"/><a id="_idTextAnchor573"/>then use KinD for the rest of <span class="No-Break">this chapter.</span></p>
+			<h2 id="_idParaDest-139">Installing Minikub<a id="_idTextAnchor574"/>e</h2>
+			<p>We will install Minikube in the same <a id="_idIndexMarker508"/>Linux machine we used to install Docker in <a href="B19877_03.xhtml#_idTextAnchor220"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, <em class="italic">Containerization with Docker</em>. So, if you haven’t done that, please go to <a href="B19877_03.xhtml#_idTextAnchor220"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, <em class="italic">Containerization with Docker</em>, and follow the instructions provided to set up Docker on <span class="No-Break">your machine.</span></p>
+			<p>First, we will install <strong class="bold">kubectl</strong>. As <a id="_idIndexMarker509"/>described previously, kubectl is the command-line utility that interacts with the Kubernetes API server. We will use kubectl multiple times in <span class="No-Break">this book.</span></p>
+			<p>To download the<a id="_idIndexMarker510"/> latest release of kubectl, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl -LO "https://storage.googleapis.com/kubernetes-release/release\
+/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)\
+/bin/linux/amd64/kubectl"</pre>			<p>You can also download a specific version of kubectl. To do so, use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl -LO https://storage.googleapis.com/kubernetes-release/release\
+/v&lt;kubectl_version&gt;/bin/linux/amd64/kubectl</pre>			<p>We will stick with the latest release for this chapter. Now, let’s go ahead and make the binary executable and then move it to any directory in your <span class="No-Break">system </span><span class="No-Break"><strong class="source-inline">PATH</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+$ chmod +x ./kubectl
+$ sudo mv kubectl /usr/local/bin/</pre>			<p>Now, let’s check whether kubectl has been successfully installed by running the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl version --client
+Client Version: version.Info{Major:"1", Minor:"27", GitVersion:"v1.27.3"}</pre>			<p>Since kubectl was installed successfully, you must download the <strong class="source-inline">minikube</strong> binary and then move it to your system path using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ curl -Lo minikube \
+https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+$ chmod +x minikube
+$ sudo <a id="_idTextAnchor575"/>mv minikube /usr/local/bin/</pre>			<p>Now, let’s install the <a id="_idIndexMarker511"/>packages required by Minikube to function correctly by running the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ sudo apt-get install -y conntrack</pre>			<p>Finally, we can bootstrap a Minikube cluster using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ minikube start --driver=docker
+Done! kubectl is now configured to use "minikube" cluster and "default" namespace by 
+default</pre>			<p>As Minikube is now up and running, we will use the kubectl command-line utility to interact with the Kube API server to manage Kubernetes resources. The kubectl commands have a standard structure and are self-explanatory in most cases. They are structured <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+kubectl &lt;verb&gt; &lt;resource type&gt; &lt;resource name&gt; [--flags]</pre>			<p>Here, we have <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="source-inline">verb</strong>: The action to perform – for example, <strong class="source-inline">get</strong>, <strong class="source-inline">apply</strong>, <strong class="source-inline">delete</strong>, <strong class="source-inline">list</strong>, <strong class="source-inline">patch</strong>, <strong class="source-inline">run</strong>, and <span class="No-Break">so on</span></li>
+				<li><strong class="source-inline">resource type</strong>: The Kubernetes resource to manage, such as <strong class="source-inline">node</strong>, <strong class="source-inline">pod</strong>, <strong class="source-inline">deployment</strong>, <strong class="source-inline">service</strong>, and <span class="No-Break">so on</span></li>
+				<li><strong class="source-inline">resource name</strong>: The name of the resource <span class="No-Break">to manage</span></li>
+			</ul>
+			<p>Now, let’s use kubectl to get nodes and check whether our cluster is ready to run <span class="No-Break">our containers:</span></p>
+			<pre class="console">
+$ kubectl get nodes
+NAME       STATUS   ROLES           AGE     VERSION
+minikube   Ready    control-plane   2m25s   v1<a id="_idTextAnchor576"/>.26.3</pre>			<p>Here, we can see that it is a single-node Kubernetes cluster running version <strong class="bold">v1.26.3</strong>. Kubernetes is now up <span class="No-Break">and running!</span></p>
+			<p>This setup is excellent for development machines where developers want to deploy and test a single component they are <span class="No-Break">working on.</span></p>
+			<p>To stop the Minikube cluster and delete it from the machine, you can use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ minikube stop</pre>			<p>Now that we have removed Minikube, let’s look at another exciting too<a id="_idTextAnchor577"/><a id="_idTextAnchor578"/>l for creating a multi-node <a id="_idTextAnchor579"/><span class="No-Break">Kubernetes cluster.</span></p>
+			<h2 id="_idParaDest-140"><a id="_idTextAnchor580"/>Installing KinD</h2>
+			<p>KinD allows <a id="_idIndexMarker512"/>you to run a multi-node Kubernetes cluster on a single server that runs Docker. We understand that a multi-node Kubernetes cluster requires multiple machines, but how can we run a multi-node Kubernetes cluster on a single server? The answer is simple: KinD uses a Docker container as a Kubernetes node. So, if we need a four-node Kubernetes cluster, KinD will spin up four containers that behave like four Kubernetes nodes. It is as simple <span class="No-Break">as that.</span></p>
+			<p>Wh<a id="_idTextAnchor581"/>ile you need Docker to run KinD, KinD internally<a id="_idIndexMarker513"/> uses <strong class="bold">containerd</strong> as a container runtime instead of Docker. Containerd implements the container runtime interface; therefore, Kubernetes does not require any specialized components, such as <strong class="bold">dock<a id="_idTextAnchor582"/>ershim</strong>, to <a id="_idIndexMarker514"/>interact with it. This means <a id="_idTextAnchor583"/>that KinD still works with Kubernetes since Docker isn’t supported anymore as a Kubernetes <span class="No-Break">container runtime.</span></p>
+			<p>As KinD supports a multi-node Kubernetes cluster, you can use it for your development activities and also in your CI/CD pipelines. In fact, KinD redefines CI/CD pipelines as you don’t require a static Kubernetes environment to test your build. KinD is swift to boot up, which means you can integrate the bootstrapping of the KinD cluster, run and test your container builds within the cluster, and then destroy it all within your CI/CD pipeline. This gives development teams immense power <span class="No-Break">and speed.</span></p>
+			<p class="callout-heading">Important</p>
+			<p class="callout">Never use KinD in production. Docker in Docker implementations are not very secure; therefore, KinD clusters should not exist beyond your dev environments and <span class="No-Break">CI/CD pipelines.</span></p>
+			<p>Bootstrapping <a id="_idIndexMarker515"/>KinD is just a few commands away. First, we need to download KinD, make it executable, and then move it to the default <strong class="source-inline">PATH</strong> directory using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+$ chmod +x kind
+$ sudo mv kind /usr/local/bin/</pre>			<p>To check whether KinD is installed, we can run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kind version
+kind v0.20.0 go1.20.4 linux/amd64</pre>			<p>Now, let’s bootstrap a multi-node KinD cluster. First, we need to create a KinD <strong class="source-inline">config</strong> file. The KinD <strong class="source-inline">config</strong> file is a simple YAML file where you can declare what configuration you want for each node. If we need to bootstrap a single control plane and three worker node clusters, we can add the <span class="No-Break">following configuration:</span></p>
+			<pre class="console">
+$ vim kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker<a id="_idTextAnchor584"/>
+- role: worker
+- role: worker</pre>			<p>You can also have an HA configuration with multiple control planes using multiple node items with the control plane role. For now, let’s stick with a single control plane, three-worker <span class="No-Break">node configuration.</span></p>
+			<p>To bootstrap your KinD cluster with the preceding configuration, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kind create cluster --config kind-config.yaml</pre>			<p>With that, our<a id="_idTextAnchor585"/> <a id="_idIndexMarker516"/>KinD cluster is up and running. Now, let’s list the nodes to see for certain by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get nodes
+NAME                 STATUS   ROLES           AGE   VERSION
+kind-control-plane   Ready    control-plane   72s   v1.27.3
+kind-worker          Ready    &lt;none&gt;          47s   v1.27.3
+kind-worker2         Ready    &lt;none&gt;          47s   v1.27.3
+kind-worker3         Ready    &lt;none&gt;          47s   v1.27.3</pre>			<p>Here, we can see four nodes in the cluster – one control plane and three workers. Now that the cluster is ready, we’ll dive deep into Kubernetes and look at some of the most frequ<a id="_idTextAnchor586"/><a id="_idTextAnchor587"/>ently used Kubernetes resources in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-141"><a id="_idTextAnchor588"/>Understanding Kubernetes pods</h1>
+			<p>Kubernetes pods are the basic building blocks of a Kubernetes application. A pod contains one or more <a id="_idIndexMarker517"/>containers, and all containers within a pod are always scheduled in the same host. Usually, there is a single container within a pod, but there are use cases where you need to schedule multiple containers in a <span class="No-Break">single pod.</span></p>
+			<p>It takes a while to digest why Kubernetes started with the concept of pods in the first place instead of using containers, but there are reasons for that, and you will appreciate this as you gain more experience with the tool. For now, let’s look at a simple example of a pod and how to schedule it <span class="No-Break">in Kubern<a id="_idTextAnchor589"/>etes.</span></p>
+			<h2 id="_idParaDest-142"><a id="_idTextAnchor590"/>Running a pod</h2>
+			<p>We will start by running an <a id="_idIndexMarker518"/>NGINX container in a pod using simple imperative commands. We will then look at how we can do <span class="No-Break">this declaratively.</span></p>
+			<p>To access the resources for this section, <strong class="source-inline">cd</strong> into the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch5/pod/</pre>			<p>To run a pod with a single NGINX container, execute the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl run nginx --image=nginx</pre>			<p>To check whether the pod is running, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod
+NAME    READY   STATUS    RESTARTS   AGE
+nginx   1/1     Running   0          26s</pre>			<p>And that’s it! As we can see, the <a id="_idIndexMarker519"/>pod is <span class="No-Break">now running.</span></p>
+			<p>To delete the pod, you<a id="_idIndexMarker520"/> can run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl delete pod nginx</pre>			<p>The <strong class="source-inline">kubectl run</strong> command was the imperative way of creating pods, but there’s another way of interacting with Kubernetes – by using declarative manifests. <strong class="bold">Kubernetes manifests</strong> are <a id="_idIndexMarker521"/>YAML or JSON files you can use to declare the desired configuration instead of telling Kubernetes everything through a command line. This method is similar to <span class="No-Break"><strong class="source-inline">docker compose</strong></span><span class="No-Break">.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always use the declarative method to create Kubernetes resources in staging and production environments. They allow you to store and version your Kubernetes configuration in a source code management tool such as Git and enable GitOps. You can use imperative methods during development because commands have a qui<a id="_idTextAnchor591"/>cker turnaround than <span class="No-Break">YAML files.</span></p>
+			<p>Let’s look at an example pod <span class="No-Break">manifest, </span><span class="No-Break"><strong class="source-inline">nginx-pod.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    imagePullPolicy: Always
+    name: nginx
+    resources:
+      limits:
+        memory: "200Mi"
+        cpu: "200m"
+      requests:
+        memory: "100Mi"
+        cpu: "100m"
+  restartPolicy: Always</pre>			<p>Let’s understand the<a id="_idIndexMarker522"/> file first. The file contains <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="source-inline">apiVersion</strong>: This defines the resource version we are trying to define. In this case, as it is a pod and <a id="_idIndexMarker523"/>a <strong class="bold">generally available</strong> (<strong class="bold">GA</strong>) resource, the version we will use <span class="No-Break">is </span><span class="No-Break"><strong class="source-inline">v1</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">kind</strong>: This defines the kind of resource we want to create – <span class="No-Break">a pod.</span></li>
+				<li><strong class="source-inline">metadata</strong>: The <strong class="source-inline">metadata</strong> section defines the name and labels surrounding this resource. It helps in uniquely identifying the resource and grou<a id="_idTextAnchor592"/>ping multiple resources <span class="No-Break">using labels.</span></li>
+				<li><strong class="source-inline">spec</strong>: This is the main section where we define the actual specifications for <span class="No-Break">the resource.</span></li>
+				<li><strong class="source-inline">spec.containers</strong>: This section defines one or more containers that form <span class="No-Break">the pod.</span></li>
+				<li><strong class="source-inline">spec.containers.name</strong>: This is the container’s name, which is <strong class="source-inline">nginx-container</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">spec.containers.image</strong>: This is the container image, which is <strong class="source-inline">nginx</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">spec.containers.imagePullPolicy</strong>: This can be <strong class="source-inline">Always</strong>, <strong class="source-inline">IfNotPresent</strong>, or <strong class="source-inline">Never</strong>. If set to <strong class="source-inline">Always</strong>, Kubernetes always pulls the image from the registry. If set to <strong class="source-inline">IfNotPresent</strong>, Kubernetes pulls the image only if the image is not found on the node where the pod is scheduled. If set to <strong class="source-inline">Never</strong>, Kubernetes will never attempt to pull images from the registry and will rely completely on <span class="No-Break">local images.</span></li>
+				<li><strong class="source-inline">spec.containers.resources</strong>: This defines the resource requests <span class="No-Break">and limits.</span></li>
+				<li><strong class="source-inline">spec.containers.resources.limit</strong>: This defines the resource limits. This is the maximum amount of resources that the pod can allocate, and if the resource consumption increases beyond it, the pod <span class="No-Break">is evicted.</span></li>
+				<li><strong class="source-inline">spec.containers.resources.limit.memory</strong>: This defines the <span class="No-Break">memory limit.</span></li>
+				<li><strong class="source-inline">spec.containers.resources.limit.cpu</strong>: This defines the <span class="No-Break">CPU limit.</span></li>
+				<li><strong class="source-inline">spec.containers.resources.requests</strong>: This defines the resource requests. This is the minimum amount of resources the pod would request during scheduling and will not be scheduled on a node that cannot <span class="No-Break">allocate it.</span></li>
+				<li><strong class="source-inline">spec.containers.resources.requests.memory</strong>: This defines the amount of memory to <span class="No-Break">be requested.</span></li>
+				<li><strong class="source-inline">spec.containers.resources.requests.cpu</strong>: This defines the number of CPU cores to <span class="No-Break">be requested.</span></li>
+				<li><strong class="source-inline">spec.restartPolicy</strong>: This defines the restart policy of containers – <strong class="source-inline">Always</strong>, <strong class="source-inline">OnFailure</strong>, or <strong class="source-inline">Never</strong>. This is similar t<a id="_idTextAnchor593"/>o the restart policy <span class="No-Break">on Docker.</span></li>
+			</ul>
+			<p>There are other settings <a id="_idIndexMarker524"/>on the pod manifest, but we will explore these as and when <span class="No-Break">we progress.</span></p>
+			<p class="callout-heading">Important tips</p>
+			<p class="callout">Set <strong class="source-inline">imagePullPolicy</strong> to <strong class="source-inline">IfNotPresent</strong> unless you have a strong reason for using <strong class="source-inline">Always</strong> or <strong class="source-inline">Never</strong>. This will ensure that your containers boot up quickly and you don’t download <span class="No-Break">images unnecessarily.</span></p>
+			<p class="callout">Always use resource requests and limits while scheduling pods. These ensure that your pod is scheduled in an appropriate node and does not exhaust any existing resources. You can also apply a default resource policy at the cluster level to ensure that your developers don’t cause any harm if they miss out on this section for <span class="No-Break">some reason.</span></p>
+			<p>Let’s apply the manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f nginx-pod.yaml</pre>			<p>The pod that <a id="_idIndexMarker525"/>we created is entirely out of bounds from the host. It runs within the container network, and by default, Kubernetes does not allow any pod to be exposed to the host network unless we explicitly want to <span class="No-Break">expose it.</span></p>
+			<p>There are two ways to access the pod – us<a id="_idTextAnchor594"/>ing port forwarding with <strong class="source-inline">kubectl <a id="_idTextAnchor595"/><a id="_idTextAnchor596"/>port-forward</strong>, or exposing the pod through a <span class="No-Break"><strong class="source-inline">S<a id="_idTextAnchor597"/>ervice</strong></span><span class="No-Break"> resource.</span></p>
+			<h2 id="_idParaDest-143"><a id="_idTextAnchor598"/>Using port forwarding</h2>
+			<p>Before we get into the service <a id="_idIndexMarker526"/>side of things, let’s consider using the <span class="No-Break"><strong class="source-inline">port-forward</strong></span><span class="No-Break"> option.</span></p>
+			<p>To expose the pod using port forwarding, execute the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl port-forward nginx 8080:80
+Forwarding from 127.0.0.1:8080 -&gt; 80
+Forwarding from [::1]:8080 -&gt; 80</pre>			<p>The prompt is stuck here. This means it has opened a port forwarding session and is listening on port <strong class="source-inline">8080</strong>. It will automatically forward the request it receives on port <strong class="source-inline">8080</strong> to NGINX <span class="No-Break">port </span><span class="No-Break"><strong class="source-inline">80</strong></span><span class="No-Break">.</span></p>
+			<p>Open a duplicate Terminal session and <strong class="source-inline">curl</strong> on the preceding address to see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ curl 127.0.0.1:8080
+...
+&lt;title&gt;Welcome to nginx!&lt;/title&gt;
+...</pre>			<p>We can see that it is working as we get the default <span class="No-Break">NGINX response.</span></p>
+			<p>Now, there are a few things to <span class="No-Break">remember here.</span></p>
+			<p>When we use HTTP <strong class="source-inline">port-forward</strong>, we are forwarding requests from the client machine running <strong class="source-inline">kubectl</strong> to the pod<a id="_idTextAnchor599"/>, something similar to what’s shown in the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer044" class="IMG---Figure">
+					<img src="image/B19877_05_2.jpg" alt="Figure 5.2 – kubectl port-forward" width="1617" height="412"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.2 – kubectl port-forward</p>
+			<p>When you run <strong class="source-inline">kubectl</strong> <strong class="source-inline">port-forward</strong>, the <strong class="source-inline">kubectl</strong> client opens a TCP tunnel via the Kube API server, and the Kube API server then forwards the connection to the correct pod. As the connection between the <strong class="source-inline">kubectl</strong> client and the API server is encrypted, it is a very secure way of accessing your pod, but hold your horses before deciding to use <strong class="source-inline">kubec<a id="_idTextAnchor600"/>tl</strong> <strong class="source-inline">port-forward</strong> to expose pods to the <span class="No-Break">outside world.</span></p>
+			<p>There are<a id="_idIndexMarker527"/> particular use cases for using <span class="No-Break"><strong class="source-inline">kubectl</strong></span><span class="No-Break"> </span><span class="No-Break"><strong class="source-inline">port-forward</strong></span><span class="No-Break">:</span></p>
+			<ul>
+				<li>For troubleshooting any <span class="No-Break">misbehaving pod.</span></li>
+				<li>For accessing an internal Kubernetes service, such as the Kubernetes dashboard – that is, when you don’t want to expose the service to the external world but only allow Kubernetes admins and users to log into the dashboard. It is assumed that only these users will have access to the cluster <span class="No-Break">via </span><span class="No-Break"><strong class="source-inline">kubectl</strong></span><span class="No-Break">.</span></li>
+			</ul>
+			<p>For anything else, you should use <strong class="source-inline">Service</strong> resources to expose your pod, internally or externally. While we will cover the <strong class="source-inline">Service</strong> resource in the next chapter, let’s look at a few operations we can perform with <span class="No-Break">a pod<a id="_idTextAnchor601"/>.</span></p>
+			<h2 id="_idParaDest-144"><a id="_idTextAnchor602"/>Troubleshooting pods</h2>
+			<p>Similar to how we can<a id="_idIndexMarker528"/> browse logs from a container using <strong class="source-inline">docker logs</strong>, we can browse logs from a container within a Kubernetes pod using the <strong class="source-inline">kubectl logs</strong> command. If more than one container runs within the pod, we can specify the container’s name using the <strong class="source-inline">-</strong><span class="No-Break"><strong class="source-inline">c</strong></span><span class="No-Break"> flag.</span></p>
+			<p>To access the container logs, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl logs nginx -c nginx
+...
+127.0.0.1 - - [18/Jun/2023:14:08:01 +0000] "GET / HTTP/1.1" 200 612 "-" "curl/7.47.0" "-"</pre>			<p>As the pod is running a single container, we need not specify the <strong class="source-inline">-c</strong> flag, so instead, you can use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl logs nginx</pre>			<p>There might be instances where you may want to get a shell to a running container and troubleshoot what’s going on within that. We use <strong class="source-inline">docker exec</strong> for that in the Docker world. Similarly, we can use <strong class="source-inline">kubectl exec</strong> for that <span class="No-Break">within Kubernetes.</span></p>
+			<p>Run the following command to open a shell session with <span class="No-Break">the container:</span></p>
+			<pre class="console">
+$ kubectl exec -it nginx -- /bin/bash
+root@nginx:/# cd /etc/nginx/ &amp;&amp; ls
+conf.d fastcgi_params mime.types modules nginx.conf scgi_<a id="_idTextAnchor603"/>params uwsgi_params
+root@nginx:/etc/nginx# exit</pre>			<p>You can even run specific commands without opening a shell session. For example, we can perform the preceding operation with a single line, something like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ kubectl exec nginx -- ls /etc/nginx
+conf.d fastcgi_params mime.types modules nginx.conf scgi_params uwsgi_params</pre>			<p><strong class="source-inline">kubectl exec</strong> is an<a id="_idIndexMarker529"/> important command that helps us <span class="No-Break">troubleshoot containers.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">If you modify files or download packages within the container in <strong class="source-inline">exec</strong> mode, they will persist until the current pod is alive. Once the pod is gone, you will lose all changes. Therefore, it isn’t a great way of fixing issues. You should only diagnose problems using <strong class="source-inline">exec</strong>, bake the correct changes in a new image, and then <span class="No-Break">redeploy it.</span></p>
+			<p>When we looked at distroless containers in the previous chapter, they did not allow <strong class="source-inline">exec</strong> into the container for security reasons. There are debug images available for distroless that will enable you to open a shell session for troubleshooting purposes if <span class="No-Break">you wish.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">By default, a container runs as the root user if you don’t specify the user within the Dockerfile while building the image. You can set a <strong class="source-inline">runAsUser</strong> attribute within your pod’s security context if you want to run your pod as a specific user, but this is not ideal. The best practic<a id="_idTextAnchor604"/>e is to bake the user within the <span class="No-Break">container image.</span></p>
+			<p>We’ve discussed troubleshooting running containers, but what if the containers fail to start for <span class="No-Break">some reason?</span></p>
+			<p>Let’s look at the <span class="No-Break">following example:</span></p>
+			<pre class="console">
+$ kubectl run nginx-1 --image=nginx-1</pre>			<p>Now, let’s try to get the pod and see <span class="No-Break">for ourselves:</span></p>
+			<pre class="console">
+$ kubectl get pod nginx-1
+NAME      READY   STATUS             RESTARTS   AGE
+nginx-1   0/1     ImagePullBackOff   0          25s</pre>			<p>Oops! There is some error now, and the status is <strong class="source-inline">ImagePullBackOff</strong>. Well, it seems like there is some issue with the image. While we understand that the issue is with the image, we want to understand the real issue, so for further information on this, we can describe the pod using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl describe pod nginx-1</pre>			<p>Now, this gives us a <a id="_idIndexMarker530"/>wealth of information regarding the pod, and if you look at the <strong class="source-inline">events</strong> section, you will find a specific line that tells us what is wrong with <span class="No-Break">the pod:</span></p>
+			<pre class="console">
+Warning  Failed     60s (x4 over 2m43s)  kubelet            Failed to pull image "nginx-
+1": rpc error: code = Unknown desc = failed to pull and unpack image "docker.io/library/
+nginx-1:latest": failed to resolve reference "docker.io/library/nginx-1:latest": pull 
+access denied, repository does not exist or may require authorization: server message: 
+insuff<a id="_idTextAnchor605"/>icient_scope: authorization failed</pre>			<p>So, this one is telling us that either the repository does not exist, or the repository exists but it is private, and hence <span class="No-Break">authorization failed.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">You can use <strong class="source-inline">kubectl describe</strong> for most Kubernetes resources. It should be the first command you use while <span class="No-Break">troubleshooting issues.</span></p>
+			<p>Since we know that the image does not exist, let’s change the image to a valid one. We must delete the pod and recreate it with the correct image to <span class="No-Break">do that.</span></p>
+			<p>To delete the pod, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl delete pod nginx-1</pre>			<p>To recreate the pod, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl run nginx-1 --image=nginx</pre>			<p>Now, let’s get the pod; it should run <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+$ kubectl get pod nginx-1
+NAME      READY   STATUS    RESTARTS   AGE
+nginx-1   1/1     Running   0          42s</pre>			<p>The pod is now <a id="_idIndexMarker531"/>running since we have fixed the <span class="No-Break">image issue.</span></p>
+			<p>So far, we’ve managed to run containers using pods, but pods are very powerful resources that help you manage containers. Kubernetes pods provide probes to ensure your applica<a id="_idTextAnchor606"/><a id="_idTextAnchor607"/>tion’s reliability. We’ll have a look at this in<a id="_idTextAnchor608"/> the <span class="No-Break">next section.</span></p>
+			<h2 id="_idParaDest-145"><a id="_idTextAnchor609"/>Ensuring pod reliability</h2>
+			<p>We talked about <a id="_idIndexMarker532"/>health checks in <a href="B19877_04.xhtml#_idTextAnchor399"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, <em class="italic">Creating and Managing Container Images</em>, and I also mentioned that you should not use them on the Docker level and instead use the ones provided by your container orchestrator. Kubernetes provides three <strong class="bold">probes</strong> to monitor your pod’s health – the <strong class="bold">start<a id="_idTextAnchor610"/>up probe</strong>, <strong class="bold">liveness probe</strong>, and <span class="No-Break"><strong class="bold">readiness <a id="_idTextAnchor611"/>probe</strong></span><span class="No-Break">.</span></p>
+			<p>The following diagram depicts all three <span class="No-Break">probes graphically:</span></p>
+			<div>
+				<div id="_idContainer045" class="IMG---Figure">
+					<img src="image/B19877_05_3.jpg" alt="Figure 5.3 – Kubernetes probes" width="1464" height="623"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.3 – Kubernetes probes</p>
+			<p>Let’s look at each one in turn and underst<a id="_idTextAnchor612"/>and how and when to <span class="No-Break">use them.</span></p>
+			<h3>Startup probe</h3>
+			<p>Kubernetes uses <strong class="bold">startup probes</strong> to check<a id="_idIndexMarker533"/> whether the application has started. You can use<a id="_idIndexMarker534"/> st<a id="_idTextAnchor613"/>artup probes on applications that start slow or those you don’t know how long it might take to start. While the startup probe is active, it disables other probes so that they don’t interfere with its operation. As the application has not started until the startup probe reports it, there is no point in having<a id="_idTextAnchor614"/> any other <span class="No-Break">probes active.</span></p>
+			<h3>Readiness probe</h3>
+			<p><strong class="bold">Readiness probes</strong> ascertain <a id="_idIndexMarker535"/>whether a container is ready to serve requests. They differ from <a id="_idIndexMarker536"/>startup probes because, unlike the startup probe, which only checks whether the application has started, the readiness probe ensures that the container can begin to process requests. A pod is ready when all the containers of the pod are ready. Readiness probes ensure that no<a id="_idTextAnchor615"/> traffic is sent to a pod if the pod is not ready. Therefore, it allows fo<a id="_idTextAnchor616"/>r a better <span class="No-Break">user experience.</span></p>
+			<h3>Liveness probe</h3>
+			<p><strong class="bold">Liveness probes</strong> are <a id="_idIndexMarker537"/>used to check whether a container is running and healthy. The probe <a id="_idIndexMarker538"/>checks the health of the containers periodically. If a container is found to be unhealthy, the liveness probe will kill the container. If you’ve set the <strong class="source-inline">restartPolicy</strong> field of your pod to <strong class="source-inline">Always</strong> or <strong class="source-inline">OnFailure</strong>, Kubernetes will restart the container. Therefore, it improves the service’s reliability by detecting deadlocks and ensuring the containers are running instead of just reporting <span class="No-Break">as running.</span></p>
+			<p>Now, let’s look at an example to u<a id="_idTextAnchor617"/>nderstand <span class="No-Break">probes better.</span></p>
+			<h3>Probes in action</h3>
+			<p>Let’s improve the last <a id="_idIndexMarker539"/>manifest and add some probes to create the following <strong class="source-inline">nginx-probe.yaml</strong> <span class="No-Break">manifest file:</span></p>
+			<pre class="console">
+    ...
+    startupProbe:
+      exec:
+        command:
+        - cat
+        - /usr/share/nginx/html/index.html
+      failureThreshold: 30
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySe<a id="_idTextAnchor618"/>conds: 5
+      periodSeconds: 3
+  restartPolicy: Always</pre>			<p>The manifest file <a id="_idIndexMarker540"/>contains all <span class="No-Break">three probes:</span></p>
+			<ul>
+				<li>The startup probe checks whether the <strong class="source-inline">/usr/share/nginx/html/index.html</strong> file exists. It will continue checking it 30 times at an interval of 10 seconds until one of them succeeds. Once it detects the file, the startup probe will stop <span class="No-Break">probing further.</span></li>
+				<li>The readiness probe checks whether there is a listener on port <strong class="source-inline">80</strong> and responds with <strong class="source-inline">HTTP 2xx – 3xx on path /</strong>. It waits for 5 seconds initially and then checks the pod every 5 seconds. If it gets a <strong class="source-inline">2xx – 3xx</strong> response, it will report the container as ready and <span class="No-Break">accept requests.</span></li>
+				<li>The liveness probe checks whether the pod responds with <strong class="source-inline">HTTP 2xx – 3xx</strong> on <strong class="source-inline">port</strong> <strong class="source-inline">80</strong> and <strong class="source-inline">path /</strong>. It waits for 5 seconds initially and probes the container every 3 seconds. Suppose, during a check, that it finds the pod not responding for <strong class="source-inline">failureThreshold</strong> times (this defaults to <strong class="source-inline">3</strong>). In that case, it will kill the container, and the kubelet will take appropriate action based on the pod’s <span class="No-Break"><strong class="source-inline">restartPolicy</strong></span><span class="No-Break"> field.</span></li>
+				<li>Let’s apply the YAML<a id="_idIndexMarker541"/> file and watch the pods come to life by using the <span class="No-Break">following command:</span></li>
+			</ul>
+			<pre class="console">
+$ kubectl delete pod nginx &amp;&amp; kubectl apply -f nginx-probe.yaml &amp;&amp; \
+ kubectl get pod -w
+NAME    READY   STATUS              RESTARTS   AGE
+nginx   0/1     Running             0          4s
+nginx   0/1     Running             0          11s
+nginx   1/1     Running             0          12s</pre>			<p>As we can see, the pod is quickly ready from the running state. It takes approximately 10 seconds for that to happen as the readiness probe kicks in 10 seconds after the pod starts. Then, the liv<a id="_idTextAnchor619"/>eness probe keeps monitoring the health of <span class="No-Break">the pod.</span></p>
+			<p>Now, let’s do something that will break the liveness check. Imagine someone getting a shell to the container and deleting some important files. How do you think the liveness probe will react? Let’s have <span class="No-Break">a look.</span></p>
+			<p>Let’s delete the <strong class="source-inline">/usr/share/nginx/html/index.html</strong> file from the container and then check how the container behaves using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl exec -it nginx -- rm -rf /usr/share/nginx/html/index.html &amp;&amp; \
+ kubectl get pod nginx -w
+NAME    READY   STATUS    RESTARTS     AGE
+nginx   1/1     Running   0            2m5s
+nginx   0/1     Running   1 (2s ago)   2m17s
+nginx   1/1     Running   1 (8s ago)   2m22s</pre>			<p>So, while we watch the pod, the initial delete is only detected after 9 seconds. That’s because of the liveness probe. It tries for 9 seconds, three times <strong class="source-inline">periodSeconds</strong>, since <strong class="source-inline">failureThreshold</strong> defaults to <strong class="source-inline">3</strong>, before declaring the pod as unhealthy and killing the container. No sooner does it kill the container than the kubelet restarts it as the pod’s <strong class="source-inline">restartPolicy</strong> field is set to <strong class="source-inline">Always</strong>. Then, we see the startup and readiness probes kicking in, and soon, the pod gets ready. Therefore, no matter what, your pods are reliable and will <a id="_idIndexMarker542"/>work even if a part of your application <span class="No-Break">is faulty.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Using readiness and liveness probes will help provide a better user experience, as no requests go to pods that are not ready to process any request. If your application does not respond appropriately, it will replace the container. If multiple pods are running to serve the req<a id="_idTextAnchor620"/>uest, your service is <span class="No-Break">exceptionally resilient.</span></p>
+			<p>As we discussed previously, a pod can contain one or more containers. Let’s loo<a id="_idTextAnchor621"/><a id="_idTextAnchor622"/>k at some use cases where you might want multiple contain<a id="_idTextAnchor623"/>ers instead <span class="No-Break">of one.</span></p>
+			<h2 id="_idParaDest-146"><a id="_idTextAnchor624"/>Pod multi-container design patterns</h2>
+			<p>You can run multiple containers in pods in<a id="_idIndexMarker543"/> two ways – running a container as an init container or running a container as a helper container to the main container. We’ll explore both approaches in the <span class="No-Break">f<a id="_idTextAnchor625"/>ollowing subsections.</span></p>
+			<h3>Init containers</h3>
+			<p><strong class="bold">Init containers</strong> are run <a id="_idIndexMarker544"/>before the main container<a id="_idTextAnchor626"/> is bootstrapped, so you can use them to initialize your container environment before the main container takes over. Here are <span class="No-Break">some examples:</span></p>
+			<ul>
+				<li>A directory might require a particular set of ownership or permissions before you want to start your container using the <span class="No-Break">non-root user</span></li>
+				<li>You might want to clone a Git repository before starting the <span class="No-Break">web server</span></li>
+				<li>You can add a <span class="No-Break">startup delay</span></li>
+				<li>You can generate configuration dynamically, such as for containers that want to dynamically connect to some other pod that it is not aware of during build time but should be <span class="No-Break">during runtime</span></li>
+			</ul>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Use init containers only as a last resort, as they hamper the startup time of your containers. Try to bake the configuration within your container image or <span class="No-Break">customize it.</span></p>
+			<p>Now, let’s look at an example to see init containers <span class="No-Break">in action.</span></p>
+			<p>To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch5/multi-container-pod/init/</pre>			<p>Let’s serve the <strong class="source-inline">example.com</strong> website from our <strong class="source-inline">nginx</strong> web server. We will get the <strong class="source-inline">example.com<a id="_idTextAnchor627"/></strong> web page and save it as <strong class="source-inline">index.html</strong> in the <strong class="source-inline">nginx</strong> default HTML directory before <span class="No-Break">starting </span><span class="No-Break"><strong class="source-inline">nginx</strong></span><span class="No-Break">.</span></p>
+			<p>Access the <a id="_idIndexMarker545"/>manifest file, <strong class="source-inline">nginx-init.yaml</strong>, which should contain <span class="No-Break">the following:</span></p>
+			<pre class="console">
+…
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx
+    volumeMounts:
+    - mountPath: /usr/share/nginx/html
+      name: html-volume
+  initContainers:
+  - name: init-nginx
+    image: busybox:1.28
+    command: ['sh', '-c', 'mkdir -p /usr/share/nginx/html &amp;&amp; wget -O /usr/share/nginx/html/index.html http://example.com']
+    volumeMounts:
+    - mountPath: /usr/share/nginx/html
+      name: html-volume
+<a id="_idTextAnchor628"/>  volumes:
+  - name: html-volume
+    emptyDir: {}</pre>			<p>If we look at<a id="_idIndexMarker546"/> the <strong class="source-inline">spec</strong> section of the manifest file, we’ll see <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="source-inline">containers</strong>: This section defines one or more containers that form <span class="No-Break">the pod.</span></li>
+				<li><strong class="source-inline">containers.name</strong>: This is the container’s name, which is <strong class="source-inline">nginx-container</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">containers.image</strong>: This is the container image, which is <strong class="source-inline">nginx</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">containers.volumeMounts</strong>: This defines a list of volumes that should be mounted to the container. It is similar to the volumes we read about in <a href="B19877_04.xhtml#_idTextAnchor399"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, <em class="italic">Creating and Managing </em><span class="No-Break"><em class="italic">Container Images</em></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">containers.volumeMounts.mountPath</strong>: This defines the path to mount the volume on, which is <strong class="source-inline">/usr/share/nginx/html</strong> in this case. We will share this volume with the init container so that when the init container downloads the <strong class="source-inline">index.html</strong> file from <strong class="source-inline">example.com</strong>, this directory will contain the <span class="No-Break">same file.</span></li>
+				<li><strong class="source-inline">containers.volumeMounts.name</strong>: This is the name of the volume, which is <strong class="source-inline">html-volume</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">initContainers</strong>: This section defines one or more in<a id="_idTextAnchor629"/>it containers that run before the <span class="No-Break">main containers.</span></li>
+				<li><strong class="source-inline">initContainers.name</strong>: This is the init container’s name, which is <strong class="source-inline">init-nginx</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">initContainers.image</strong>: This is the init container image, which is <strong class="source-inline">busybox:1.28</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">initContainers.command</strong>: This is the command that the busybox should execute. In this case, <strong class="source-inline">'mkdir -p /usr/share/nginx/html &amp;&amp; wget -O /usr/share/nginx/html/index.html </strong><a href="http://example.com">http://example.com</a><strong class="source-inline">'</strong> will download the content of <strong class="source-inline">example.com</strong> to the <strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">usr/share/nginx/html</strong></span><span class="No-Break"> directory.</span></li>
+				<li><strong class="source-inline">initContainers.volumeMounts</strong>: We will mount the same volume we defined in <strong class="source-inline">nginx-container</strong> on this container. So, anything we save in this volume will automatically appear <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">nginx-container</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">initContainers.volumeMounts.mountPath</strong>: This defines the path to mount the volume on, which is <strong class="source-inline">/usr/share/nginx/html</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">initContainers.volumeMounts.name</strong>: This is the name of the volume, which is <strong class="source-inline">html-volume</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">volumes</strong>: This section defines one or more volumes associated with the <span class="No-Break">pod’s containers.</span></li>
+				<li><strong class="source-inline">volumes.name</strong>: This is the volume’s name, which is <strong class="source-inline">html-volume</strong> in <span class="No-Break">this case.</span></li>
+				<li><strong class="source-inline">volumes.empt<a id="_idTextAnchor630"/>yDir</strong>: This defines an <strong class="source-inline">emptyDir</strong> volume. It is similar to a <strong class="source-inline">tmpfs</strong> volume <a id="_idIndexMarker547"/>in Docker. Therefore, it is not persistent and lasts just for the <span class="No-Break">container’s lifetime.</span></li>
+			</ul>
+			<p>So, let’s go ahead and apply the manifest and watch the pod come to life using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl delete pod nginx &amp;&amp; kubectl apply -f nginx-init.yaml &amp;&amp; \
+ kubectl get pod nginx -w
+NAME    READY   STATUS            RESTARTS   AGE
+nginx   0/1     Init:0/1          0          0s
+nginx   0/1     PodInitializing   0          1s
+nginx   1/1     Running           0          3s</pre>			<p>Initially, we <a id="_idIndexMarker548"/>can see that the <strong class="source-inline">nginx</strong> pod shows a status of <strong class="source-inline">Init:0/1</strong>. This means that <strong class="source-inline">0</strong> out of <strong class="source-inline">1</strong> init containers have started initializing. After some time, we can see that the pod reports its status, <strong class="source-inline">PodInitializing</strong>, which means that the init containers have started running. The pod reports a running status once the init containers have <span class="No-Break">run successfully.</span></p>
+			<p>Now, once the pod starts to run, we can port-forward the container from port <strong class="source-inline">80</strong> to host port <strong class="source-inline">8080</strong> using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl port-forward nginx 8080:80</pre>			<p>Open a duplicate Terminal and try to <strong class="source-inline">curl</strong> the localhost on port <strong class="source-inline">8080</strong> by using the <span class="No-Break">following com<a id="_idTextAnchor631"/>mand:</span></p>
+			<pre class="console">
+$ curl localhost:8080
+    &lt;title&gt;Example Domain&lt;/title&gt;</pre>			<p>Here, we can see the example domain response from our web<a id="_idTextAnchor632"/> server. This means that the init container worked <span class="No-Break">perfectly fine.</span></p>
+			<p>As you may <a id="_idIndexMarker549"/>have understood by now, the life cycle of init containers ends before the primary containers start, and a pod can contain one or more main containers. So, let’s look at a few design patterns we can u<a id="_idTextAnchor633"/>se in the <span class="No-Break">main container.</span></p>
+			<h3>The ambassador pattern</h3>
+			<p>The <strong class="bold">ambassador pattern</strong> derives<a id="_idIndexMarker550"/> its name from an ambassador, an envoy representing a country <a id="_idIndexMarker551"/>overseas. You c<a id="_idTextAnchor634"/>an also think of an ambassador as a proxy of a particular application. Let’s say, for example, that you have migrated one of your existing Python Flask applications to containers, and one of your containers needs to communicate with a Redis database. The database always existed in the local host. Therefore, the database connection details within your application contain <span class="No-Break"><strong class="source-inline">localhost</strong></span><span class="No-Break"> e<a id="_idTextAnchor635"/>verywhere.</span></p>
+			<p>Now, there are two approaches you <span class="No-Break">can take:</span></p>
+			<ul>
+				<li>You can change the application code and use config maps and secrets (more on these later) to inject the database connection details into the <span class="No-Break">environment variable.</span></li>
+				<li>You can keep using the existing code and use a second container as a TCP proxy to the Redis database. The TCP proxy will link with the config map and secrets and contain the Redis database’s <span class="No-Break">connection details.</span></li>
+			</ul>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">The ambassador pattern helps developers focus on the application without worrying about the configuration details. Consider using it if you want t<a id="_idTextAnchor636"/>o decouple application development from <span class="No-Break">config management.</span></p>
+			<p>The second <a id="_idIndexMarker552"/>approach solves our problem if <a id="_idIndexMarker553"/>we wish to do a like-for-like migration. We can use config maps to define the environment-specific configura<a id="_idTextAnchor637"/>tion without changing the application code. The following diagram shows <span class="No-Break">this approach:</span></p>
+			<div>
+				<div id="_idContainer046" class="IMG---Figure">
+					<img src="image/B19877_05_4.jpg" alt="Figure 5.4 – The ambassador pattern" width="1086" height="513"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.4 – The ambassador pattern</p>
+			<p>Before we delve i<a id="_idTextAnchor638"/>nto the technicalities, let’s understand a <span class="No-Break">config map.</span></p>
+			<h3>Config map</h3>
+			<p>A <strong class="bold">config map</strong> contains<a id="_idIndexMarker554"/> key-value pairs that we can use for various purposes, such as defining environment-specific properties or injecting an external variable at container startup or <span class="No-Break">during runtime.</span></p>
+			<p>The idea of the config map is to decouple the application with configuration and to externalize configuration at a Kubernetes level. It is similar to using a properties file, for example, to define th<a id="_idTextAnchor639"/>e <span class="No-Break">environment-specific configuration.</span></p>
+			<p>The following diagram explains <span class="No-Break">this beautifully:</span></p>
+			<div>
+				<div id="_idContainer047" class="IMG---Figure">
+					<img src="image/B19877_05_5.jpg" alt="Figure 5.5 – Config maps" width="1018" height="1030"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.5 – Config maps</p>
+			<p>We will use <strong class="source-inline">ConfigMap</strong> t<a id="_idTextAnchor640"/>o define the connection <a id="_idIndexMarker555"/>properties of the external Redis database within the <span class="No-Break">ambassador container.</span></p>
+			<h4>Example application</h4>
+			<p>We will use the<a id="_idIndexMarker556"/> example application we used in <a href="B19877_03.xhtml#_idTextAnchor220"><span class="No-Break"><em class="italic">Chapter 3</em></span></a>, <em class="italic">Containerization with Docker</em>, in the <em class="italic">Deploying a sample application with Docker Compose</em> section. The source code has been replicated into the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch5/multi-container-pod/ambassador</pre>			<p>You can visualize the <strong class="source-inline">app.py</strong> file of the Flask application, the <strong class="source-inline">requirements.txt</strong> file, an<a id="_idTextAnchor641"/>d the Dockerfile to understand what the <span class="No-Break">application does.</span></p>
+			<p>Now, let’s build the container using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ docker build -t &lt;your_dockerhub_user&gt;/flask-redis .</pre>			<p>Let’s push it to our container registry using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ docker push &lt;your_dockerhub_user&gt;/flask-redis</pre>			<p>As you may have noticed, the <strong class="source-inline">app.py</strong> code defines the cache as <strong class="source-inline">localhost:6379</strong>. We will run an ambassador container on <strong class="source-inline">localhost:6379</strong>. The proxy will tunnel the connection to the <strong class="source-inline">redis</strong> pod <span class="No-Break">running elsewhere.</span></p>
+			<p>First, let’s create the <strong class="source-inline">redis</strong> pod using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl run redis --image=redis</pre>			<p>Now, let’s expose the <strong class="source-inline">redis</strong> pod to the cluster resources via a <strong class="source-inline">Service</strong> resource. This will allow any pod within the cluster to communicate with the <strong class="source-inline">redis</strong> pod using the <strong class="source-inline">redis</strong> hostname. We will discuss Kubernetes <strong class="source-inline">Service</strong> resources in the next chapter <span class="No-Break">in detail:</span></p>
+			<pre class="console">
+$ kubectl expose pod redis --port 6379</pre>			<p>Cool! Now that <a id="_idIndexMarker557"/>the pod and the <strong class="source-inline">Servic<a id="_idTextAnchor642"/>e</strong> resource are up and running, let’s work on the <span class="No-Break">ambassador pattern.</span></p>
+			<p>We need to define two config maps first. The first describes the <strong class="source-inline">redis</strong> host and port details, while the second defines the template <strong class="source-inline">nginx.conf</strong> file to work as a <span class="No-Break">reverse proxy.</span></p>
+			<p>The <strong class="source-inline">redis-config-map.yaml</strong> file looks <span class="No-Break">like this:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+data:
+  host: "redis"
+  port: "6379"</pre>			<p>The preceding YAML file defines a config map called <strong class="source-inline">redis-config</strong> that contains <strong class="source-inline">host</strong> and <strong class="source-inline">port</strong> properties. You can have multiple config maps, one for <span class="No-Break">each environment.</span></p>
+			<p>The <strong class="source-inline">nginx-config-map.yaml</strong> file looks <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    ...
+    stream {
+        server {
+            listen     6379;
+            proxy_pass stream_redis_backend;
+        }
+        upstream stream<a id="_idTextAnchor643"/>_redis_backend {
+            server REDIS_HOST:REDIS_PORT;
+        }
+    }</pre>			<p>This config map<a id="_idIndexMarker558"/> injects the <strong class="source-inline">nginx.conf</strong> template as a config map value. This template defines the configuration of our ambassador pod to listen on <strong class="source-inline">localhost:6379</strong> and tunnel the connection to <strong class="source-inline">REDIS_HOST:REDIS_PORT</strong>. As the <strong class="source-inline">REDIS_HOST</strong> and <strong class="source-inline">REDIS_PORT</strong> values are placeholders, we must fill these up with the correct values that we obtained from the <strong class="source-inline">redis-config</strong> config map. To do that, we can mount this file to a volume and then manipulate it. We can use <strong class="source-inline">initContainer</strong> to initialize the proxy with the <span class="No-Break">correct configuration.</span></p>
+			<p>Now, let’s look at the <a id="_idIndexMarker559"/>pod configuration manifest, <strong class="source-inline">flask-ambassador.yaml</strong>. There are multiple parts of this YAML file. Let’s look at the <strong class="source-inline">containers</strong> <span class="No-Break">section first:</span></p>
+			<pre class="console">
+...
+spec:
+  containers:
+  - name: flask-app
+    image: &lt;your_dockerhub_user&gt;/flask-redis
+  - name: nginx-ambassador
+    image: nginx
+    volumeMounts:
+    - mountPath: /etc/nginx
+      name: nginx-volume
+  ...</pre>			<p>This section contains a container called <strong class="source-inline">flask-app</strong> that uses the <strong class="source-inline">&lt;your_dockerhub_user&gt;/flask-redis</strong> image that we built in the previous section. The second container is the <strong class="source-inline">nginx-ambassador</strong> container <a id="_idTextAnchor644"/>that will act as the proxy to <strong class="source-inline">redis</strong>. Therefore, we have mounted the <strong class="source-inline">/etc/nginx</strong> directory on a volume. This volume is also mounted on the init container to generate the required configuration before <strong class="source-inline">nginx</strong> <span class="No-Break">boots up.</span></p>
+			<p>The following is the <span class="No-Break"><strong class="source-inline">initContainers</strong></span><span class="No-Break"> section:</span></p>
+			<pre class="console">
+  initContainers:
+  - name: init-nginx
+    image: busybox:1.28
+    command: ['sh', '-c', 'cp -L /config/nginx.conf /etc/nginx/nginx.conf &amp;&amp; sed -i "s/
+REDIS_HOST/${REDIS_HOST}/g" /etc/nginx/nginx.conf']
+    env:
+      - name: REDIS_HOST
+        valueFrom:
+          configMapKeyRef:
+            name: redis-config
+            key: host
+      - name: REDIS_PORT
+        valueFrom:
+          configMapKeyRef:
+            name: redis-config
+            key: port
+    volumeMounts:
+    - mountPath: /etc/nginx
+      name: nginx-volume
+    - mountPath: /config
+      name: config</pre>			<p>This section<a id="_idIndexMarker560"/> defines a <strong class="source-inline">busybox</strong> container – <strong class="source-inline">init-nginx</strong>. The container needs to generate the <strong class="source-inline">nginx-ambassador</strong> proxy configuration to communicate with Redis; therefore, two environment variables are present. Both environment variables are sourced from the <strong class="source-inline">redis-config</strong> config map. Apart from that, we have also mounted the <strong class="source-inline">nginx.conf</strong> <a id="_idTextAnchor645"/>file from the <strong class="source-inline">nginx-config</strong> config map. The <strong class="source-inline">command</strong> section within the init container uses the environment variables to replace placeholders within the <strong class="source-inline">nginx.conf</strong> file, after which we get a TCP proxy to the <span class="No-Break">Redis backend.</span></p>
+			<p>The <strong class="source-inline">volumes</strong> section defines <strong class="source-inline">nginx-volume</strong> as an <strong class="source-inline">emptyDir</strong> volume, and the <strong class="source-inline">config</strong> volume is mounted from the <strong class="source-inline">nginx.conf</strong> file present in the <strong class="source-inline">nginx-config</strong> <span class="No-Break">config map:</span></p>
+			<pre class="console">
+  volumes:
+  - name: nginx-volume
+    emptyDir: {}
+  - name: config
+    configMap:
+      name: nginx-config
+      items:
+      - key: "nginx.conf"
+        path: "nginx.conf"</pre>			<p>Now, let’s start applying the YAML files <span class="No-Break">in steps.</span></p>
+			<p>Apply both of the config maps using the <span class="No-Break">following commands:</span></p>
+			<pre class="console">
+$ kubectl apply -f redis-config-map.yaml
+$ kubectl apply -f nginx-config-map.yaml</pre>			<p>Let’s apply the pod configuration using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f flask-ambassador.yaml</pre>			<p>Get the pod to <a id="_idIndexMarker561"/>see whether the configuration is correct by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod/flask-ambassador
+NAME               READY   STATUS    RESTARTS   AGE
+flask-ambassador   2/2     Running   0          10s</pre>			<p>As the pod is running successfully now, let’s port-forward <strong class="source-inline">5000</strong> to the localhost for some tests by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl port-forward flask-ambassador 5000:5000</pre>			<p>Now, open a<a id="_idIndexMarker562"/> duplicate Terminal and try to <strong class="source-inline">curl</strong> on <strong class="source-inline">localhost:5000</strong> using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl localhost:5000
+Hi there! This page was last visited on 2023-06-18, 16:52:28.
+$ curl localhost:5000
+Hi there! This page was last visited on 2023-06-18, 16:52:28.
+$ curl localhost:5000
+Hi there! This page was last visited on 2023-16-28, 16:52:32.</pre>			<p>As we can see, every time we <strong class="source-inline">curl</strong> the application, we get the last visited time on our screen. The ambassador pattern <span class="No-Break">is working.</span></p>
+			<p>This was a simple example of the ambassador pattern. There are advanced configurations you can do to add fine-grained control on how your application should interact with the outside world. You can use the ambassador pattern to secure traffic that moves from your con<a id="_idTextAnchor646"/>tainers. It also simplifies application development for your development team as they need not worry about these nuances. In contrast, the operations team can use these containers to manage your environment in a better way without stepping <a id="_idIndexMarker563"/>on each <span class="No-Break">other’s toes.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">As the ambassador pattern adds some overhead as you tunnel connections via a proxy, you should only use it if the management benefits outweigh the extra cost you incur because of the <span class="No-Break">ambassador container.</span></p>
+			<p>Now, let’s look at anoth<a id="_idTextAnchor647"/>er multi-container pod pattern – <span class="No-Break">sidecars.</span></p>
+			<h3>The sidecar pattern</h3>
+			<p><strong class="bold">Sidecars</strong> derive their names <a id="_idIndexMarker564"/>from motorcycle sidecars. The sidecar does not change the<a id="_idIndexMarker565"/> bike’s core functionality and can work perfectly without it. Instead, it adds an extra seat, a functionality that helps you give an additional person a ride. Similarly, sidecars in a pod are helper containers that provide functionalities unrelated to the main container’s core functionality and enhance it instead. Examples include logging and monitoring containers. Keeping a separate container for logging will help decouple the logging responsibilities from your main container, which will help you monitor your application even when the main container goes down for <span class="No-Break">some reason.</span></p>
+			<p>It also helps if there is some issue with the logging code, and instead of the entire application going down, only the logging container is impacted. You can also use sidecars to keep helper or related containers together with the main container since we know containers within the pod share the <span class="No-Break">same machine.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Only use multi-container pods if two containers are functionally related and work as <span class="No-Break">a unit.</span></p>
+			<p>You can also use sidecars to segregate your application with secrets. For example, if you are running a web application that needs access to specific passwords to operate, it would be best to mount the secrets to a sidecar and let the sidecar provide the passwor<a id="_idTextAnchor648"/>ds to the web application via a link. This is because if someone gains access to your application container’s filesystem, they cannot get hold of your p<a id="_idTextAnchor649"/>asswords as another container is responsible for sourcing it, as shown in the <span class="No-Break">following diagram:</span></p>
+			<div>
+				<div id="_idContainer048" class="IMG---Figure">
+					<img src="image/B19877_05_6.jpg" alt="Figure 5.6 – The sidecar pattern" width="537" height="751"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.6 – The sidecar pattern</p>
+			<p>Let’s implement the preceding pattern to understand a sidecar better. We have a Flask application that interacts with a Redis sidecar. We will pre-populate the Redis sidecar with a<a id="_idIndexMarker566"/> sec<a id="_idTextAnchor650"/>ret <strong class="source-inline">foobar</strong>, and we will do that by using the Kubernetes <span class="No-Break">secret </span><span class="No-Break"><a id="_idIndexMarker567"/></span><span class="No-Break">resource.</span></p>
+			<h3>Secrets</h3>
+			<p><strong class="bold">Secrets</strong> are very<a id="_idIndexMarker568"/> similar to config maps, with the difference that the secret values are <strong class="source-inline">base64</strong>-encoded instead of <strong class="source-inline">plaintext</strong>. While <strong class="source-inline">base64</strong> encoding does not make any difference, and it is as bad as <strong class="source-inline">plaintext</strong> from a security standpoint, you should use secrets for sensitive information such as passwords. That is because the Kubernetes community will develop a soluti<a id="_idTextAnchor651"/>on to tighten the security around secrets in future releases. If you use secrets, you will directly benefit <span class="No-Break">from it.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">As a rule of thumb, always use secrets for confidential data, such as API keys and passwords, and config maps for non-sensitive <span class="No-Break">configuration data.</span></p>
+			<p>To access the files for this section, go to the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch5/multi-container-pod/sid<a id="_idTextAnchor652"/>ecar</pre>			<p>Now, let’s move on to the example <span class="No-Break">Flask application.</span></p>
+			<h4>Example application</h4>
+			<p>The Flask application <a id="_idIndexMarker569"/>queries a Redis sidecar for the secret and sends that as a response. That is not ideal, as you won’t send secrets back as a response, but for this demo, let’s go ahead <span class="No-Break">with that.</span></p>
+			<p>So, first, let’s design our sidecar so that it pre-populates data within the container after <span class="No-Break">it starts.</span></p>
+			<p>We need to create a secret named <strong class="source-inline">secret</strong> with a value of <strong class="source-inline">foobar</strong>. Now, <strong class="source-inline">base64-</strong>encode the Redis command to set the secret into the cache by running the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ echo 'SET secret foobar' | base64
+U0VUIHNlY3JldCBmb29iYXIK</pre>			<p>Now that we have the <strong class="source-inline">base64</strong>-encoded secret, we can create a <strong class="source-inline">redis-secret.yaml</strong> manifest with the string <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+data:
+  redis-secret: U0VUIHNlY3JldCBmb29iYXIK</pre>			<p>Then, we need to build the Redis container so that this secret is created at startup. To access the files for this section, go to the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch5/multi-container-pod/sidecar/redis/</pre>			<p>Create an <strong class="source-inline">entrypoint.sh</strong> file, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+redis-server --daemonize yes &amp;&amp; sleep 5
+redis-cli &lt; /redis-master/init.redis
+redis-cli save
+redis-cli shutdown
+redis-server</pre>			<p>The shell script looks for a file, <strong class="source-inline">init.redis</strong>, within the <strong class="source-inline">/redis-master</strong> directory and runs the <strong class="source-inline">redis-cli</strong> command on it. This means the cache will be pre-populated with the values defined in our secret, provided we mount the secret <span class="No-Break">as </span><span class="No-Break"><strong class="source-inline">/redis-master/init.redis</strong></span><span class="No-Break">.</span></p>
+			<p>Then, we must create a Dockerfile that will use this <strong class="source-inline">entrypoint.sh</strong> script, <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+FROM redis
+COPY entrypoint.sh /tmp/
+CMD ["sh", "/tmp/entrypoint.sh"]</pre>			<p>Now that we are ready, we can build and push the code to <span class="No-Break">Docker Hub:</span></p>
+			<pre class="console">
+$ docker build -t &lt;your_dockerhub_user&gt;/redis-secret .
+$ docker push &lt;your_dockerhub_user&gt;/redis-secret</pre>			<p>Now that we<a id="_idIndexMarker570"/> are ready with the Redis image, we must build the Flask application image. To access the files for this section, <strong class="source-inline">cd</strong> into the <span class="No-Break">following directory:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch5/multi-container-pod/sidecar/flask</pre>			<p>Let’s look at the <strong class="source-inline">app.py</strong> <span class="No-Break">file first:</span></p>
+			<pre class="console">
+...
+cache = redis.Redis(host='localhost', port=6379)
+def get_secret():
+    try:
+        secret = cache.get('secret')
+        return secret
+...
+def index():
+    secret = str(get_secret().decode('utf-8'))
+    return 'Hi there! The secret is {}.\n'.format(secret)</pre>			<p>The code is simple – it gets the secret from the cache and returns that in <span class="No-Break">the response.</span></p>
+			<p>We also created the same Dockerfile that we did in the <span class="No-Break">previous section.</span></p>
+			<p>So, let’s build and push the container image to <span class="No-Break">Docker Hub:</span></p>
+			<pre class="console">
+$ docker build -t &lt;your_dockerhub_user&gt;/flask-redis-secret .
+$ docker push &lt;your_dockerhub_user&gt;/flask-redis-secret</pre>			<p>Now that our images are ready, let’s look at the pod manifest, <strong class="source-inline">flask-sidecar.yaml</strong>, which<a id="_idIndexMarker571"/> is present in the <strong class="source-inline">~/</strong><span class="No-Break"><strong class="source-inline">modern-devops/ch5/multi-container-pod/sidecar/</strong></span><span class="No-Break"> directory:</span></p>
+			<pre class="console">
+...
+spec:
+  containers:
+  - name: flask-app
+    image: &lt;your_dockerhub_user&gt;/flask-redis-secret
+  - name: redis-sidecar
+    image: &lt;your_dockerhub_user&gt;/redis-secret
+    volumeMounts:
+    - mountPath: /redis-master
+      name: secret
+  volumes:
+  - name: secret
+    secret:
+      secretName: redis-secret
+      items:
+      - key: redis-secret
+        path: init.redis</pre>			<p>The pod defines <a id="_idIndexMarker572"/>two containers – <strong class="source-inline">flask-app</strong> and <strong class="source-inline">redis-sidecar</strong>. The <strong class="source-inline">flask-app</strong> container runs the Flask application that will interact with <strong class="source-inline">redis-sidecar</strong> for the secret. The <strong class="source-inline">redis-sidecar</strong> container has mounted the <strong class="source-inline">secret</strong> volume on <strong class="source-inline">/redis-master</strong>. The pod definition also contains a single volume called <strong class="source-inline">secret</strong>, and the volume points to the <strong class="source-inline">redis-secret</strong> secret and mounts that as a <span class="No-Break">file, </span><span class="No-Break"><strong class="source-inline">init.redis</strong></span><span class="No-Break">.</span></p>
+			<p>So, in the end, we have a file, <strong class="source-inline">/redis-master/init.redis</strong>, and, as we know, the <strong class="source-inline">entrypoint.sh</strong> script looks for this file and runs t<a id="_idTextAnchor653"/>he <strong class="source-inline">redis-cli</strong> command to pre-populate the Redis cache with the <span class="No-Break">secret data.</span></p>
+			<p>Let’s apply the secret first using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f redis-secret.yaml</pre>			<p>Then, we can apply the <strong class="source-inline">flask-sidecar.yaml</strong> file using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f flask-sidecar.yaml</pre>			<p>Now, let’s get the pods using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod flask-sidecar
+NAME            READY   STATUS              RESTARTS   AGE
+flask-sidecar   2/2     Running             0          11s</pre>			<p>As the pod is running, it’s time to port-forward it to the host using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl port-forward flask-sidecar 5000:5000</pre>			<p>Now, let’s open a duplicate Terminal, run the <strong class="source-inline">curl localhost:5000</strong> command, and see what <span class="No-Break">we get:</span></p>
+			<pre class="console">
+$ curl localhost:5000
+Hi there! The secret is foobar.</pre>			<p>As we can see, we<a id="_idIndexMarker573"/> get the secret, <strong class="source-inline">foobar</strong>, in the response. The sidecar is <span class="No-Break">working correctly!</span></p>
+			<p>Now, let’s look at another popular <a id="_idTextAnchor654"/>multi-container pod pattern – the <span class="No-Break">adapter pattern.</span></p>
+			<h3>The adapter pattern</h3>
+			<p>As its name suggests, the <strong class="bold">adapter pattern</strong> helps change something to fit a standard, such as cell phones and <a id="_idIndexMarker574"/>laptop <a id="_idIndexMarker575"/>adapters, which convert our main power supply into something our devices can digest. A great example of the adapter patter<a id="_idTextAnchor655"/>n is transforming log files so that they fit an enterprise standard and feed your log <span class="No-Break">analytics solution:</span></p>
+			<div>
+				<div id="_idContainer049" class="IMG---Figure">
+					<img src="image/B19877_05_7.jpg" alt="Figure 5.7 – The adapter pattern" width="598" height="628"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.7 – The adapter pattern</p>
+			<p>It helps when you have a heterogeneous solution outputting log files in several formats but a single log analytics solution that only accepts messages in a particular format. There are two ways of doing this: changing the code for outputting log files in a standard format or using an adapter container to execute <span class="No-Break">the transformation.</span></p>
+			<p>Let’s look at the following scenario to understand <span class="No-Break">it further.</span></p>
+			<p>We have an application that continuously outputs log files without a date at the beginning. Our adapter should read the stream of logs and append the timestamp as soon as a logline <span class="No-Break">is generated.</span></p>
+			<p>For this, we will use the following pod <span class="No-Break">manifest, </span><span class="No-Break"><strong class="source-inline">app-adapter.yaml</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+...
+spec:
+  volumes:
+  - name: logs
+    emptyDir: {}
+  containers:
+  - name: app-container
+    image: ubuntu
+    command: ["/bin/bash"]
+    args: ["-c", "while true; do echo 'This is a log line' &gt;&gt; /var/log/app.log; sleep 
+2;done"]
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log
+  - name: log-adapter
+    image: ubuntu
+    command: ["/bin/bash"]
+    args: ["-c", "apt update -y &amp;&amp; apt install -y moreutils &amp;&amp; tail -f /var/log/app.log | 
+ts '[%Y-%m-%d %H:%M:%<a id="_idTextAnchor656"/>S]' &gt; /var/log/out.log"]
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log</pre>			<p>The pod <a id="_idIndexMarker576"/>contains two containers – the app <a id="_idIndexMarker577"/>container, which is a simple Ubuntu container that outputs <strong class="source-inline">This is a log line</strong> every 2 seconds, and the log adapter, which continuously tails the <strong class="source-inline">app.log</strong> file, adds a timestamp at the beginning of the line, and sends the resulting output to <strong class="source-inline">/var/log/out.log</strong>. Both containers share the <strong class="source-inline">/var/log</strong> volume, which is mounted as an <strong class="source-inline">emptyDir</strong> volume on <span class="No-Break">both containers.</span></p>
+			<p>Now, let’s apply this manifest using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl apply -f app-adapter.yaml</pre>			<p>Let’s wait a while and check whether the pod is running by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl get pod app-adapter
+NAME          READY   STATUS    RESTARTS   AGE
+app-adapter   2/2     Running   0          8s</pre>			<p>As the pod is running, we can now get a shell into the log adapter containe<a id="_idTextAnchor657"/>r by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ kubectl exec -it app-adapter -c log-adapter -- bash</pre>			<p>When we get into the shell, we can <strong class="source-inline">cd</strong> into the <strong class="source-inline">/var/log</strong> directory and list its contents using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+root@app-adapter:/# cd /var/log/ &amp;&amp; ls
+app.log apt/ dpkg.log out.log</pre>			<p>As we can see, we get <strong class="source-inline">app.log</strong> and <strong class="source-inline">out.log</strong> as two files. Now, let’s use the <strong class="source-inline">cat</strong> command to print <a id="_idIndexMarker578"/>both of them to see what <span class="No-Break">we get.</span></p>
+			<p>First, <strong class="source-inline">cat</strong> the <strong class="source-inline">app.log</strong> file <a id="_idIndexMarker579"/>using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+root@app-adapter:/var/log# cat app.log
+This is a log line
+This is a log line
+This is a log line</pre>			<p>Here, we can see that a series of log lines are <span class="No-Break">being printed.</span></p>
+			<p>Now, <strong class="source-inline">cat</strong> the <strong class="source-inline">out.log</strong> file to see what we get using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+root@app-adapter:/var/log# cat out.log
+[2023-06-18 16:35:25] This is <a id="_idTextAnchor658"/>a log line
+[2023-06-18 16:35:27] This is a log line
+[2023-06-18 16:35:29] This is a log line</pre>			<p>Here, we can see timestamps in front of the log line. This means<a id="_idTextAnchor659"/><a id="_idTextAnchor660"/> that the adapter pattern is working correctly. You can then export this log file to your log <span class="No-Break">analytics tool.</span></p>
+			<h1 id="_idParaDest-147"><a id="_idTextAnchor661"/>Summary</h1>
+			<p>We have reached the end of this critical chapter. We’ve covered enough ground to get you started with Kubernetes and understand and appreciate the best practices <span class="No-Break">surrounding it.</span></p>
+			<p>We started with Kubernetes and why we need it and then discussed bootstrapping a Kubernetes cluster using Minikube and KinD. Then, we looked at the pod resource and discussed creating and managing pods, troubleshooting them, ensuring your application’s reliability using probes, and multi-container design patterns to appreciate why Kubernetes uses pods in the first place instead <span class="No-Break">of containers.</span></p>
+			<p>In the next chapter, we will deep dive into the advanced aspects of Kubernetes by covering c<a id="_idTextAnchor662"/><a id="_idTextAnchor663"/>ontrollers, services, ingresses, managing a stateful application, and Kubernetes command-line <span class="No-Break">best practices.</span></p>
+			<h1 id="_idParaDest-148"><a id="_idTextAnchor664"/>Questions</h1>
+			<p>Answer the following questions to test your knowledge of <span class="No-Break">this chapter:</span></p>
+			<ol>
+				<li>All communication with Kubernetes happens via which of <span class="No-Break">the following?</span><p class="list-inset"><span class="No-Break">A. Kubelet</span></p><p class="list-inset">B. <span class="No-Break">API server</span></p><p class="list-inset"><span class="No-Break">C. Etcd</span></p><p class="list-inset">D. <span class="No-Break">Controller manager</span></p><p class="list-inset"><span class="No-Break">E. Scheduler</span></p></li>
+				<li>Which of the following is responsible for ensuring that the cluster is in the <span class="No-Break">desired state?</span><p class="list-inset"><span class="No-Break">A. Kubelet</span></p><p class="list-inset">B. <span class="No-Break">API server</span></p><p class="list-inset"><span class="No-Break">C. Etcd</span></p><p class="list-inset">D. <span class="No-Break">Controller manager</span></p><p class="list-inset"><span class="No-Break">E. Scheduler</span></p></li>
+				<li>Which of the following is responsible for storing the desired state of <span class="No-Break">the cluster?</span><p class="list-inset"><span class="No-Break">A. Kubelet</span></p><p class="list-inset">B. <span class="No-Break">API server</span></p><p class="list-inset"><span class="No-Break">C. Etcd</span></p><p class="list-inset">D. <span class="No-Break">Controller manager</span></p><p class="list-inset"><span class="No-Break">E. Scheduler</span></p></li>
+				<li>A pod can contain more than one <span class="No-Break">container. </span><span class="No-Break">(True/False)</span></li>
+				<li>You can use port-forwarding for which of the following use cases? (<span class="No-Break">Choose two)</span><p class="list-inset">A. For troubleshooting a <span class="No-Break">misbehaving pod</span></p><p class="list-inset">B. For exposing a service to <span class="No-Break">the internet</span></p><p class="list-inset">C. For accessing a system service such as the <span class="No-Break">Kubernetes dashboard</span></p></li>
+				<li>Using a combination of which two probes can help you ensure that your application is reliable even when your application has some intermittent issues? (<span class="No-Break">Choose two.)</span><p class="list-inset">A. <span class="No-Break">Startup probe</span></p><p class="list-inset">B. <span class="No-Break">Liveness probe</span></p><p class="list-inset">C. <span class="No-Break">Readiness probe</span></p></li>
+				<li>We may use KinD in <span class="No-Break">production. </span><span class="No-Break">(True/False)</span></li>
+				<li>Which of the followin<a id="_idTextAnchor665"/><a id="_idTextAnchor666"/>g multi-container patterns is used as a <span class="No-Break">forward proxy?</span><p class="list-inset"><span class="No-Break">A. Ambassador</span></p><p class="list-inset"><span class="No-Break">B. Adapter</span></p><p class="list-inset"><span class="No-Break">C. Sidecar</span></p><p class="list-inset">D. <span class="No-Break">Init containers</span></p></li>
+			</ol>
+			<h1 id="_idParaDest-149"><a id="_idTextAnchor667"/>Answers</h1>
+			<p>Here are the answers to this <span class="No-Break">chapter’s questions:</span></p>
+			<ol>
+				<li>B</li>
+				<li>D</li>
+				<li>C</li>
+				<li><span class="No-Break">True</span></li>
+				<li><span class="No-Break">A, C</span></li>
+				<li><span class="No-Break">B, C</span></li>
+				<li><span class="No-Break">False</span></li>
+				<li>A</li>
+			</ol>
+		</div>
+	</div>
+</div>
+</body></html>

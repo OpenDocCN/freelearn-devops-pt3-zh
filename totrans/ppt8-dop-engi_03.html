@@ -1,0 +1,700 @@
+<html><head></head><body>
+		<div id="_idContainer019">
+			<h1 id="_idParaDest-41" class="chapter-number"><a id="_idTextAnchor048"/>3</h1>
+			<h1 id="_idParaDest-42"><a id="_idTextAnchor049"/>Puppet Classes, Resource Types, and Providers</h1>
+			<p>This chapter will cover how classes and defined types provide structure and a way to group resources, allowing code to be modular and reusable. You will learn about the components that make up resources; types, providers, and the attributes applied to them. You will be shown how to use Puppet commands to understand the current state of the system and by looking at three of the most common resource types – packages, files, and services. You will see how to find out the attributes that are available to a resource and how to declare <span class="No-Break">a state.</span></p>
+			<p>Using these three resource types, you will see how a simple installation of a package, configuration file, and service can be quickly used to start up an application with Puppet code, such as Apache or Grafana. The other core resource types will then be discussed, highlighting the best practices and approaches. A number of metaparameters (attributes that can be applied to any resource) will be discussed, along with some advanced patterns for <span class="No-Break">resource declaration.</span></p>
+			<p>You will then come across some anti-patterns, which, although still documented Puppet language features, are not recommended for use. This will help you understand any legacy code you may encounter and consider where code needs to <span class="No-Break">be refactored.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Classes and <span class="No-Break">defined types</span></li>
+				<li>Resources, types, <span class="No-Break">and providers</span></li>
+				<li>Core <span class="No-Break">resource types</span></li>
+				<li>Metaparameters and <span class="No-Break">advanced features</span></li>
+				<li><span class="No-Break">Anti-patterns</span></li>
+			</ul>
+			<h1 id="_idParaDest-43"><a id="_idTextAnchor050"/>Technical requirements</h1>
+			<p>Provision a standard sized Puppet server with a Windows client and a Linux client by downloading the <strong class="source-inline">params.json</strong> file from <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch03">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch03</a> using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+bolt --verbose plan run pecdm::provision –params @params.json</pre>
+			<h1 id="_idParaDest-44"><a id="_idTextAnchor051"/>Classes and defined types</h1>
+			<p>As discussed in <a href="B18492_01.xhtml#_idTextAnchor018"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>, Puppet code is stored in manifest files ending with <strong class="source-inline">.pp</strong> . It is possible to just write resources into a single manifest file and then, using the <strong class="source-inline">apply</strong> command, <strong class="source-inline">puppet apply example.pp</strong>, enforce the code locally. It can also be done without the manifest file using the <strong class="source-inline">execute</strong> flag with the Puppet code in the field of the command, such as <strong class="source-inline">puppet apply -e 'Package { '</strong><span class="No-Break"><strong class="source-inline">vscode': }'</strong></span><span class="No-Break">.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout"><strong class="source-inline">puppet apply</strong> can also be run against a directory of manifests and it will parse every file in order, descending a directory structure. In <a href="B18492_11.xhtml#_idTextAnchor272"><span class="No-Break"><em class="italic">Chapter 11</em></span></a>, node definitions will allow us to <span class="No-Break">utilize this.</span></p>
+			<p>While both of these approaches are useful for testing and learning purposes, they have a clear limitation in terms of lacking any structure, which will result in both having to run a lot of large static commands or files and having no way to <a id="_idIndexMarker070"/>pass data. <strong class="bold">Classes</strong> are named sections of code that provide this structure, offering a way of grouping resources together and assigning data, which we can apply to servers. A class definition goes into a manifest file and within the class definition, we put our resource definitions. The<a id="_idIndexMarker071"/> syntax is <span class="No-Break">as follows:</span></p>
+			<ul>
+				<li>The <span class="No-Break"><strong class="source-inline">class</strong></span><span class="No-Break"> keyword.</span></li>
+				<li>The name of <span class="No-Break">the class.</span></li>
+				<li>Optional parameters within <strong class="source-inline">( )</strong>.</li>
+				<li>Puppet code<a id="_idIndexMarker072"/> <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">{}</strong></span><span class="No-Break">:</span><pre class="console">
+class  example_class (
+  String example_parameter
+)
+{
+   &lt;code block&gt;
+}</pre></li>
+			</ul>
+			<p><strong class="bold">Parameters</strong> will be <a id="_idIndexMarker073"/>discussed in greater detail in <a href="B18492_04.xhtml#_idTextAnchor078"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, but for now, it should be understood that <strong class="source-inline">class</strong> parameters allow classes to be supplied with external data. For example, a class might have a resource that installs a package, and a parameter can be used to specify the version of that package to <span class="No-Break">be installed.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">An optional <strong class="source-inline">inherit</strong> keyword can be added to a class to allow class inheritance, whereby you can create a general base class and then extend it in an inheriting class or classes. This pattern is no longer used and is no longer discussed in the Puppet documentation as of Puppet 6, beyond saying it exists as a keyword. There are better ways to achieve this behavior using data, which we will cover in <a href="B18492_09.xhtml#_idTextAnchor233"><span class="No-Break"><em class="italic">Chapter 9</em></span></a><span class="No-Break">.</span></p>
+			<p>A common early source of confusion with <a id="_idIndexMarker074"/>classes is that this structure only defines a class; it does not declare it to be included in the catalog compiled from the Puppet code. This contrasts with the resource statement in manifests, which by being written and then applied are added to <span class="No-Break">the catalog.</span></p>
+			<p>This means running <strong class="source-inline">puppet apply</strong> on a manifest containing a class will do nothing. To add the classes to a catalog, we must declare the class using the <strong class="source-inline">include</strong> function, make a class resource<a id="_idIndexMarker075"/> declaration, or we must use an <strong class="bold">External Node Classifier</strong> (<strong class="bold">ENC</strong>). ENCs will be covered in <a href="B18492_11.xhtml#_idTextAnchor272"><span class="No-Break"><em class="italic">Chapter 11</em></span></a>, but for now, they can be understood as Puppet server scripts that identify the classes to be included in <span class="No-Break">a node.</span></p>
+			<h2 id="_idParaDest-45"><a id="_idTextAnchor052"/>Including a class</h2>
+			<p>The <strong class="source-inline">include</strong> function <a id="_idIndexMarker076"/>is the simplest way to add classes via the declaration in the <a id="_idIndexMarker077"/>code block of a class in a manifest file of <strong class="source-inline">include class_name</strong>. It can be used multiple times across multiple classes and will result in only one entry. To declare a class with <strong class="source-inline">puppet apply</strong> directly, we can instead run <strong class="source-inline">puppet apply –e "include class_name"</strong>, which will test a manifest file with a class. Following the module structure, this would apply the manifest from the <span class="No-Break"><strong class="source-inline">class_name/manifest/init.pp</strong></span><span class="No-Break"> path.</span></p>
+			<h3>The class resource declaration</h3>
+			<p>In the next section, resource declaration<a id="_idIndexMarker078"/> will be covered in more detail, but declaring a class such as a resource allows us to pass in the attributes we have defined or looked up. It looks like this, but can only be used once in <span class="No-Break">a catalog:</span></p>
+			<pre class="source-code">
+Class {'class_name':
+  paramter1 =&gt; 'value1'
+}</pre>
+			<h2 id="_idParaDest-46"><a id="_idTextAnchor053"/>Defined types</h2>
+			<p>A defined type<a id="_idIndexMarker079"/> is a block of Puppet code, which, in contrast to a class, can be declared multiple times in a catalog by passing in parameters and a unique name. Like a class, it is by best practice defined in a manifest file <span class="No-Break">by itself.</span></p>
+			<p>The syntax is <a id="_idIndexMarker080"/><span class="No-Break">as follows:</span></p>
+			<ul>
+				<li>Starts with a <span class="No-Break"><strong class="source-inline">define</strong></span><span class="No-Break"> keyword</span></li>
+				<li>The <span class="No-Break">type name</span></li>
+				<li>Open <span class="No-Break">brackets (</span><span class="No-Break"><strong class="source-inline">(</strong></span><span class="No-Break">)</span></li>
+				<li>List <span class="No-Break">of parameters</span></li>
+				<li>Open <span class="No-Break">braces (</span><span class="No-Break"><strong class="source-inline">{</strong></span><span class="No-Break">)</span></li>
+				<li>The <span class="No-Break">resource body</span></li>
+				<li>Close <a id="_idIndexMarker081"/><span class="No-Break">braces (</span><span class="No-Break"><strong class="source-inline">}</strong></span><span class="No-Break">)</span></li>
+			</ul>
+			<p>In addition to the parameter list defined, the <strong class="source-inline">$title</strong> and <strong class="source-inline">$name</strong> variables are available to be used within the definition. This ensures the resources we declare are unique. A very simple example could take a name and a group and ensure a user and a group are created and a file is placed in the <strong class="source-inline">user</strong> home directory owned by the user and group we <span class="No-Break">have created:</span></p>
+			<pre class="source-code">
+define exampledefine (
+  String user = "${title}",
+  String group
+) {
+user { ${user}: }
+group { ${group}: }
+file { '/export/home/${user}/.examplesetting':
+  user =&gt; ${user},
+  group =&gt; ${group},
+  content =&gt; "User is ${user} and group is ${group}",
+}
+}</pre>
+			<p>Defined types <a id="_idIndexMarker082"/>are the same as classes; applying the manifest file will not produce anything. A defined type resource declaration must be made in a class, which can then <span class="No-Break">be included:</span></p>
+			<pre class="source-code">
+exampledefine {'user1':
+  group =&gt; 'group1'
+}
+exampledefine {'user2':
+  group =&gt; 'group2'
+}</pre>
+			<p>This example has its<a id="_idIndexMarker083"/> dangers since if the second declaration for <strong class="source-inline">user2</strong> also used a group of <strong class="source-inline">group1</strong>, this would result in a duplicated <span class="No-Break">resource declaration.</span></p>
+			<h2 id="_idParaDest-47"><a id="_idTextAnchor054"/>Namespaces</h2>
+			<p>Namespaces are<a id="_idIndexMarker084"/> segments that identify the directory and file structure for classes in manifest files. These namespaces are separated with two colons (<strong class="source-inline">::</strong>), so, for example, the following directories would translate <span class="No-Break">as follows:</span></p>
+			<table id="table001-1" class="No-Table-Style _idGenTablePara-1">
+				<colgroup>
+					<col/>
+					<col/>
+				</colgroup>
+				<tbody>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><strong class="bold">File </strong><span class="No-Break"><strong class="bold">path name</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="bold">Namespace</strong></span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>/<span class="No-Break">manifests/base.pp</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">base</span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>/<span class="No-Break">manifests/windows/grafana.pp</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">windows::grafana</span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>/<span class="No-Break">manifests/linux/apache.pp</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">linux::apache</span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>/<span class="No-Break">manifests/linux/ubuntu/landscape.pp</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break">linux::ubuntu::landscape</span></p>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Table 3.1 – Namespace directory translation</p>
+			<p>If we wanted only to apply the <strong class="source-inline">windows::grafana</strong> class, we could therefore run <strong class="source-inline">puppet apply –e "include windows::grafana"</strong> from within the <span class="No-Break"><strong class="source-inline">manifest</strong></span><span class="No-Break"> directory.</span></p>
+			<p>There is no limit to the depth a namespace can have, but the best practice would be to stick to a couple <span class="No-Break">of levels.</span></p>
+			<p>In <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, we will see modules that have namespaces where the module name is the root level for all classes <span class="No-Break">except one.</span></p>
+			<h1 id="_idParaDest-48"><a id="_idTextAnchor055"/>Resources, types, and providers</h1>
+			<p>Resources<a id="_idIndexMarker085"/> are the fundamental basic unit of the Puppet language; every stateful item we wish to describe is a resource. Resources must be unique in terms of what they manage since Puppet has no way of managing or prioritizing conflict between resources. It will simply call out that a clash exists and fail to compile <span class="No-Break">a catalog.</span></p>
+			<p>Each resource <a id="_idIndexMarker086"/>will have a <a id="_idIndexMarker087"/>type, which is a description of what we are configuring, such as a file or a registry setting; parameters, which are variables containing the settings we can customize for the resource; and a provider, which is the <a id="_idIndexMarker088"/>underlying implementation allowing Puppet to be OS independent. This provider is often a default based on the OS but can be added as an attribute if required. So, a resource declaration has the <span class="No-Break">following syntax:</span></p>
+			<ul>
+				<li>Opens with the type name, such as <strong class="source-inline">file</strong>, with no quotes and <span class="No-Break">in lowercase</span></li>
+				<li>A curly <span class="No-Break">brace (</span><span class="No-Break"><strong class="source-inline">{</strong></span><span class="No-Break">)</span></li>
+				<li>The title of the resource <span class="No-Break">in quotes</span></li>
+				<li>A <span class="No-Break">colon (</span><span class="No-Break"><strong class="source-inline">:</strong></span><span class="No-Break">)</span></li>
+				<li>A list of attribute names and the value of that named attribute with <strong class="source-inline">=&gt;</strong> between, ending with a <span class="No-Break">comma (</span><span class="No-Break"><strong class="source-inline">,</strong></span><span class="No-Break">)</span></li>
+				<li>A closing curly <span class="No-Break">brace (</span><span class="No-Break"><strong class="source-inline">}</strong></span><span class="No-Break">)</span></li>
+			</ul>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Everything between the two curly braces is known<a id="_idIndexMarker089"/> as the <strong class="bold">resource body</strong>. It is possible to have multiple bodies in a single resource declaration, essentially declaring multiple resources of the same type, but for clarity, I would generally advise <span class="No-Break">against this.</span></p>
+			<p>As pseudocode, this syntax looks like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+type { 'title':
+   attribute1  =&gt; value1,
+   attribute2 =&gt; value2,
+}</pre>
+			<p>Here’s a real example of ensuring a package named <strong class="source-inline">vscode</strong> is at the latest version on <span class="No-Break">the system:</span></p>
+			<pre class="console">
+package { 'vscode':
+  ensure =&gt; 'latest',
+}</pre>
+			<p>What was given in the syntax list for both the resource and class declarations/definitions was the minimum required, while the code examples were spaced and broken over several lines for stylistic reasons and following best practices. It is possible to write declarations and definitions as a single line but <a id="_idIndexMarker090"/>Puppet has developed a style guide – <a href="https://www.puppet.com/docs/puppet/8/style_guide.html">https://www.puppet.com/docs/puppet/8/style_guide.html</a> – that we will use throughout this book, along with other opinionated best practices to create readable, maintainable, and <span class="No-Break">simple code.</span></p>
+			<p>Here are<a id="_idIndexMarker091"/> some examples of the style guide being applied in the <span class="No-Break">code examples:</span></p>
+			<ul>
+				<li>Use a <span class="No-Break">two-space indent</span></li>
+				<li>No <span class="No-Break">trailing whitespace</span></li>
+				<li>Attribute names <span class="No-Break">should align</span></li>
+				<li>Attribute <strong class="source-inline">=&gt;</strong> symbols <span class="No-Break">should align</span></li>
+				<li>Attribute values <span class="No-Break">should align</span></li>
+				<li>Include trailing commas after <span class="No-Break">all attributes</span></li>
+			</ul>
+			<p>Although there are no limits or syntactical meanings for whitespace, the Puppet language style guide’s recommendations aim to make the code more readable and consistent. The <a id="_idIndexMarker092"/>style guide states all attributes should have trailing commas; this ensures adding a new attribute will only show a single change in a Git diff, but you may find some code follows a pattern of having no comma on the last attribute, which would make it clear it was the last element. This will pass linting checks but may cause issues for not meeting Puppet style guides if you wish to get code approved by Puppet for <span class="No-Break">module use.</span></p>
+			<p>As there are a number of syntactic and stylistic rules, the best way to learn is to use style guide linting, made available via the Ruby gem, <strong class="source-inline">puppet-lint</strong>, with syntax validation made available via the <strong class="source-inline">puppet parser validate</strong> command. The Puppet extension on Visual Studio Code has these commands integrated into its checks, so it highlights syntax and lint issues as you edit. In the screenshot in <span class="No-Break"><em class="italic">Figure 3</em></span><em class="italic">.1</em>, the warning output of the lab is visible with some stylistic and <span class="No-Break">syntactical errors:</span></p>
+			<div>
+				<div id="_idContainer018" class="IMG---Figure">
+					<img src="image/Figure_03.01.jpg" alt="Figure 3.1 – Visual Studio Code showing syntax and lint issues"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.1 – Visual Studio Code showing syntax and lint issues</p>
+			<p>Similar effects can be achieved in <strong class="source-inline">vim</strong> <span class="No-Break">using </span><a href="https://github.com/rodjek/vim-puppet"><span class="No-Break">https://github.com/rodjek/vim-puppet</span></a><span class="No-Break">.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">Throughout this book, advice will be given on best practices and approaches to coding, with a lot of this advice taken from sources such as the Puppet style guide. One of the best things an organization can do to develop clear and consistent Puppet code is to write its own best practices and style guidelines, building on top of the foundation provided by the Puppet style guide and ensuring it is followed when reviewing code. This can equally disagree with points raised in the style guide or this book, as long as it is best for your organization and developers and it is <span class="No-Break">agreed to.</span></p>
+			<p>Resources<a id="_idIndexMarker093"/> of each type must be uniquely <strong class="bold">titled</strong>, so you could have file, service, and package resources all titled <strong class="source-inline">ntp</strong>, but not two service type resources both titled <strong class="source-inline">ntp</strong>. There are no other limitations on how they are named in terms of characters or spacing, but for performance purposes, titles should be kept short and never be longer than 140 characters. This <strong class="bold">title</strong> is what identifies the resource to Puppet itself <a id="_idIndexMarker094"/>when it generates <span class="No-Break">a catalog.</span></p>
+			<p>The <strong class="source-inline">namevar</strong> attribute (also known as the <strong class="bold">name attribute</strong>) is what the target system uses to identify the resource and confirm uniqueness. <strong class="source-inline">namevar</strong> by default is the same as the title unless attributes are assigned. In some cases, types will use multiple attributes to define <strong class="source-inline">namevar</strong>, such as a package using the command and name together. This is used in cases where multiple copies of the same configuration can be installed via different mechanisms, such as installing a package of the same name as a Ruby gem and<a id="_idIndexMarker095"/> as a <strong class="bold">Red Hat Package </strong><span class="No-Break"><strong class="bold">Manager</strong></span><span class="No-Break"> (</span><span class="No-Break"><strong class="bold">RPM</strong></span><span class="No-Break">).</span></p>
+			<p>Installing the Apache package can demonstrate the difference between <strong class="source-inline">namevar</strong> and <strong class="bold">title</strong>. For example, the <strong class="source-inline">apache_package</strong> name variable is set based on the operating system. For Fedora, the package name will be <strong class="source-inline">httpd</strong>, while for all other operating systems, it will be <strong class="source-inline">apache2</strong>. This means our title for this package resource is <strong class="source-inline">apache</strong>, and when referring to this resource in Puppet code, we can always refer to it as the <strong class="source-inline">apache</strong> resource package, while the target system will refer to it by the appropriate package name, ensuring it is a uniquely <span class="No-Break">managed installation:</span></p>
+			<pre class="console">
+$apache_package_name = $facts['os']['name']? {
+  Fedora  =&gt; 'httpd',
+  default =&gt; 'apache2',
+}
+package { 'apache':
+  ensure =&gt; 'latest',
+  name   =&gt; "$apach_package_name",
+}</pre>
+			<p>Let us now move on to some <span class="No-Break">practical examples.</span></p>
+			<h2 id="_idParaDest-49"><a id="_idTextAnchor056"/>Lab</h2>
+			<p>To practice what has been learned so far, look at the file at <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/lint_and_validate.pp">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/lint_and_validate.pp</a> and try to correct the errors highlighted in VS Code. Alternatively, use the <strong class="source-inline">puppet-lint -f</strong> (<strong class="source-inline">-f</strong> automatically fixes issues where possible) and <strong class="source-inline">puppet parser validate</strong> commands from the VS Code integrated terminal or a separate <span class="No-Break">terminal session.</span></p>
+			<p><a href="https://validate.puppet.com/">https://validate.puppet.com/</a> can also be used to do validation <span class="No-Break">checks online.</span></p>
+			<h3>Examining the current system state</h3>
+			<p>This chapter so far has discussed <a id="_idIndexMarker096"/>how resources should be structured and styled and, with all these rules, it can be intimidating when starting to write your own resources. The <strong class="source-inline">puppet resource</strong> command allows us to produce Puppet code from the state of a current machine; this command is supplied parameters of a type and a <strong class="source-inline">namevar</strong> variable. To give an example, looking at the directory on which a Windows desktop puppet has been installed would produce something like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+C:\ProgramData\PuppetLabs&gt;puppet resource file "c:\Program Files\Puppet Labs"
+file { 'c:\Program Files\Puppet Labs':
+  ensure   =&gt; 'directory',
+  ctime    =&gt; '2022-01-31 22:01:02 +0000',
+  group    =&gt; 'S-1-5-18',
+  mode     =&gt; '2000770',
+  mtime    =&gt; '2022-01-31 22:01:02 +0000',
+  owner    =&gt; 'S-1-5-18',
+  provider =&gt; 'windows',
+  type     =&gt; 'directory',
+}</pre>
+			<p>From this example, it should be noted that certain attributes are returned only for the information we refer to as properties and cannot be managed by Puppet, such as <strong class="source-inline">mtime</strong> and <strong class="source-inline">ctime</strong>. Other attributes such as <strong class="source-inline">provider</strong> do not need to be declared, as <strong class="source-inline">windows</strong> would be the presumed provider on a Windows machine. Apart from this, with minor adjustments, this output can just be directly put into Puppet manifests and run. (Later in this chapter, we will show you how to review <span class="No-Break">type attributes.)</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Visual Studio Code allows you to run Puppet commands via the command palette (<em class="italic">Ctrl</em> + <em class="italic">Shift</em> + <em class="italic">P</em>, or for Mac, <em class="italic">Command</em> + <em class="italic">Shift </em>+ <em class="italic">P</em>). Type <strong class="source-inline">puppet resource</strong>, then the resource type, and optionally name <strong class="source-inline">var</strong>. It will then paste the output into your <span class="No-Break">open file.</span></p>
+			<p>In the previous example, we ran <strong class="source-inline">puppet resource</strong> against a single <strong class="source-inline">namevar</strong> attribute. For certain types, you can discover what the state of every resource of that type would be on a machine, such as running <strong class="source-inline">puppet resource package</strong> for packages. This clearly will not work for the likes of files, as recursively going through every file on a host would produce too much information, but you can quickly produce information on your <span class="No-Break">host’s setup.</span></p>
+			<p>In VSCode, try opening a new file, running the command palette with <strong class="source-inline">puppet resource</strong>, and just entering <strong class="source-inline">package</strong>. This will list all the packages recognized by Puppet and <a id="_idIndexMarker097"/>available Puppet providers. An example of this output is available <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/puppet_resource_package.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/puppet_resource_package.pp</span></a><span class="No-Break">.</span></p>
+			<h3>Introducing types with the package, file, and service pattern</h3>
+			<p>Having discussed the structure and style of declaring resources, the next step is to introduce the core types available to Puppet and how you can discover the attributes and features of <span class="No-Break">a type.</span></p>
+			<p>The core types are documented online at <a href="https://www.puppet.com/docs/puppet/8/type.html#puppet-core-types">https://www.puppet.com/docs/puppet/8/type.html#puppet-core-types</a> and can be viewed on the command line with the <strong class="source-inline">puppet describe</strong> Puppet command. Using <strong class="source-inline">puppet describe --list</strong> will list all the types available in your environment; you can then review a type by passing the type name, for example, <strong class="source-inline">puppet describe package</strong>. This documentation is also visible in VS Code when you hover the mouse pointer over the types and attribute names in a <span class="No-Break">resource declaration.</span></p>
+			<p>Starting with the combination of package, file, and service types, you will be able to install, configure, and start <span class="No-Break">an application.</span></p>
+			<h2 id="_idParaDest-50"><a id="_idTextAnchor057"/>The package type</h2>
+			<p>Running <strong class="source-inline">puppet describe package</strong> or viewing the web contents at <a href="https://www.puppet.com/docs/puppet/8/types/package.html">https://www.puppet.com/docs/puppet/8/types/package.html</a>, we can view the description of what the type is <a id="_idIndexMarker098"/>for and a<a id="_idIndexMarker099"/> list of attributes and <span class="No-Break">available providers.</span></p>
+			<p>A package used at its simplest level can just be declared as a package resource with <span class="No-Break">a title:</span></p>
+			<pre class="console">
+package { 'vscode': }</pre>
+			<p>This sets several attributes to defaults, resulting in using the default provider for the underlying operating system, such as <strong class="source-inline">yum</strong> for Red Hat or, for Windows, the Windows provider, which handles <strong class="source-inline">.exe</strong> and <strong class="source-inline">.msi</strong> files. It will also install at the latest package version available but, when enforced, will only ensure the package is installed and not maintain it at the <span class="No-Break">latest version.</span></p>
+			<p>This versioning behavior is controlled by the <strong class="source-inline">ensure</strong> parameter and the example defaulted to a value of <strong class="source-inline">present</strong>, which can also be declared as <strong class="source-inline">installed</strong>. The <strong class="source-inline">latest</strong> value, just as it sounds, ensures the package is at the latest version available to the provider. For more flexible versioning, it is possible to set a value as a string version, such as <strong class="source-inline">1.2.3</strong>, and, depending on the support of the provider, to use ranges, such as <strong class="source-inline">&gt; 1.0.0 &lt; 2.0.0</strong>. Using the value of <strong class="source-inline">absent</strong> is an important part of Puppet, where resources don’t just ensure what is present in the server state but also what should not <span class="No-Break">be there.</span></p>
+			<p>Related to using the <strong class="source-inline">absent</strong> value for <strong class="source-inline">ensure</strong> is the <strong class="source-inline">purged</strong> value, which is a provider-dependent option. If set to <strong class="source-inline">true</strong>, it removes configuration files on the removal <span class="No-Break">of packages.</span></p>
+			<p>The <strong class="source-inline">providers</strong> attribute is often left as the default, but if it is required to be installed via another package management system such as <strong class="source-inline">pip</strong> or <strong class="source-inline">rubygems</strong>, can be assigned an appropriate provider’s name as <span class="No-Break">its value.</span></p>
+			<p>To see what providers can be used, the <strong class="source-inline">-p</strong> flag can be used on the <strong class="source-inline">describe</strong> command: <strong class="source-inline">puppet describe </strong><span class="No-Break"><strong class="source-inline">package -p</strong></span><span class="No-Break">.</span></p>
+			<p>Taking the example of Windows, it is important to note that it tells us the Windows provider is the default provider and it lists the supported features, which are attributes that will work with this provider. This difference in attributes reflects the different underlying commands used by <span class="No-Break">the provider.</span></p>
+			<p>The <strong class="source-inline">source</strong> attribute is a URL to the package file; this allows for remote calls to web sources such as JFrog Artifactory or locally downloaded files and is a required parameter for certain providers, such as Windows, which requires a location of the <strong class="source-inline">.bin</strong> or <strong class="source-inline">.</strong><span class="No-Break"><strong class="source-inline">exe</strong></span><span class="No-Break"> file.</span></p>
+			<p>The <strong class="source-inline">command</strong> attribute, new since Puppet 6, allows you to select which command the provider should run. This is necessary for situations where you have multiple versions of an installer command available on <span class="No-Break">a machine.</span></p>
+			<p>The <strong class="source-inline">name</strong> attribute, which<a id="_idIndexMarker100"/> should be the name of the package, will be set as the title by default and combined with the<a id="_idIndexMarker101"/> command attribute; since Puppet 6, this is what makes the <strong class="source-inline">namevar</strong> attribute for a package. In Puppet 5, the provider attribute is used instead of the <span class="No-Break">command attribute.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Sometimes, it may be necessary due to dependency issues to run install commands such as <strong class="source-inline">yum</strong> with multiple packages in a single command. There isn’t a way to do this under the package type; the best approach would be to use an <strong class="source-inline">exec</strong> type, which we will talk about later in <span class="No-Break">this chapter.</span></p>
+			<p>So, as an exercise, write a manifest for the following; create a new file for each platform example, <strong class="source-inline">package_rhel8.pp</strong>, in <strong class="source-inline">vscode</strong> or <span class="No-Break">a terminal.</span></p>
+			<p>On RHEL 8, do <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>Install <strong class="source-inline">rubygem activerecord</strong> so that it is greater than <span class="No-Break">version 7</span></li>
+				<li>Install the latest <strong class="source-inline">cowsay</strong> <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">yum</strong></span></li>
+				<li>Ensure the <strong class="source-inline">pinball</strong> package is absent from the system in a resource titled <span class="No-Break"><strong class="source-inline">no games</strong></span></li>
+			</ul>
+			<p>View the suggested solution <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_rhel8_answer.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_rhel8_answer.pp</span></a><span class="No-Break">.</span></p>
+			<p>On Windows Server, do <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>Install <strong class="source-inline">ruby</strong> and <strong class="source-inline">devkit</strong> from the <strong class="source-inline">.exe</strong> file already downloaded to <strong class="source-inline">c:\tmp\rubyinstaller-devket-3.1.1-1-x64.exe</strong> with the <strong class="source-inline">/VERYSILENT</strong> <span class="No-Break">install option</span></li>
+				<li>Install <strong class="source-inline">rubygem activerecord</strong> so that it is greater than version 7 but less <span class="No-Break">than 9</span></li>
+				<li>Ensure the <strong class="source-inline">pinball</strong> package<a id="_idIndexMarker102"/> is installed at version <strong class="source-inline">2005-xp</strong> in a resource<a id="_idIndexMarker103"/> titled <span class="No-Break"><strong class="source-inline">fun games</strong></span></li>
+			</ul>
+			<p>View the suggested solution <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_windows_answer.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_windows_answer.pp</span></a><span class="No-Break">.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">For more advanced Windows package management, it is worth looking at Chocolatey, which will be covered in <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter </em></span><span class="No-Break"><em class="italic">8</em></span></a><span class="No-Break"> (</span><a href="https://forge.puppet.com/puppetlabs/chocolatey"><span class="No-Break">https://forge.puppet.com/puppetlabs/chocolatey</span></a><span class="No-Break">).</span></p>
+			<h2 id="_idParaDest-51"><a id="_idTextAnchor058"/>The file type</h2>
+			<p>Having installed <a id="_idIndexMarker104"/>packages, it is<a id="_idIndexMarker105"/> then common to add application configuration files and directories to contain them. The file type is ideal for creating files and making directory structures. It can handle the content, ownership, and permissions of files, links, <span class="No-Break">and directories.</span></p>
+			<p>The simplest declaration of a file type is the title as a fully <span class="No-Break">declared path:</span></p>
+			<pre class="source-code">
+file { '/var/tmp/testfile' : }</pre>
+			<p>Looking at the file type <a id="_idIndexMarker106"/>via <strong class="source-inline">puppet describe file</strong>, in this case, there are only two <strong class="bold">providers</strong> – a Windows file or a POSIX file, which will match whichever operating system family you <span class="No-Break">are configuring.</span></p>
+			<p>For the <strong class="source-inline">ensure</strong> attribute, there are <strong class="source-inline">present</strong> and <strong class="source-inline">absent</strong> options. Selecting <strong class="source-inline">present</strong> will default to the file value, ensuring the created resource is a normal file but only enforcing that the file path exists regardless of whether it is a symbolic link, a file, or <span class="No-Break">a directory.</span></p>
+			<p>To create and enforce a resource, we must select the value of a file and use <strong class="source-inline">direct</strong> to create a directory or directory nest or <strong class="source-inline">link</strong> to create a <span class="No-Break">symbolic link.</span></p>
+			<p>The path is <a id="_idIndexMarker107"/>the <strong class="source-inline">namevar</strong> attribute for this type and should be a fully qualified path, or it can default from <span class="No-Break">the title.</span></p>
+			<p>For example, a resource titled <strong class="source-inline">Puppet directory</strong>, which creates <strong class="source-inline">ensure</strong> for the existing <strong class="source-inline">directory</strong> at <strong class="source-inline">C:\ProgramData\PuppetLabs</strong>, is <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+file {'Puppet directory' :
+  ensure =&gt; 'directory',
+  path   =&gt; 'C:\ProgramData\PuppetLabs'
+}</pre>
+			<p>For resources we ensure as files, the <strong class="source-inline">content</strong> attribute gives us multiple ways of putting content into the file. The simplest version is simply to put a string of the text into the file but using the functions, file, and template, we can copy the contents of whole files stored in Puppet modules or use templated files, allowing us to substitute values into pre-parsed files. These functions will be covered in detail in <a href="B18492_07.xhtml#_idTextAnchor194"><span class="No-Break"><em class="italic">Chapter 7</em></span></a> and <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a><span class="No-Break">.</span></p>
+			<p>Three <a id="_idIndexMarker108"/>attributes are then used to <a id="_idIndexMarker109"/>manage ownership and permissions: <strong class="source-inline">user</strong>, <strong class="source-inline">group</strong>, and <strong class="source-inline">mode</strong>. For <strong class="source-inline">user</strong> and <strong class="source-inline">group</strong>, this is as simple as entering the UID and GID or the username and group name. If this is not set, this will default to the user and group Puppet is running under. <strong class="source-inline">mode</strong> deals with permissions using the Unix 4-digit-style permissions mode, but for Windows systems, entering this gives a very rough and limited translation and it is better to leave <strong class="source-inline">mode</strong> undeclared and supplement files with the ACL <span class="No-Break">module: </span><a href="https://forge.puppetlabs.com/puppetlabs/acl"><span class="No-Break">https://forge.puppetlabs.com/puppetlabs/acl</span></a><span class="No-Break">.</span></p>
+			<p>To give an example of the attributes we have covered, the following declaration creates a file called <strong class="source-inline">config.test</strong> with both <strong class="source-inline">owner</strong> and <strong class="source-inline">group</strong> set and the content of two lines <span class="No-Break">of text:</span></p>
+			<pre class="source-code">
+file {'Example config':
+  ensure =&gt; 'file',
+  path   =&gt; '/app/exampleapp/config.txt',
+  owner =&gt; 'exampleapp',
+  group =&gt; 'examplegroup',
+  content =&gt; "verbose = true\nselinux=permissive"
+}</pre>
+			<p>The <strong class="source-inline">recurse</strong> parameter allows recursive management of the contents of a directory. If set to <strong class="source-inline">true</strong> when ensuring a directory and using <strong class="source-inline">source</strong>, it will copy the directory contents recursively. It is important to note Puppet is not a file synchronization tool, so do not put too many files under Puppet management, or files that are too big. There is no specific number documented, but a common recommendation is 10 or fewer files in a recursive file resource and no greater than 25 MB. This is due to the comparative nature of Puppet, which uses <strong class="source-inline">md5</strong> checksums for content, which are expensive to run over large-sized files or large numbers <span class="No-Break">of files.</span></p>
+			<p class="callout-heading">Information</p>
+			<p class="callout">In the case of large numbers of files and directory structure, the module archive – <a href="https://forge.puppet.com/modules/puppet/archive">https://forge.puppet.com/modules/puppet/archive</a> – can be used to download and extract it into place. Alternatively, when auditing and versioning files, it is better to build a package and manage it with the package resource we spoke <span class="No-Break">of previously.</span></p>
+			<p>Several parameters can provide protection with <strong class="source-inline">recurse</strong> using <strong class="source-inline">max_files</strong>, which can warn or error if a command is going to go over a certain limit. <strong class="source-inline">recurselimit</strong> can be used to limit how many levels of recursion will <span class="No-Break">be performed.</span></p>
+			<p>There are <a id="_idIndexMarker110"/>only two scenarios in<a id="_idIndexMarker111"/> which it is advised to use this parameter – when you have a small number of files and the content of the files should be enforced, or when also using the <strong class="source-inline">purge</strong> parameter, which, when set to <strong class="source-inline">true</strong>, will ensure no files outside of Puppet’s control will remain in <span class="No-Break">the directory.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">We will review data types and variables in detail in the next chapter, but for now, note a parameter that takes <strong class="source-inline">true</strong> or <strong class="source-inline">false</strong> can take a value without quotes, and that is the style this book <span class="No-Break">will use.</span></p>
+			<p>The <strong class="source-inline">purge</strong> parameter can only be used with <strong class="source-inline">ensure</strong> set to <strong class="source-inline">directory</strong> and <strong class="source-inline">recursive</strong> set to <strong class="source-inline">true</strong> and provides a powerful way to ensure the directory only contains files under Puppet management, removing any other files it finds. In the following, we give an example of recursion, ensuring the <strong class="source-inline">/etc/httpd/conf</strong> directory only contains files under <span class="No-Break">Puppet’s control:</span></p>
+			<pre class="console">
+file {'Remove apache config files outside of puppet control' :
+  ensure  =&gt; 'directory',
+  purge   =&gt; true,
+  recurse =&gt; true,
+  path    =&gt; '/etc/httpd/conf'
+}</pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">There is a <strong class="source-inline">recursive_file_permissions</strong> module (<a href="https://forge.puppet.com/modules/npwalker/recursive_file_permissions">https://forge.puppet.com/modules/npwalker/recursive_file_permissions</a>), which can assist in managing recursive permissions over a large number of files in a performant way. This can be combined with the <strong class="source-inline">archive</strong> module we <span class="No-Break">previously mentioned.</span></p>
+			<p>The <strong class="source-inline">validate_cmd</strong> parameters <a id="_idIndexMarker112"/>can be particularly useful with configuration files, where there is a known <a id="_idIndexMarker113"/>way to check the file we are putting in place. If the validation command fails, the old file will be left in place, <span class="No-Break">preventing issues.</span></p>
+			<p>The <strong class="source-inline">target</strong> parameter is required if ensuring a link. By combining it with the <strong class="source-inline">path</strong> value, we get a symlink, as demonstrated in the <span class="No-Break">following code:</span></p>
+			<pre class="console">
+file {'Picking a python on Rhel 8' :
+  ensure  =&gt; link,
+  path    =&gt; /usr/bin/python3,
+  target  =&gt; /usr/bin/python,
+}</pre>
+			<p>The <strong class="source-inline">source</strong> parameter can be of several types: URIs, local files, NFS shares, or web or Puppet modules. This can also be presented as an array to provide multiple choices depending on the hostname or operating system, where it would use the first file it could find. In the following code block, we show an example, where <strong class="source-inline">host</strong> would be substituted with the applicable hostname and <strong class="source-inline">operatingsystem</strong> with the locally installed <span class="No-Break">operating system:</span></p>
+			<pre class="console">
+file {'/etc/exampleapp.conf':
+  source =&gt; [
+    "nfsserver:///exampleapp/conf.${host}",
+    "nfsserver:///exampleapp/conf.${operatingsystem}",
+    'nfsserver:///exampleapp/conf'
+  ]
+}</pre>
+			<p>In this example, on a Windows server called <strong class="source-inline">server1</strong>, applying this resource declaration would look on <strong class="source-inline">nfsserver</strong> under the <strong class="source-inline">exampleapp</strong> share to find the first match, looking for <strong class="source-inline">conf.server1</strong>, then <strong class="source-inline">conf.windows</strong> if it could not find it, and <span class="No-Break">finally </span><span class="No-Break"><strong class="source-inline">conf</strong></span><span class="No-Break">.</span></p>
+			<p>The <strong class="source-inline">backup</strong> parameter is not recommended, as managing and scaling file buckets to store these backups proves difficult, and as we will see in <a href="B18492_11.xhtml#_idTextAnchor272"><span class="No-Break"><em class="italic">Chapter 11</em></span></a>, there are better approaches we can consider, managing our code in Git to allow for <span class="No-Break">back-out scenarios.</span></p>
+			<p>The <strong class="source-inline">replace</strong> parameter<a id="_idIndexMarker114"/> should be <a id="_idIndexMarker115"/>used sparingly, but if set to <strong class="source-inline">true</strong>, allows for a file to have content enforced only if it does not exist. If the file exists, the state is met. This can be useful for applications that require an initial configuration file but then <span class="No-Break">overwrite it.</span></p>
+			<p>Having discussed a lot of attributes, try practicing constructing examples by writing a manifest file to meet the <span class="No-Break">requirements listed:</span></p>
+			<ol>
+				<li>On a Unix-based system, ensure only Puppet-controlled files are in the <strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">etc/sudoers.d</strong></span><span class="No-Break"> directory.</span></li>
+				<li>Add a <strong class="source-inline">/etc/sudoers.d/mongodb</strong> file with <strong class="source-inline">robin All=(ALL) NOPASSWD: su – mongo</strong> content and a validation command, <strong class="source-inline">visudo -c</strong>, owned by <strong class="source-inline">root</strong>, a group of <strong class="source-inline">root</strong>, and <span class="No-Break">permission </span><span class="No-Break"><strong class="source-inline">0660</strong></span><span class="No-Break">.</span></li>
+				<li>Create a symlink from <strong class="source-inline">/</strong><span class="No-Break"><strong class="source-inline">opt/mongodb/mongos /home/robin/mongos</strong></span><span class="No-Break">.</span></li>
+				<li>View the suggested solution <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_unix_answer.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_unix_answer.pp</span></a><span class="No-Break">.</span></li>
+			</ol>
+			<p>For Windows, see <span class="No-Break">the following:</span></p>
+			<ol>
+				<li>On a <a id="_idIndexMarker116"/>Windows-based system, ensure only Puppet-controlled files are in the <strong class="source-inline">c:</strong> <strong class="source-inline">\inetpub\wwwroot</strong> directory but subdirectories <span class="No-Break">are untouched.</span></li>
+				<li>Add a <strong class="source-inline">c:\inetpub\wwwroot\page with source nfsshare1:\\publish\page.html</strong> and a validation command <strong class="source-inline">c:\program </strong><span class="No-Break"><strong class="source-inline">files\httpvalidator\httpvlidate.exe</strong></span><span class="No-Break"> file.</span></li>
+				<li>Create a symlink from <strong class="source-inline">c:\program files\httpvalidator\httpvlidate.exe  C:\Users\david\Desktop</strong> and use the <strong class="source-inline">replace</strong> option to replace the file if <span class="No-Break">it exists.</span></li>
+				<li>View the suggested <a id="_idIndexMarker117"/>solution <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_windows_answer.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_windows_answer.pp</span></a><span class="No-Break">.</span></li>
+			</ol>
+			<h2 id="_idParaDest-52"><a id="_idTextAnchor059"/>Service types</h2>
+			<p>Having installed<a id="_idIndexMarker118"/> software and created configuration files, the next common step is to start services with the <a id="_idIndexMarker119"/>service type. Since system services can vary widely in terms of what they support and provide, we must be careful to provide all the necessary parameters. Some services lack proper status commands but can be provided via the parameters <span class="No-Break">of service.</span></p>
+			<p>Running and reviewing the output of <strong class="source-inline">puppet describe service -p</strong>, you will see various providers, although in most cases, the default service provider is what will be required. On certain occasions, such as legacy software on a modern Red Hat system only providing <strong class="source-inline">init</strong> scripts, we may expect to select a <span class="No-Break">different provider.</span></p>
+			<p>The first two parameters to consider are <strong class="source-inline">enable</strong> and <strong class="source-inline">ensure</strong>. <strong class="source-inline">ensure</strong> accepts the values <strong class="source-inline">stopped</strong> or <strong class="source-inline">running</strong>, which can also be represented as <strong class="source-inline">false</strong> or <strong class="source-inline">true</strong>, respectively. This is a simple binary of whether the service should be running or not. <strong class="source-inline">enable</strong> defines in the service whether it should start on boot and is only provided by certain providers. This can be <strong class="source-inline">true</strong> or <strong class="source-inline">false</strong> to be enabled or disabled, and then there are several provider-dependent options; for example, on Windows, <strong class="source-inline">false</strong> means the service is disabled and cannot be started, and <strong class="source-inline">manual</strong> means the service is set to a manual startup type, which doesn’t start with Windows but does allow the service to be started manually. <strong class="source-inline">true</strong> is an automatic startup type and <strong class="source-inline">delayed</strong> means the service is set to the automatic (<em class="italic">delayed</em>) startup type, which starts the service a couple of minutes after Windows has <span class="No-Break">started up.</span></p>
+			<p>One final parameter to highlight for Windows would be <strong class="source-inline">logonaccount</strong>, which specifies an account for the service to <span class="No-Break">run as.</span></p>
+			<p>To give<a id="_idIndexMarker120"/> examples of the attributes we have covered, see the following<a id="_idIndexMarker121"/> code for a Windows service, <strong class="source-inline">wuauserv</strong>, a running service with a delayed startup service and running as the <strong class="source-inline">localsystem</strong> user. The <strong class="source-inline">bam</strong> service is stopped <span class="No-Break">and disabled:</span></p>
+			<pre class="console">
+service { 'wuauserv':
+  ensure       =&gt; running,
+  enable       =&gt; 'delayed',
+  logonaccount =&gt; 'LocalSystem'
+}
+service { 'bam':
+  ensure =&gt; stopped,
+  enable =&gt; 'false'
+}</pre>
+			<p>Comparing this to <strong class="source-inline">systemd</strong>, the default provider for RHEL 8 and other Linux systems, we can see in the description under supported features that <strong class="source-inline">systemctl</strong> does not have delayed login or <strong class="source-inline">manual</strong> but does have <strong class="source-inline">mask</strong>, which, in system terms, means it disables the service so not even services that are dependent on it can <span class="No-Break">activate it.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Beware that the defaults for <strong class="source-inline">ensure</strong> and <strong class="source-inline">enabled</strong> are entirely dependent on the underlying <span class="No-Break">provider implementation.</span></p>
+			<p>In cases where there <a id="_idIndexMarker122"/>are no startup scripts provided for an application, combining <a id="_idIndexMarker123"/>the <strong class="source-inline">start</strong> and <strong class="source-inline">stop</strong> parameters, you can use Puppet to bridge this gap, defining which commands start and stop the service in these parameters. The <strong class="source-inline">pattern</strong> parameter would by default take the name of the service and look for the name in the process table to confirm a running status, or you can supply a regular expression, strings, or any permissible Ruby pattern to search the process table. Alternatively, the <strong class="source-inline">status</strong> parameter can be used to point at a status script, which should return a zero-exit code if the service <span class="No-Break">is running.</span></p>
+			<p>The following shows an example of a legacy service with scripts for starting, stopping, and checking the status of the server pulled together in this <span class="No-Break">service resource:</span></p>
+			<pre class="console">
+service {'legacy service':
+  ensure       =&gt; running,
+  enable       =&gt; true,
+  start  =&gt; '/opt/legacyapp/startlegacy -e production'
+  stop   =&gt; '/opt/legacyapp/stoplegacy -e production'
+  status =&gt; '/opt/legacyapp/legacystatus -e production'
+}</pre>
+			<p>It can be seen based on the nature of implementation that a careful parameter choice must be made and that this varies by scenario. Later in this chapter, we will show methods for how to cover these differences while declaring resources using a <span class="No-Break">splat (</span><span class="No-Break"><strong class="source-inline">*</strong></span><span class="No-Break">).</span></p>
+			<h3>Running Puppet locally with multiple resources</h3>
+			<p>In <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a> and <a href="B18492_10.xhtml#_idTextAnchor252"><span class="No-Break"><em class="italic">Chapter 10</em></span></a>, we will cover using<a id="_idIndexMarker124"/> Puppet agents and classification<a id="_idIndexMarker125"/> to apply Puppet code, but to test the code developed just now, as mentioned at the start of the chapter, <strong class="source-inline">puppet apply</strong> can be used to run code locally. In our labs, we will use Bolt to automatically copy our manifest files to our remote labs and run <span class="No-Break"><strong class="source-inline">puppet apply</strong></span><span class="No-Break">.</span></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">An additional way of applying resources is via the <strong class="source-inline">resource</strong> command we reviewed earlier. Adding parameters and settings to the command will cause it to be applied to the resource. The Puppet service could be enforced as enabled and running with the <strong class="source-inline">puppet resource service puppet ensure=running enable=true</strong> command. You will often see this command in Puppet knowledge base articles when performing fixes to Puppet services since it can usefully start/restart services without having to think about which operating system it is <span class="No-Break">running on.</span></p>
+			<p>Relationships will be covered in detail in <a href="B18492_06.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>, but to allow for resources that are dependent on one another, as the package, file, and service pattern requires, the basics of the <strong class="source-inline">require</strong>, <strong class="source-inline">before</strong>, <strong class="source-inline">subscribe</strong>, and <strong class="source-inline">notify</strong> metaparameters need to be known. <strong class="source-inline">require</strong> and <strong class="source-inline">before</strong> mirror one another, creating a relationship between two resources so that when Puppet runs one resource, it will run before the other. It is not semantically important which way you define the relationship, although it may prove more logical where there is a many-to-one relationship to apply the dependency metaparameter to <span class="No-Break">many resources.</span></p>
+			<p>Similarly, the <strong class="source-inline">subscribe</strong> and <strong class="source-inline">notify</strong> metaparameters allow a resource to not only have this dependency but also to send refresh events to types that support them if the resource state changes (this can be confirmed in the type documentation using <strong class="source-inline">puppet describe</strong>). This <a id="_idIndexMarker126"/>is particularly useful in service resources where<a id="_idIndexMarker127"/> updating a configuration file should result in the <span class="No-Break">service restarting.</span></p>
+			<p>The syntax for these metaparameters is a resource reference, which comprises a resource type with a capital letter and a resource name in square brackets. To give some examples of this, the following shows examples of <strong class="source-inline">before</strong>, <strong class="source-inline">notify</strong>, and <strong class="source-inline">require</strong> being used to make the package, file, and <span class="No-Break">service pattern:</span></p>
+			<pre class="console">
+package { 'example app package':
+  ensure =&gt; latest,
+  name   =&gt; 'exampleapp'
+  before =&gt; File['example app configuration']
+}
+file { 'example app configuration':
+  content =&gt; 'attribute=value',
+  notify    =&gt; Service['example app service']
+}
+Service {'example app service':
+  name    =&gt; 'exampleapp',
+  enable  =&gt; true,
+  ensure  =&gt; running,
+  require =&gt; Package['example app package']
+}</pre>
+			<p>In this <a id="_idIndexMarker128"/>example, <strong class="source-inline">package</strong> is installed first, the configuration<a id="_idIndexMarker129"/> file is then added, and the service should start. If the configuration file changes state, this will cause the service to restart. In the next section, we will talk in more detail about <span class="No-Break">resource references.</span></p>
+			<p>Shorthand can be used to create an array of the same resource types in <span class="No-Break">a dependency:</span></p>
+			<pre class="source-code">
+file { ' C:\Program Files\Common Files\Example':
+  require =&gt; Package['package1',package2],
+}</pre>
+			<p>Running Puppet will generate reports that describe how resources, if not in the desired state, were changed into the correct state and, if the server was in the correct state, will produce little output beyond the time it took to run checks. The code can also be run in <strong class="bold">noop mode</strong>, which will <a id="_idIndexMarker130"/>list out what changes are needed to get to the correct state but without applying them. In <a href="B18492_10.xhtml#_idTextAnchor252"><span class="No-Break"><em class="italic">Chapter 10</em></span></a>, Puppet platform parts and functions will be discussed in more detail around reporting and <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">noop</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-53"><a id="_idTextAnchor060"/>Lab</h2>
+			<p>So, use the lab environment to apply some Puppet code to our <span class="No-Break">client servers.</span></p>
+			<p>For CentOS, we will install <strong class="source-inline">httpd</strong> and serve a web page displaying <em class="italic">Hello World</em>. Create an <strong class="source-inline">apache_linux.pp</strong> file; this will require the <strong class="source-inline">httpd</strong> package to be installed and a file to be created at <strong class="source-inline">/var/www/html/index.html</strong> with the <span class="No-Break">following content:</span></p>
+			<pre class="source-code">
+&lt;html&gt;
+&lt;head&gt;
+&lt;/head&gt;
+&lt;body&gt;
+   &lt;h1&gt;Hello World&lt;h1&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+			<p>We have a <strong class="source-inline">/etc/httpd/conf/httpd.conf</strong> configuration file with content sourced from <a href="https://raw.githubusercontent.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/main/ch03/httpd.conf">https://raw.githubusercontent.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/main/ch03/httpd.conf</a> and validated by running <strong class="source-inline">httpd -t -f</strong> and an <strong class="source-inline">httpd</strong> service, which is enabled on boot <span class="No-Break">and running.</span></p>
+			<p>For Windows, create a <strong class="source-inline">grafana_windows.pp</strong> file; we will install the Grafana server from <a href="https://dl.grafana.com/oss/release/grafana-8.4.3.windows-amd64.msi">https://dl.grafana.com/oss/release/grafana-8.4.3.windows-amd64.msi</a>, ensuring the service is running and enabled and, in the <strong class="source-inline">C:\Program Files\GrafanaLabs\grafana\conf\grafana.ini</strong> configuration file, ensuring the content contains <span class="No-Break">the following:</span></p>
+			<pre class="source-code">
+[server]
+Protocol = HTTP
+Http_port = 8080</pre>
+			<p>Updating the configuration file should restart <span class="No-Break">the service.</span></p>
+			<p>You can apply the code you have written using Bolt, which will be covered in <a href="B18492_12.xhtml#_idTextAnchor293"><span class="No-Break"><em class="italic">Chapter 12</em></span></a>. Using the <strong class="source-inline">bolt apply apache_linux.pp –server linuxclient.example.com</strong> or <strong class="source-inline">bolt apply grafana_windows.pp –server windowsclient.example.com</strong> command will copy the manifest to the server and run <strong class="source-inline">puppet apply</strong> on the client. For both Linux and Windows examples, test your solution by navigating to <strong class="source-inline">http://hostname:8080</strong> and confirming <strong class="bold">Hello World</strong> for Linux or the Grafana login page for Windows <span class="No-Break">is visible.</span></p>
+			<p>Example solutions are available at <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/apache_linux.pp">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/apache_linux.pp</a> <span class="No-Break">and </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/grafana_windows.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/grafana_windows.pp</span></a><span class="No-Break">.</span></p>
+			<p>To test the runs in <strong class="source-inline">noop</strong> mode, you can apply the <strong class="source-inline">_noop =&gt; true</strong> option to the <span class="No-Break">Bolt command.</span></p>
+			<p>While it would be impractical to discuss every core type in detail, the next section will cover at a high level the other core types, which are useful for creating more <span class="No-Break">advanced configurations.</span></p>
+			<h2 id="_idParaDest-54"><a id="_idTextAnchor061"/>Core resource types</h2>
+			<p>In this section, we will<a id="_idIndexMarker131"/> discuss<a id="_idIndexMarker132"/> the core <span class="No-Break">resource types.</span></p>
+			<h3>User and group types</h3>
+			<p>The user type<a id="_idIndexMarker133"/> and group type<a id="_idIndexMarker134"/> are core to most configurations, allowing the <strong class="source-inline">ensure</strong> attribute to be set to <strong class="source-inline">present</strong> or <strong class="source-inline">absent</strong>. With a Unix platform as<a id="_idIndexMarker135"/> the provider, the user would normally have a minimum set of attributes of <strong class="source-inline">uid</strong> and <strong class="source-inline">gid</strong>, with the group having a minimum of <strong class="source-inline">gid</strong>. The user can be further enforced via the <strong class="source-inline">password</strong> attribute, which can ensure the limits for any password set, passing an encrypted password and enforcing the home directory and shell. For<a id="_idIndexMarker136"/> Windows Server, it is important to note only local users and groups can be managed, although a group resource can manage adding domain accounts to the membership of that group via the <strong class="source-inline">members</strong> parameter. The names are case sensitive in Puppet but case insensitive in Windows. The case should match so we do not lose any of the auto requirements that are formed. Windows also uses multiple types of names, so it can be <strong class="source-inline">&lt;name of computer\&lt;user name&gt;</strong>, <strong class="source-inline">BUILTIN\&lt;username&gt;</strong>, or <span class="No-Break">just </span><span class="No-Break"><strong class="source-inline">&lt;username&gt;</strong></span><span class="No-Break">.</span></p>
+			<p>So, for example, <strong class="source-inline">'DESKTOP-1MT10AJ\david, 'BUILTIN\david'</strong> and <strong class="source-inline">david</strong> are all treated the same <span class="No-Break">by Puppet.</span></p>
+			<p>The<a id="_idIndexMarker137"/> following code shows<a id="_idIndexMarker138"/> examples in Windows and <a id="_idIndexMarker139"/>Unix of an account and<a id="_idIndexMarker140"/> <span class="No-Break">a group:</span></p>
+			<pre class="console">
+user { 'david':
+  ensure   =&gt; 'present',
+  groups   =&gt; ['BUILTIN\Administrators', 'BUILTIN\Users']
+}
+group { 'Users':
+  ensure   =&gt; 'present',
+  members  =&gt; ['NT AUTHORITY\INTERACTIVE', 'NT AUTHORITY\Authenticated Users', 'DESKTOP-1MT10AJ\david'],
+}
+user { 'ubuntu':
+  ensure             =&gt; 'present',
+  comment            =&gt; 'Ubuntu',
+  gid                =&gt; 1000,
+  groups             =&gt; ['adm', 'dialout', 'cdrom', 'floppy', 'sudo', 'audio', 'dip', 'video', 'plugdev', 'lxd', 'netdev'],
+  home               =&gt; '/home/ubuntu',
+  password           =&gt; '!',
+  password_max_age   =&gt; 99999,
+  password_min_age   =&gt; 0,
+  password_warn_days =&gt; 7,
+  shell              =&gt; '/bin/bash',
+  uid                =&gt; 1000
+}
+group { 'ubuntu':
+  ensure   =&gt; 'present',
+  gid      =&gt; 1000
+}</pre>
+			<p>We <a id="_idIndexMarker141"/>see here that Windows user David is a member of the administrator’s group<a id="_idIndexMarker142"/> and user’s group. We see the user’s group and its list of members. We can then see the detailed setup of a Ubuntu user on Unix with password settings, a home directory, and group settings. Similarly, certain users and groups can be added as <a id="_idIndexMarker143"/>resource declarations, ensured absent, and <a id="_idIndexMarker144"/>removed from <span class="No-Break">the system.</span></p>
+			<h2 id="_idParaDest-55"><a id="_idTextAnchor062"/>The exec type</h2>
+			<p>The <strong class="source-inline">exec</strong> type<a id="_idIndexMarker145"/> is quite different from most Puppet types and can be dangerous if not used correctly. While <a id="_idIndexMarker146"/>most Puppet types try to describe the state a server should be in, <strong class="source-inline">exec</strong> provides a way of running scripts or commands on servers. This means declaring an <strong class="source-inline">exec</strong> type takes effort to make sure the resource <a id="_idIndexMarker147"/>will be <strong class="bold">idempotent</strong>. We can achieve this if the command itself is already idempotent, such as <strong class="source-inline">apt-get update</strong> (the command for updating package sources in Ubuntu), if we use the <strong class="source-inline">onlyif</strong> attribute, <strong class="source-inline">unless</strong>, or <strong class="source-inline">creates</strong>, or if the <strong class="source-inline">exec</strong> has a <span class="No-Break">refresh-only attribute.</span></p>
+			<p>In the first case, if the command is <strong class="bold">idempotent</strong>, it will do no harm, but it will log in each Puppet run that it has run, and therefore using the other two methods is better to avoid the <strong class="source-inline">exec</strong> <span class="No-Break">reporting runs.</span></p>
+			<p>With the <strong class="source-inline">onlyif</strong> attribute, we can declare a command that if it returns <strong class="source-inline">true</strong>, then our <strong class="source-inline">exec</strong> will run. <strong class="source-inline">unless</strong> is the opposite of <strong class="source-inline">onlyif</strong>, using a command that if it returns <strong class="source-inline">true</strong>, then our <strong class="source-inline">exec</strong> will not run. Finally, <strong class="source-inline">creates</strong> looks for a file to be created to show the script <span class="No-Break">has run.</span></p>
+			<p>This first example looks at disabling public Chocolatey access unless the command finds in the sources that it is <span class="No-Break">already disabled:</span></p>
+			<pre class="source-code">
+exec { 'disable_public_chocolatey':
+    command =&gt; "C:/ProgramData/chocolatey/choco.exe source disable -n=chocolatey",
+    unless  =&gt; "\$sourceOutput = choco.exe source list; if (\$sourceOutput.Contains('chocolatey [Disabled]')) {exit 0} else {exit 1}",
+    provider =&gt; powershell,
+}</pre>
+			<p>This second <a id="_idIndexMarker148"/>example shows an example command, which generates a file using the <strong class="source-inline">cowsay</strong> command unless that file has already <span class="No-Break">been created:</span></p>
+			<pre class="source-code">
+exec { 'Cowsay file':
+   command =&gt; '/bin/cowsay Hello world &gt; /etc/cowsaysays',
+   creates =&gt; '/etc/cowsaysays'
+}</pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">There is an optional PowerShell provider to allow <strong class="source-inline">exec</strong> to run PowerShell <span class="No-Break">scripts: </span><a href="https://forge.puppet.com/puppetlabs/powershell"><span class="No-Break">https://forge.puppet.com/puppetlabs/powershell</span></a><span class="No-Break">.</span></p>
+			<p>The third scenario uses the <strong class="source-inline">refreshonly</strong> attribute, so using the <strong class="source-inline">notify</strong> and <strong class="source-inline">subscribe</strong> attributes, we can set the <strong class="source-inline">exec</strong> to only run if another resource is refreshed. The following <strong class="source-inline">exec</strong> can be useful <a id="_idIndexMarker149"/>when scripts are simply not going to be replaced by <a id="_idIndexMarker150"/><span class="No-Break">Puppet code:</span></p>
+			<pre class="source-code">
+exec  { 'refresh exampleapp configuration' :
+  command   =&gt; [''/bin/exampleapp/rereadconfig']
+  refreshonly =&gt; true
+  subscribe    =&gt; File['config file']
+}
+file {'config file':
+  path =&gt; '/etc/exampleapp/configfile',
+  content =&gt; 'setting 1 = value'
+}</pre>
+			<p>This might be the case if the script/command is vendor-provided or simply a heritage script that works, and the effort of refactoring it into Puppet code would not be <span class="No-Break">worth it.</span></p>
+			<p>On Unix platforms, a recent feature called parametrized execs was introduced with Puppet 6.24+ and 7.9+, allowing you to pass a <strong class="source-inline">command</strong> attribute as an array, the first part of the array being the command and the second part being the arguments. This uses the secure method of parametrized system calls to ensure code cannot be injected. In the following example, a traditional <strong class="source-inline">exec</strong> with just the command would run all the commands separated by the semi-colon, in our simple example echoing <strong class="source-inline">real parameters</strong> and running <strong class="source-inline">rm</strong>, while with the improvement of parametrized execs, it will take the second argument as a string to be passed and echo it, ensuring the original purpose of the command and preventing <span class="No-Break">command injection:</span></p>
+			<pre class="source-code">
+exec  { 'parametrized command'
+  command =&gt; ['/bin/echo', 'real parameters; rm -rf /']
+}</pre>
+			<p>This <a id="_idIndexMarker151"/>example using <strong class="source-inline">echo</strong> is obviously simplified and it will become clearer where this plays a part <a id="_idIndexMarker152"/>when we look at <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a> and <a href="B18492_09.xhtml#_idTextAnchor233"><span class="No-Break"><em class="italic">Chapter 9</em></span></a>. There, we will see how user data can be fed into Puppet code and that we must <span class="No-Break">code defensively.</span></p>
+			<h2 id="_idParaDest-56"><a id="_idTextAnchor063"/>The Augeas type</h2>
+			<p>Augeas is a <a id="_idIndexMarker153"/>type only available on Linux; it was used more historically in earlier <a id="_idIndexMarker154"/>versions of Puppet when the options for manipulating files were much more limited, but in more advanced situations, it can have its uses. It can be computationally more expensive, so you should be careful in how you use it. Augeas can parse files in their native formats into a tree, which you can then manipulate. It uses lenses to perform <span class="No-Break">these translations.</span></p>
+			<p>To give an example, if we want to manipulate the <strong class="source-inline">access.conf</strong> file, we can view the file using <strong class="source-inline">augtool</strong> (the CLI interface for Augeas) and print it using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+augtool print /files/etc/security/access.conf</pre>
+			<p>Let’s say our file contains the <span class="No-Break">following lines:</span></p>
+			<pre class="source-code">
++ : john : 2001:4ca0:0:101::/64
++ : root : 192.168.200.1 192.168.200.4 192.168.200.9
+- : ALL : ALL</pre>
+			<p>This would result in<a id="_idIndexMarker155"/> the following <a id="_idIndexMarker156"/>being printed using the <span class="No-Break">default lens:</span></p>
+			<pre class="source-code">
+<strong class="bold">/files/etc/security/access.conf/access[1] = "+"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[1]/user = "john"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[1]/origin = "2001:4ca0:0:101::/64"</strong>
+<strong class="bold">/files/etc/security/access.conf/#comment[83] = "All other users should be denied to get access from all sources."</strong>
+<strong class="bold">/files/etc/security/access.conf/access[2] = "+"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[2]/user = "root"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[2]/origin[1] = "192.168.200.1"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[2]/origin[2] = "192.168.200.4"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[2]/origin[3] = "192.168.200.9"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[3] = "-"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[3]/user = "ALL"</strong>
+<strong class="bold">/files/etc/security/access.conf/access[3]/origin = "ALL"</strong></pre>
+			<p>This allows you to make programmatical references to individual sections and values in the syntax, so if in the client state, you wanted to remove any entry with the user <strong class="source-inline">john</strong> from all entries, <strong class="source-inline">augtool</strong> could run <span class="No-Break">the following:</span></p>
+			<pre class="source-code">
+<strong class="bold">augtool rm /files/etc/security/access.conf/*[user="john"]</strong></pre>
+			<p>To use this in<a id="_idIndexMarker157"/> Puppet, Augeas only has one <strong class="bold">provider</strong>, and the core attributes <a id="_idIndexMarker158"/>are <strong class="source-inline">changes</strong>, which is the Augeas command you wish to run, <strong class="source-inline">lens</strong> if you wish to use a different translation from the default, and <strong class="source-inline">onlyif</strong>, which can perform a check of the content of the tree to see whether the change needs to be run. Creating the previous example as a Puppet resource would look like <span class="No-Break">the following:</span></p>
+			<pre class="source-code">
+Augeas { 'remove John from access.conf' :
+  changes =&gt; 'rm /files/etc/security/access.conf/*[user="john"]'
+}</pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Augeas is a <a id="_idIndexMarker159"/>powerful tool but should be used sparingly. More details on the syntax can be found at <a href="http://augeas.net/docs/">http://augeas.net/docs/</a> <span class="No-Break">and </span><a href="https://forge.puppet.com/modules/puppetlabs/augeas_core/reference"><span class="No-Break">https://forge.puppet.com/modules/puppetlabs/augeas_core/reference</span></a><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-57"><a id="_idTextAnchor064"/>The notify type</h2>
+			<p>The <strong class="source-inline">notify</strong> type is<a id="_idIndexMarker160"/> used to send messages to the logs. This is more likely to be used for debugging<a id="_idIndexMarker161"/> purposes than production use, as it is not idempotent, and it will cause the Puppet report to see changes on every run. Using the <strong class="source-inline">message</strong> parameter as a string of what to print will take a default from the title. A simple example would be <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+notify { 'print a message to logs'}</pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">The <strong class="source-inline">notice</strong> function can be more practical for printing messages, as they will not show up in the Puppet report change logs. See <a href="B18492_05.xhtml#_idTextAnchor123"><span class="No-Break"><em class="italic">Chapter 5</em></span></a><span class="No-Break">.</span></p>
+			<p>There are more core <a id="_idIndexMarker162"/>types, but the commands demonstrated in this chapter to list types available, view the attribute, and provide documentation should give you the ability to understand how to go on and investigate other types that you may find useful, including<a id="_idIndexMarker163"/> types installed from <strong class="source-inline">puppet forge</strong>, which will be covered in <a href="B18492_08.xhtml#_idTextAnchor212"><span class="No-Break"><em class="italic">Chapter 8</em></span></a><span class="No-Break">.</span></p>
+			<p class="callout-heading">Information</p>
+			<p class="callout">Throughout this chapter, we have highlighted resources coming under Puppet’s control by being added to the catalog, whether they enforce presence or absence. Puppet has no concept of back-out, so removing a resource from Puppet’s control will just leave it unmanaged as it was set in the last Puppet run. This should therefore always be considered in your back-out process for a <span class="No-Break">code change.</span></p>
+			<h1 id="_idParaDest-58"><a id="_idTextAnchor065"/>Metaparameters and advanced resources</h1>
+			<p>This section will start by looking<a id="_idIndexMarker164"/> at metaparameters, which are attributes that work on any resource type. For the lab work, we covered <strong class="source-inline">before</strong>, <strong class="source-inline">required</strong>, <strong class="source-inline">notify</strong>, and <strong class="source-inline">subscribe</strong>, which were used to create dependencies between resources. To follow this, there are several other useful attributes with a range of effects on resources. To see the full documentation of metaparameters on types and providers, the <strong class="source-inline">meta</strong> flag can be added to the <strong class="source-inline">describe</strong> command: <strong class="source-inline">puppet describe &lt;file </strong><span class="No-Break"><strong class="source-inline">type&gt; --meta</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-59"><a id="_idTextAnchor066"/>audit</h2>
+			<p>The <strong class="source-inline">audit</strong> metaparameter<a id="_idIndexMarker165"/> allows us to monitor unmanaged Puppet parameters; this could either be an array list of attributes or all for monitoring all undeclared attributes. In the following example, we <span class="No-Break">declare this:</span></p>
+			<pre class="source-code">
+file {'/var/tmp/example'
+  mode =&gt; 0770,
+  audit  =&gt; [owner,group]
+}</pre>
+			<p>This creates a <strong class="source-inline">/opt/puppetlabs/puppet/cache/state/state.yaml</strong> file on Puppet Enterprise or <strong class="source-inline">/var/lib/puppet/state/state.yaml</strong> in the open source version of Puppet, which records the audit state. Applying the preceding resource would produce the <span class="No-Break">following output:</span></p>
+			<pre class="source-code">
+<strong class="bold">Notice: /Stage[main]/Main/File[/var/tmp/example]/owner: audit change: previously recorded value 'absent' has been changed to 'root'</strong>
+<strong class="bold">Notice: /Stage[main]/Main/File[/var/tmp/example]/group: audit change: previously recorded value 'absent' has been changed to 'root'</strong></pre>
+			<p>As the resource <a id="_idIndexMarker166"/>was created, its state will be recorded as changing from <strong class="source-inline">absent</strong> to <strong class="source-inline">present</strong>, and it will then be reported whether the previously recorded value was found to have changed on Puppet runs. The <strong class="source-inline">state.yaml</strong> file would update to this new value, so it’s important to take action on this change if it <span class="No-Break">is required.</span></p>
+			<h2 id="_idParaDest-60"><a id="_idTextAnchor067"/>tag</h2>
+			<p>The <strong class="source-inline">tag</strong> parameter<a id="_idIndexMarker167"/> allows us to apply tags to our resource, which can be a single string or multiple tags with an array of strings. By default, several tags are applied to a resource: the title, resource type, and the class the resource is contained in. Tags are particularly useful in scenarios where we only want to run parts of our manifests since both Puppet local and agent-based runs can take a <strong class="source-inline">--tag</strong> flag to run only resources with a <span class="No-Break">particular tag.</span></p>
+			<p>For example, let’s look at the Puppet resources in a manifest <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">example.pp</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+class example::access {
+  group {'ubuntu':
+    ensure   =&gt; 'present',
+    gid      =&gt; 1000,
+    tag      =&gt; ['pci','sox']
+  }
+  user {'ubuntu':
+    ensure  =&gt; 'present',
+    tag         =&gt; 'pci'
+  }
+}</pre>
+			<p>The group will have the <strong class="source-inline">group</strong>, <strong class="source-inline">ubuntu</strong>, <strong class="source-inline">pci</strong>, and <strong class="source-inline">sox</strong> tags while the user will have the <strong class="source-inline">user</strong>, <strong class="source-inline">ubuntu</strong>, and <strong class="source-inline">pci</strong> tags. Additionally, both would have a tag of the class name, <strong class="source-inline">example::access</strong>. With the <strong class="source-inline">puppet apply </strong><strong class="source-inline">--tags</strong><strong class="source-inline"> pci example.pp</strong> command, both resources would be applied similarly; <strong class="source-inline">ubuntu</strong> would apply both while running with a tag of <strong class="source-inline">sox</strong> would just run <span class="No-Break">the group.</span></p>
+			<p>There are further metaparameters, such as <strong class="source-inline">alias</strong> and <strong class="source-inline">loglevel</strong>, that are simply not in common use although they have no risks worth discussing in detail; they can be read about at <a href="https://www.puppet.com/docs/puppet/8/metaparameter.html">https://www.puppet.com/docs/puppet/8/metaparameter.html</a> or by running <strong class="source-inline">puppet describe &lt;any </strong><span class="No-Break"><strong class="source-inline">type&gt; -m</strong></span><span class="No-Break">.</span></p>
+			<p>The resource<a id="_idIndexMarker168"/> declarations shown before now have followed the same simple declaration pattern, but there are several other methods to allow more flexibility and <span class="No-Break">advanced features.</span></p>
+			<h2 id="_idParaDest-61"><a id="_idTextAnchor068"/>The resources metatype</h2>
+			<p>Puppet has a <strong class="source-inline">resources</strong> metatype, which<a id="_idIndexMarker169"/> can be used to ensure unmanaged resources of a type are removed. If it is thought of like the output of the <strong class="source-inline">&lt;type&gt;</strong> Puppet resource, finding anything with no matching <strong class="source-inline">namevar</strong> attributes from your code to mark as <strong class="source-inline">absent</strong>. It uses four attributes; a <strong class="bold">name</strong>, which is the type you want to apply to, the <strong class="source-inline">purge</strong> attribute, which can be <strong class="source-inline">true</strong> or <strong class="source-inline">false</strong>, and two attributes relevant when you are using resources on the user type – <strong class="source-inline">unless_system_user</strong>, which accepts <strong class="source-inline">true</strong>, <strong class="source-inline">false</strong>, or a specified minimum UID and ensures the system definition, or you can define integers or an array of integers in the <strong class="source-inline">minimum_uid</strong> parameter, which will be protected from the purge. To generate a list of numbers, the <strong class="source-inline">range()</strong> function from the <strong class="source-inline">stdlib</strong> module can make this easier. We will discuss functions in <a href="B18492_05.xhtml#_idTextAnchor123"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>, to make it clear how functions work. As with all resources, the metaparameters can be used and <strong class="bold">noop</strong> is advisable here, as purging all users may be too aggressive, so seeing which users will be removed may initially be the best reporting <span class="No-Break">to see:</span></p>
+			<pre class="source-code">
+resources {'user':
+  purge =&gt; true,
+  noop =&gt; true
+}</pre>
+			<p class="callout-heading">Note</p>
+			<p class="callout">The <strong class="source-inline">ssh_authorized_key</strong> type should be managed on the <em class="italic">user</em> type via the <span class="No-Break"><strong class="source-inline">purge_ssh_keys</strong></span><span class="No-Break"> attribute.</span></p>
+			<h2 id="_idParaDest-62"><a id="_idTextAnchor069"/>Arrays of titles</h2>
+			<p>When declaring several resources <a id="_idIndexMarker170"/>with the same attributes, the title can be declared as an array of resources, acting like multiple resource declarations. We will cover arrays in <a href="B18492_04.xhtml#_idTextAnchor078"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, but for now, understand an array of titles can be used with opening square brackets and a separating comma, so the title for a resource would be like the <span class="No-Break">following example:</span></p>
+			<pre class="source-code">
+file{ ['/opt/example1','/opt/example1/etc','/opt/example1/bin'] :
+  owner =&gt; user,
+  group =&gt; user,
+  mode  =&gt; 0750
+}</pre>
+			<h2 id="_idParaDest-63"><a id="_idTextAnchor070"/>Overriding parameters</h2>
+			<p>Here’s the <a id="_idIndexMarker171"/>syntax for a <span class="No-Break">resource reference:</span></p>
+			<ul>
+				<li>Type starting with <span class="No-Break">a capital</span></li>
+				<li>Title in <span class="No-Break">square brackets</span></li>
+				<li>Opening curly <span class="No-Break">brace (</span><span class="No-Break"><strong class="source-inline">{</strong></span><span class="No-Break">)</span></li>
+				<li>Attributes <span class="No-Break">to override</span></li>
+				<li>Closing curly <span class="No-Break">brace (</span><span class="No-Break"><strong class="source-inline">}</strong></span><span class="No-Break">)</span></li>
+			</ul>
+			<p>It is possible to override attributes of a declared resource. In this example, we set <strong class="source-inline">Audit</strong> to <strong class="source-inline">true</strong> and <strong class="source-inline">group</strong> to <strong class="source-inline">other_group</strong> on the <strong class="source-inline">resource /</strong><span class="No-Break"><strong class="source-inline">opt/example/bin</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="source-code">
+File['/opt/example/bin/'] {
+  group  =&gt; other_group,
+  Audit   =&gt; true
+}</pre>
+			<p>This is best <a id="_idIndexMarker172"/>used combined with the array of titles so that common defaults can be defined and then particular attributes set for a named resource. In this book, we recommend using this sparingly to avoid confusion when everything <span class="No-Break">is declared.</span></p>
+			<h2 id="_idParaDest-64"><a id="_idTextAnchor071"/>Attribute splats</h2>
+			<p>The attribute splat (<strong class="source-inline">*</strong>) is a <a id="_idIndexMarker173"/>mechanism of using a hash to fill out attributes of a type; this can be useful in situations where we want to cover the differences in attributes used by different providers. In a resource using the normal syntax, you can have set of the attributes as <strong class="source-inline">*</strong> and then create a hash of the attributes you would use. We will cover hashes, variables, and case statements in <a href="B18492_04.xhtml#_idTextAnchor078"><span class="No-Break"><em class="italic">Chapter 4</em></span></a> and <a href="B18492_07.xhtml#_idTextAnchor194"><span class="No-Break"><em class="italic">Chapter 7</em></span></a>, but for this example, it should be clear that we are setting the package options hash to contain a <strong class="source-inline">name</strong> attribute equal to <strong class="source-inline">apache2</strong> for Debian and <strong class="source-inline">httpd</strong> as <span class="No-Break">a default:</span></p>
+			<pre class="source-code">
+case $facts['os']['name'] {
+  /^(Debian|Ubuntu)$/: {
+  $package_options = {
+    "name"  =&gt; "apache2"
+    }
+  }
+  default:  {
+  $package_options = {
+    "name"  =&gt; "httpd"
+    }
+  }
+}
+Package { 'http' :
+  ensure =&gt; latest,
+  *       =&gt;  ${package_options}
+}</pre>
+			<p>This results<a id="_idIndexMarker174"/> in the package <strong class="source-inline">http</strong> resource using the name <strong class="source-inline">http2</strong> for Ubuntu and Debian systems and <strong class="source-inline">httpd</strong> by default for any other systems. This feature should be used carefully so as not to detract <span class="No-Break">from readability.</span></p>
+			<h2 id="_idParaDest-65"><a id="_idTextAnchor072"/>Lab</h2>
+			<p>To practice a little of what we have discussed, let us follow up on our previous example and have a single manifest, <strong class="source-inline">all_grafana.pp</strong>, which can install, configure, and run Grafana on both Linux and Windows. As we have not covered facts yet, understand that as in our previous example, a case statement could use <strong class="source-inline">$facts ['os']['family']</strong> to look for Red Hat or Windows to distinguish between our two clients. Note the <strong class="source-inline">rpm install</strong> file is available at <a href="https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm">https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm</a> and the configuration file for Linux is <span class="No-Break">at </span><span class="No-Break"><strong class="source-inline">/etc/grafana/grafana.ini</strong></span><span class="No-Break">.</span></p>
+			<p>As a second exercise, create a separate manifest to create some users on the Linux client, <strong class="source-inline">linux_users.pp create 3 users exampleappdev</strong>, <strong class="source-inline">exampleapptest</strong>, <strong class="source-inline">exampleappprod</strong>, and a group, <strong class="source-inline">exampleapp</strong>, with all the users using this group as their primary group. <strong class="source-inline">exampleappprod</strong> should purge <strong class="source-inline">ssh</strong> keys from <strong class="source-inline">authorized</strong>. Finally, it should check whether there are any other non-system-level users on the client (but not <span class="No-Break">enforce anything).</span></p>
+			<p>As per the previous lab, you can test your manifests by running a <strong class="source-inline">bolt</strong> command with your manifest name and client name listed: <strong class="source-inline">bolt apply manifestname.pp –</strong><span class="No-Break"><strong class="source-inline">server servername.example.com</strong></span><span class="No-Break">.</span></p>
+			<p>You can find solutions at <a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/all_grafana.pp">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/all_grafana.pp</a> <span class="No-Break">and </span><a href="https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/linux_users.pp"><span class="No-Break">https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/linux_users.pp</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-66"><a id="_idTextAnchor073"/>Anti-patterns</h1>
+			<p>In this section, we will talk about some <a id="_idIndexMarker175"/>resource features you will find documented and useable with Puppet but that this book strongly recommends you do not use and make it part of your best practices to avoid. The resource features we highlight here are powerful but make resource declarations harder to read and require more translation and calculations required to see the state we are attempting to get the <span class="No-Break">server into.</span></p>
+			<h2 id="_idParaDest-67"><a id="_idTextAnchor074"/>Abstract resource types</h2>
+			<p>An<a id="_idIndexMarker176"/> abstract resource type<a id="_idIndexMarker177"/> is used for declaring a resource when we do not want to predefine a type and may decide which resource we will use based on the client. In this simple example, a variable is set to the type and the resource is then declared using the <strong class="source-inline">Resource[&lt;TYPE&gt;] { &lt;RESOURCE </strong><span class="No-Break"><strong class="source-inline">BODY&gt;}</strong></span><span class="No-Break"> syntax:</span></p>
+			<pre class="source-code">
+$selectedtype = exec
+resource[$mytype] { "/bin/echo 'don't use this' &gt; /tmp/badidea": creates =&gt; /tmp/badidea , }</pre>
+			<p>A simple translation of this statement would be <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+exec {"/bin/echo 'don't use this' &gt; /tmp/badidea":
+  creates  =&gt;  /tmp/badidea
+}</pre>
+			<p>This book recommends against using abstracts, it is not commonly used, and it makes the code a lot less readable, particularly for less experienced Puppet users. The best approach is to use <strong class="source-inline">case</strong> statements or <strong class="source-inline">if</strong> statements, which we will cover in <a href="B18492_07.xhtml#_idTextAnchor194"><span class="No-Break"><em class="italic">Chapter 7</em></span></a>. If there is too much divergence in the code, it becomes best to separate the resources into separate classes and not force platforms that share little in resource <span class="No-Break">types together.</span></p>
+			<h2 id="_idParaDest-68"><a id="_idTextAnchor075"/>Defaults</h2>
+			<p>There<a id="_idIndexMarker178"/> are two methods of declaring defaults, but this book advises against using either. A default <a id="_idIndexMarker179"/>body with multiple bodies in a resource declaration breaks good practices around single purposes for a declaration, and a default resource statement can be dangerous in terms of understanding <span class="No-Break">its scoping.</span></p>
+			<h3>A default resource body</h3>
+			<p>Here, a <a id="_idIndexMarker180"/>resource can have a default body, following the same syntax as a normal resource declaration but starting one of the bodies with <strong class="source-inline">default:</strong>; the ordering of the bodies does <span class="No-Break">not matter.</span></p>
+			<p>This example shows two sets of arrays of titles, taking the defaults and changing the default mode for the second array of the <span class="No-Break">titles set:</span></p>
+			<pre class="source-code">
+file {
+  default:
+    ensure =&gt; directory,
+    owner =&gt; 'exampleapp',
+    group =&gt; 'exampleapp',
+    mode =&gt; '0660'
+  ;
+  ['/opt/example','/opt/example/app','/etc/exampleapp']:
+  ;
+  ['/var/example','/var/example/app',]:
+    mode =&gt; '0644'
+  ;
+}</pre>
+			<p>As discussed when declaring resources, this book strongly recommends keeping a clear single-purpose resource declaration as grouping multiple bodies together makes the code harder to read. The recommended method for comparable results is to use arrays of titles and override<a id="_idIndexMarker181"/> parameters <span class="No-Break">where appropriate.</span></p>
+			<h3>Resource default syntax</h3>
+			<p>The second <a id="_idIndexMarker182"/>method is to use a default resource <span class="No-Break">statement syntax:</span></p>
+			<ul>
+				<li>The type starting with a capital <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">{</strong></span></li>
+				<li>A List of attributes and <span class="No-Break">default values</span></li>
+				<li>Ending <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">}</strong></span></li>
+			</ul>
+			<p>If the type has multiple namespaces, such as <strong class="source-inline">concat::fragment</strong>, then each namespace section should <span class="No-Break">be capitalized.</span></p>
+			<p>In this example, we use a file to set the default for all files resources that do not declare a value for an attribute’s owner group <span class="No-Break">or mode:</span></p>
+			<pre class="source-code">
+file {
+  owner  =&gt; 'exampleapp',
+  group  =&gt; 'exampleapp',
+  mode   =&gt; 0660
+}</pre>
+			<p>Commonly used in early versions of Puppet, this is now considered only suitable for use on the <strong class="source-inline">site.pp</strong> file (a global settings file we will cover in <a href="B18492_11.xhtml#_idTextAnchor272"><span class="No-Break"><em class="italic">Chapter 11</em></span></a>). This is a result of Puppet no longer using a dynamic scope for variable lookup and default resources still being dynamically scoped, which can result in scope creep and unintentionally affect other resources in your catalog. (Scope will be discussed in detail in <a href="B18492_06.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>). Since having defaults in <strong class="source-inline">site.pp</strong> makes them unexpected and less visible, this book recommends <a id="_idIndexMarker183"/>against using <span class="No-Break">resource defaults.</span></p>
+			<h2 id="_idParaDest-69"><a id="_idTextAnchor076"/>schedule</h2>
+			<p><strong class="source-inline">schedule</strong> is a<a id="_idIndexMarker184"/> metaparameter <a id="_idIndexMarker185"/>used in conjunction with the schedule resource type. This allows us to describe a specific schedule with a resource type, which defines when a particular resource can be run so that if Puppet is applied outside of this time, it will ignore the resource and how many times it can run in this period. The schedule resource type uses various attributes to describe ranges, repetition, or days: a simple example would be to cover the hours 6 p.m. to 9 a.m. over Friday night and <span class="No-Break">Saturday morning:</span></p>
+			<pre class="source-code">
+schedule { 'Friday Night':
+  day=&gt; 'Friday',
+  range  =&gt; '18 - 9',
+}</pre>
+			<p>That could then be applied to <span class="No-Break">a resource:</span></p>
+			<pre class="source-code">
+exec {'/bin/echo weekend start &gt; /tmp/example'
+  Schedule = &gt; 'Friday Night'
+}</pre>
+			<p>This book <a id="_idIndexMarker186"/>advocates against this use case. It may seem tempting, particularly for highly regulated environments that have restricted windows for changes, but Puppet should enforce the expected state, so diverging from this state should be an issue. Creating schedules makes it obscure as to what will be applied and opens the state to <a id="_idIndexMarker187"/>periods of vulnerability where servers are only partially enforced <span class="No-Break">by Puppet.</span></p>
+			<h3>Exporters and collectors</h3>
+			<p>Exporting and collecting Puppet<a id="_idIndexMarker188"/> resources happens when Puppet tries to allow information to be exchanged between nodes for interdependency. It allows a resource to be declared and <a id="_idIndexMarker189"/>run on one node and then other nodes to also apply these resources. This is done by exporting the information to the <strong class="source-inline">PuppetDB</strong> database, which Puppet runs will consult with when collecting. This means it can only be run via a Puppet agent setup and not via local <span class="No-Break">Puppet runs.</span></p>
+			<p>Exporting a resource just involves adding <strong class="source-inline">@@</strong> in front of a normal resource declaration. The exported resource must be unique in <strong class="source-inline">PuppetDB</strong>, so commonly the hostname fact (a variable containing the hostname) is used in the declaration. In this example, a host entry is being exported to be put in the host file of each <span class="No-Break">collecting server:</span></p>
+			<pre class="source-code">
+@@host { "Oracle database host entry ${::hostname}" :
+  name  =&gt; 'dbserver1',
+  ip    =&gt; '192.168.0.6',
+  tag   =&gt; 'oracle'
+}</pre>
+			<p>Collecting the resource then involves declaring a collector, which is the type starting with a capital and a <em class="italic">spaceship</em> (<strong class="source-inline">&lt;&lt;| |&gt;&gt;</strong>) declaration; inside this, tags can be declared to filter the collection. Completing this example, this collection would ensure all exported host resources tagged <strong class="source-inline">oracle</strong> would be applied to <span class="No-Break">the server:</span></p>
+			<pre class="source-code">
+Host &lt;&lt;| tag = oracle |&gt;&gt;</pre>
+			<p>Exporting and collecting have two key issues; the first is it becomes harder to read the code and understand the resources that may be applied to a node. The second is it complicates the <a id="_idIndexMarker190"/>scalability and high-availability considerations for your Puppet infrastructure<a id="_idIndexMarker191"/> setup. As a result, by best practice, this book recommends avoiding any use of exporters <span class="No-Break">and collectors.</span></p>
+			<h1 id="_idParaDest-70"><a id="_idTextAnchor077"/>Summary</h1>
+			<p>In this chapter, you learned about declaring resources and the syntax and styling checks that can be performed to develop consistent code. Classes were shown to be a way to group resources and allow us to call classes and apply these groups of resources to servers. Defined types were then shown as a way to create repeatable patterns of Puppet code, which can vary <span class="No-Break">by parameters.</span></p>
+			<p>We showed how to explore and use types and providers and saw some of the most commonly used core types and how to use them well. The file, package, and service types were shown to provide a great foundation for installing, configuring, and starting an application. It was seen how Puppet resources can relate to each other to ensure an order and how to then apply these resources written locally to servers <span class="No-Break">for testing.</span></p>
+			<p>The chapter covered the core resource metaparameters to understand how to use various features of resources – tagging to allow filtered runs of resources; auditing to monitor changes, which happen to unmanaged attributes on a resource, and using <strong class="source-inline">noop</strong> to allow a resource to be declared as non-executable but <span class="No-Break">reported on.</span></p>
+			<p>Finally, various anti-patterns were covered – default resources, which have scoping issues; default bodies, which result in overloaded resource statements; schedules, which make understanding Puppet runs complex; and export and collectors, which have issues both in terms of scalability and availability and in terms of abstracting data away from <span class="No-Break">the code.</span></p>
+			<p>In the next chapter, we will cover variables and data types, which will allow us to assign values to variables and control what those values are and how they can be interacted with. This will allow us to reduce duplication and make our resources easier to update and manage, as well as providing a way to pass in data to <span class="No-Break">our classes.</span></p>
+		</div>
+	</body></html>

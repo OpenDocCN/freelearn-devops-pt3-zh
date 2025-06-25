@@ -1,0 +1,789 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer074">
+			<h1 id="_idParaDest-203" class="chapter-number"><a id="_idTextAnchor1010"/>8</h1>
+			<h1 id="_idParaDest-204"><a id="_idTextAnchor1011"/>Infrastructure as Code (IaC) with Terraform</h1>
+			<p>Cloud computing<a id="_idIndexMarker871"/> is one of the primary factors of DevOps enablement today. The initial apprehensions about the cloud are a thing of the past. With an army of security and compliance experts manning cloud platforms 24x7, organizations are now trusting the <em class="italic">public cloud</em> like never before. Along with cloud computing, another <a id="_idIndexMarker872"/>buzzword has taken the industry by storm – <strong class="bold">Infrastructure as Code</strong> (<strong class="bold">IaC</strong>). This chapter will focus on IaC with <strong class="bold">Terraform</strong>, and <a id="_idIndexMarker873"/>by the end of this chapter, you will understand the concept and have enough hands-on experience with Terraform to get you started on <span class="No-Break">your journey.</span></p>
+			<p>In this chapter, we’re going to cover the following <span class="No-Break">main topics:</span></p>
+			<ul>
+				<li>Introduction <span class="No-Break">to IaC</span></li>
+				<li>Setting up Terraform and <span class="No-Break">Azure providers</span></li>
+				<li>Understanding Terraform workflows and creating your first resource <span class="No-Break">using Terraform</span></li>
+				<li><span class="No-Break">Terraform modules</span></li>
+				<li>Terraform state <span class="No-Break">and backends</span></li>
+				<li><span class="No-Break">Terraform workspaces</span></li>
+				<li>Terraform outputs, state, console, <span class="No-Break">and grap<a id="_idTextAnchor1012"/><a id="_idTextAnchor1013"/>hs</span></li>
+			</ul>
+			<h1 id="_idParaDest-205"><a id="_idTextAnchor1014"/>Technical requirements</h1>
+			<p>For this chapter, you can use any machine to run Terraform. Terraform supports many platforms, including Windows, Linux, <span class="No-Break">and macOS.</span></p>
+			<p>You will need an active Azure subscription to follow the exercises. Currently, Azure is offering a free trial for 30 days with $200 worth of free credits; you can sign up <span class="No-Break">at </span><a href="https://azure.microsoft.com/en-in/free"><span class="No-Break">https://azure.microsoft.com/en-in/free</span></a><span class="No-Break">.</span></p>
+			<p>You will also need to clone the following GitHub repository for some of <span class="No-Break">the exercises:</span></p>
+			<p><a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e"><span class="No-Break">https://github.com/PacktPublishing/Modern-DevOps-Practices-2e</span></a></p>
+			<p>Run the following command to clone the repository into your home directory, and <strong class="source-inline">cd</strong> into the <strong class="source-inline">ch8</strong> directory to access the <span class="No-Break">required resources:</span></p>
+			<pre class="console">
+$ git clone https://github.com/PacktPublishing/Modern-DevOps-Practices-2e.git \
+  modern-devops
+$ cd modern-devops/ch8</pre>			<p>So, let’s <span class="No-Break">get starte<a id="_idTextAnchor1015"/><a id="_idTextAnchor1016"/>d!</span></p>
+			<h1 id="_idParaDest-206"><a id="_idTextAnchor1017"/>Introduction to IaC</h1>
+			<p>IaC<a id="_idIndexMarker874"/> is the concept of using code to define infrastructure. Wh<a id="_idTextAnchor1018"/>ile most people can visualize infrastructure as something tangible, virtual infrastructure is already commonplace and has existed for around two decades. Cloud providers provide a web-based console through which you can manage your infrastructure intuitively. But the process is not repeatable <span class="No-Break">or recorded.</span></p>
+			<p>If you spin up a set of infrastructure components using the console in one environment and want to replicate it in another, it is a duplication of effort. To solve this problem, cloud platforms provide APIs to manipulate resources within the cloud and some command-line tools that can help trigger the APIs. You can start writing scripts using commands to create the infrastructure and parameterize them to use the same scripts in another environment. Well, that solves the <span class="No-Break">problem, right?</span></p>
+			<p>Not really! Writing scripts is an imperative way of managing infrastructure. Though you can still call it IaC, its problem is that it does not effectively manage infrastructure changes. Let me give you a <span class="No-Break">few examples:</span></p>
+			<ul>
+				<li>What would happen if you needed to modify something already in the script? Changing the script somewhere in the middle and rerunning the entire thing may create havoc with your infrastructure. Imperative management of infrastructure is not idempotent. So, managing changes becomes <span class="No-Break">a problem.</span></li>
+				<li>What if someone manually changes the script-managed infrastructure using the console? Will your script be able to detect it correctly? What if you want to change the same thing using a script? It will soon start to <span class="No-Break">get messy.</span></li>
+				<li>With the advent of hybrid cloud architecture, most organizations use multiple cloud platforms for their needs. When you are in such a situation, managing multiple clouds with imperative scripts soon becomes a problem. Different clouds have different ways of interacting with their APIs and have distinct <span class="No-Break">command-line tools.</span></li>
+			</ul>
+			<p>The solution to <a id="_idTextAnchor1019"/>all these problems is a declarative IaC solution such as Terraform. HashiCorp’s Terraform is the most popular <a id="_idIndexMarker875"/>IaC tool available on the market. It helps you automate and manage your infrastructure using code and can run on various platforms. As it is declarative, you just need to define what you need (the desired end state) instead of describing how to achieve it. It has the <span class="No-Break">following features:</span></p>
+			<ul>
+				<li>It supp<a id="_idTextAnchor1020"/>orts multiple cloud platforms via providers and exposes a single declarative <strong class="bold">HashiCorp Configuration Language</strong> (<strong class="bold">HCL</strong>)-based interface to interact with it. Therefore, it<a id="_idIndexMarker876"/> allows you to manage various cloud platforms using a similar language and syntax. So, having a few Terraform experts within your team can handle all your <span class="No-Break">IaC needs.</span></li>
+				<li>It tracks the state of the resources it manages using state files and supports local and remote backends to store and manage them. That helps in making the Terraform configuration idempotent. So, if someone manually changes a Terraform-managed resource, Terraform can detect the difference in the next run and prompt corrective action to bring it to the defined configuration. The admin can then absorb the change or resolve any conflicts before <span class="No-Break">applying it.</span></li>
+				<li>It enables GitOps in infrastructure management. With Terraform, you can have the infrastructure configuration alongside application code, making versioning, managing, and releasing infrastructure the same as managing code. You can also include code scanning and gating using pull requests so that someone can review and approve the changes to higher environments before you apply them. A great <span class="No-Break">power indeed!</span></li>
+			</ul>
+			<p>Terraform has multiple offerings – <strong class="bold">open source</strong>, <strong class="bold">cloud</strong>, and <strong class="bold">enterprise</strong>. The open source offering<a id="_idTextAnchor1021"/> is a <a id="_idIndexMarker877"/>simple <strong class="bold">command-line interface</strong> (<strong class="bold">CLI</strong>)-based tool that you can download on any supported <strong class="bold">operating system</strong> (<strong class="bold">OS</strong>) and use. The cloud<a id="_idIndexMarker878"/> and enterprise offerings are more of a wrapper on top of the open source<a id="_idIndexMarker879"/> one. They<a id="_idIndexMarker880"/> provide a web-based GUI and <a id="_idIndexMarker881"/>advanced<a id="_idIndexMarker882"/> features<a id="_idIndexMarker883"/> such as <strong class="bold">policy as code</strong> with <strong class="bold">Sentinel</strong>, <strong class="bold">cost analysis</strong>, <strong class="bold">private modules</strong>, <strong class="bold">GitOps</strong>, and <span class="No-Break"><strong class="bold">CI/CD pipelines</strong></span><span class="No-Break">.</span></p>
+			<p>This chapter will discuss the open source offering and its <span class="No-Break">core function<a id="_idTextAnchor1022"/>s.</span></p>
+			<p>Terraform open source is divided into two main <a id="_idIndexMarker884"/>parts – <strong class="bold">Terraform Core</strong> and<strong class="bold"> Terraform providers</strong>, as<a id="_idIndexMarker885"/> seen in the <span class="No-Break">follo<a id="_idTextAnchor1023"/>wing diagram:</span></p>
+			<div>
+				<div id="_idContainer068" class="IMG---Figure">
+					<img src="image/B19877_08_1.jpg" alt="Figure 8.1 – Terraform architecture" width="1332" height="795"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.1 – Terraform architecture</p>
+			<p>Let’s look at the functions of <span class="No-Break">both components:</span></p>
+			<ul>
+				<li><strong class="bold">Terrafor<a id="_idTextAnchor1024"/>m Core</strong> is the CLI that we will use to interact with Terraform. It takes two main inputs – your <a id="_idIndexMarker886"/>Terraform configuration files and the existing state. It then takes the difference in configuration and <span class="No-Break">applies it.</span></li>
+				<li><strong class="bold">Terraform<a id="_idTextAnchor1025"/> providers</strong> are <a id="_idIndexMarker887"/>plugins that Terraform uses to interact with cloud providers. The providers translate the Terraform configuration into the respective cloud’s REST API calls so that Terraform can manage its associated infrastructure. For example, if you want Terraform to manage AWS infrastructure, you must use the Terraform <span class="No-Break">AWS provider.</span></li>
+			</ul>
+			<p>Now let’s see how we can install open <span class="No-Break">so<a id="_idTextAnchor1026"/><a id="_idTextAnchor1027"/>urce Terraform.</span></p>
+			<h2 id="_idParaDest-207"><a id="_idTextAnchor1028"/>Installing Terraform</h2>
+			<p>Installi<a id="_idTextAnchor1029"/>ng Terraform is<a id="_idIndexMarker888"/> simple; go <a id="_idIndexMarker889"/>to <a href="https://www.terraform.io/downloads.html">https://www.terraform.io/downloads.html</a> and follow the instructions for your platform. Most of it will require you to download a binary and move it to your <span class="No-Break">system path.</span></p>
+			<p>Since we’ve been using Ubuntu throughout this book, I will show the installation on Ubuntu. Use the following commands to use the <strong class="source-inline">apt</strong> package manager to <span class="No-Break">install Terraform:</span></p>
+			<pre class="console">
+$ wget -O- https://apt.releases.hashicorp.com/gpg | \
+  sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+$ echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \ 
+https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \ 
+sudo tee /etc/apt/sources.list.d/hashicorp.list
+$ sudo apt update &amp;&amp; sudo apt install terraform</pre>			<p>Check whether Terraform has been installed successfully with the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform version
+Terraform v1.5.2</pre>			<p>It sho<a id="_idTextAnchor1030"/>ws that <a id="_idIndexMarker890"/>Terraform has been installed successfully. Terraform uses Terraform providers to interact with cloud providers, so let’s look at those in<a id="_idTextAnchor1031"/><a id="_idTextAnchor1032"/> the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-208">Terraform provide<a id="_idTextAnchor1033"/>rs</h1>
+			<p>Terraform has a<a id="_idIndexMarker891"/> decentralized architecture. While the Terraform CLI contains Terraform’s core functionality and provides all functionalities not related to any specific cloud provider, Terraform providers provide the interface between the Terraform CLI and the cloud providers themselves. This decentralized approach has allowed public cloud vendors to offer their Terraform providers so that their customers can use Terraform to manage infrastructure in their cloud. Such is Terraform’s popularity that it has now become an essential requirement for every public cloud provider to offer a <span class="No-Break">Terraform provider.</span></p>
+			<p>We will interact with Azure for this chapter’s entirety and use the Azure Terraform provider for <span class="No-Break">our activity.</span></p>
+			<p>To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch8/terraform-exercise/</pre>			<p>Before we go ahead and configure the provider, we need to understand how Terraform needs to authenticate and authorize w<a id="_idTextAnchor1034"/><a id="_idTextAnchor1035"/>ith the <span class="No-Break">Azure APIs.</span></p>
+			<h2 id="_idParaDest-209"><a id="_idTextAnchor1036"/>Authentication and authorization with Azure</h2>
+			<p>The<a id="_idIndexMarker892"/> simplest way to authenticate and authorize with Azure is to log in to your account using the Azure CLI. When you use the Azure <a id="_idTextAnchor1037"/>provider within your Ter<a id="_idTextAnchor1038"/>raform file, it will automatically act as your account and do whatever it needs to. Now, this sounds dangerous. Admins generally have a lot of access, and having a tool that acts as an admin might not be a<a id="_idTextAnchor1039"/> great idea. What if you want to plug Terraform into your CI/CD pipelines? Well, there is another way to do it – by <a id="_idIndexMarker893"/>using <strong class="bold">Azure service principals</strong>. Azure service principals allow you to access the required features without using a named user account. You can then apply the <strong class="bold">principle of least privilege</strong> to the<a id="_idIndexMarker894"/> service principal and provide only the <span class="No-Break">necessary access.</span></p>
+			<p>Before configuring the service principal, let’s install the Azure CLI on our machine. To do so, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash</pre>			<p>The preceding command will download a shell script and execute it using <strong class="source-inline">bash</strong>. The script will then automatically download and configure the Azure CLI. To confirm whether the Azure CLI is installed successfully, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az --version
+azure-cli                         2.49.0</pre>			<p>We see that the Azure CLI is correctly installed on the system. Now, let’s go ahead and configure the <span class="No-Break">service princ<a id="_idTextAnchor1040"/>ipal.</span></p>
+			<p>To configure the Azure service principal, follow <span class="No-Break">these steps.</span></p>
+			<p>Log in to Azure using the following command and follow all<a id="_idTextAnchor1041"/> the steps the command prompts. You must browse to a specified URL and enter the given code. Once you’ve logged in, you will get a JSON response that will include some details, something like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ az login
+To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter 
+the code XXXXXXXXX to authenticate:
+[
+  {
+    "id": "00000000-0000-0000-0000-0000000000000",
+    ...
+  }
+]</pre>			<p>Make a note of the <strong class="source-inline">id</strong> attribute, which is the subscription ID, and if you have more than one subscription, you can use the following to set it to the <span class="No-Break">correct one:</span></p>
+			<pre class="console">
+$ export SUBSCRIPTION_ID="&lt;SUBSCRIPTION_ID&gt;"
+$ az account set --subscription="$SUBSCRIPTION_ID"</pre>			<p>Use th<a id="_idTextAnchor1042"/>e following command to create a <strong class="bold">service principal</strong> with the <strong class="source-inline">contributor</strong> role to allow Terraform to manage the <span class="No-Break">subscription’s infrastructure.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Follow the principle of least privilege while granting access to the service principal. Do not give privileges thinking you might need them in the future. If any future access is required, you can grant <span class="No-Break">it lat<a id="_idTextAnchor1043"/>er.</span></p>
+			<p>We use <strong class="source-inline">contributor</strong> acce<a id="_idTextAnchor1044"/>ss for <a id="_idIndexMarker895"/>simplicity, but <a id="_idTextAnchor1045"/>finer-grained access<a id="_idTextAnchor1046"/> is possible and should <span class="No-Break">be used:</span></p>
+			<pre class="console">
+$ az ad sp create-for-rbac --role="Contributor" \
+ --scopes="/subscriptions/$SUBSCRIPTION_ID"
+Creating 'Contributor' role assignment under scope '/subscriptions/&lt;SUBSCRIPTION_ID&gt;'
+The output includes credentials that you must protect. Ensure you do not include these 
+credentials in your code or check the credentials into your source control (for more 
+information, see <a href="https://aka.ms/azadsp-cli">https://aka.ms/azadsp-cli</a>):
+{
+  "appId": "00000000-0000-0000-0000-0000000000000",
+  "displayName": "azure-cli-2023-07-02-09-13-40",
+  "password": "00000000000.xx-00000000000000000",
+  "tenant": "00000000-0000-0000-0000-0000000000000"
+}</pre>			<p>We’ve <a id="_idIndexMarker896"/><a id="_idTextAnchor1047"/>successfully created th<a id="_idTextAnchor1048"/>e <strong class="bold">service prin<a id="_idTextAnchor1049"/>cipal</strong>. The response JSON consists of <strong class="source-inline">appId</strong>, <a id="_idTextAnchor1050"/><strong class="source-inline">password</strong>, and <strong class="source-inline">tenant</strong>. We will need these to configure Terraform to use the service principal. In the next section, let’s define the Azure Terraform pr<a id="_idTextAnchor1051"/><a id="_idTextAnchor1052"/>ovider with <span class="No-Break">the details.</span></p>
+			<h2 id="_idParaDest-210">Using the Azure Terr<a id="_idTextAnchor1053"/>aform provider</h2>
+			<p>Before we define the <a id="_idIndexMarker897"/>Azure Terraform provider, let’s understand what makes a Terraform root module. The Terraform root module is just a working directory within your filesystem containing one or more <strong class="source-inline">.tf</strong> files that help you define your configuration and are where you would typically run your <span class="No-Break">Terraform commands.</span></p>
+			<p>Terraform scans all your <strong class="source-inline">.tf</strong> files, combines them, and processes them internally as one. Therefore, you can have one or more <strong class="source-inline">.tf</strong> files that you can split according to your needs. While there are no defined standards for naming <strong class="source-inline">.tf</strong> files, most conventions use <strong class="source-inline">main.tf</strong> as the main Terraform file where they define resources, a <strong class="source-inline">vars.tf</strong> file for defining variables, and <strong class="source-inline">outputs.tf</strong> for <span class="No-Break">defining outputs.</span></p>
+			<p>For this discussion, let’s create a <strong class="source-inline">main.tf</strong> file within our working directory and add a <strong class="source-inline">provider</strong> configuration like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "azurerm"
+      version = "=3.55.0"
+    }
+  }
+}
+provider "azurerm" {
+  subscription_id = var.subscription_id
+  client_id       = var.client_id
+  client_secret   = var.client_secret
+  tenant_id       = var.tenant_id
+  feature<a id="_idTextAnchor1054"/>s {}
+}</pre>			<p>The preceding file contains two blocks. The <strong class="source-inline">terraform</strong> block contains the <strong class="source-inline">required_providers</strong> block, which declares the <strong class="source-inline">version</strong> constraint for the <strong class="source-inline">azurerm</strong> provider. The <strong class="source-inline">provider</strong> block declares an <strong class="source-inline">azurerm</strong> provider, which requires <span class="No-Break">four </span><span class="No-Break"><a id="_idIndexMarker898"/></span><span class="No-Break">parameters.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always constrain the provider version, as providers are released without notice, and if you don’t include the version number, something that works on your machine might not work on someone else’s machine or the CI/CD pipeline. Using a version constraint avoids breaking changes and keeps you <span class="No-Break">in control.</span></p>
+			<p>You might have noticed that we have declared several variables within the preceding file instead of directly inputting the values. There are two main reasons for that – we want to make our template as generic as possible to promote reuse. So, suppose we want to apply a similar configuration in another subscription or use another service principal; we should be able to change it by changing the variable values. Secondly, we don’t want to check <strong class="source-inline">client_id</strong> and <strong class="source-inline">client_secret</strong> in source control. It is a bad practice as we expose our service principal to <a id="_idIndexMarker899"/>users beyond those who need to know <span class="No-Break">about it.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Never store sensitive data in source control. Instead, use a <strong class="source-inline">tfvars</strong> file to manage sensitive information and keep it in a secret management system such as <span class="No-Break">HashiCorp’s Vault.</span></p>
+			<p>Okay, so as we’ve defined the provider resource and the attribute values are sourced from variables, the next step would be to declare variables. Let<a id="_idTextAnchor1055"/><a id="_idTextAnchor1056"/>’s have a look at <span class="No-Break">that now.</span></p>
+			<h1 id="_idParaDest-211">Ter<a id="_idTextAnchor1057"/>raform variables</h1>
+			<p>To declare variables, we will need <a id="_idIndexMarker900"/>to create a <strong class="source-inline">vars.tf</strong> file with the <span class="No-Break">following data:</span></p>
+			<pre class="console">
+variable "subscription_id" {
+  type        = string
+  description = "The azure subscription id"
+}
+variable "app_id" {
+  type        = string
+  description = "The azure service principal appId"
+}
+variable "password" {
+  type        = string
+  description = "The azure service principal password"
+  sensitive   = true
+}
+variable "tenant" {
+  type        = string
+  description = "The azure tenant id"
+}</pre>			<p>So, we’ve defined four variables here using <strong class="source-inline">variable</strong> blocks. Variable blocks typically have a <strong class="source-inline">type</strong> and a <strong class="source-inline">description</strong>. The <strong class="source-inline">type</strong> attribute defines the data type of the variable we declare and defaults to the <strong class="source-inline">string</strong> data type. It can be a primitive data type such as <strong class="source-inline">string</strong>, <strong class="source-inline">number</strong>, or <strong class="source-inline">bool</strong>, or a complex data structure such as <strong class="source-inline">list</strong>, <strong class="source-inline">set</strong>, <strong class="source-inline">map</strong>, <strong class="source-inline">object</strong>, or <strong class="source-inline">tuple</strong>. We will look at types in detail when we use them later in the exercises. The <strong class="source-inline">description</strong> attribute provides more information regarding the variable so users can refer to it for <span class="No-Break">better understanding.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always set the <strong class="source-inline">description</strong> attribute right from the beginning, as it is user-friendly and promotes the reuse of <span class="No-Break">your template<a id="_idTextAnchor1058"/>.</span></p>
+			<p>The <strong class="source-inline">client_secret</strong> variable also contains a third attribute called <strong class="source-inline">sensitive</strong>, a Boolean attribute set to <strong class="source-inline">true</strong>. When the <strong class="source-inline">sensitive</strong> attribute is <strong class="source-inline">true</strong>, the Terraform CLI does not display it in the screen’s output. This attribute is highly recommended for sensitive variables such as passwords <span class="No-Break">and secrets.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always declare a sensitive variable as <strong class="source-inline">sensitive</strong>. This is because if you use Terraform within your CI/CD pipelines, unprivileged users might access sensitive information by looking at <span class="No-Break">the logs.</span></p>
+			<p>Apart from the other three, an<a id="_idIndexMarker901"/> attribute called <strong class="source-inline">default</strong> will help you specify default variable values. The default values help you provide the best possible value for a variable, which your users can override <span class="No-Break">if necessary.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always use default values where possible, as they allow you to provide users with soft guidance about your enterprise standard and save <span class="No-Break">them time.</span></p>
+			<p>The next step would be to provide variable value<a id="_idTextAnchor1059"/><a id="_idTextAnchor1060"/>s. Let’s have a look <span class="No-Break">at that.</span></p>
+			<h2 id="_idParaDest-212">Providing variable v<a id="_idTextAnchor1061"/>alues</h2>
+			<p>There are a<a id="_idIndexMarker902"/> few ways to provide variable values <span class="No-Break">within</span><span class="No-Break"><a id="_idIndexMarker903"/></span><span class="No-Break"> Terraform:</span></p>
+			<ul>
+				<li><strong class="bold">Via the console using </strong><strong class="source-inline">-var</strong><strong class="bold"> flags</strong>: You can use multiple <strong class="source-inline">-var</strong> flags with the <strong class="source-inline">variable_name=variable_value</strong> string to supply <span class="No-Break">the values.</span></li>
+				<li><strong class="bold">Via a variable definition file (the </strong><strong class="source-inline">.tfvars</strong><strong class="bold"> file)</strong>: You can use a file containing the list of variables and their values ending with an extension of <strong class="source-inline">.tfvars</strong> (if you prefer HCL) or <strong class="source-inline">.tfvars.json</strong> (if you prefer JSON) via the command line with the <strong class="source-inline">-</strong><span class="No-Break"><strong class="source-inline">var-file</strong></span><span class="No-Break"> flag.</span></li>
+				<li><strong class="bold">Via default variable definition files</strong>: If you don’t want to supply the variable definition file via the command line, you can create a file with the name <strong class="source-inline">terraform.tfvars</strong> or end it with an extension of <strong class="source-inline">.auto.tfvars</strong> within the Terraform workspace. Terraform will automatically scan these files and take the values <span class="No-Break">from there.</span></li>
+				<li><strong class="bold">Environment variables</strong>: If you don’t want to use a file or pass the information via the command line, you can use environment variables to supply it. You must create environment variables with the <strong class="source-inline">TF_VAR_&lt;var-name&gt;</strong> structure containing the <span class="No-Break">variable value.</span></li>
+				<li><strong class="bold">Default</strong>: When<a id="_idIndexMarker904"/> you run a Terraform plan without <a id="_idIndexMarker905"/>providing values to variables in any other way, the Terraform CLI will prompt for the values, and you must manually <span class="No-Break">enter them.</span></li>
+			</ul>
+			<p>If multiple methods are used to provide the same variable’s value, the first method in the preceding list has the highest precedence for a specific variable. It overrides anything that is defined in the methods <span class="No-Break">listed later.</span></p>
+			<p>We will use the <strong class="source-inline">terraform.tfvars</strong> file for this activity and provide the values for <span class="No-Break">the variables.</span></p>
+			<p>Add the following data to the <span class="No-Break"><strong class="source-inline">terraform.tfvars</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+subscription_id = "&lt;SUBSCRIPTION_ID&gt;"
+app_id          = "&lt;SERVICE_PRINCIPAL_APP_ID&gt;"
+password        = "&lt;SERVICE_PRINCIPAL_PASSWORD&gt;"
+tenant          = "&lt;TENANT_ID&gt;"</pre>			<p>If you are<a id="_idIndexMarker906"/> checking the Terraform configuration into<a id="_idIndexMarker907"/> source control, add the file to the ignore list to avoid accidentally checkin<a id="_idTextAnchor1062"/>g <span class="No-Break">it in.</span></p>
+			<p>If you use Git, adding the following to the <strong class="source-inline">.gitignore</strong> file <span class="No-Break">will suffice:</span></p>
+			<pre class="console">
+*.tfvars
+.terraform*</pre>			<p>Now, let’s go ahead and look at the Terr<a id="_idTextAnchor1063"/><a id="_idTextAnchor1064"/>aform workflow to <span class="No-Break">progress further.</span></p>
+			<h1 id="_idParaDest-213"><a id="_idTextAnchor1065"/>Terraform workflow</h1>
+			<p>The Terraform workflow <a id="_idIndexMarker908"/>typically consists of <a id="_idTextAnchor1066"/><span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="source-inline">init</strong>: Initializes the Terraform <strong class="bold">workspace</strong> and <strong class="bold">backend</strong> (more on them later) and downloads all required providers. You can run the <strong class="source-inline">init</strong> command multiple times during your build, as it does not change your workspace <span class="No-Break">o<a id="_idTextAnchor1067"/>r state.</span></li>
+				<li><strong class="source-inline">plan</strong>: It runs a speculative plan on the requested resources. This command typically connects with the cloud provider and then checks whether the objects managed by Terraform exist within the cloud provider and whether they have the same configuration as defined in the Terraform template. It then shows the delta in the plan output that an admin can review and change the configuration if unsatisfied. If satisfied, they can apply the plan to commit the changes to the cloud platform. The <strong class="source-inline">plan</strong> command does not make any changes to the <span class="No-Break">current<a id="_idTextAnchor1068"/> infrastructure.</span></li>
+				<li><strong class="source-inline">apply</strong>: This applies the delta configuration to the cloud platform. When you use <strong class="source-inline">apply</strong> by itself, it runs the <strong class="source-inline">plan</strong> command first and asks for confirmation. If you supply a plan to it, it applies the plan directly. You can also use <strong class="source-inline">apply</strong> without running the plan using the <strong class="source-inline">-</strong><span class="No-Break"><strong class="source-inline">auto-approve</strong></span><span class="No-Break"> flag.</span></li>
+				<li><strong class="source-inline">destroy</strong>: The <strong class="source-inline">destroy</strong> command destroys the entire infrastructure Terraform manages. It is, therefore, not a very popular command and is rarely used in a production environment. That does not mean that the <strong class="source-inline">destroy</strong> command is not helpful. Suppose you are spinning up a development infrastructure for temporary purposes and don’t need it later. In that case, destroying everything you created using this command takes a <span class="No-Break">few minutes.</span></li>
+			</ul>
+			<p>To access the<a id="_idIndexMarker909"/> resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch8/terraform-exercise</pre>			<p>Now, let’s look at the<a id="_idTextAnchor1069"/><a id="_idTextAnchor1070"/>se in detail with <span class="No-Break">hands-on exer<a id="_idTextAnchor1071"/>cises.</span></p>
+			<h2 id="_idParaDest-214">ter<a id="_idTextAnchor1072"/>raform init</h2>
+			<p>To initialize a Terraform<a id="_idIndexMarker910"/> workspace, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform init
+Initializing the backend...
+Initializing provider plugins...
+- Finding hashicorp/azurerm versions matching "3.63.0"...
+- Installing hashicorp/azurerm v3.63.0...
+- Installed hashicorp/azurerm v3.63.0 (signed by HashiCorp)
+Terraform has created a lock file, .terraform.lock.hcl, to record the provider selections 
+it made previously. Include this file in your version control repository so that Terraform 
+can guarantee to make the same selections by default when you run terraform init in the 
+future.
+Terraform<a id="_idTextAnchor1073"/> has been successfully initi<a id="_idTextAnchor1074"/>alized!</pre>			<p>As the Terraform workspace has been initialized, we can create an <strong class="bold">Azure resource <a id="_idTextAnchor1075"/><a id="_idTextAnchor1076"/>group</strong> to start working with <span class="No-Break">the cloud.</span></p>
+			<h2 id="_idParaDest-215"><a id="_idTextAnchor1077"/>Creating the first resource – Azure resource group</h2>
+			<p>We must <a id="_idIndexMarker911"/>use the <strong class="source-inline">azurerm_resource_group</strong> resource wit<a id="_idTextAnchor1078"/>hin the <strong class="source-inline">main.tf</strong> file to <a id="_idTextAnchor1079"/>create an Azure resource group. Add the following to your <strong class="source-inline">main.tf</strong> file to <span class="No-Break">do so:</span></p>
+			<pre class="console">
+resource "azurerm_resource_group" "rg" {
+  name     = var.rg_name
+  location = var.rg_location
+}</pre>			<p>As we’ve used two variables, we’ve got to declare those, so add the following to the <span class="No-Break"><strong class="source-inline">vars.tf</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+variable "rg_name" {
+  type        = string
+  description = "The resource group name"
+}
+variable "rg_location" {
+  type        = string
+  description = "The resource group location"
+}</pre>			<p>Then, we need to<a id="_idIndexMarker912"/> add the resource group name and location to the <strong class="source-inline">terraform.tfvars</strong> file. Therefore, add the following to the <span class="No-Break"><strong class="source-inline">terraform.tfvars</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+rg_name=terraform-ex<a id="_idTextAnchor1080"/>ercise
+rg_location="West Europe"</pre>			<p>So, now we’re ready to run a plan, but before we do so, let’s use <strong class="source-inline">terraform fmt</strong> to forma<a id="_idTextAnchor1081"/><a id="_idTextAnchor1082"/>t our files into the <span class="No-Break">canonical standard.</span><a id="_idTextAnchor1083"/></p>
+			<h2 id="_idParaDest-216"><a id="_idTextAnchor1084"/>terraform fmt</h2>
+			<p>The <strong class="source-inline">terraform <a id="_idTextAnchor1085"/>fmt</strong> command<a id="_idIndexMarker913"/> formats the <strong class="source-inline">.tf</strong> files into a canonical standard. Use the following command to format <span class="No-Break">your files:</span></p>
+			<pre class="console">
+$ terraform fmt
+terraform.tfvars
+vars.tf</pre>			<p>The command lists<a id="_idIndexMarker914"/> the files that it formatted. The ne<a id="_idTextAnchor1086"/><a id="_idTextAnchor1087"/>xt step is to validate <span class="No-Break">your configuration.</span></p>
+			<h2 id="_idParaDest-217">terrafo<a id="_idTextAnchor1088"/>rm validate</h2>
+			<p>The <strong class="source-inline">terraf<a id="_idTextAnchor1089"/>orm validate</strong> command<a id="_idIndexMarker915"/> validates the current configuration and checks whether there are any syntax errors. To validate your configuration, run <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ terraform validate
+Success! The configuration is valid.</pre>			<p>The success output denotes that our configuration is valid. If there were any errors, it would have highlighted them in the <span class="No-Break">validated output.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always run <strong class="source-inline">fmt</strong> and <strong class="source-inline">validate</strong> before every Terraform plan. It saves you a ton of planning time and helps you ke<a id="_idTextAnchor1090"/>ep your configuration in <span class="No-Break">go<a id="_idTextAnchor1091"/>od shape.</span></p>
+			<p>As the configur<a id="_idTextAnchor1092"/><a id="_idTextAnchor1093"/>ation is valid, we are ready to run <span class="No-Break">a plan.</span></p>
+			<h2 id="_idParaDest-218"><a id="_idTextAnchor1094"/>terraform plan</h2>
+			<p>To run a Terraform plan, use the<a id="_idIndexMarker916"/> <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform plan
+Terraform used the selected providers to generate the following execution plan. Resource 
+actions are indicated with the following symbols:  + create
+Terraform will perform the following actions:
+  # azurerm_resource_group.rg will be created
+  + resource "azurerm_resource_group" "rg" {
+      + id       = (known after apply)
+      + location = "westeurope"
+      + name     = "terraform-exercise"
+    }
+Plan: 1 to add, 0 to change, 0 to destroy.
+Note: You didn't use the -out option to save this plan, so Terraform can't guarantee to 
+take exactly these actions if you run terraform apply now.</pre>			<p>The <strong class="source-inline">plan</strong> output tells us that if we run <strong class="source-inline">terraform apply</strong> immediately, it will create a single <strong class="source-inline">terraform_exercise</strong> resource group. It also outputs a note that since we did not save this plan, the subsequent application is not guaranteed to result in the same action. Meanwhile, things might have changed; therefore, Terraform will rerun <strong class="source-inline">plan</strong> and prompt us for <strong class="source-inline">yes</strong> when applying. Thus, you should save the plan to a file if you don’t <span class="No-Break">want surprises.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always save <strong class="source-inline">terraform plan</strong> output to a file and use the file to apply the changes. This is to avoid any last-minute surprises with things that might have changed in the background and <strong class="source-inline">apply</strong> not doing what it is intended to do, especially when your plan is reviewed as a part of <span class="No-Break">your process.</span></p>
+			<p>So, let’s go ahead and save the<a id="_idIndexMarker917"/> plan to a file first using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform plan -ou<a id="_idTextAnchor1095"/>t rg_ter<a id="_idTextAnchor1096"/>raform_exercise.tfplan</pre>			<p>This time, the plan is saved to a file called <strong class="source-inline">rg_terraform_exercise.tfplan</strong>. We can use<a id="_idTextAnchor1097"/><a id="_idTextAnchor1098"/> this file to apply the <span class="No-Break">chang<a id="_idTextAnchor1099"/>es subse<a id="_idTextAnchor1100"/>quently.</span></p>
+			<h2 id="_idParaDest-219"><a id="_idTextAnchor1101"/>terraform apply</h2>
+			<p>To apply the changes using<a id="_idIndexMarker918"/> the <strong class="source-inline">plan</strong> file, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform apply "rg_terraform_exercise.tfplan"
+azurerm_resource_group.rg: Creating...
+azurerm_resource_group.rg: Creation complete after 2s [id=/subscriptions/id/
+resourceGroups/terraform-exercise]
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.</pre>			<p>And that’s it! Terraform has applied the configuration. Let’s use the Azure CLI to verify whether the resource group <span class="No-Break">is created.</span></p>
+			<p>Run the following command <a id="_idIndexMarker919"/>to list all resource groups within <span class="No-Break">your subscription:</span></p>
+			<pre class="console">
+$ az group list
+...
+    "id": "/subscriptions/id/resourceGroups/terraform-exercise",
+    "location": "westeurope",
+    "name": "terraform-exercise",
+...</pre>			<p>We see that our resource group<a id="_idTextAnchor1102"/> is created and within <span class="No-Break">the list.</span></p>
+			<p>There might be instances when <strong class="source-inline">apply</strong> i<a id="_idTextAnchor1103"/>s partially successful. In that case, Terraform will automatically taint resources it believes weren’t created successfully. Such resources will be recreated automatically in the next run. If you want to taint a resource for recreation manually, you can use the <strong class="source-inline">terraform </strong><span class="No-Break"><strong class="source-inline">taint</strong></span><span class="No-Break"> command:</span></p>
+			<pre class="console">
+$ terraform taint &lt;resource&gt;</pre>			<p>Suppose we want to destroy the resource group as we no longer <a id="_idTextAnchor1104"/><a id="_idTextAnchor1105"/>need it. We can use <strong class="source-inline">terraform des<a id="_idTextAnchor1106"/>troy</strong> <span class="No-Break">for that.</span></p>
+			<h2 id="_idParaDest-220"><a id="_idTextAnchor1107"/>terraform destroy</h2>
+			<p>To destroy the resource gr<a id="_idTextAnchor1108"/>oup, we<a id="_idIndexMarker920"/> can run a speculative plan first. It is always a best practice to run a speculative plan to confirm that what we need to destroy is within the output to have no surprises later. Terraform, like Linux, does not have an <span class="No-Break">undo button.</span></p>
+			<p>To run a speculative destroy plan, use the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform plan -destroy
+Terraform used the selected providers to generate the following execution plan. Resource 
+actions are indicated with the following symbols:
+  - destroy
+Terraform will perform the following actions:
+  # azurerm_resource_group.rg will be destroyed
+  - resource "azurerm_resource_group" "rg" {
+      - id = "/subscriptions/id/resourceGroups/terraform-exercise" -&gt; null
+      - location = "westeurope" -&gt; null
+      - name = "terraform-exercise" -&gt; null
+      - tags = {} -&gt; null
+    }
+Plan: 0 to a<a id="_idTextAnchor1109"/>dd, 0 to change, 1 to destroy.</pre>			<p>As we <a id="_idTextAnchor1110"/>see, as the <a id="_idIndexMarker921"/>resource group was the only resource managed by Terraform, it has listed that as the resource that will be destroyed. There are two ways of destroying the resource: using <strong class="source-inline">terraform destroy</strong> on its own or saving the speculative plan using the <strong class="source-inline">out</strong> parameter and running <strong class="source-inline">terraform apply</strong> on the <span class="No-Break">destroy plan.</span></p>
+			<p>Let’s use the first method <span class="No-Break">for now.</span></p>
+			<p>Run the following command to destroy all resources managed <span class="No-Break">by Terraform:</span></p>
+			<pre class="console">
+$ terraform destroy
+Terraform will perform the following actions:
+  # azurerm_resource_group.rg will be destroyed
+Do you really want to destroy all resources?
+Terraform will destroy all your managed infrastructure, as shown above. There is no undo. 
+Only yes will be accepted to confirm.
+  Enter a value:</pre>			<p>Now, this time, Terraform reruns <strong class="source-inline">plan</strong> and prompts for a value. It will only accept <strong class="source-inline">yes</strong><strong class="bold"> </strong>as confirmation. So, you<a id="_idIndexMarker922"/> can review the output, type <strong class="source-inline">yes</strong>, and hit <em class="italic">Enter</em> <span class="No-Break">to confirm:</span></p>
+			<pre class="console">
+  Enter a value: yes
+azurerm_resource_group.rg: Destroying... [id=/subscriptions/id/resourceGroups/terraform-
+exercise]
+azurerm_resource_group.rg: Still destroying... [id=/subscriptions/id/resourceGroups/
+terraform-exercise, 10s elapsed]
+azurerm_resource_group.r<a id="_idTextAnchor1111"/>g: Destruction complete after 1m20s</pre>			<p>And it has now destroyed the <span class="No-Break">resource group.</span></p>
+			<p>We’ve looked at a basic root module and explored the Terraform workflow. The basic root module helps us create and manage resources but lacks a very important feature – reusability. Terraform provides us with modules to allow reusability for common templates. Let’s look at it in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-221"><a id="_idTextAnchor1112"/>Terraform modules</h1>
+			<p><strong class="bold">Terraform modules</strong> are<a id="_idIndexMarker923"/> reusable, repeatable templates. They allow abstraction in provisioning infrastructure, which is much needed if your usage grows beyond just some proof of concept. HashiCorp visualizes modules as designed by experts who know the enterprise standard and used by developers who want to apply the enterprise standard infrastructure in their projects. That way, things are standard across the organization. It saves developers time and avoids duplication of efforts. Modules can be versioned and distributed<a id="_idIndexMarker924"/> using a <strong class="bold">module repository </strong>or through your version control. That provides infrastructure admins with an ample amount of power and control at the <span class="No-Break">same time.</span></p>
+			<p>As we created a resource group in the last section, let’s modularize that in the next exercise. To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch8/terraform-modules/</pre>			<p>Within this directory, we <a id="_idIndexMarker925"/>have the following <span class="No-Break">directory structure:</span></p>
+			<pre class="console">
+.
+├── main.tf
+├── modules
+│   └── resource_group
+│       ├── main.tf
+│       └── vars.tf
+├── terraform.tfvars
+└── vars.tf</pre>			<p>As we can see, we have the <strong class="source-inline">main.tf</strong>, <strong class="source-inline">terraform.tfvars</strong>, and <strong class="source-inline">vars.tf</strong> files in the root directory like before. However, we have included an additional <strong class="source-inline">modules</strong> directory, which contains a <strong class="source-inline">resource_group</strong> subdirectory that contains a <strong class="source-inline">main.tf</strong> file and a <strong class="source-inline">vars.tf</strong> file. Let’s look <span class="No-Break">at both.</span></p>
+			<p><strong class="source-inline">modules/resource_group/main.tf</strong> looks like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+resource "azurerm_resource_group" "rg" {
+  name     = var.name
+  location = var.location
+}</pre>			<p>It only contains an <strong class="source-inline">azurerm_resource_group</strong> resource with a name and location sourced from the <strong class="source-inline">name</strong> and <strong class="source-inline">location</strong> variables defined in the following <span class="No-Break"><strong class="source-inline">modules/resource_group/vars.tf</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+variable "name" {
+  type        = string
+  description = "The resource group name"
+}
+variable "location" {
+  type        = string
+  description = "The resource group location"
+}</pre>			<p>In the root<a id="_idIndexMarker926"/> module, which is the current directory, we’ve modified the <strong class="source-inline">main.tf</strong> file to look like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+terraform {
+  required_providers {
+    ...
+  }
+}
+provider "azurerm" {
+  ...
+}
+module "rg" {
+  source  = "./modules/resource_group"
+  name     = var.rg_name
+  location = var.rg_location
+}</pre>			<p>As we can see, instead of defining the resource directly in this file, we have defined a module called <strong class="source-inline">rg</strong>, whose <strong class="source-inline">source</strong> is <strong class="source-inline">./modules/resource_group</strong>. Note that we pass the value for the variables defined for the module, that is, <strong class="source-inline">name</strong>, and <strong class="source-inline">location</strong>, from the variables defined at the root level, that is, <strong class="source-inline">var.rg_name</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">var.rg_location</strong></span><span class="No-Break">.</span></p>
+			<p>Now, let’s go ahead and see what happens when we initialize and apply <span class="No-Break">this configuration.</span></p>
+			<p>Run the following command to initialize the <span class="No-Break">Terraform workspace:</span></p>
+			<pre class="console">
+$ terraform init
+Initializing the backend...
+Initializing modules...
+- rg in modules/resource_group
+Initializing provider plugins...
+...
+Terraform has been successfully initialized!</pre>			<p>As we can see, Terraform has detected the new module and initialized it <span class="No-Break">during init.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Whenever you define a new module, you must always <span class="No-Break">reinitialize Terraform.</span></p>
+			<p>Now, let’s go ahead <a id="_idIndexMarker927"/>and run a plan using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform plan
+Terraform will perform the following actions:
+  # module.rg.azurerm_resource_group.rg will be created
+  + resource "azurerm_resource_group" "rg" {
+      + id       = (known after apply)
+      + location = "westeurope"
+      + name     = "terraform-exercise"
+    }
+Plan: 1 to add, 0 to change, 0 to destroy.</pre>			<p>As we can see, it will create the resource group. However, this is now a part of the module addressed <strong class="source-inline">module.rg.azurerm_resource_group.rg</strong>. To apply the plan, let’s run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform apply
+module.rg.azurerm_resource_group.rg: Creating...
+module.rg.azurerm_resource_group.rg: Creation complete after 4s [id=/subscriptions/id/
+resourceGroups/terraform-exercise]</pre>			<p>And the resource group has been created! To destroy the resource group, let’s run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform destroy</pre>			<p>By using modules, you can simplify infrastructure creation and management, enhance collaboration among teams, and establish a consistent approach to deploying resources in a scalable and <span class="No-Break">maintainable manner.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Use Terraform modules to encapsulate and reuse infrastructure configurations, promoting modularity <span class="No-Break">and reusability.</span></p>
+			<p>Until now, we’ve seen <a id="_idIndexMarker928"/>Terraform creati<a id="_idTextAnchor1113"/>ng and destroying resources, but how does Terraform know what it had created before and what it needs to destroy?<a id="_idTextAnchor1114"/><a id="_idTextAnchor1115"/> Well, it uses a <strong class="bold">state file</strong> for that. Let’s have <span class="No-Break">a look.</span><a id="_idTextAnchor1116"/></p>
+			<h1 id="_idParaDest-222"><a id="_idTextAnchor1117"/>Managing Terraform state</h1>
+			<p>Terraform uses a <a id="_idIndexMarker929"/>state file to track what it has deployed and what resources it is managing. The state file is essential as it records all the infrastructure Terraform maintains. If you lose it, Terraform will lose track of what it has done so far and start treating resources as new and needing to be created again. Therefore, you should protect your state <span class="No-Break">as code.</span></p>
+			<p>Terraform stores state in backends. By default, Terraform stores the state file as <strong class="source-inline">terraform.tfstate</strong> within the <strong class="source-inline">workspace</strong> directory, which is called the local backend. However, that is not the best way of managing the state. There are a couple of reasons why you should not store state in a <span class="No-Break">local system:</span></p>
+			<ul>
+				<li>Multiple admins cannot work on the same infrastructure if the state file is stored within someone’s <span class="No-Break">local directory</span></li>
+				<li>Local workstations are not backed up; therefore, the risk of losing the state file is high even if you have a single admin doing <span class="No-Break">the job</span></li>
+			</ul>
+			<p>You might argue that we<a id="_idIndexMarker930"/> can resolve these problems by checking the state file into source control with the <strong class="source-inline">.tf</strong> files. Don’t do that! State files are plaintext, and if your infrastructure configuration contains sensitive information such as passwords, anyone can see it. Therefore, you need to store a state file securely. Also, storing state files in source control does not provide state locking, resulting in conflicts if multiple people are simultaneously modifying the <span class="No-Break">state file.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Never store state files in source control. Use a <strong class="source-inline">.gitignore</strong> file entry to bypass the <span class="No-Break"><strong class="source-inline">terraform.tfstate</strong></span><span class="No-Break"> file.</span></p>
+			<p>The best place to store your Terraform state is on<a id="_idIndexMarker931"/> remote cloud storage. Terraform provides a remote backend<a id="_idIndexMarker932"/> to<a id="_idIndexMarker933"/> store state remotely. There are multiple types of remote <a id="_idIndexMarker934"/>backends<a id="_idIndexMarker935"/> you can use. When writing <a id="_idIndexMarker936"/>this book, <strong class="bold">Azure RM</strong>, <strong class="bold">Consul</strong>, <strong class="bold">cos</strong>, <strong class="bold">gcs</strong>, <strong class="bold">http</strong>, <strong class="bold">Kubernetes</strong>, <strong class="bold">oss</strong>, <strong class="bold">pg</strong>, <strong class="bold">S3</strong>, and <strong class="bold">Remote</strong> were available <a id="_idIndexMarker937"/>backends. <strong class="bold">Remote</strong> is an enhanced <a id="_idIndexMarker938"/>backend<a id="_idIndexMarker939"/> type that allows <a id="_idIndexMarker940"/>running Terraform <strong class="source-inline">plan</strong> and <strong class="source-inline">apply</strong> within the <a id="_idIndexMarker941"/>backend, and only Terraform Cloud and Enterprise <span class="No-Break">support it.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">While choosing the state storage solution, you should prefer storage with state locking. That will allow multiple people to manipulate the resources without stepping on each other’s shoes and causing conflict, as once a state file is locked, others c<a id="_idTextAnchor1118"/>annot acquire it until the lock <span class="No-Break">is released.</span></p>
+			<p>As we’re using Azure, we can use Azure Storage to store our state. The advantages <span class="No-Break">are three-fold:</span></p>
+			<ul>
+				<li>Your state file is centralized. You can have multiple admins working together and managing the <span class="No-Break">same infrastructure.</span></li>
+				<li>The store is encrypted <span class="No-Break">at rest.</span></li>
+				<li>You get automatic backup, redundancy, and <span class="No-Break">high availability.</span></li>
+			</ul>
+			<p>To access the <a id="_idIndexMarker942"/>resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch8/terraform-backend/</pre>			<p>Let’s now use the<a id="_idTextAnchor1119"/><a id="_idTextAnchor1120"/> <strong class="source-inline">azurerm</strong> backend and use Azure Storage to p<a id="_idTextAnchor1121"/>ersist our <span class="No-Break">Terraform state.</span></p>
+			<h2 id="_idParaDest-223"><a id="_idTextAnchor1122"/>Using the Azure Storage backend</h2>
+			<p>As we will end up in a <a id="_idIndexMarker943"/>chicken-or-egg situation if we use Terraform to build a backend to store its state, we will have to configure this bit without <span class="No-Break">using Terraform.</span></p>
+			<p>Therefore, let’s use the <strong class="source-inline">az<a id="_idTextAnchor1123"/></strong> command to configure the storage account in a different resource group that Ter<a id="_idTextAnchor1124"/>raform will <span class="No-Break">not manage.</span></p>
+			<h3>Creating Azure Storage resources</h3>
+			<p>Let’s start by<a id="_idIndexMarker944"/> defining a <span class="No-Break">few variables:</span></p>
+			<ul>
+				<li><strong class="source-inline">$ </strong><span class="No-Break"><strong class="source-inline">RESOURCE_GROUP=tfstate</strong></span></li>
+				<li><strong class="source-inline">$ </strong><span class="No-Break"><strong class="source-inline">STORAGE_ACCOUNT_NAME=tfstate$RANDOM</strong></span></li>
+				<li><strong class="source-inline">$ </strong><span class="No-Break"><strong class="source-inline">CONTAINER_NAME=tfstate</strong></span></li>
+			</ul>
+			<p>Create a resource group first using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az group create --name $RESOURCE_GROUP --location westeurope</pre>			<p>Now, let’s go ahead and create a storage account within the resource group using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az storage account create --resource-group $RESOURCE_GROUP \
+--name $STORAGE_ACCOUNT_NAME --sku Standard_LRS \
+--encryption-services BLOB</pre>			<p>The next step is to fetch the account key using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ ACCOUNT_KEY=$(az storage account keys list \
+--resource-group tfstate --account-name $STORAGE_ACCOUNT_NAME \
+--query '[0].value' -o tsv)</pre>			<p>Now, we can go ahead and create a Blob Storage container using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ az storage container create --name $CONTAINER_NAME \
+--account-name $STORAGE_ACCOUNT_NAME --account-key $ACCOUNT_KEY</pre>			<p>If we receive<a id="_idIndexMarker945"/> a <strong class="source-inline">created</strong> response, the storage account is created and ready for use. Now, we can go and define the backend configuration f<a id="_idTextAnchor1125"/>ile <span class="No-Break">in Terraform.</span></p>
+			<h3>Creating a backend configuration in Terraform</h3>
+			<p>Before we<a id="_idIndexMarker946"/> create the backend, we will need<a id="_idIndexMarker947"/> the <strong class="source-inline">STORAGE_ACCOUNT_NAME</strong> value. To get this, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ echo $STORAGE_ACCOUNT_NAME
+tfstate28099</pre>			<p>To create the backend configuration in Terraform, create a file called <strong class="source-inline">backend.tf</strong> within <span class="No-Break">the workspace:</span></p>
+			<pre class="console">
+terraform {
+  backend "azurerm" {
+    resource_group_name   = "tfstate"
+    storage_account_name  = "tfstate28099"
+    container_name        = "tfstate"
+    key                   = "example.tfstate"
+  }
+}</pre>			<p>In the backend configuration, we’ve defined the <strong class="source-inline">resource_group_name</strong> backend where the Blob Storage instance exists – <strong class="source-inline">storage_account_name</strong>, <strong class="source-inline">container_name</strong>, and <strong class="source-inline">key</strong>. The <strong class="source-inline">key</strong> attribute specifies the filename that we will use to define the state of this configuration. There might be multiple projects that you are managing using Terraform, and all of them will need separate state files. Therefore, the <strong class="source-inline">key</strong> attribute defines the state file’s name that we will use for our project. That allows multiple Terraform<a id="_idIndexMarker948"/> projects to use the same Azure Blob<a id="_idIndexMarker949"/> Storage to store <span class="No-Break">the state.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Always use the name of the project as the name of the key. For example, if your project name is <strong class="source-inline">foo</strong>, name the key <strong class="source-inline">foo.tfstate</strong>. That will prevent potential conflicts with others and also allow you to locate your state <span class="No-Break">file quickly.</span></p>
+			<p>To initialize the Terraform workspace with the new backend configuration, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform init
+Initializing the backend...
+Backend configuration changed!
+Terraform has detected that the configuration specified for the backend has changed. 
+Terraform will now check for existing state in the backends.
+Successfully configured the backend azurerm! Terraform will <a id="_idTextAnchor1126"/>automatically use this backend 
+unless the backend configuration changes.</pre>			<p>When we initialize that, Terraform detects that the backend has changed and checks whether anything is available in the existing backend. If it finds something, it asks whether we want to migrate the current state to the new backend. If it does not, it automatically switches to the new backend, as we <span class="No-Break">see here.</span></p>
+			<p>Now, let’s go ahead and use the <strong class="source-inline">terraform plan</strong> command to run <span class="No-Break">a plan:</span></p>
+			<pre class="console">
+$ terraform plan
+Acquiring state lock. This may take a few moments...
+Terraform will perform the following actions:
+  # azurerm_resource_group.rg will be created
+  + resource "azurerm_resource_group" "rg" {
+    	...
+    }
+Plan: 1 to add, 0 to change, 0 to destroy.</pre>			<p>So, as we see, <strong class="source-inline">terraform plan</strong> tells us that it will create a new resource group called <strong class="source-inline">terraform-exercise</strong>. Let’s <a id="_idIndexMarker950"/>apply the configuration, and<a id="_idIndexMarker951"/> this time with an <strong class="source-inline">auto-approve</strong> flag so that the plan does not run again, and Terraform immediately applies the changes using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform apply -auto-approve
+Acquiring state lock. This may take a few moments...
+azurerm_resource_group.rg: Creating...
+azurerm_resource_group.rg: Creation complete after 2s [id=/subscriptions/id/
+resourceGroups/terraform-exercise]
+Releasing state lock. This may take a few moments...</pre>			<p>We now have the resource <span class="No-Break">created successfully.</span></p>
+			<p>Now, let’s go to <a id="_idIndexMarker952"/>Azure Blob Storage and <a id="_idTextAnchor1127"/>see whether we <a id="_idIndexMarker953"/>have a <strong class="source-inline">tfstate</strong> file there, as shown in the <span class="No-Break">following screenshot:</span></p>
+			<div>
+				<div id="_idContainer069" class="IMG---Figure">
+					<img src="image/B19877_08_2.jpg" alt="Figure 8.2 – Terraform state" width="1191" height="601"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.2 – Terraform state</p>
+			<p>As we see, we have a file called <strong class="source-inline">example.tfstate</strong> within the blob container. That is how remote storage works, and now anyone with access to the Blob Storage instance can use the Terraform configuration and <span class="No-Break">make changes.</span></p>
+			<p>So far, we’ve been managing re<a id="_idTextAnchor1128"/>sources using the default workspace, but what if there are multiple environments that you need to control usin<a id="_idTextAnchor1129"/><a id="_idTextAnchor1130"/>g the same configuration? Well, Terraform <a id="_idTextAnchor1131"/>offers workspaces for <span class="No-Break">those scenarios.</span></p>
+			<h1 id="_idParaDest-224"><a id="_idTextAnchor1132"/>Terraform workspaces</h1>
+			<p>Software development <a id="_idIndexMarker954"/>requires multiple environments. You develop software within your workspace, deploy it into the development environment, unit test it, and then promote the tested code to a test environment. Your QA team will test the code extensively in the test environment, and once all test cases pass, you can promote your code <span class="No-Break">to production.</span></p>
+			<p>That means you must maintain a similar infrastructure in all environments. With an IaC tool such as Terraform, infrastructure is represented as code, and we must manage our code to fit multiple environments. But Terraform isn’t just code; it also contains state files, and we must maintain state files for <span class="No-Break">every environment.</span></p>
+			<p>Suppose you want <a id="_idIndexMarker955"/>to create three resource groups, <strong class="source-inline">terraform-exercise-dev</strong>, <strong class="source-inline">terraform-exercise-test</strong>, and <strong class="source-inline">terraform-exercise-prod</strong>. Each resource group <a id="_idTextAnchor1133"/>will contain a similar set of infrastructure with similar properties. For example, each <a id="_idIndexMarker956"/>resource group includes an Ubuntu <strong class="bold">Virtual </strong><span class="No-Break"><strong class="bold">Machine</strong></span><span class="No-Break"> (</span><span class="No-Break"><strong class="bold">VM</strong></span><span class="No-Break">).</span></p>
+			<p>A simple method to approach the problem is by creating a structure like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+├── dev
+│   ├── backend.tf
+│   ├── main.tf
+│   ├── terraform.tfvars
+│   └── vars.tf
+├── prod
+│   ├── backend.tf
+│   ├── main.tf
+│   ├── terraform.tfvars
+│   └── vars.tf
+└── test
+    ├── backend.tf
+    ├── main.tf
+    ├── terraform.tfvars
+    └── vars.tf</pre>			<p>Can you see the duplication? The same files occur multiple times, all containing the same configuration. The only thing that might change is the <strong class="source-inline">terraform.tfvars</strong> file for <span class="No-Break">each environment.</span></p>
+			<p>So, this does not sound like a great way to approach this problem, and that’s why Terraform provides workspaces <span class="No-Break">for it.</span></p>
+			<p><strong class="bold">Terraform workspaces</strong> are<a id="_idIndexMarker957"/> nothing but independent state files. So, you have a single configuration and multiple state files for each environment. Sounds simple, right? Let’s have <span class="No-Break">a look.</span></p>
+			<p>Another way to represent the same configuration by using Terraform workspaces is <span class="No-Break">the following:</span></p>
+			<pre class="console">
+├─<a id="_idTextAnchor1134"/>─ backend.tf
+├── main.tf
+├── terraform.tfvars
+└── vars.tf</pre>			<p>Now, this looks simple. It just contains a single set of files. Let’s have a look at each of them to understand <span class="No-Break">them better.</span></p>
+			<p>To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch8/terraform-workspaces/</pre>			<p>The <strong class="source-inline">main.tf</strong> file contains a <strong class="source-inline">resource_group</strong> resource with a name that includes an environment suffix, along with other resources that we need to create within the resource group, such as the VNet, subnet, and VM, something like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+...
+resource "azurerm_resource_group" "main" {
+  name     = "${var.rg_prefix}-${terraform.workspace}"
+  location = var.rg_location
+}
+resource "azurerm_virtual_network" "main" {
+  ...
+}
+resource "azurerm_subnet" "internal" {
+  ...
+}
+resource "azurerm_network_interface" "main" {
+...
+}
+resource "azurerm_virtual_machine" "main" {
+  ...
+}
+...</pre>			<p>To access the name of the<a id="_idIndexMarker958"/> workspace, Terraform provides the <strong class="source-inline">terraform.workspace</strong> variable, which we have used to define the <strong class="source-inline">resource_group</strong> name. So, the template is now ready to take configuration for any environment, and we will have a separate resource group for <span class="No-Break">each environment.</span></p>
+			<p>Also, update the <strong class="source-inline">backend.tf</strong> file with the <strong class="source-inline">tfstate</strong> container name we created in the last section and initialize the Terraform workspace by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform init</pre>			<p>Now, once Terraform has initialized, let’s create a <strong class="source-inline">dev</strong> workspace by using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform workspace new dev
+Created and switched to workspace "dev"!</pre>			<p>You’re now in a new, empty workspace. Workspaces isolate their state, so if you run <strong class="source-inline">terraform plan</strong>, Ter<a id="_idTextAnchor1135"/>raform will not see any existing state for <span class="No-Break">this configuration.</span></p>
+			<p>So, as we’re in a new, empty workspace called <strong class="source-inline">dev</strong>, let’s run <span class="No-Break">a plan.</span></p>
+			<p>Use the following command to run a plan on the <span class="No-Break"><strong class="source-inline">dev</strong></span><span class="No-Break"> environment:</span></p>
+			<pre class="console">
+$ terraform plan -out dev.tfplan
+Acquiring state lock. This may take a few moments...
+Terraform will perform the following actions:
+  + resource "azurerm_network_interface" "main" {
+      ...
+    }
+  + resource "azurerm_resource_group" "main" {
+      + id       = (known after apply)
+      + location = "westeurope"
+      + name     = "terraform-ws-dev"
+    }
+  + resource "azurerm_subnet" "internal" {
+      ...
+    }
+  + resource "azurerm_virtual_machine" "main" {
+	...
+    }
+  + resource "azurerm_virtual_<a id="_idTextAnchor1136"/>network" "main" {
+	...
+    }
+Plan: 5 to add, 0 to change, 0 to destroy.</pre>			<p>Now, let’s go ahead <a id="_idIndexMarker959"/>and apply the plan using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform apply "dev.tfplan"
+Acquiring state lock. This may take a few moments...
+azurerm_resource_group.main: Creating...
+azurerm_virtual_network.main: Creating...
+azurerm_subnet.internal: Creating...
+azurerm_network_interface.main: Creating...
+azurerm_virtual_machine.main: Creating...
+Apply complete! Resources: 5 added, 0 changed, 0 destroyed.
+Releasing state lock. This may take a few moments...</pre>			<p>As the <strong class="source-inline">dev</strong> plan has been applied and the resources are created in the <strong class="source-inline">dev</strong> resource group, let’s create a workspace <span class="No-Break">for testing:</span></p>
+			<pre class="console">
+$ terraform workspace new test</pre>			<p>As the new <a id="_idIndexMarker960"/>workspace is created, let’s run a plan on the test workspace using the following command and save it to the <span class="No-Break"><strong class="source-inline">test.tfplan</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+$ terraform plan -out test.tfplan
+...
+  + resource "azurerm_resource_group" "main" {
+      + id       = (known after apply)
+      + loca<a id="_idTextAnchor1137"/>tion = "westeurope"
+      + name     = "terraform-ws-test"
+    }
+...</pre>			<p>As we can see, the resources will be created in the <strong class="source-inline">terraform-ws-test</strong> resource group. So, let’s go ahead and apply the plan using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform apply test.tfplan</pre>			<p>The <strong class="source-inline">test</strong> plan has been applied as well. Now let’s go ahead and inspect the <span class="No-Break">created resources.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Terraform workspaces are ideal for maintaining separate infrastructure configurations for different environments, such as development, staging, and product<a id="_idTextAnchor1138"/><a id="_idTextAnchor1139"/>ion. This helps prevent accidental configuration changes a<a id="_idTextAnchor1140"/>nd ensures <span class="No-Break">consistent setups.</span></p>
+			<h2 id="_idParaDest-225"><a id="_idTextAnchor1141"/>Inspecting resources</h2>
+			<p>Let’s use the <strong class="source-inline">az</strong> command to<a id="_idIndexMarker961"/> list the resource groups. As we know, our resource groups have a resource group prefix of <strong class="source-inline">terraform-ws</strong>. Therefore, use the following command to list all resource groups containing <span class="No-Break">the prefix:</span></p>
+			<pre class="console">
+$ az group list | grep name | grep terraform-ws
+    "name": "terraform-ws-dev",
+    "name": "terraform-ws-test",</pre>			<p>As we can see, we have two resource groups, <strong class="source-inline">terraform-ws-dev</strong> and <strong class="source-inline">terraform-ws-test</strong>. So, two resource groups have been <span class="No-Break">created successful<a id="_idTextAnchor1142"/>ly.</span></p>
+			<p>You can also verify this in the Azure portal, as shown in the <span class="No-Break">following screenshot:</span></p>
+			<div>
+				<div id="_idContainer070" class="IMG---Figure">
+					<img src="image/B19877_08_3.jpg" alt="Figure 8.3 – Resource groups" width="933" height="354"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.3 – Resource groups</p>
+			<p>Now, let’s go ahead and inspect the resources on the <strong class="source-inline">t<a id="_idTextAnchor1143"/>erraform-ws-dev</strong> resource group using the Azure portal <a id="_idTextAnchor1144"/>by clicking <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">terraform-ws-dev</strong></span><span class="No-Break">:</span></p>
+			<div>
+				<div id="_idContainer071" class="IMG---Figure">
+					<img src="image/B19877_08_4.jpg" alt="Figure 8.4 – Terraform dev resource group" width="1097" height="448"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.4 – Terraform dev resource group</p>
+			<p>We have a virtual <a id="_idIndexMarker962"/>network, a network interface, an OS disk, and a VM within the resource group. We should expect similar resources with t<a id="_idTextAnchor1145"/>he same names in the <strong class="source-inline">terraform-ws-test</strong> resource group. Let’s go ahead and have <span class="No-Break">a look:</span></p>
+			<div>
+				<div id="_idContainer072" class="IMG---Figure">
+					<img src="image/B19877_08_5.jpg" alt="Figure 8.5 – Terraform test resource group" width="1091" height="448"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.5 – Terraform test resource group</p>
+			<p>As we can see, we also h<a id="_idTextAnchor1146"/>ave similar resources in the <strong class="source-inline">terraform-ws-test</strong> <span class="No-Break">resource group.</span></p>
+			<p>We did all this using a single configuration, but there should be two s<a id="_idTextAnchor1147"/><a id="_idTextAnchor1148"/>tate files for each workspace since th<a id="_idTextAnchor1149"/>ey are two sets of resources. Let’s have <span class="No-Break">a look.</span></p>
+			<h2 id="_idParaDest-226"><a id="_idTextAnchor1150"/>Inspecting state files</h2>
+			<p>If we had used the local backend for the<a id="_idIndexMarker963"/> state files, we would get the <span class="No-Break">following structure:</span></p>
+			<pre class="console">
+|-- terraform.tfstate.d
+    |-- dev
+    |   `-- terraform.tfstate
+    `-- test
+        `-- terraform.tfstate</pre>			<p>So, Terraform creates a directory called <strong class="source-inline">terrafom.tfstate.d</strong>; within that, it creates directories for each workspace. Within the directories, it stores the state file for each workspace <span class="No-Break">as </span><span class="No-Break"><strong class="source-inline">terraform.tfstate</strong></span><span class="No-Break">.</span></p>
+			<p>But since we are using a remote backend and using<a id="_idTextAnchor1151"/> Azure Blob Storage for it, let’s inspect the files within it u<a id="_idTextAnchor1152"/>sing the <span class="No-Break">Azure console:</span></p>
+			<div>
+				<div id="_idContainer073" class="IMG---Figure">
+					<img src="image/B19877_08_6.jpg" alt="Figure 8.6 – Terraform workspace state" width="529" height="341"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.6 – Terraform workspace state</p>
+			<p>As we see, there are two state files, one for each environment. Therefore, the state files are suffixed with an <strong class="source-inline">env:dev</strong> or <strong class="source-inline">env:test</strong> string. That is how workspaces are managed in Azure Blob Storage. The remote backend’s structure for maintaining state files depends on the provider plugins, and therefore, there might be different ways of managing multiple states for various backends. However, the Terraform CLI will interpret workspaces the same way, irr<a id="_idTextAnchor1153"/><a id="_idTextAnchor1154"/>espective of the backends,<a id="_idTextAnchor1155"/> so nothing changes for the end user from a <span class="No-Break">CLI perspective.</span></p>
+			<h2 id="_idParaDest-227"><a id="_idTextAnchor1156"/>Cleaning up</h2>
+			<p>Now, let’s go ahead and clean up both resource groups<a id="_idIndexMarker964"/> to avoid <span class="No-Break">unnecessary charges.</span></p>
+			<p>As we’re already within the test workspace, let’s run the following command to destroy resources within the <span class="No-Break">te<a id="_idTextAnchor1157"/>st workspace:</span></p>
+			<pre class="console">
+$ terraform destroy --auto-approve</pre>			<p>Now, let’s switch to the <strong class="source-inline">dev</strong> workspace using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform workspace select dev
+Switched to workspace "dev".</pre>			<p>As we’re within the <strong class="source-inline">dev</strong> workspace, use the following command to destroy all resources within the <span class="No-Break"><strong class="source-inline">dev</strong></span><span class="No-Break"> workspace:</span></p>
+			<pre class="console">
+$ terraform destroy --auto-approve</pre>			<p>In a while, we should see that both resource groups are g<a id="_idTextAnchor1158"/><a id="_idTextAnchor1159"/>one. Now, let’s look at some of the advanced concepts of Terraform in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-228"><a id="_idTextAnchor1160"/>Terraform output, state, console, and graphs</h1>
+			<p>While we understand that Terraform uses state files to manage resources, let’s look at some advanced commands to help us appreciate and make more sense of the Terraform <span class="No-Break">state concept.</span></p>
+			<p>To access the resources for this section, <strong class="source-inline">cd</strong> into <span class="No-Break">the following:</span></p>
+			<pre class="console">
+$ cd ~/modern-devops/ch8/terr<a id="_idTextAnchor1161"/><a id="_idTextAnchor1162"/>aform-workspaces/</pre>			<p>Now, let’s go ahead and<a id="_idTextAnchor1163"/> look at our first command – <span class="No-Break"><strong class="source-inline">terraform output</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-229"><a id="_idTextAnchor1164"/>terraform output</h2>
+			<p>So far, we’ve looked <a id="_idIndexMarker965"/>at variables but haven’t yet discussed outputs. Terraform outputs are return values of a Terraform configuration that allow users to export configuration to users or any modules that might use the <span class="No-Break">current module.</span></p>
+			<p>Let’s go with the last example and add an output variable that exports the private IP of the network interface attached to the VM in the <span class="No-Break"><strong class="source-inline">outputs.tf</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="console">
+output "vm_ip_addr" {
+  value = azurerm_network_interface.main.private_ip_address
+}</pre>			<p>Now, let’s go ahead and apply <span class="No-Break">the configuration:</span></p>
+			<pre class="console">
+$<a id="_idTextAnchor1165"/> terraform apply --auto-approve
+...
+Outputs:
+vm_ip_addr = "10.0.2.4"</pre>			<p>After Terraform has applied the configuration, it shows the outputs at the end of the console result. You can run the following to inspect the output <span class="No-Break">anytime later:</span></p>
+			<pre class="console">
+$ terraform output
+vm_ip_addr = "10.0.2.4"</pre>			<p>Outputs are stored in the state file<a id="_idTextAnchor1166"/><a id="_idTextAnchor1167"/> like everything else, so let’s look at how we<a id="_idTextAnchor1168"/> can manage Terraform state using <span class="No-Break">the CLI.</span></p>
+			<h2 id="_idParaDest-230"><a id="_idTextAnchor1169"/>Managing Terraform state</h2>
+			<p>Terraform stores the<a id="_idIndexMarker966"/> configuration it manages in state files and therefore provides a command for advanced state management. The <strong class="source-inline">terraform state</strong> command helps you manage the state of the current configuration. While the state file is plaintext and you can manually modify it, using the <strong class="source-inline">terraform state</strong> command <span class="No-Break">is recommended.</span></p>
+			<p>But before we get into details, we must understand why we want to do that. Things might not always go according to plan, so the state file may have corrupt data. You also might want to see specific attributes of a particular resource after you’ve applied it. The state file might need to be investigated for the root cause analysis of a specific infrastructure <a id="_idIndexMarker967"/>provisioning problem. Let’s have a look at the most common <span class="No-Break">use cases.</span></p>
+			<h3>Viewing the current state</h3>
+			<p>To view the <a id="_idIndexMarker968"/>current state, we can run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform show</pre>			<p>That will outp<a id="_idTextAnchor1170"/>ut all resources that Terraform has created and manages, including outputs. Of course, this can be overwhelming for some, and we may want to view <a id="_idTextAnchor1171"/>the list of resources <span class="No-Break">Terraform manages.</span></p>
+			<h3>Listing resources in the current state</h3>
+			<p>To list the <a id="_idIndexMarker969"/>resources in the Terraform state file, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform state list
+azurerm_network_interface.main
+azurerm_resource_group.main
+azurerm_subnet.internal
+azurerm_virtual_machine.main
+azurerm_virtual_network.main</pre>			<p>And as we see, there are five resources managed by Terraform. You might want to remove a resource from the Terraform state. It might be possible that someone has removed a resource manually as it is no longer required, <a id="_idTextAnchor1172"/>but it isn’t removed from the <span class="No-Break">Terraform configuration.</span></p>
+			<h3>Removing a resource from the state</h3>
+			<p>To remove a <a id="_idIndexMarker970"/>state manually from the Terraform state file, you must use the <strong class="source-inline">terraform state rm &lt;resource&gt;</strong> command. For example, to remove the Azure VM resource from the Terraform state, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform state rm azurerm_virtual_machine.main
+Acquiring state lock. This may take a few moments...
+Removed azurerm_virtual_machine.main
+Successfully removed 1 resource instance(s).
+Releasing state lock. This may take a few moments...</pre>			<p>Bear <a id="_idTextAnchor1173"/>in mind that this has merely removed the resource from the state file and has not touched the actual resource sitting <span class="No-Break">on Azure.</span></p>
+			<p>There might be instances where someone spun up a VM manually within Azure, and we now want Terraform to manage it. This kind of situation happens mostly in brownfield projects. In that case, we must declare the same configuration within Terraform and then import existing resources in the Terraform state. To do so, we can use the <strong class="source-inline">terraform </strong><span class="No-Break"><strong class="source-inline">import</strong></span><span class="No-Break"> command.</span></p>
+			<h3>Importing existing resources into Terraform state</h3>
+			<p>You can<a id="_idIndexMarker971"/> use the <strong class="source-inline">terraform import</strong> command to import existing resources into Terraform state. The <strong class="source-inline">terraform import</strong> command is structured <span class="No-Break">as follows:</span></p>
+			<pre class="console">
+terraform import &lt;resource&gt; &lt;resource_id&gt;</pre>			<p>For example, to reimport the <strong class="source-inline">httpd</strong> VM into the state, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform import azurerm_virtual_machine.main \
+"/subscriptions/&lt;SUBSCRIPTION_ID&gt;/resourceGroups\
+/terraform-ws-dev/providers/Microsoft.Compute/virtualMachines/httpd"
+Acquiring state lock. This may take a few moments...
+azurerm_virtual_machine.main: Importing from ID "/subscriptions/id/resourceGroups/
+terraform-ws-dev/providers/Microsoft.Compute/virtualMachines/httpd"...
+azurerm_virtual_machine.main: Import prepared!
+  Prepared azurerm_virtual_machine for import
+azurerm_virtual_machine.main: Refreshing state... [id=/subscriptions/1de491b5-f572-
+459b-a568-c4a35d5ac7a9/resourceGroups/terraform-ws-<a id="_idTextAnchor1174"/>dev/providers/Microsoft.Compute/
+virtualMachines/httpd]
+Import successful!</pre>			<p>To check whether the resource is imported to the state, we can list the resources again using the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ terraform state list | grep azurerm_virtual_machine
+azurerm_virtual_machine.main</pre>			<p>As we see, we have <a id="_idIndexMarker972"/>the VM wit<a id="_idTextAnchor1175"/><a id="_idTextAnchor1176"/>hin the state file. If we want to dig further into the resou<a id="_idTextAnchor1177"/>rces, we can use <span class="No-Break"><strong class="source-inline">terraform console</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-231"><a id="_idTextAnchor1178"/>terraform console</h2>
+			<p>The <strong class="source-inline">terraform console</strong> command<a id="_idIndexMarker973"/> provides an interactive console to investigate state files, dynamically build paths, and evaluate expressions even before using them in resources. It is a potent tool that most advanced Terraform users use. For example, let’s launch the console and look through the configuration of the VM resource we <span class="No-Break">just imported.</span></p>
+			<p>Use the following commands to launch the console and get the resource group of the VM and the <span class="No-Break"><strong class="source-inline">id</strong></span><span class="No-Break"> value:</span></p>
+			<pre class="console">
+$ terraform console
+Acquiring state lock. This may take a few moments...
+&gt; azurerm_virtual_machine.main.resource_group_name
+"terraform-ws-dev"
+&gt; azurerm_virtual_machine.main.id
+"/subscriptions/id/resourceGroups/terraform-ws-dev/providers/Microsoft.Compute/
+virtu<a id="_idTextAnchor1179"/>alMachines/httpd"
+&gt; exit
+Releasing state lock. This may take a few moments...</pre>			<p>As we ca<a id="_idTextAnchor1180"/><a id="_idTextAnchor1181"/>n see, the <a id="_idIndexMarker974"/>VM is in the correct resource group, a<a id="_idTextAnchor1182"/>nd we’re satisfied that the import <span class="No-Break">was correct.</span></p>
+			<h2 id="_idParaDest-232"><a id="_idTextAnchor1183"/>Terraform dependencies and graphs</h2>
+			<p>Terraform uses a<a id="_idIndexMarker975"/> dependency model to manage in what order resources are created and destroyed. There are two kinds of dependencies – <em class="italic">implicit</em> and <em class="italic">explicit</em>. We’ve been using implicit dependencies until now, where the VM depended upon the network interface, and the network interface depended upon the subnet. The subnet depended upon the virtual network, and all of these resources depended on the resource group. These depende<a id="_idTextAnchor1184"/>ncies naturally occur when we use one resource’s output as <span class="No-Break">another’s input.</span></p>
+			<p>However, sometimes, we want to define an explicit dependency on a resource, especially when there is no way to define an implicit dependency on it. You can use the <strong class="source-inline">depends_on</strong> attribute for that kind <span class="No-Break">of operation.</span></p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Avoid explicit dependencies unless needed, as Terraform uses parallelism to manage resources. If explicit dependencies are not required, it will slow down Terraform runs because it can process multiple <span class="No-Break">parallel resources.</span></p>
+			<p>To visualize the dependen<a id="_idTextAnchor1185"/>cies between resources, we can export a graph<a id="_idIndexMarker976"/> from the state file and convert that into a PNG file using a tool such <a id="_idIndexMarker977"/><span class="No-Break">as </span><span class="No-Break"><strong class="bold">Graphviz</strong></span><span class="No-Break">.</span></p>
+			<p>Run the following command to export the <span class="No-Break">dependency graph:</span></p>
+			<pre class="console">
+$ terraform graph &gt; vm.dot</pre>			<p>We can then process the graph file using the Graphviz tool. To install the tool on Ubuntu, run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+$ sudo apt install graphviz -y</pre>			<p>Now run the following command to convert the graph file into a <span class="No-Break">PNG file:</span></p>
+			<pre class="console">
+$ cat vm.dot | dot -T png -o vm.png</pre>			<p>The graph is available at <a href="https://github.com/PacktPublishing/Modern-DevOps-Practices-2e/blob/main/ch8/terraform-graph.png">https://github.com/PacktPublishing/Modern-DevOps-Practices-<span id="_idTextAnchor1186"/><span id="_idTextAnchor1187"/>2e/blob/main/ch8/terraform-graph.png</a>. Now, let’s go ahead and see how we can clean up <span class="No-Break">our resources.</span></p>
+			<h2 id="_idParaDest-233"><a id="_idTextAnchor1188"/>Cleaning up resources</h2>
+			<p>As we already know, we run the <a id="_idIndexMarker978"/>following command to clean up <span class="No-Break">the resources:</span></p>
+			<pre class="console">
+$ terraform destroy --auto-approve</pre>			<p>It will clear resources from the resource group and delete the resource group <span class="No-Break">after that.</span></p>
+			<p>While using <strong class="source-inline">terraform destroy</strong> can be an easy way to eliminate resources you don’t need, it is best if you stick to this only in the <strong class="source-inline">dev</strong> environment and never use it in production. <a id="_idTextAnchor1189"/><a id="_idTextAnchor1190"/>Instead, you can remove resources you don’t need from the configuration and then run <span class="No-Break"><strong class="source-inline">terraform apply</strong></span><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-234"><a id="_idTextAnchor1191"/>Summary</h1>
+			<p>In this chapter, we’ve discussed Terraform’s core and understood some of the most common commands and functionalities from a hands-on perspective. We started with understanding IaC, introduced Terraform as an IaC tool, installed Terraform, understood Terraform providers, and used the Azure Terraform provider to manage infrastructure <span class="No-Break">in Azure.</span></p>
+			<p>We then looked at Terraform variables and multiple ways of supplying values to the variables. We discussed the core Terraform workflow and several commands you would use to manage infrastructure using Terraform. We then looked at Terraform modules and then at Terraform state as an essential component that helps Terraform keep track of the infrastructure it <span class="No-Break">is managing.</span></p>
+			<p>We looked at local and remote state storage and used Azure Blob Storage as the remote state backend. We then discussed Terraform workspaces and how they enable us to use the same Terraform configuration to build multiple environments with <span class="No-Break">hands-on exercises.</span></p>
+			<p>We then looked at some advanced operations with Terraform state using the <strong class="source-inline">outputs</strong>, <strong class="source-inline">state</strong>, and <strong class="source-inline">console</strong> commands. We finally looked at how Terraform manages dependencies and viewed a dependency graph usi<a id="_idTextAnchor1192"/><a id="_idTextAnchor1193"/>ng the <span class="No-Break"><strong class="source-inline">graph</strong></span><span class="No-Break"> command.</span></p>
+			<p>In the next chapter, we will delve into configuration management <span class="No-Break">using Ansible.</span></p>
+			<h1 id="_idParaDest-235"><a id="_idTextAnchor1194"/>Questions</h1>
+			<ol>
+				<li>Why should we constrain the <span class="No-Break">provider version?</span></li>
+				<li>You should always use the <strong class="source-inline">fmt</strong> and <strong class="source-inline">validate</strong> functions before a Terraform <span class="No-Break">plan</span><span class="No-Break">. (True/False)</span></li>
+				<li>What does the Terraform <strong class="source-inline">plan</strong> command do? (<span class="No-Break">Choose two)</span><p class="list-inset">A. Refreshes the current state with the existing <span class="No-Break">infrastructure state</span></p><p class="list-inset">B. Gets the delta between the current configuration and the <span class="No-Break">expected configuration</span></p><p class="list-inset">C. Applies the configuration to <span class="No-Break">the cloud</span></p><p class="list-inset">D. Destroys the configuration in <span class="No-Break">the cloud</span></p></li>
+				<li>What does the <strong class="source-inline">terraform apply</strong> command do? (<span class="No-Break">Choose three)</span><p class="list-inset">A. Refreshes the current state with the <span class="No-Break">existing infrastructure</span></p><p class="list-inset">B. Gets the delta between the current configuration and the <span class="No-Break">expected configuration</span></p><p class="list-inset">C. Applies the configuration to <span class="No-Break">the cloud</span></p><p class="list-inset">D. Destroys the configuration in <span class="No-Break">the cloud</span></p></li>
+				<li>Why should you never store state files in source control? (<span class="No-Break">Choose two)</span><p class="list-inset">A. State files are plaintext, and therefore you expose sensitive information to <span class="No-Break">unprivileged users.</span></p><p class="list-inset">B. Source control does not support state locking, and therefore it might result in potential conflicts <span class="No-Break">between users.</span></p><p class="list-inset">C. Multiple admins cannot work on the <span class="No-Break">same configuration.</span></p></li>
+				<li>Which of the following are valid Terraform remote backends? (<span class="No-Break">Choose five)</span><p class="list-inset"><span class="No-Break">A. S3</span></p><p class="list-inset">B. Azure <span class="No-Break">Blob Storage</span></p><p class="list-inset"><span class="No-Break">C. Artifactory</span></p><p class="list-inset"><span class="No-Break">D. Git</span></p><p class="list-inset"><span class="No-Break">E. HTTP</span></p><p class="list-inset">F. <span class="No-Break">Terraform Enterprise</span></p></li>
+				<li>Which command will mark a resource for recreation in the <span class="No-Break">next </span><span class="No-Break"><strong class="source-inline">apply</strong></span><span class="No-Break">?</span></li>
+				<li>Where are state files stored in the local backend if you <span class="No-Break">use workspaces?</span></li>
+				<li>What command should we use to remove a Terraform resou<a id="_idTextAnchor1195"/><a id="_idTextAnchor1196"/>rce from <span class="No-Break">the state?</span></li>
+				<li>What command should we use to import an existing cloud resource within <span class="No-Break">the state?</span></li>
+			</ol>
+			<h1 id="_idParaDest-236"><a id="_idTextAnchor1197"/>Answers</h1>
+			<ol>
+				<li value="1">Because Terraform providers are released separately to the Terraform CLI, different versions might break the <span class="No-Break">existing configuration</span></li>
+				<li><span class="No-Break">True</span></li>
+				<li><span class="No-Break">A, B</span></li>
+				<li>A, <span class="No-Break">B, C</span></li>
+				<li><span class="No-Break">A, B</span></li>
+				<li>A, B, C, <span class="No-Break">E, F</span></li>
+				<li>The <span class="No-Break"><strong class="source-inline">taint</strong></span><span class="No-Break"> command</span></li>
+				<li><span class="No-Break"><strong class="source-inline">terraform.tfstate.d</strong></span></li>
+				<li><strong class="source-inline">terraform state </strong><span class="No-Break"><strong class="source-inline">rm &lt;resource&gt;</strong></span></li>
+				<li><strong class="source-inline">terraform import &lt;</strong><span class="No-Break"><strong class="source-inline">resource&gt; &lt;id&gt;</strong></span></li>
+			</ol>
+		</div>
+	</div>
+</div>
+</body></html>
