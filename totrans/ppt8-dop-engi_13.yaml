@@ -1,11 +1,15 @@
 - en: '13'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '13'
 - en: Taking Puppet Server Further
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 深入探讨Puppet服务器
 - en: This chapter will look at how you can monitor, tune, and integrate your Puppet
     infrastructure with third-party sources. You will understand how to find the logs
     of the various services we have discussed in previous chapters and how to find
@@ -24,99 +28,145 @@
     environment release procedures. Various third-party implementations, including
     **ServiceNow** and **1Password**, will be shown. The **Puppet Data Service** (**PDS**)
     will be implemented in this chapter’s lab to demonstrate this pattern.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将介绍如何监控、调优并将Puppet基础设施与第三方数据源集成。你将了解如何查找我们在前几章讨论的各种服务的日志，并如何查找当前的状态API。接着，你将学习如何将这些日志和状态集成到像**logstash**这样的服务中，以提供更大的可见性和告警选项。然后，我们将回顾Puppet提供的性能指标，以及如何将这些指标与Splunk和Grafana等仪表板工具集成，从而为Puppet的基础设施提供**监控**和**可观测性**。我们将为**Splunk**和**Grafana**设置实验环境，作为Puppet操作仪表板的一部分，展示这些仪表板。通过使用这些指标，你将学习如何调整和扩展Puppet基础设施的各个组件，以应对Puppet扩展时常见的问题和挑战。之后，你将了解外部提供者模式如何使事实、分类和Hiera数据能够从外部数据源传输到Puppet，并允许Puppet平台团队提供自助服务，无需完全了解Puppet或环境发布程序。本章将展示多个第三方实现，包括**ServiceNow**和**1Password**。在本章的实验中，我们将实现**Puppet数据服务**（**PDS**）来演示这一模式。
 - en: 'In this chapter, we’re going to cover the following main topics:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将涵盖以下主要内容：
 - en: Logging and status
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 日志与状态
 - en: Metrics, tuning, and scaling
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 性能指标、调优与扩展
 - en: Identifying and avoiding common issues
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 识别和避免常见问题
 - en: External data sources
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 外部数据源
 - en: Technical requirements
+  id: totrans-8
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: 'Clone the control repository from [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo
     ) to your GitHub account (`controlrepo-chapter13`) and update the following files
     in this repository:'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 从[https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)将控制仓库克隆到你的GitHub账户（`controlrepo-chapter13`），并更新该仓库中的以下文件：
 - en: '`Puppetfile` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/Puppetfile)'
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用[https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/Puppetfile)的`Puppetfile`
 - en: '`hiera.yaml` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/hiera.yaml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/hiera.yaml)'
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用[https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/hiera.yaml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/hiera.yaml)的`hiera.yaml`
 - en: '`manifests/site.pp` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/site.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/site.pp)'
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用[https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/site.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/site.pp)的`manifests/site.pp`
 - en: 'Build a large cluster with three compilers and three clients by downloading
     the `params.json` file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/params.json)
     and update it with the location of your control repository and your SSH key for
     the control repository. Then, run the following command from your `pecdm` directory:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过下载[https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/params.json)中的`params.json`文件，构建一个包含三个编译器和三个客户端的大型集群，并更新文件以包含你的控制仓库位置和控制仓库的SSH密钥。然后，从你的`pecdm`目录运行以下命令：
 - en: '[PRE0]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: First, we will look at where to find the logs and current status of the Puppet
     services and infrastructure. This will be fundamental to how you will need to
     tune and troubleshoot Puppet.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们将查看在哪里可以找到日志以及Puppet服务和基础设施的当前状态。这对于如何调优和排除Puppet故障至关重要。
 - en: Logging and status
+  id: totrans-16
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 日志记录和状态
 - en: When we discussed different Puppet components previously in this book, we listed
     logging directories, but it is useful to have a single reference point for these
     logs.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们在本书中之前讨论不同的Puppet组件时，我们列出了日志目录，但有一个统一的日志参考点是很有用的。
 - en: Exploring log locations
+  id: totrans-18
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 探索日志位置
 - en: 'This section provides a list of these logs, titled with the core function,
     the containing directory, and the list of logs in that directory:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节提供了这些日志的列表，标题包括核心功能、包含目录和该目录中的日志列表：
 - en: '`/var/log/puppetlabs/puppetserver/`: The primary server logging directory'
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`/var/log/puppetlabs/puppetserver/`：主要服务器日志目录'
 - en: '`puppetserver.log`: The primary server which logs its activity'
+  id: totrans-21
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`puppetserver.log`：主要的服务器日志，记录其活动'
 - en: '`puppetserver-access.log`: Requests to access endpoints'
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`puppetserver-access.log`：访问端点的请求'
 - en: '`puppetserver-daemon.log`: Crash reports and fatal errors'
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`puppetserver-daemon.log`：崩溃报告和致命错误'
 - en: '`puppetserver-status.log`: Debug status logging for the service'
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`puppetserver-status.log`：服务的调试状态日志'
 - en: '`/var/log/puppetlabs/postgresql/<version>`: PostgreSQL logging directory*   `pgstartup.log`:
     Start-up logs*   `postgresql-<Mon – Sun>.log`: Daily debugging logs*   `/var/log/puppetlabs/puppetdb/`:
     PuppetDB logging directory*   `puppetdb.log`: The PuppetDB service activity log*   `puppetdb-access.log`:
@@ -132,9 +182,13 @@
     reports and fatal errors logged*   `/var/log/puppetlabs/nginx/`: nginx logging
     directory*   `access.log`: Requests to nginx endpoints*   `error.log`: nginx errors
     and general console errors*   **Agent logs:**'
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`/var/log/puppetlabs/postgresql/<version>`：PostgreSQL日志目录*   `pgstartup.log`：启动日志*   `postgresql-<Mon
+    – Sun>.log`：每日调试日志*   `/var/log/puppetlabs/puppetdb/`：PuppetDB日志目录*   `puppetdb.log`：PuppetDB服务活动日志*   `puppetdb-access.log`：访问端点的请求*   `puppetdb-status.log`：服务的调试状态日志*   `/var/log/puppetlabs/puppetserver/`：主要服务器日志目录*   `code-manager-access.log`：访问代码管理器端点的请求*   `file-sync-access.log`：访问文件同步端点的请求*   `pcp-broker.log`：编译器上的Puppet通信协议代理*   `/var/log/puppetlabs/console-services/`：Puppet
+    Enterprise控制台服务日志目录*   `console-services.log`：控制台服务活动日志*   `console-services-api-access.log`：访问控制台服务API端点的请求*   `console-services-access.log`：访问控制台服务端点的请求*   `console-services-daemon.log`：崩溃报告和致命错误日志*   `/var/log/puppetlabs/nginx/`：nginx日志目录*   `access.log`：访问nginx端点的请求*   `error.log`：nginx错误和一般控制台错误*   **代理日志：**'
 - en: The agent output that you see on your screen when you run Puppet manually is
     logged to a location based on the `logdest` and `logdir` settings in the `puppet.conf`
     file. The `logdest` parameter can be set to `syslog` (to be sent to the POSIX
@@ -144,100 +198,144 @@
     Unix-based systems, while `eventlog` is the default for Windows. The defaults
     for `logdest` are `/var/log/puppetlabs/puppet` for Unix and `C:\ProgramData\PuppetLabs\puppet\var\log`
     for Windows.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你手动运行Puppet时，你在屏幕上看到的代理输出会根据`puppet.conf`文件中的`logdest`和`logdir`设置记录到一个位置。`logdest`参数可以设置为`syslog`（发送到POSIX
+    syslog服务）、`eventlog`（发送到Windows事件日志）、`console`（日志发送到控制台）或一个文件名，以便将其输出到`logdest`设置的位置下的该文件名。`syslog`是Unix系统的默认设置，而`eventlog`是Windows的默认设置。`logdest`的默认值为Unix的`/var/log/puppetlabs/puppet`和Windows的`C:\ProgramData\PuppetLabs\puppet\var\log`。
 - en: Note
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: It is possible to turn on server profiling, which can generate detailed catalog
     logging information. This can then be graphed to show in-depth debugging information
     about the catalog compilation. It is beyond the scope of this book to dive into
     this. More information can be found in Puppet’s documentation at [https://github.com/puppetlabs/puppet/blob/main/docs/profiling.md](https://github.com/puppetlabs/puppet/blob/main/docs/profiling.md).
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以开启服务器配置文件分析，它可以生成详细的目录日志信息。然后可以将其绘制为图形，展示目录编译的深入调试信息。本书不涉及此内容。更多信息请参考Puppet的文档：[https://github.com/puppetlabs/puppet/blob/main/docs/profiling.md](https://github.com/puppetlabs/puppet/blob/main/docs/profiling.md)。
 - en: Having examined the various locations of logging, it becomes clear that it would
     be useful to forward these server logs to specialized tools so that they can be
     indexed and processed.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 经过对不同日志位置的检查，我们可以清楚地看到，将这些服务器日志转发到专用工具中以便索引和处理是非常有用的。
 - en: Forwarding server logs
+  id: totrans-30
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 转发服务器日志
 - en: As the number of Puppet clients grows, the log tracking exercise, which we completed
     in [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252), simply becomes impractical.
     In this scenario, more specialized `logback.xml`, which can be sent to a logging
     backend such as Elastic’s Logstash or Grafana’s Loki. The `logback.xml` file contains
     `appender` definitions, which are the Logback components for writing logs.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着Puppet客户端数量的增加，我们在[*第10章*](B18492_10.xhtml#_idTextAnchor252)中完成的日志跟踪工作变得不切实际。在这种情况下，需要更专业的`logback.xml`，可以将其发送到像Elastic的Logstash或Grafana的Loki这样的日志后端。`logback.xml`文件包含`appender`定义，它是Logback用于写入日志的组件。
 - en: 'By observing the `appender` configuration for `puppetserver.log`, we will see
     the current configuration:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过观察`puppetserver.log`的`appender`配置，我们可以看到当前的配置：
 - en: '[PRE1]'
+  id: totrans-33
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: Here, we can see how it appends to the log, the filename pattern it will use,
     along with dates for rolling the log, and that the file size will not exceed 200
     MB per file, no more than 1 GB, and that logs will not be retained for more than
     90 days. The encoder shows how the log entries should be formed.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们可以看到它是如何追加到日志中的，使用的文件名模式，以及日志轮转的日期，并且每个文件的大小不会超过200 MB，总大小不超过1 GB，日志将不会保存超过90天。编码器展示了日志条目的构成方式。
 - en: 'To add a JSON version of the log, we could make a similar entry that consists
     of just 5 days of logging. Here, the encoder is the Logstash encoder to output
     in JSON. Here’s the code for this `appender`:'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了添加日志的JSON版本，我们可以做一个类似的条目，仅包含5天的日志。在这里，编码器是Logstash编码器，用于以JSON格式输出。以下是此`appender`的代码：
 - en: '[PRE2]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'To enable this `appender` toward the bottom of the `logback.xml` file, add
     the following definitions:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在`logback.xml`文件的底部启用此`appender`，请添加以下定义：
 - en: '[PRE3]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Adding `<appender-ref ref="server_JSON"/>` within this root section would enable
     our JSON `appender`. Restarting the `puppetserver` service would enable the new
     `appender`.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 在根部分中添加`<appender-ref ref="server_JSON"/>`将启用我们的JSON `appender`。重新启动`puppetserver`服务将启用新的`appender`。
 - en: To set up `server-access.log`, you can use the code at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/appender_example.xml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/appender_example.xml),
     which will add an `appender` that will configure the JSON output with an appropriate
     pattern.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 要设置`server-access.log`，可以使用[https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/appender_example.xml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch13/appender_example.xml)中的代码，这将添加一个`appender`，它将配置适当模式的JSON输出。
 - en: You will need to consider disk space in such cases. It’s possible to run this
     with JSON logging. Logback is a powerful library, but it’s beyond the scope of
     this book to go through the full options. These can be reviewed at [http://logback.qos.ch/manual/configuration.html](http://logback.qos.ch/manual/configuration.html)
     and [https://logback.qos.ch/manual/appenders.html](https://logback.qos.ch/manual/appenders.html).
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况下，您需要考虑磁盘空间。可以使用JSON日志记录来运行此操作。Logback是一个强大的库，但本书无法涵盖所有选项。可以在[http://logback.qos.ch/manual/configuration.html](http://logback.qos.ch/manual/configuration.html)和[https://logback.qos.ch/manual/appenders.html](https://logback.qos.ch/manual/appenders.html)中查看这些选项。
 - en: Now that logfiles exist in JSON, a tool such as Grafana’s **Promtail** or Elastic’s
     **Filebeat** could be configured to forward the log files to a service such as
     Elastic’s Logstash or Grafana’s Loki. The Ruby logs managed by **Logrotate** can
     also be gathered, but it would require more work to put suitable patterns on them
     to be processed.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在日志文件以 JSON 格式存在，可以配置像 Grafana 的 **Promtail** 或 Elastic 的 **Filebeat** 这样的工具，将日志文件转发到像
+    Elastic 的 Logstash 或 Grafana 的 Loki 这样的服务。由 **Logrotate** 管理的 Ruby 日志也可以被收集，但这需要更多的工作，去为它们设置合适的模式进行处理。
 - en: Note
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: Puppet Enterprise services, `console-services`, PuppetDB, and orchestration
     services all use Logback and can have their logs forwarded like this.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet Enterprise 服务、`console-services`、PuppetDB 和协调服务都使用 Logback，并可以像这样转发它们的日志。
 - en: Having reviewed how logs can be sent to external services to be processed, we
     will now see how the reports that are generated from applying Puppet catalogs
     can also be sent to external tools using report processors.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: 在回顾了如何将日志发送到外部服务进行处理之后，我们将看到如何将应用 Puppet 目录生成的报告通过报告处理器发送到外部工具。
 - en: Report processors
+  id: totrans-46
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 报告处理器
 - en: 'As well as server logging, as shown in [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252),
     every catalog run generates reports. In [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252),
     you saw how this was configured by `peadm` to be stored in `puppetdb` using `reports
@@ -258,108 +356,170 @@
     a report processor is for Puppet Server to have the module deployed in an environment
     and for the reports to have the name of the forwarder set. Writing custom report
     processors is beyond the scope of this book but details can be found at [https://puppet.com/docs/puppet/latest/reporting_write_processors.html.](https://puppet.com/docs/puppet/latest/reporting_write_processors.html'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了服务器日志记录，如 [*第 10 章*](B18492_10.xhtml#_idTextAnchor252) 所示，每次运行目录都会生成报告。在 [*第
+    10 章*](B18492_10.xhtml#_idTextAnchor252) 中，您看到如何通过 `peadm` 配置它，以便使用 `reports =
+    puppetdb` 在 `puppet.conf` 的 `master/server` 部分将其存储在 `puppetdb` 中。设置这个 `reports`
+    值告诉服务器使用报告处理器，这是一个在 Puppet Server 接收到报告时运行的 Ruby 脚本。然后该脚本执行操作，将其传递给目标。在 PuppetDB
+    的情况下，就是将报告发送到 PuppetDB 存储。有三个内置的报告处理器：`http`、`log` 和 `store`。`http` 将报告发送到通过 `puppet.conf`
+    中的 `reporturl` 设置指定的 HTTP 地址，格式为 YAML。`log` 将报告输出发送到 `puppet.conf` 中 `logdest`
+    和 `logdir` 指定的日志文件，而 `store` 将报告的输出放入 `puppet.conf` 中 `reportdir` 设置指定的文件。Puppet
+    Forge 中还有其他自定义报告处理器可用，包括 Splunk 集成模块，详细信息请参见 [https://forge.puppet.com/modules/puppetlabs/splunk_hec](https://forge.puppet.com/modules/puppetlabs/splunk_hec)，以及
+    Datadog 代理模块，详细信息请参见 [https://forge.puppet.com/modules/datadog/datadog_agent](https://forge.puppet.com/modules/datadog/datadog_agent)，这使得报告数据可以在这些第三方服务中查看。根据模块的不同，指令有所不同，但通常，添加报告处理器所需的最小操作是
+    Puppet Server 在环境中部署该模块，并且报告的转发器名称已设置。编写自定义报告处理器超出了本书的范围，但可以在 [https://puppet.com/docs/puppet/latest/reporting_write_processors.html](https://puppet.com/docs/puppet/latest/reporting_write_processors.html)
+    中找到详细信息。
 - en: )
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: In addition to logs and reports, we can see what condition the current Puppet
     Infrastructure is by calling the status APIs.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了日志和报告，我们还可以通过调用状态 API 来查看当前 Puppet 基础架构的状态。
 - en: Accessing status APIs
+  id: totrans-50
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 访问状态 API
 - en: 'Puppet provides a status endpoint that can be called at `GET /status/v1/services`.
     This endpoint returns the status of all known services on the server. This access
     is controlled by `auth.conf` and can be accessed locally via the Puppet CA certificates,
     as follows:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet提供了一个可以通过`GET /status/v1/services`调用的状态端点。该端点返回服务器上所有已知服务的状态。此访问由`auth.conf`控制，并可以通过Puppet
+    CA证书在本地访问，如下所示：
 - en: '[PRE4]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'The final pipe to JQ (a command-line JSON processor) is optional but makes
     the output more readable. Here’s an example of the output Puppet Server’s status
     would provide:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后的JQ管道（命令行JSON处理器）是可选的，但它使输出更具可读性。以下是Puppet Server状态输出的示例：
 - en: '[PRE5]'
+  id: totrans-54
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: It is possible to target an individual service by adding the service name to
     the URL – for example, `GET/status/v1/services/server`. For PE installations that
     have additional services, the specific port for each service should also be called.
     PE services will be discussed in [*Chapter 14*](B18492_14.xhtml#_idTextAnchor340).
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以通过在URL中添加服务名称来定位单个服务——例如，`GET/status/v1/services/server`。对于有额外服务的PE安装，应该为每个服务调用特定的端口。PE服务将在[*第14章*](B18492_14.xhtml#_idTextAnchor340)中讨论。
 - en: The return code from these calls will be `200` for all services running, `404`
     when a service is not found, or `503` when a service state is in any state other
     than running.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些调用的返回代码将是`200`，表示所有服务正在运行；`404`表示找不到服务；或`503`，表示服务状态不在运行状态。
 - en: The server state can be `running` when all services are running, `error` if
     any service reports an error, `starting` or `stopping` if any services are in
     those states, and `unknown` if any service reports an unknown state.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 当所有服务都在运行时，服务器状态为`running`；如果任何服务报告错误，则为`error`；如果任何服务处于`starting`或`stopping`状态，则为这两种状态之一；如果任何服务报告未知状态，则为`unknown`。
 - en: 'Puppet Enterprise has an extra command-line option to call APIs via the `puppet
     infrastructure status` command, which produces an output similar to the following:'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet Enterprise提供了一个额外的命令行选项，可以通过`puppet infrastructure status`命令调用API，输出类似如下所示：
 - en: '[PRE6]'
+  id: totrans-59
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'In the web console, you can find the Puppet Service’s status by clicking the
     **Puppet Services status** button, as per the following figure:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 在网页控制台中，您可以通过点击**Puppet服务状态**按钮查看Puppet服务的状态，如下图所示：
 - en: '![Figure 13.1 – Puppet Services status in the web console](img/B18492_13_01.jpg)'
+  id: totrans-61
   prefs: []
   type: TYPE_IMG
+  zh: '![图13.1 – 网页控制台中的Puppet服务状态](img/B18492_13_01.jpg)'
 - en: Figure 13.1 – Puppet Services status in the web console
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 图13.1 – 网页控制台中的Puppet服务状态
 - en: Note
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 注
 - en: The `puppet status` command, which was depreciated in Puppet 5, was removed
     in Puppet 7\. It didn’t use API endpoints.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: '`puppet status`命令在Puppet 5中已被弃用，并在Puppet 7中删除。它没有使用API端点。'
 - en: The logs, reports, and statuses we have viewed so far allow us to observe what
     the Puppet infrastructure and clients are doing, but they don’t tell us about
     the overall performance of the infrastructure and its clients. Next, we will look
     at the metrics that Puppet supplies and how they can be used to monitor the performance
     and capacity of infrastructure.
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，我们查看的日志、报告和状态让我们了解Puppet基础设施和客户端的行为，但它们并未告诉我们关于基础设施及其客户端的整体性能。接下来，我们将查看Puppet提供的指标，以及如何使用它们来监控基础设施的性能和容量。
 - en: Metrics, tuning, and scaling
+  id: totrans-66
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 指标、调优和扩展
 - en: 'To provide more detailed data on the performance and health of Puppet services
     via the services status API, the `level` flag can be set to `debug`; this will
     return metrics. For example, to return the metrics for Puppet Server and filter
     them using JQ, the following commands can be run:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了通过服务状态API提供更详细的Puppet服务性能和健康数据，可以将`level`标志设置为`debug`；这将返回指标。例如，要返回Puppet
+    Server的指标并使用JQ进行过滤，可以运行以下命令：
 - en: '[PRE7]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'This would output data such as the following metric for the `puppet-v3-catalog`
     endpoint:'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将输出如下指标的数据，例如`puppet-v3-catalog`端点：
 - en: '[PRE8]'
+  id: totrans-70
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: This gives us a `count` of how many calls have been made to the endpoint since
     the service last restarted. `mean` is the average response time over 5 minutes,
     while `aggregate` is the total time spent since the service started.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 这给出了自服务上次重启以来，`count`表示对该端点进行的调用次数。`mean`是5分钟内的平均响应时间，而`aggregate`是服务启动以来的总时间。
 - en: There are many metrics across all the different services. To find the definitions
     of these metrics, the API services can be viewed in the documentation (for example,
     [https://puppet.com/docs/pe/2021.7/status_api.html](https://puppet.com/docs/pe/2021.7/status_api.html)).
@@ -368,42 +528,64 @@
     a contract. Do not be concerned by most of the metrics having *experimental* in
     their title – most of the metrics have been available for years; they just haven’t
     had the experimental tag removed by Puppet.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 各种服务中有许多度量指标。要查看这些度量的定义，可以在文档中查看 API 服务（例如，[https://puppet.com/docs/pe/2021.7/status_api.html](https://puppet.com/docs/pe/2021.7/status_api.html)）。不过，总体来说，它们的文档并不完善，可能需要一些探索，或者你可以在
+    Puppet 的 Slack 渠道和支持渠道（如果你有合同的话）上提问。不要被大多数度量标题中的*实验性*标签所困扰——大多数度量数据已经可用了，只是 Puppet
+    尚未移除实验性标签。
 - en: Note
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: In-depth details explaining how the underlying metrics library works for Puppet
     are available at [https://www.youtube.com/watch?v=czes-oa0yik&t=0s](https://www.youtube.com/watch?v=czes-oa0yik&t=0s),
     provided by the author of the metrics library.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 有关 Puppet 的底层度量库如何工作的详细解释，可通过[https://www.youtube.com/watch?v=czes-oa0yik&t=0s](https://www.youtube.com/watch?v=czes-oa0yik&t=0s)观看，由该度量库的作者提供。
 - en: Now, let’s take a look at the dashboards that are used to display metrics data.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们来看一下用于展示度量数据的仪表盘。
 - en: Exploring metrics dashboards
+  id: totrans-76
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 探索度量仪表盘
 - en: 'Puppet provides three implementations that automate the process of gathering
     and displaying metrics data:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 提供了三种实现方式，自动化收集和展示度量数据的过程：
 - en: '**Puppet Operational Dashboards**, available at [https://forge.puppet.com/modules/puppetlabs/puppet_operational_dashboards](https://forge.puppet.com/modules/puppetlabs/puppet_operational_dashboards),
     is a supported Puppet module from Puppet Forge that implements Telegraf, InfluxDB,
     and Grafana to provide mechanisms to send the API metric data, store it in a time
     series database, and visualize the data in preconfigured dashboards. Operational
     Dashboards supports both Puppet Enterprise and open source Puppet. An example
     of such a dashboard can be seen in the following figure:'
+  id: totrans-78
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Puppet 操作仪表盘**，可在[https://forge.puppet.com/modules/puppetlabs/puppet_operational_dashboards](https://forge.puppet.com/modules/puppetlabs/puppet_operational_dashboards)找到，是一个由
+    Puppet Forge 提供的支持模块，集成了 Telegraf、InfluxDB 和 Grafana，提供机制来发送 API 度量数据、将其存储在时间序列数据库中，并在预配置的仪表盘中可视化数据。操作仪表盘支持
+    Puppet Enterprise 和开源 Puppet。下图展示了一个此类仪表盘的示例：'
 - en: '![Figure 13.2 – Grafana Puppetserver performance dashboard](img/B18492_13_02.jpg)'
+  id: totrans-79
   prefs: []
   type: TYPE_IMG
+  zh: '![图 13.2 – Grafana Puppetserver 性能仪表盘](img/B18492_13_02.jpg)'
 - en: Figure 13.2 – Grafana Puppetserver performance dashboard
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 13.2 – Grafana Puppetserver 性能仪表盘
 - en: 'The **Splunk Plugin**, an app on the Splunk store, available at [https://splunkbase.splunk.com/app/4413/#/overview](https://splunkbase.splunk.com/app/4413/#/overview),
     can be added to your Splunk setup to provide preconfigured dashboards. The Splunk
     **HTTP event collector** (**HEC**) module can be found at [https://forge.puppet.com/modules/puppetlabs/splunk_hec](https://forge.puppet.com/modules/puppetlabs/splunk_hec).
@@ -411,51 +593,76 @@
     can be combined with this module to send the metrics over HTTP to the HEC module.
     An example of a Splunk dashboard is shown in the following figure, with Puppet
     Server Memory graphed:'
+  id: totrans-81
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Splunk 插件**，可在[https://splunkbase.splunk.com/app/4413/#/overview](https://splunkbase.splunk.com/app/4413/#/overview)找到，是一个在
+    Splunk 商店中的应用，可以添加到你的 Splunk 设置中，提供预配置的仪表盘。Splunk **HTTP 事件收集器**（**HEC**）模块可在[https://forge.puppet.com/modules/puppetlabs/splunk_hec](https://forge.puppet.com/modules/puppetlabs/splunk_hec)找到。[https://forge.puppet.com/modules/puppetlabs/pe_event_forwarding](https://forge.puppet.com/modules/puppetlabs/pe_event_forwarding)可以与此模块结合，使用
+    HTTP 将度量数据发送到 HEC 模块。下图展示了一个 Splunk 仪表盘的示例，其中绘制了 Puppet 服务器内存：'
 - en: '![Figure 13.3 – Splunk Puppet Server Memory dashboard](img/B18492_13_03.jpg)'
+  id: totrans-82
   prefs: []
   type: TYPE_IMG
+  zh: '![图 13.3 – Splunk Puppet 服务器内存仪表盘](img/B18492_13_03.jpg)'
 - en: Figure 13.3 – Splunk Puppet Server Memory dashboard
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 13.3 – Splunk Puppet 服务器内存仪表盘
 - en: Puppet teams work together to keep the Splunk and Grafana dashboards consistent.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 团队共同合作，保持 Splunk 和 Grafana 仪表盘的一致性。
 - en: 'For Puppet Enterprise, there is also the `/opt/puppetlabs/puppet-metrics-collector`
     directory. These JSON files can then be searched using commands such as `grep`
     or `JQ` (assuming the terminal was in the metric collector directory). Two common
     queries, which will be explained in detail in the `average-free-jrubies` and `queue_depth`.
     These can be added like this:'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 Puppet Enterprise，还有一个`/opt/puppetlabs/puppet-metrics-collector`目录。然后可以使用诸如`grep`或`JQ`的命令（假设终端处于度量收集器目录中）搜索这些
+    JSON 文件。两个常见的查询将在`average-free-jrubies`和`queue_depth`中详细解释。可以像这样添加：
 - en: '[PRE9]'
+  id: totrans-86
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: To make it easier to share this data, it can be archived by running the `/opt/puppetlabs/puppet-metrics-collector/scripts/create-metrics-archive`
     command, which will produce a `–r` flag if you wish to archive a set number of
     days.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更方便地共享这些数据，可以通过运行`/opt/puppetlabs/puppet-metrics-collector/scripts/create-metrics-archive`命令来归档数据，如果希望归档一定天数的数据，可以使用`–r`标志。
 - en: Having looked at how to gather and display metrics, we will now discuss some
     common performance and capacity issues and how to manage them using metrics.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 在了解了如何收集和显示度量后，我们将讨论一些常见的性能和容量问题，以及如何使用度量来管理它们。
 - en: Identifying and avoiding common issues
+  id: totrans-89
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 识别并避免常见问题
 - en: Having set up logging, statuses, and metrics, we need to consider what to look
     for and how to examine our Puppet infrastructure. Normal monitoring of CPU, memory,
     and disk usage should be in place but there are some key functional areas to focus
     on. We will discuss these in the following sections.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 设置好日志、状态和度量后，我们需要考虑应该关注什么以及如何检查我们的 Puppet 基础设施。应该有正常的 CPU、内存和磁盘使用情况监控，但有一些关键的功能区域需要关注。我们将在接下来的章节中讨论这些内容。
 - en: Catalog compilation
+  id: totrans-91
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 目录编译
 - en: 'In [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252), we learned how each **catalog
     compilation** required a JRuby instance to compile a catalog for each Puppet request
     and that the Puppet Primary or Compiler Servers provided this JRuby capacity.
@@ -465,45 +672,65 @@
     are required per server. We can take the number of Puppet Clients we expect the
     infrastructure to have and divide this by the previous figure to provide an estimate
     of the total required JRuby instances:'
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 [*第 10 章*](B18492_10.xhtml#_idTextAnchor252)中，我们学习了每次**目录编译**都需要一个 JRuby 实例来为每个
+    Puppet 请求编译目录，并且 Puppet 主服务器或编译服务器提供了这个 JRuby 能力。为了计算处理基础设施负载所需的 JRuby 实例数，我们可以将**运行间隔**（服务器检查频率）除以编译的平均时长。这样就能得出每台服务器所需的
+    JRuby 实例数。然后，我们可以将预期基础设施中 Puppet 客户端的数量除以这个数字，得到所需的 JRuby 实例总数估算值：
 - en: 'Add this here: *Total JRuby Instances = Number of Puppet clients / ( run interval
     / average* *compilation length*'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 添加此内容：*总 JRuby 实例数 = Puppet 客户端数量 / (运行间隔 / 平均* *编译时长*
 - en: Choosing the sizing for your infrastructure can be complicated. The number of
     JRuby instances on a primary server or compiler can be set by running `max-active-instances`
     in the `puppetserver.conf` file; this defaults to the number of CPUs – 1 for a
     range of 1 to 4\. Each JRuby instance will require memory in the JVM stack. For
     Puppet Enterprise, this file is controlled by setting the `hiera` value to `puppet_enterprise::master::puppetserver::jruby_max_active_instances:`.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 选择适当的基础设施大小可能会很复杂。可以通过在`puppetserver.conf`文件中运行`max-active-instances`来设置主服务器或编译服务器上的
+    JRuby 实例数；默认情况下，它设置为 CPU 数量减 1，范围为 1 到 4。每个 JRuby 实例需要在 JVM 堆栈中分配内存。对于 Puppet
+    Enterprise，这个文件是通过设置`hiera`值为`puppet_enterprise::master::puppetserver::jruby_max_active_instances:`来控制的。
 - en: 'The total JVM stack memory is allocated by the Puppet Server startup script,
     which depending on the operating system, will be at `/etc/sysconfig/puppetserver`
     or `/etc/defaults/puppetserver`. This is set by the `xmx` argument, which can
     be calculated as each JRuby instance requiring 512 MB of memory by default and
     leaving 512 MB of headroom for other Java tasks:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 总 JVM 堆栈内存由 Puppet 服务器启动脚本分配，根据操作系统的不同，可能位于`/etc/sysconfig/puppetserver`或`/etc/defaults/puppetserver`。这个内存大小由`xmx`参数设置，可以计算出每个
+    JRuby 实例默认需要 512MB 的内存，并为其他 Java 任务保留 512MB 的空余空间：
 - en: 'Add this here: *Total stack heap size required = 512mb + maximum active instances
     ** *512MB*'
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 添加此内容：*所需总堆栈大小 = 512MB + 最大活动实例数 ** *512MB*
 - en: It is recommended that you never exceed 32 GB of stack size for JVM. As seen
     from various field experiments, the maximum effective number of JRuby instances
     appears to be between 11 and 13\. These maximum figures tend to be for much larger
     estates and concern should be given to allow for compiler failures. In this case,
     it would be unwise to focus entirely on horizontal scaling; instead, it should
     be balanced with **vertical scaling** (having more compiler servers).
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 建议你永远不要超过32 GB的JVM堆栈大小。根据各种现场实验的结果，JRuby实例的最大有效数量似乎在11到13之间。这个最大值通常适用于规模更大的环境，并且需要关注以防止编译器故障。在这种情况下，完全依赖水平扩展是不明智的；应该与**垂直扩展**（增加更多的编译服务器）相结合。
 - en: Sizing recommendations can be difficult when you’re just starting – it can be
     very unclear what your average compilation time will be and seconds in compilation
     can have a big impact, so it is wise to monitor both JRuby usage and catalog compilation
     time as the estate grows and look for outliers as they appear. Puppet has some
     guidelines for Puppet Enterprise sizing at [https://puppet.com/docs/pe/2021.7/tuning_infrastructure.html](https://puppet.com/docs/pe/2021.7/tuning_infrastructure.html).
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 在刚开始时，进行大小调整建议可能会很困难——你可能不清楚你的平均编译时间会是多少，而编译的秒数可能会产生很大的影响，因此，在整个环境逐步扩展时，监控JRuby的使用情况和目录编译时间是明智的，并且在出现时寻找异常值。Puppet为Puppet
+    Enterprise大小调整提供了一些指南，详情请参考[https://puppet.com/docs/pe/2021.7/tuning_infrastructure.html](https://puppet.com/docs/pe/2021.7/tuning_infrastructure.html)。
 - en: When monitoring catalog performance, we have some key concerns. The `jruby.num-jrubies`
     and `jruby.num-free-jrubies` metrics show how many JRuby instances are on a server
     and how many are free. When looking at these metrics, the average used capacity
@@ -515,57 +742,83 @@
     can be seen in the metrics as large spikes in JRuby instance usage. If you experience
     this, you can use the **puppet run scheduler** module at [https://forge.puppet.com/modules/reidmv/puppet_run_scheduler](https://forge.puppet.com/modules/reidmv/puppet_run_scheduler)
     to distribute the scheduling of Puppet agent runs.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 在监控目录性能时，我们有一些关键的关注点。`jruby.num-jrubies`和`jruby.num-free-jrubies`指标显示服务器上有多少个JRuby实例，以及其中有多少个是空闲的。在查看这些指标时，应计算基础设施的平均使用容量。建议避免超过80%的使用率，因为性能通常在超过这个值后无法扩展。你还应该确认负载均衡器没有问题，并且空闲的JRuby实例在编译器之间使用均衡。一个可能发生的问题是**雷鸣群体效应**，即许多服务器同时请求目录编译。这可以通过JRuby实例使用的巨大峰值在指标中看到。如果你遇到这种情况，可以使用**Puppet运行调度器**模块，详情请参见[https://forge.puppet.com/modules/reidmv/puppet_run_scheduler](https://forge.puppet.com/modules/reidmv/puppet_run_scheduler)，来分散Puppet代理运行的调度。
 - en: If the capacity of the JRuby pool is exceeded, then requests will queue and
     timeout after a default of 10 seconds. The `borrow-timeout-count` metric provides
     a count of the number of requests that have timed out while waiting for a JRuby
     instance to become available.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果超过了JRuby池的容量，请求将会排队并在默认情况下超时，超时为10秒。`borrow-timeout-count`指标提供了等待JRuby实例变得可用时超时的请求数量。
 - en: Catalog runtimes
+  id: totrans-101
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 目录运行时间
 - en: As highlighted previously, the catalog’s runtime has a huge impact on the number
     of JRuby instances that are required in the infrastructure. Looking at the `metrics-time-total`
     metric, which shows the compile time for report events sent, we can look at the
     average time to compile to help with our capacity calculations. We can also look
     at the distribution of these figures to see if we have any extreme outliers we
     would want to investigate in that catalog and its Puppet code.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前所述，目录的运行时间对基础设施中所需的JRuby实例数量有巨大影响。查看`metrics-time-total`指标，它显示报告事件发送的编译时间，我们可以查看编译的平均时间，帮助进行容量计算。我们还可以查看这些数据的分布，看看是否存在任何极端异常值，我们希望对该目录及其Puppet代码进行调查。
 - en: 'Some key areas to check can be seen in the following table:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以查看以下表格中一些关键区域：
 - en: '| **Metric Definition** | **Metric Name** |'
+  id: totrans-104
   prefs: []
   type: TYPE_TB
+  zh: '| **指标定义** | **指标名称** |'
 - en: '| Catalog compilation time | `Metrics-time-config_retrieval` |'
+  id: totrans-105
   prefs: []
   type: TYPE_TB
+  zh: '| 目录编译时间 | `Metrics-time-config_retrieval` |'
 - en: '| Time to apply the catalog | `Metrics-time.catalog_application` |'
+  id: totrans-106
   prefs: []
   type: TYPE_TB
+  zh: '| 应用目录的时间 | `Metrics-time.catalog_application` |'
 - en: '| Number of resources in the catalog | `Metrics-resources-total` |'
+  id: totrans-107
   prefs: []
   type: TYPE_TB
+  zh: '| 目录中的资源数量 | `Metrics-resources-total` |'
 - en: '| Time to generate facts | `Metrics-changes-total` |'
+  id: totrans-108
   prefs: []
   type: TYPE_TB
+  zh: '| 生成事实的时间 | `Metrics-changes-total` |'
 - en: Table 12.1 – Catalog metrics
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 表 12.1 – 目录指标
 - en: Within each of these measures, you should ensure that there was a reason for
     it to be an outlier. If the code or fact is complex or any particular resource
     is known to be slow, this may be normal, or it may be inefficient code that can
     be reviewed before it is applied to more servers, thus saving infrastructure capacity.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这些度量指标中，您应该确保每个异常值是有原因的。如果代码或事实较为复杂，或某些资源已知较慢，这可能是正常的，或者可能是需要在应用到更多服务器之前审查的低效代码，从而节省基础设施容量。
 - en: PuppetDB and PostgreSQL tuning
+  id: totrans-111
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: PuppetDB 和 PostgreSQL 调优
 - en: For PuppetD, the best metrics to monitor are `jvm-metrics.heap-memory.committed`
     and `jvm-metrics.heap-memory.used`. If the used memory’s size is regularly approaching
     the committed memory’s size, then it’s best to increase the stack’s size. Similar
@@ -579,8 +832,15 @@
     that have been queued due to them running out of memory would just continue after
     a restart. For Puppet Enterprise, this file can be controlled by setting the `hiera`
     value to `puppet_enterprise::profile::puppetdb::java_args:`.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于 PuppetD，最佳的监控指标是 `jvm-metrics.heap-memory.committed` 和 `jvm-metrics.heap-memory.used`。如果已用内存的大小经常接近已分配内存的大小，最好增加堆栈大小。与编译器类似，这涉及到更新
+    `/etc/sysconfig/` 或 `/etc/default/puppetdb` 中的 `puppetdb` 或 `pe-puppetdb` 配置文件（取决于操作系统），并更新
+    `JAVA_ARGS` 参数。例如，如果你发现 `jvm-metrics.heap-memory.committed` 设置为 512 MB，但 `jvm-metrics.heap-memory.used`
+    经常接近这个限制，可以将最大堆内存大小从 `JAVA_ARGS ="-Xmx512m"` 更新为 `JAVA_ARGS="-Xmx1g"`。完成后，需要重启
+    PuppetDB 服务。但是，请注意，所有因内存不足而排队的任务将在重启后继续执行。对于 Puppet Enterprise，这个文件可以通过将 `hiera`
+    值设置为 `puppet_enterprise::profile::puppetdb::java_args:` 来控制。
 - en: Another good indication of performance is the queue depth, which is represented
     by the `puppetdb-status.status.queue_depth` metric. If this is high and there
     are free CPUs, it would be beneficial to increase the number of CPU threads available
@@ -591,236 +851,345 @@
     settings. In Puppet Enterprise, this can be done in the **node groups** section
     in the web console. Any changes that are made to threads will require you to restart
     the PuppetDB service.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个好的性能指示是队列深度，表示为 `puppetdb-status.status.queue_depth` 指标。如果这个值很高且有空闲的 CPU，那么增加
+    PuppetDB 可用的 CPU 线程数量将是有益的。这可以在 PuppetDB 配置文件 `/etc/puppetlabs/puppetdb/conf.d`
+    中完成。如果 PuppetDB 是通过包安装的，可以在 `[command-processing]` 部分的 `threads` 键中设置，或者如果使用了
+    Puppet PuppetDB 模块（在 Puppet Enterprise 中也是如此），则应使用模块的设置来调整类。在 Puppet Enterprise
+    中，可以在 Web 控制台的 **节点组** 部分进行调整。任何对线程的更改都需要重启 PuppetDB 服务。
 - en: The reverse scenario, where CPU usage is high and throttling but the PuppetDB
     queue is low, should allow threads to be released to improve the throughput of
     other services.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 反向场景是，CPU 使用率很高且限流，但 PuppetDB 队列较低，这时应释放线程以提高其他服务的吞吐量。
 - en: Tuning sizing
+  id: totrans-115
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 调优大小
 - en: To assist in getting the right server settings based on available hardware,
     Puppet Enterprise has the `puppet infrastructure` `tune` command.
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了帮助根据可用硬件获得正确的服务器设置，Puppet Enterprise 提供了 `puppet infrastructure` `tune` 命令。
 - en: 'This calculates the optimal settings to apply for your servers. The following
     example output extracts only the suggested Hiera settings printed by the command:'
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 这会计算出应用于服务器的最佳设置。以下是命令输出中的建议 Hiera 设置示例：
 - en: '[PRE10]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: This extracted data could be put in a Hiera file and classified against the
     primary server. Note that if the RAM is high enough, it will recommend configurations
     for heap sizes above 32 GB. This is sub-optimal, as we discussed when we looked
     at compilation sizing and issues.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些提取的数据可以放入 Hiera 文件中，并与主服务器进行分类。请注意，如果内存足够大，它会推荐堆大小配置超过 32 GB。这是次优配置，正如我们在查看编译大小和问题时讨论的那样。
 - en: 'The following is general advice:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是一般建议：
 - en: It may seem difficult to process the number of metrics, especially given the
     lack of clear definitions, but if the Splunk plugin or Operational dashboard is
     used, this can give you a view that’s consistent with what Puppet Support teams
     use and monitor. Learning how your estate normally behaves in these values and
     looking for spikes in the graph and relating them to others can go some way to
     finding issues.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 处理度量指标的数量可能看起来很困难，尤其是在缺乏明确定义的情况下，但如果使用 Splunk 插件或操作仪表板，这可以为你提供与 Puppet 支持团队使用和监控的一致视图。了解你的环境在这些数值下的常态行为，并查看图表中的尖峰，将它们与其他数据关联起来，可以帮助你发现问题。
 - en: Using Puppet’s knowledge base, which has been open to any user since April 2021,
     can help you search for issues. Looking at collections of articles such as [https://support.puppet.com/hc/en-us/sections/360000926413-Performance-tuning](https://support.puppet.com/hc/en-us/sections/360000926413-Performance-tuning)
     can assist you in gaining a deeper understanding of any issues that you experience.
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 Puppet 的知识库，它自 2021 年 4 月起向所有用户开放，可以帮助你搜索问题。查看如 [https://support.puppet.com/hc/en-us/sections/360000926413-Performance-tuning](https://support.puppet.com/hc/en-us/sections/360000926413-Performance-tuning)
+    这样的文章集合，可以帮助你更深入理解你遇到的任何问题。
 - en: Lab – configuring metric dashboards
+  id: totrans-123
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 实验 – 配置度量仪表板
 - en: Having discussed metrics and Puppet’s two options for viewing them, we can configure
     the Splunk dashboard and the Puppet Operational dashboard to see the dashboards
     provided. Using the issues that were described in the previous section around
     PuppetDB and compiler capacity, find the graphs that would assist in your investigation.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 在讨论了度量标准和 Puppet 的两种查看选项之后，我们可以配置 Splunk 仪表板和 Puppet 操作仪表板，以查看提供的仪表板。使用前一部分中描述的关于
+    PuppetDB 和编译器容量的问题，找到可以帮助你调查的图表。
 - en: 'Configure the Puppet operational dashboard:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 配置 Puppet 操作仪表板：
 - en: Choose one of your nodes to host the Puppet Operational dashboard and classify
     `puppet_operational_dashboards` on the web console as a node group.
+  id: totrans-126
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择一个节点来托管 Puppet 操作仪表板，并在 Web 控制台中将 `puppet_operational_dashboards` 分类为节点组。
 - en: In the node group’s PE Infrastructure Agent, add `puppet_operational_dashboards::enterprise_infrastructure`
     to the list of classes on the **Classes** tab.
+  id: totrans-127
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在节点组的 PE 基础设施代理中，将 `puppet_operational_dashboards::enterprise_infrastructure`
+    添加到 **Classes**（类）标签下的类列表中。
 - en: Run `puppet` on all the nodes until the servers are showing clean.
+  id: totrans-128
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在所有节点上运行 `puppet`，直到服务器显示为干净状态。
 - en: Log in at `https://<public_ip_of_operational_dashboard_node>:3000` `user=admin
     password=admin`.
+  id: totrans-129
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 登录到 `https://<operational_dashboard_node_ip>:3000`，`user=admin password=admin`。
 - en: 'Configure Splunk:'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 配置 Splunk：
 - en: Sign up for a Splunk account at [https://www.splunk.com/en_us/sign-up.html?301=/page/sign_up](https://www.splunk.com/en_us/sign-up.html?301=/page/sign_up)
     (this is free).
+  id: totrans-131
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在 [https://www.splunk.com/en_us/sign-up.html?301=/page/sign_up](https://www.splunk.com/en_us/sign-up.html?301=/page/sign_up)
+    注册一个 Splunk 账户（这是免费的）。
 - en: Choose a different node to host Splunk Enterprise by classifying `splunk::enterprise`
     as a node group on the web console and pinning the chosen node.
+  id: totrans-132
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择另一个节点来托管 Splunk Enterprise，通过在 Web 控制台上将 `splunk::enterprise` 分类为节点组并固定所选节点。
 - en: 'Install the Puppet report viewer:'
+  id: totrans-133
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 安装 Puppet 报告查看器：
 - en: Log in and download [https://splunkbase.splunk.com/app/4413/](https://splunkbase.splunk.com/app/4413/).
+  id: totrans-134
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 登录并下载 [https://splunkbase.splunk.com/app/4413/](https://splunkbase.splunk.com/app/4413/)。
 - en: Log in to `https://<public_ip_of_splunk_server>:8000` `username`=`admin` and
     `password`=`changeme`.
+  id: totrans-135
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 登录到 `https://<splunk_server_ip>:8000`，`username`=`admin` 和 `password`=`changeme`。
 - en: Select the cog to the top left of the **Apps** bar.
+  id: totrans-136
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择 **Apps** 栏左上角的齿轮图标。
 - en: On the next screen, select **upload app from file** at the top right.
+  id: totrans-137
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在下一个屏幕中，选择右上角的 **upload app from file**（从文件上传应用）。
 - en: 'Set the license to free in Splunk:'
+  id: totrans-138
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在 Splunk 中将许可证设置为免费：
 - en: Click **Settings** at the top right.
+  id: totrans-139
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 点击右上角的 **Settings**（设置）。
 - en: In the dropdown under system, select **Licensing**.
+  id: totrans-140
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在系统下拉菜单中，选择 **Licensing**（许可）。
 - en: Select **change** **license group**.
+  id: totrans-141
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择 **change**（更改） **license group**（许可证组）。
 - en: Select **free license** and click **Save**.
+  id: totrans-142
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择 **free license**（免费许可证）并点击 **Save**（保存）。
 - en: 'Create an HEC token in Splunk:'
+  id: totrans-143
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在 Splunk 中创建 HEC 令牌：
 - en: Navigate to **Settings** | **Data Input** in your Splunk console.
+  id: totrans-144
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在 Splunk 控制台中导航到 **Settings** | **Data Input**。
 - en: Add a new HTTP Event Collector with a name of your choice.
+  id: totrans-145
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 添加一个新的 HTTP 事件收集器，命名为您选择的名称。
 - en: Ensure **Indexer acknowledgement** is not enabled.
+  id: totrans-146
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 确保 **Indexer acknowledgement** 未启用。
 - en: Click **Next** and set **source type** to **Automatic**.
+  id: totrans-147
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 单击 **Next** 并将 **source type** 设置为 **Automatic**。
 - en: Ensure **App Context** is set to **Puppet** **Report Viewer**.
+  id: totrans-148
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 确保 **App Context** 设置为 **Puppet** **Report Viewer**。
 - en: Add the main index.
+  id: totrans-149
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 添加主索引。
 - en: Set **Default Index** to **main**.
+  id: totrans-150
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 设置 **默认索引** 为 **main**。
 - en: Click **Review** and then **Submit**.
+  id: totrans-151
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 单击 **Review** 然后点击 **Submit**。
 - en: Classify `puppet_metrics_collector` with the `metrics_server_type` parameter
     set to `splunk_hec` on the PE Infrastructure node group.
+  id: totrans-152
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在 PE 基础设施节点组中，将 `puppet_metrics_collector` 分类为 `metrics_server_type` 参数设置为 `splunk_hec`。
 - en: Classify `splunk_hec` on the `enable_reports` set to `true`
+  id: totrans-153
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将 `splunk_hec` 分类为 `enable_reports` 设置为 `true`
 - en: '`events_reporting_enabled` set to `true`'
+  id: totrans-154
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '`events_reporting_enabled` 设置为 `true`'
 - en: '`manage_routes` set to `true`'
+  id: totrans-155
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '`manage_routes` 设置为 `true`'
 - en: '`token` set to `<token number of generated in` `step 5>`'
+  id: totrans-156
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '`token` 设置为 `<在第 5 步生成的 token>`'
 - en: '`url` set to `https://<public_ip_of_splunk_server>:8088/services/collector`'
+  id: totrans-157
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '`url` 设置为 `https://<public_ip_of_splunk_server>:8088/services/collector`'
 - en: Log in at `https://<public_ip_of_splunk_server>:8000` and run `index=* sourcetype=puppet:summary`
     to ensure data is being gathered (it may take some time to start).
+  id: totrans-158
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 登录 `https://<public_ip_of_splunk_server>:8000`，并运行 `index=* sourcetype=puppet:summary`
+    以确保数据正在被收集（可能需要一些时间才能开始）。
 - en: Now that both the Puppet operational dashboard and Splunk have been configured,
     tour the various graphs and panels to find the graphs that are relevant to catalog
     capacity and PuppetDB performance.
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在 Puppet 操作面板和 Splunk 已经配置完成，浏览各种图表和面板，找到与目录容量和 PuppetDB 性能相关的图表。
 - en: If possible, leave Splunk set up for the next section as the inventory and inventory
     trend views are the dashboard views of the Facter terminus output.
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果可能，请保留 Splunk 设置，以便在下一部分中使用，因为库存和库存趋势视图是 Facter 终端输出的仪表板视图。
 - en: Now that you know how to integrate Puppet’s status, logging, and metrics, we
     can look at a pattern that allows us to integrate Puppet with other services and
     provide self-service to Puppet users.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在您已经了解了如何集成 Puppet 的状态、日志和指标，我们可以查看一种模式，该模式允许我们将 Puppet 与其他服务集成，并为 Puppet 用户提供自助服务。
 - en: External data provider pattern
+  id: totrans-162
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 外部数据提供者模式
 - en: 'Puppet will not be the only source of configuration and information in your
     estate. There are likely to be numerous sources for **Configuration Management
     Databases** (**CMDBs**) such as ServiceNow or internally developed systems that
@@ -830,63 +1199,94 @@
     will also be demands to be able to feed Puppet data back into external systems.
     The external data provider pattern allows this to happen by allowing you to do
     the following:'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 将不再是您系统中唯一的配置和信息来源。很可能会有多个 **配置管理数据库**（**CMDBs**），例如 ServiceNow 或应用程序团队用于存储信息的内部开发系统。您的几位同事和内部客户可能希望能够创建例外和自定义，而无需了解
+    Puppet 代码及其部署工作流。同时，也会有需求希望能够将 Puppet 数据反馈到外部系统。外部数据提供者模式使这一切成为可能，允许您执行以下操作：
 - en: Make changes in the classification
+  id: totrans-164
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在分类中进行更改
 - en: Add and change trusted facts
+  id: totrans-165
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 添加和更改受信任的事实
 - en: Feed existing data in as a fact or Hiera data
+  id: totrans-166
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将现有数据作为事实或 Hiera 数据输入
 - en: Send Facter data to external sources
+  id: totrans-167
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将 Facter 数据发送到外部源
 - en: Having introduced the core concept of the external data provider pattern, we
     will now look at each of the technical components used within it.
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 在介绍了外部数据提供者模式的核心概念后，我们将探讨其中使用的每个技术组件。
 - en: Understanding external data provider components
+  id: totrans-169
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 了解外部数据提供者组件
 - en: 'The underlying components of this pattern are shown in the following figure:'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 该模式的底层组件如下图所示：
 - en: '![Figure 13.4 – Core components of the external data provider pattern](img/B18492_13_04.jpg)'
+  id: totrans-171
   prefs: []
   type: TYPE_IMG
+  zh: '![图 13.4 – 外部数据提供者模式的核心组件](img/B18492_13_04.jpg)'
 - en: Figure 13.4 – Core components of the external data provider pattern
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 13.4 – 外部数据提供者模式的核心组件
 - en: 'We will run through each to show how this pattern works. It is beyond the scope
     of this book to show you how to write each of these components, but we will detail
     where documentation exists for this. In the following section, sample implementations
     will be referenced:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将逐一展示这个模式是如何工作的。本书无法展示如何编写每个组件，但我们会详细说明文档在哪里可以找到。在接下来的部分中，将参考示例实现：
 - en: A **backend storage service** (**BSS**) allows you to store data for consumption.
     The technical solution for the BSS is not important, but it must be resilient
     and provide high throughput on reads.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: '**后端存储服务**（**BSS**）允许你存储数据以供使用。BSS 的技术解决方案并不重要，但它必须具有韧性，并且在读取时提供高吞吐量。'
 - en: This throughput can be calculated at *2 + <number of Hiera levels>* reads per
     Puppet agent run. To show how this would be calculated if an estate of 10,000
     servers used the default agent run time of 30 minutes and had a 5-level Hiera
     setup, this would be calculated as *(2+5) * 10,000 / 1,800 = 39 queries per second*
     (rounded up).
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 该吞吐量可以通过 *2 + <Hiera 层数>* 来计算每次 Puppet agent 执行时的读取次数。为了说明如果一个 10,000 台服务器的环境使用默认的
+    30 分钟 agent 执行时间，并且有 5 层 Hiera 配置时，如何计算该吞吐量，可以这样计算：*(2+5) * 10,000 / 1,800 = 39
+    次查询每秒*（四舍五入）。
 - en: Tools such as CMDB or internal applications can be directly queried and act
     as the BSS, but the tool can deal with the workload.
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 像 CMDB 或内部应用程序这样的工具可以直接进行查询并充当 BSS，但该工具能够处理工作负载。
 - en: The `trusted` external command, which was introduced in Puppet 6.11 and 7.0,
     allows a script to be run during Puppet runs and gather facts and classification
     information from external sources. This script should take the `certname` property
@@ -899,37 +1299,58 @@
     to be a directory containing multiple scripts. This can be useful for querying
     multiple sources. Each source would then get a different base name. In the external
     data provider pattern, it is used to query the BSS.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: '`trusted` 外部命令在 Puppet 6.11 和 7.0 中引入，允许在 Puppet 执行期间运行脚本，并从外部源收集事实和分类信息。此脚本应以客户端的
+    `certname` 属性作为参数，返回一个包含事实的 JSON 哈希，并且对于任何未知的 `certname` 返回错误代码。可以通过在每个主服务器和编译服务器的
+    `puppet.conf` 文件的 `master/server` 部分中使用 `trusted_external_command` 设置来配置此脚本。此命令返回的事实将包含在
+    `trusted.external.basename` 下，其中 `basename` 是脚本的名称。自 Puppet 6.17 和 7.0 起，还可以通过将
+    `trusted_external_command` 设置为包含多个脚本的目录来使用多个受信外部命令。这对于查询多个源非常有用。每个源将获得不同的基本名称。在外部数据提供者模式中，它用于查询
+    BSS。'
 - en: The Hiera backend uses functions written in Ruby or Puppet to query APIs or
     other sources when Hiera lookups are performed. In the external data provider
     pattern, the backend queries the BSS for values. Documentation on this is available
     at [https://puppet.com/docs/puppet/latest/hiera_custom_backends.html](https://puppet.com/docs/puppet/latest/hiera_custom_backends.html).
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: Hiera 后端使用 Ruby 或 Puppet 编写的函数在执行 Hiera 查找时查询 API 或其他源。在外部数据提供者模式中，后端查询 BSS
+    以获取值。有关此内容的文档，请参见 [https://puppet.com/docs/puppet/latest/hiera_custom_backends.html](https://puppet.com/docs/puppet/latest/hiera_custom_backends.html)。
 - en: Puppet allows pluggable backends known as **termini** and uses indirectors,
     as discussed in [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252), to allow Ruby
     scripts to access key-value pairs at endpoints. Fact termini are Ruby scripts
     that access the fact endpoints and allow the data to be sent on to other external
     systems. Further details on this are available at [https://puppet.com/docs/puppet/latest/indirection.html](https://puppet.com/docs/puppet/latest/indirection.html)
     and [https://puppet.com/docs/puppet/latest/man/facts.html](https://puppet.com/docs/puppet/latest/man/facts.html).
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 允许使用称为 **termini** 的可插拔后端，并使用间接器，如 [*第 10 章*](B18492_10.xhtml#_idTextAnchor252)
+    中所讨论的，允许 Ruby 脚本访问端点上的键值对。事实 termini 是访问事实端点的 Ruby 脚本，允许将数据发送到其他外部系统。有关此内容的更多详细信息，请参见
+    [https://puppet.com/docs/puppet/latest/indirection.html](https://puppet.com/docs/puppet/latest/indirection.html)
+    和 [https://puppet.com/docs/puppet/latest/man/facts.html](https://puppet.com/docs/puppet/latest/man/facts.html)。
 - en: External data provider implementations
+  id: totrans-180
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 外部数据提供者实现
 - en: At the time of writing, no single implementation of the external data provider
     pattern implements all parts, but they can be used together to integrate multiple
     systems and purposes. The list of examples in this section is not meant to be
     exhaustive but should show the breadth of integrations that can be investigated.
     We will also provide documentation examples, which can be expanded on if necessary.
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 在撰写本文时，没有单一的外部数据提供者模式实现所有部分，但它们可以结合使用，以集成多个系统和用途。本节中的示例列表并不旨在穷尽所有内容，但应该能展示可以进行调查的集成范围。如果有必要，我们还将提供文档示例，后续可根据需要进行扩展。
 - en: Satellite
+  id: totrans-182
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Satellite
 - en: Red Hat Satellite can receive reports from Puppet Server through a report processor
     while using the module available at [https://forge.puppet.com/modules/puppetlabs/satellite_pe_tools](https://forge.puppet.com/modules/puppetlabs/satellite_pe_tools).
     However, it is also possible to use the `puppetserver_foreman` module to configure
@@ -942,80 +1363,121 @@
     to be migrated as a separate Puppet infrastructure while the configuration is
     maintained in the Foreman component of Satellite. See the files/Satellite at [https://github.com/theforeman/puppet-puppetserver_foreman](https://github.com/theforeman/puppet-puppetserver_foreman)
     to see the trusted external command.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: Red Hat Satellite 可以通过报告处理器接收来自 Puppet 服务器的报告，同时使用可在 [https://forge.puppet.com/modules/puppetlabs/satellite_pe_tools](https://forge.puppet.com/modules/puppetlabs/satellite_pe_tools)
+    获取的模块。然而，也可以使用 `puppetserver_foreman` 模块来配置一个受信任的外部命令，以便从 Satellite 收集各种配置信息，例如智能参数和组织信息作为事实。由于
+    Puppet 被移除作为默认的配置管理选择，并改为作为可选插件使用，而且 Puppet 版本未能跟上 Satellite 平台的开发进展，参考 [https://www.redhat.com/en/blog/upcoming-changes-puppet-functionality-red-hat-satellite](https://www.redhat.com/en/blog/upcoming-changes-puppet-functionality-red-hat-satellite)，使用此受信任的外部命令可以将
+    Puppet 服务器的功能迁移为独立的 Puppet 基础设施，而配置则保存在 Satellite 的 Foreman 组件中。请参阅文件/Satellite，了解受信任的外部命令：[https://github.com/theforeman/puppet-puppetserver_foreman](https://github.com/theforeman/puppet-puppetserver_foreman)。
 - en: ServiceNow
+  id: totrans-184
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: ServiceNow
 - en: Several ServiceNow integrations have been developed for use with Puppet; the
     CMDB integration allows a trusted command provided by the module available at
     [https://forge.puppet.com/modules/puppetlabs/servicenow_cmdb_integration](https://forge.puppet.com/modules/puppetlabs/servicenow_cmdb_integration).
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 已为 Puppet 开发了多个 ServiceNow 集成；CMDB 集成允许使用来自 [https://forge.puppet.com/modules/puppetlabs/servicenow_cmdb_integration](https://forge.puppet.com/modules/puppetlabs/servicenow_cmdb_integration)
+    的模块提供的受信任命令。
 - en: ServiceNow should only be used with BSS on a smaller scale since using a large
     number of nodes could overwhelm ServiceNow with queries. It provides a useful
     example of using the trusted command.
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于大量节点的使用可能会使 ServiceNow 因查询而不堪重负，因此 ServiceNow 应仅在较小规模的 BSS 中使用。它提供了一个使用受信任命令的有用示例。
 - en: 'A better approach has been developed to ensure scaling where the ServiceNow
     graph connector connects to the Puppet API and gathers the necessary data: [https://store.servicenow.com/sn_appstore_store.do#!/store/application/42ae987a1b832c10fa34a8233a4bcb0b](https://store.servicenow.com/sn_appstore_store.do#!/store/application/42ae987a1b832c10fa34a8233a4bcb0b).'
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 已开发出一种更好的方法来确保扩展性，其中 ServiceNow 图连接器连接到 Puppet API 并收集必要的数据：[https://store.servicenow.com/sn_appstore_store.do#!/store/application/42ae987a1b832c10fa34a8233a4bcb0b](https://store.servicenow.com/sn_appstore_store.do#!/store/application/42ae987a1b832c10fa34a8233a4bcb0b)。
 - en: Azure Key Vault
+  id: totrans-188
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Azure Key Vault
 - en: Azure Key Vault’s integration is a function that calls `azure_key_vault::secret`
     in Puppet code. This can be used with a Hiera backend to access Azure Key Vault
     secrets. It is an approved module ([https://forge.puppet.com/modules/tragiccode/azure_key_vault](https://forge.puppet.com/modules/tragiccode/azure_key_vault)).
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: Azure Key Vault 的集成是一种调用 Puppet 代码中 `azure_key_vault::secret` 的功能。可以与 Hiera
+    后端一起使用来访问 Azure Key Vault 秘密。这是一个经过批准的模块（[https://forge.puppet.com/modules/tragiccode/azure_key_vault](https://forge.puppet.com/modules/tragiccode/azure_key_vault)）。
 - en: 1Password
+  id: totrans-190
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 1Password
 - en: 'The 1Password integration is a Hiera backend that allows lookup calls to be
     made for secrets in the 1Password setup: [https://forge.puppet.com/modules/bryxxit/onepassword_lookup](https://forge.puppet.com/modules/bryxxit/onepassword_lookup).'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 1Password 集成是一个 Hiera 后端，允许在 1Password 设置中进行密钥查找调用：[https://forge.puppet.com/modules/bryxxit/onepassword_lookup](https://forge.puppet.com/modules/bryxxit/onepassword_lookup)。
 - en: Vault
+  id: totrans-192
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Vault
 - en: The two Vault solutions (server-side and client-side) were discussed and demonstrated
     in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233), but to recap, it is the server-side
     Vault lookup that implements a Hiera backend lookup function called `hiera_vault`
     in the module. As discussed at [https://forge.puppet.com/modules/petems/hiera_vault](https://forge.puppet.com/modules/petems/hiera_vault),
     this allows secrets from Vault to be called via Hiera and compiled into code.
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 两种 Vault 解决方案（服务器端和客户端）已在 [*第 9 章*](B18492_09.xhtml#_idTextAnchor233) 中讨论并演示，但为了回顾，服务器端
+    Vault 查找实现了一个名为 `hiera_vault` 的 Hiera 后端查找功能。正如在 [https://forge.puppet.com/modules/petems/hiera_vault](https://forge.puppet.com/modules/petems/hiera_vault)
+    中所讨论的，这允许通过 Hiera 调用 Vault 中的密钥并将其编译到代码中。
 - en: Puppet Data Service
+  id: totrans-194
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Puppet 数据服务
 - en: '**Puppet Data Service** (**PDS**) provides one of the most complete implementations
     of the external data provider pattern, except it implements a fact terminus. The
     following components are a part of PDS:'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: '**Puppet 数据服务** (**PDS**) 提供了外部数据提供者模式的最完整实现之一，唯一的不同是它实现了一个事实终端。PDS 包含以下组件：'
 - en: A REST API and CLI that allow user and application interaction
+  id: totrans-196
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个允许用户和应用程序交互的 REST API 和 CLI
 - en: A pluggable backend database to provide a BSS (at the time of writing, only
     PostgreSQL is supported)
+  id: totrans-197
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个可插拔的后端数据库，用于提供 BSS（在编写时，仅支持 PostgreSQL）
 - en: A Hiera backend to query the BSS
+  id: totrans-198
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个用于查询 BSS 的 Hiera 后端
 - en: A trusted external command to query the BSS
+  id: totrans-199
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于查询 BSS 的受信任外部命令
 - en: PDS was designed to be less focused on a particular set of integrations and
     allow Puppet platform teams to leverage the external data provider pattern to
     provide self-service and reduce operational burdens. PDS has an install module
@@ -1025,152 +1487,223 @@
     time of writing, both modules are only designed for a Puppet Enterprise installation,
     but nothing within the underlying setup limits the application to Puppet Enterprise,
     which means it can be adapted to open source Puppet.
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: PDS 的设计重点不局限于某一特定的集成，而是允许 Puppet 平台团队利用外部数据提供者模式提供自助服务并减少操作负担。PDS 提供了一个安装模块（[https://github.com/puppetlabs/puppetlabs-puppet_data_service](https://github.com/puppetlabs/puppetlabs-puppet_data_service)）。构成应用程序和
+    API 的代码（[https://github.com/puppetlabs/puppet-data-service](https://github.com/puppetlabs/puppet-data-service)）打包为
+    `deb` 和 `rpm` 格式，这些包由 `install` 模块使用。在编写时，这两个模块仅为 Puppet Enterprise 安装设计，但基础设置并没有将应用程序局限于
+    Puppet Enterprise，这意味着它可以适配到开源 Puppet。
 - en: Splunk
+  id: totrans-201
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: Splunk
 - en: In the *Logging and status* section of this chapter, we discussed and demonstrated
     how the `splunk_hec` module provided communication from Puppet Server to the Splunk
     Hec URL on a Splunk server using the same modules fact terminus ([https://github.com/puppetlabs/puppetlabs-splunk_hec/blob/main/lib/puppet/indirector/facts/splunk_hec.rb](https://github.com/puppetlabs/puppetlabs-splunk_hec/blob/main/lib/puppet/indirector/facts/splunk_hec.rb)).
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章的 *日志记录和状态* 部分，我们讨论并演示了如何通过 `splunk_hec` 模块利用相同的模块事实终端，将通信从 Puppet 服务器发送到
+    Splunk 服务器的 Splunk Hec URL（[https://github.com/puppetlabs/puppetlabs-splunk_hec/blob/main/lib/puppet/indirector/facts/splunk_hec.rb](https://github.com/puppetlabs/puppetlabs-splunk_hec/blob/main/lib/puppet/indirector/facts/splunk_hec.rb)）。
 - en: Facts from Puppet runs can be sent to Splunk, which can then be viewed in the
     Splunk app ([https://splunkbase.splunk.com/app/4413/](https://splunkbase.splunk.com/app/4413/))
     in terms of inventory and inventory trends.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 运行的事实可以发送到 Splunk，然后可以通过 Splunk 应用程序中的库存和库存趋势查看这些数据（[https://splunkbase.splunk.com/app/4413/](https://splunkbase.splunk.com/app/4413/)）。
 - en: Lab – hands-on with Splunk and Puppet Data Service
+  id: totrans-204
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 实验室 – 使用 Splunk 和 Puppet 数据服务的动手操作
 - en: Having discussed several integrations, if you left the Splunk installation or
     reinstallation as per the previous lab, you can log into Splunk and view the **inventory**
     and **inventory trend** tabs. Here, you will see the Facter terminus output and
     can experiment with viewing the data from your nodes.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 在讨论了几个集成之后，如果你按照前面的实验步骤进行了 Splunk 安装或重新安装，你可以登录到 Splunk 并查看 **inventory** 和
+    **inventory trend** 标签。在这里，你将看到 Facter 终端的输出，并可以尝试查看节点中的数据。
 - en: In this part of the lab, you will see how PDS can be used to classify nodes,
     update Hiera data, and add trusted facts.
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本部分实验中，你将看到如何使用 PDS 来分类节点、更新 Hiera 数据并添加受信事实。
 - en: 'To install PDS, you will need to perform the following tasks:'
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 要安装 PDS，你需要执行以下任务：
 - en: Observe the `hiera.yaml` and `site.pp` file in the control repository you cloned
     and see how PDS will use them.
+  id: totrans-208
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 查看你克隆的控制仓库中的 `hiera.yaml` 和 `site.pp` 文件，了解 PDS 如何使用它们。
 - en: Configure the two required application roles.
+  id: totrans-209
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 配置两个必需的应用程序角色。
 - en: 'For the database server, do the following:'
+  id: totrans-210
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 对于数据库服务器，执行以下操作：
 - en: 'Add a new node group from the PE console:'
+  id: totrans-211
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 从 PE 控制台添加一个新的节点组：
 - en: '[PRE11]'
+  id: totrans-212
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: Add the `puppet_data_service::database` class to the PDS database group you
     created in the previous step.
+  id: totrans-213
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将 `puppet_data_service::database` 类添加到你在前一步创建的 PDS 数据库组中。
 - en: Add your existing primary server to the group using the Rules tab node before
     following these steps.
+  id: totrans-214
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在执行这些步骤之前，使用规则选项卡节点将现有主服务器添加到该组中。
 - en: Commit your changes.
+  id: totrans-215
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 提交你的更改。
 - en: For the PDS API servers, do the following
+  id: totrans-216
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 对于 PDS API 服务器，执行以下操作：
 - en: Select the `puppet_data_service::server` class
+  id: totrans-217
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择 `puppet_data_service::server` 类。
 - en: 'Include the `database_host: <FQDN of your primary` `server>` parameter'
+  id: totrans-218
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '包括 `database_host: <FQDN of your primary server>` 参数'
 - en: Select the `sensitive pds_token` parameter. You can use [https://www.uuidgenerator.net/](https://www.uuidgenerator.net/)
     to generate a token
+  id: totrans-219
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择 `sensitive pds_token` 参数。你可以使用 [https://www.uuidgenerator.net/](https://www.uuidgenerator.net/)
+    来生成一个 token。
 - en: Commit your changes.
+  id: totrans-220
   prefs:
   - PREF_IND
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 提交你的更改。
 - en: Run Puppet on all nodes until reports show unchanged.
+  id: totrans-221
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在所有节点上运行 Puppet，直到报告显示没有更改。
 - en: Create an SSH session to the primary server and one of the nodes in separate
     terminal windows.
+  id: totrans-222
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在单独的终端窗口中创建一个到主服务器和一个节点的 SSH 会话。
 - en: On the primary server, run the `pds-cli node upsert <fqdn_of_node> -c motd -e`
     `production` command.
+  id: totrans-223
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在主服务器上，运行 `pds-cli node upsert <fqdn_of_node> -c motd -e production` 命令。
 - en: On the node, run `puppet agent –t`. In the output of the command, you will see
     that `motd` has been applied with default settings.
+  id: totrans-224
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在节点上运行 `puppet agent –t`。在命令输出中，你将看到 `motd` 已应用默认设置。
 - en: On the primary server, run `pds-cli hiera upsert nodes/<fqdn_of_node> motd::content
     -v '"Hello world` `its PDS\n"'`.
+  id: totrans-225
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在主服务器上，运行 `pds-cli hiera upsert nodes/<fqdn_of_node> motd::content -v '"Hello
+    world its PDS\n"'`。
 - en: On the node, run `puppet agent –t`. In the output of the command, you will see
     that `motd` has been applied with the Hiera override we set.
+  id: totrans-226
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在节点上运行 `puppet agent –t`。在命令的输出中，你将看到应用了我们设置的 Hiera 覆盖的 `motd`。
 - en: 'On the primary, run `pds-cli node upsert <fqdn_of_node> -c motd -d ''{"status":
     "Testing"}'' -e production` and `pds-cli hiera upsert nodes/<fqdn_of_name> motd::content
     -v ''"Hello world, I am a PDS %{``trusted.external.pds.data.status} Server\n"''`.'
+  id: totrans-227
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: '在主服务器上，运行 `pds-cli node upsert <fqdn_of_node> -c motd -d ''{"status": "Testing"}''
+    -e production` 和 `pds-cli hiera upsert nodes/<fqdn_of_name> motd::content -v ''"Hello
+    world, I am a PDS %{``trusted.external.pds.data.status} Server\n"''`。'
 - en: On the node, run `puppet agent –t`. Observe that it applies the new `motd` with
     the Hiera override and value `testing` set for the trusted fact.
+  id: totrans-228
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在节点上运行 `puppet agent –t`。观察它应用了带有 Hiera 覆盖的新的 `motd`，并为受信事实设置了 `testing` 值。
 - en: Log into the console and look at the node and its facts to see if it has a trusted
     fact, `pds.data.status`, set to testing.
+  id: totrans-229
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 登录到控制台，查看节点及其事实，检查是否设置了受信事实 `pds.data.status` 为 testing。
 - en: Summary
+  id: totrans-230
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: In this chapter, we summarized the various log locations and showed you how
     logs could be turned into JSON and exported so that they can be handled in logging
     toolsets such as Elastic or Grafana, which can better index them for viewing and
@@ -1183,23 +1716,32 @@
     and web console option to call this API. Using these mechanisms, you learned how
     to access critical logging and metrics to understand the current state of the
     system.
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们总结了各种日志位置，并向您展示了如何将日志转化为JSON格式并导出，以便它们能够在如Elastic或Grafana等日志工具集中处理，这些工具能够更好地对日志进行索引以便查看和分析。我们了解了如何在Puppet
+    Server上使用报告处理器，以便通过在客户端应用目录来生成报告。这使得报告能够发送到像Splunk这样的工具，并支持高级可视化和搜索。我们还讨论了可用的状态API，说明了如何通过API调用来查找所有正在运行的服务或某个特定服务的状态。展示了Puppet
+    Enterprise具有命令行（`Puppet Infrastructure status`）和Web控制台选项来调用该API。通过这些机制，您学习了如何访问关键日志和指标，以便了解系统的当前状态。
 - en: To use this information and understand the performance of the services in depth,
     you learned how Puppet metrics become available upon using the `debug` flag of
     the status API and how tools such as the Puppet Operational Dashboard and the
     Puppet plugin for Splunk could be used to gather this data and visualize it. Puppet
     Enterprise was noted as having the Metrics Collector module, which gathers metrics
     locally in JSON files, which can be viewed manually or exported.
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更好地利用这些信息并深入了解服务的性能，您学习了如何通过在状态API中使用`debug`标志来获取Puppet指标，以及如何使用Puppet操作仪表板和Splunk插件等工具来收集和可视化这些数据。Puppet
+    Enterprise具有Metrics Collector模块，它会将指标以JSON文件格式本地收集，您可以手动查看或导出这些文件。
 - en: To better understand how these metrics and dashboards can be used, we reviewed
     some common issues, looking at how to size the infrastructure for catalog compilation
     and avoid issues such as Thundering Herd as servers squeeze demand and how PuppetDB
     could be adjusted as demand increases or decreases. Various infrastructure tuning
     tools were shown to be an option in PE to optimize settings for deployed hardware.
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更好地理解如何使用这些指标和仪表板，我们回顾了一些常见问题，讨论了如何为目录编译调整基础设施规模，避免像“雷鸣效应”这样的服务器需求过度集中的问题，并探讨了如何根据需求的增加或减少来调整PuppetDB。展示了PE中各种基础设施调优工具作为优化已部署硬件设置的选项。
 - en: Then, we covered the external data provider pattern, which provides mechanisms
     for self-service and access to Puppet data on external services so that it can
     be integrated better. The core components of a backend storage service were shown
@@ -1207,25 +1749,34 @@
     make while trusted external commands and the Hiera backend were shown as ways
     to query that data. Fact termini were shown to be ways to export data from the
     BSS to external services.
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们介绍了外部数据提供者模式，它提供了自助服务机制，使得Puppet数据能够在外部服务上访问，以便更好地集成。展示了一个后端存储服务的核心组件，用于存储能够处理Puppet查询的级别的数据，同时展示了受信任的外部命令和Hiera后端作为查询这些数据的方法。展示了Fact终端作为从BSS导出数据到外部服务的方式。
 - en: Various implementations of these components were shown when using various Hiera
     backends, with 1Password, Azure Key Vault, and Vault being shown as ways to access
     external secret managers, while Satellite and ServiceNow were shown to have trusted
     commands that allowed data within those applications to be fed into Puppet code.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 当使用不同的Hiera后端时，展示了这些组件的各种实现，其中1Password、Azure Key Vault和Vault被展示为访问外部秘密管理器的方式，而Satellite和ServiceNow则展示了可以通过受信任命令将这些应用程序中的数据输入到Puppet代码中的方式。
 - en: Puppet Data Service was shown to be one of the most complete implementations
     of the pattern and provides a solid design to allow for self-service of internal
     customers who would be able to access suitably exposed Puppet options without
     requiring full knowledge of the Git flow and Puppet language.
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet数据服务被证明是该模式最完整的实现之一，并提供了一个稳固的设计，使得内部客户能够在不需要全面了解Git工作流和Puppet语言的情况下，访问适当暴露的Puppet选项，进而实现自助服务。
 - en: This coverage of the external data provider pattern showed you how powerful
     integrations can be made with Puppet Enterprise to feed data into and out of different
     tools and work toward building a platform with Puppet as a vital component.
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节介绍了外部数据提供者模式，展示了如何通过 Puppet Enterprise 实现强大的集成，将数据输入和输出到不同的工具，并朝着将 Puppet
+    作为重要组成部分来构建平台的目标迈进。
 - en: Having covered the components of Puppet Server how to monitor performance at
     scale and integrate it, the next chapter will look at Puppet Enterprise-specific
     services and their components. It will describe what Puppet Enterprise is, how
@@ -1233,12 +1784,18 @@
     the reference architectures provided by Puppet to allow for easier scaling and
     tooling to automate a deployment and its status. Projects and integrations specifically
     for Puppet Enterprise will also be discussed.
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前一部分讲解了 Puppet Server 的组件、如何在大规模监控性能并进行集成后，下一章将讨论 Puppet Enterprise 特定的服务及其组件。它将描述什么是
+    Puppet Enterprise，它与开源版本有何不同，提供了哪些额外的服务，以及 Puppet 提供的参考架构，这些架构能更轻松地扩展和使用工具自动化部署及其状态。还将讨论专门针对
+    Puppet Enterprise 的项目和集成。
 - en: Part 4 – Puppet Enterprise and Approaches to the Adoption of Puppet
+  id: totrans-239
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 第4部分 – Puppet Enterprise 与 Puppet 采用方法
 - en: This part will look at Puppet Enterprise and how it differs from open source.
     It will review some Puppet-related products that can extend Puppet Enterprise
     and some specific integrations for Puppet Enterprise. We will then discuss approaches
@@ -1246,17 +1803,27 @@
     scoping use cases to benefit from regular delivery, and how Puppet can work within
     platform engineering as well as with heritage estates, and even in highly regulated,
     change-managed estates.
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: 本部分将讨论 Puppet Enterprise 及其与开源版本的区别。我们将回顾一些可以扩展 Puppet Enterprise 的 Puppet 相关产品，以及一些
+    Puppet Enterprise 的具体集成。接着，我们将探讨有助于组织成功采用 Puppet 的方法。我们将探讨如何正确界定用例，从而从常规交付中获益，Puppet
+    如何在平台工程中发挥作用，以及如何在传统遗留环境和高度监管、变更管理的环境中使用 Puppet。
 - en: 'This part has the following chapters:'
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 本部分包含以下章节：
 - en: '[*Chapter 14*](B18492_14.xhtml#_idTextAnchor340), *A Brief Overview of Puppet
     Enterprise*'
+  id: totrans-242
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[*第14章*](B18492_14.xhtml#_idTextAnchor340)，*Puppet Enterprise 简介*'
 - en: '[*Chapter 15*](B18492_15.xhtml#_idTextAnchor359), *Approaches to Adoption*'
+  id: totrans-243
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[*第15章*](B18492_15.xhtml#_idTextAnchor359)，*采用方法*'
