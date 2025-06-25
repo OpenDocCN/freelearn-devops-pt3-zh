@@ -1,11 +1,15 @@
 - en: '9'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '9'
 - en: Handling Data with Puppet
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用 Puppet 处理数据
 - en: This chapter will focus on how to handle data using Puppet. It will look at
     Hiera, Puppet’s key-value data lookup tool, and how it ensures that Puppet’s reusable
     code is made more configurable without burdening it with excessive logic and variables.
@@ -33,87 +37,139 @@
     in hierarchies, how to avoid defaults, the dangers of using Hiera for classification,
     and how the **Hiera Data Manager** (**HDM**) can act as a tool to make your data
     more accessible.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将重点介绍如何使用 Puppet 处理数据。我们将讨论 Hiera，Puppet 的键值数据查找工具，以及它如何确保 Puppet 的可重用代码在不增加过多逻辑和变量的情况下更加可配置。将回顾
+    Hiera 的基本结构，展示它如何以层级方式存储数据，提供基于规则的键查找，且无需繁琐操作，以及如何使用不同的后端查找数据中的键以返回值，这些后端实现可能是
+    YAML 数据文件或应用程序的 API 调用。将讨论自动参数查找的使用，展示它如何让参数化配置文件自动接收数据，以及如何在 Puppet 代码中直接使用查找功能来调用数据。我们将简要讨论
+    Hiera 3 和 Hiera 5 在传统 Puppet 中的变化。接下来，将详细回顾三个 Hiera 层级（全局层、环境层和模块层），讨论在这些不同层级中如何管理层级和数据。将展示查找合并和优先级行为的选项，突出如何通过第一次匹配或合并不同的值来查找数据。然后，我们将根据使用案例和最佳实践讨论数据应该在何时何地使用，以及代码应该直接保存在控制仓库中还是保存在单独的
+    Hiera 数据仓库中。接着，我们将讨论数据的安全性，展示如何通过不同的方法在存储、传输和在 Puppet 代码中使用时保持数据安全，重点介绍使用 `Sensitive`
+    类型、`node_encrypt` 模块以及通过 `eyaml` 加密文件的效果和局限性。最后，将回顾一些常见问题及故障排除方法/工具，展示如何最佳地使用
+    `lookup` 命令调试和解释值，以及为什么我们永远不应该在层级中使用全局变量，如何避免使用默认值，使用 Hiera 进行分类的风险，以及如何通过 **Hiera
+    数据管理器** (**HDM**) 工具使数据更易于访问。
 - en: 'In this chapter, we’re going to cover the following main topics:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将涵盖以下主要主题：
 - en: What is Hiera?
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 什么是 Hiera？
 - en: Hiera levels
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Hiera 层级
 - en: Deciding when to use static code or dynamic data
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 决定何时使用静态代码或动态数据
 - en: Keeping data secure
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 保持数据安全
 - en: Pitfalls, gotchas, and issues
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 陷阱、难点和问题
 - en: Technical requirements
+  id: totrans-9
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: 'Clone the control repo from [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
     to your GitHub account as `controlrepo-chapter9` and update the following in this
     repo on the production branch:'
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 从 [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
+    克隆控制仓库到你的 GitHub 账户，并将其命名为 `controlrepo-chapter9`，然后在生产分支中更新以下内容：
 - en: '`Puppetfile` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/Puppetfile'
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Puppetfile` 与 [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/Puppetfile)'
 - en: )
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: '`Manifests/site.pp` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/site.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/site.pp'
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Manifests/site.pp` 与 [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/site.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/site.pp)'
 - en: )
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: 'Create a branch from production called `lab_error` and replace the following:'
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从生产环境创建一个名为 `lab_error` 的分支，并替换以下内容：
 - en: '`data` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/data](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/data'
+  id: totrans-16
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`data` 与 [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/data](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/data)'
 - en: )
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: )
 - en: '`hiera.yaml` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/hiera.yaml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/hiera.yaml)'
+  id: totrans-18
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`hiera.yaml` 与 [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/hiera.yaml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/hiera.yaml)'
 - en: 'Build a standard cluster with two Linux clients and two Windows clients by
     downloading the `params.json` file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/params.json
     ) and updating it with the location of your control repo and your SSH key from
     the control repo. Then, run the following command from your `pecdm` directory:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过从[https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/params.json)
+    下载 `params.json` 文件，并更新控制仓库位置和控制仓库中的 SSH 密钥，来构建一个包含两个 Linux 客户端和两个 Windows 客户端的标准集群。然后，在
+    `pecdm` 目录下运行以下命令：
 - en: '[PRE0]'
+  id: totrans-20
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Let us first find out what Hiera is and why it is used.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们了解一下 Hiera 是什么以及它为何被使用。
 - en: What is Hiera?
+  id: totrans-22
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 什么是 Hiera？
 - en: So far, we have discussed how using Puppet creates stateful and reusable code
     and how, by using the roles and profiles method, parameters can be made available
     to make modules configurable. We also showed how to use those parameters in code,
@@ -122,8 +178,11 @@
     endless logic and variables to represent data variations required for node exceptions,
     location differences, OS version variations, organization differences, and many
     other circumstances.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，我们讨论了如何使用 Puppet 创建有状态且可重用的代码，以及如何通过使用角色和配置文件方法使得参数可用，从而使模块可配置。我们还展示了如何在代码中使用这些参数，但为了创建一个可扩展、可读且特定于站点的数据源，Puppet
+    使用了一个名为 **Hiera** 的工具。如果不在 Puppet 代码中使用 Hiera 数据，将需要无休止的逻辑和变量来表示节点例外、位置差异、操作系统版本差异、组织差异以及许多其他情况所需的数据变化。
 - en: Hiera is a data lookup tool that looks up values in files of JSON, HOCON, YAML,
     and EYAML, the built-in backends, or using custom backends that can call external
     sources such as websites or databases. It stores data in key-value pairs that
@@ -135,42 +194,63 @@
     The hierarchies are configured in a `hiera.yaml` file; this YAML file lists out
     the levels in order of priority. This `hiera.yaml` file sets the version of Hiera
     to be used, which is required, although *5* is the only active version.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: Hiera 是一个数据查找工具，可以在 JSON、HOCON、YAML 和 EYAML 文件中查找值，支持内置后端，或使用自定义后端调用外部数据源，例如网站或数据库。它以键值对的形式存储数据，可以通过代码中的函数调用显式查找，也可以通过自动参数查找自动查找，后者通过将类中的参数名称与
+    Hiera 数据值进行匹配来实现。正如这个名字所暗示的那样，Hiera 专注于使用层级来查找数据，查找过程遵循一个常见的默认值，数据源的层级越具体，匹配的节点数据越精确。这些层级在
+    `hiera.yaml` 文件中配置；该 YAML 文件按优先级列出各个层级。此 `hiera.yaml` 文件设置了要使用的 Hiera 版本，这是必需的，虽然
+    *5* 是唯一的活跃版本。
 - en: Using the built-in backends
+  id: totrans-25
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用内置后端
 - en: 'For built-in backends in a hierarchy map, there will be a list of hierarchies,
     each of which will have the following:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于层级映射中的内置后端，将会有一个层级列表，每个层级将包含以下内容：
 - en: '`name` – A readable label describing the level'
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`name` – 描述层级的可读标签'
 - en: '`datadir` – The base path relative to `hiera.yaml` where all data is stored'
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`datadir` – 相对于 `hiera.yaml` 的基础路径，所有数据都存储在此路径下'
 - en: '`data_hash` – The Hiera backend/file type to use'
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`data_hash` – 要使用的 Hiera 后端/文件类型'
 - en: Either `path`, `paths`, `glob`, `globs`, or `mapped_paths` – The file path or
     paths to the data relative to `datadir`
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`path`、`paths`、`glob`、`globs`或`mapped_paths`——文件路径或相对于`datadir`的数据路径。'
 - en: A default map can also be created with these keys so that values don’t need
     to be needlessly repeated in each layer of the hierarchy.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 还可以使用这些键创建默认映射，这样就不需要在每个层次结构中重复值。
 - en: The `data_hash` lookup function key accepts `yaml_data`, `json_data`, and `hocon_data`
     as values but most Puppet implementations just use YAML data, so this book will
     default to the `yaml_data` backend.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: '`data_hash`查找函数键接受`yaml_data`、`json_data`和`hocon_data`作为值，但大多数Puppet实现仅使用YAML数据，因此本书将默认使用`yaml_data`后端。'
 - en: The file path allows a hierarchy level to state a specific location for the
     data file of that hierarchy using variables interpolated in the code associated
     with the node, such as global variables associated with the `%{<variable_name}`,
@@ -180,159 +260,224 @@
     the `os` fact. Trusted facts similarly are accessed from the `trusted` array,
     such as `%{trusted.certname}`, and trusted external facts can be accessed using
     `%{trusted.external.pds.data}`.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 文件路径允许层次结构级别使用与节点相关的代码中插值的变量，声明数据文件的特定位置，例如与`%{<variable_name}`相关的全局变量，并通过点（`.`）访问`facts`数组来调用事实。因此，`%{facts.application_owner}`将访问`application_owner`事实。进一步的点可以用来访问结构化事实，例如`%{facts.os.family}`可以访问`os`事实中的`family`值。类似地，受信任的事实可以从`trusted`数组中访问，例如`%{trusted.certname}`，并且可以使用`%{trusted.external.pds.data}`访问受信任的外部事实。
 - en: 'So, a simple hierarchy could be created in the `hiera.yaml` file with the following
     piece of code:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，可以在`hiera.yaml`文件中使用以下代码创建一个简单的层次结构：
 - en: '[PRE1]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: This hierarchy would mean that a host with the `certname` trusted fact of `examplehost`
     and a `data_center` fact of `enterprisedc1` would first look in `data/nodes/examplehost.yaml`,
     then in `data/location/enterprisedc1.yaml`, and lastly, in the `/data/common.yaml`
     common file.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个层次结构意味着，具有`certname`可信事实为`examplehost`和`data_center`事实为`enterprisedc1`的主机，首先会在`data/nodes/examplehost.yaml`中查找，然后在`data/location/enterprisedc1.yaml`中查找，最后在`/data/common.yaml`公共文件中查找。
 - en: 'It is also possible to combine multiple variable interpolations together on
     a path, such as updating the location layer to differentiate on another fact –
     for example, assuming a `brand` fact existed and different brands within the organization
     would have variation for a data center, `path: "location/%{facts.brand}-%{fact.data_center}.yaml"`.'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: '也可以将多个变量插值组合在路径中，例如更新位置层以根据另一个事实进行区分——例如，假设存在`brand`事实，并且组织中的不同品牌将对数据中心有所不同，那么路径可以写成`path:
+    "location/%{facts.brand}-%{fact.data_center}.yaml"`。'
 - en: So, if `examplehost` had the `brand` fact set to `retail`, it would look in
     `data/location/retail-enterprisedc1.yaml`.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，如果`examplehost`的`brand`事实设置为`retail`，它将会在`data/location/retail-enterprisedc1.yaml`中查找。
 - en: 'In these lookups, if it doesn’t find a matching file for its level, it will
     return nothing and go to the next level. Using the `paths` path file variable
     instead would allow simplification. Since the only real difference between the
     hierarchy levels is the path, it could instead be declared with a single hierarchy
     and paths with an array of `paths`. For example, the hierarchy from the previous
     example could be reduced to one layer with `paths`:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这些查找中，如果在当前层次找不到匹配的文件，它将返回空值并进入下一层。改用`paths`路径文件变量可以简化这一过程。由于层次结构之间唯一的实际差异是路径，因此可以通过一个单一的层次结构声明和带有`paths`数组的路径来简化。例如，前一个示例中的层次结构可以简化为一个层次结构，使用`paths`：
 - en: '[PRE2]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: If additional Hiera layers were required for a different backend, it would need
     to be understood that any hierarchy would have all its paths examined in order
     before moving on to the next hierarchy, which may prevent this simplification
     to maintain the correct order of hierarchy.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果需要为不同的后端添加额外的Hiera层次结构，那么必须理解，任何层次结构都会按照顺序检查所有路径，然后才会进入下一个层次，这可能会防止简化并保持正确的层次顺序。
 - en: In this section, we will cover globs, only because they can be found in code
     bases, but they should *not* be used, as they make the data structure a lot more
     complicated than any environment truly needs.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将讨论glob，因为它们在代码库中可能会出现，但它们*不应*被使用，因为它们会使数据结构比任何环境实际需要的更复杂。
 - en: 'The file path can use `glob` or `globs` to pass Ruby’s style `Dir.glob` method.
     The full documentation of this can be viewed at [https://www.puppet.com/docs/puppet/latest/hiera_config_yaml_5.html#specifying_file_paths.](https://www.puppet.com/docs/puppet/latest/hiera_config_yaml_5.html#specifying_file_paths
     ) This allows the use of the following:'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: '文件路径可以使用`glob`或`globs`来传递Ruby风格的`Dir.glob`方法。此方法的完整文档可以在[https://www.puppet.com/docs/puppet/latest/hiera_config_yaml_5.html#specifying_file_paths](https://www.puppet.com/docs/puppet/latest/hiera_config_yaml_5.html#specifying_file_paths)查看。这允许使用以下功能：  '
 - en: An asterisk (`*`) as a wildcard
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '星号（`*`）作为通配符  '
 - en: Two asterisks (`**`) to match recursively through directories
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '两个星号（`**`）用于递归匹配目录  '
 - en: A question mark (`?`) to match any one character
+  id: totrans-46
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '问号（`?`）用于匹配任意一个字符  '
 - en: A comma-separated list within curly braces (`{this,that,or,not}`) for a literal
     match with any option in the list
+  id: totrans-47
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '用逗号分隔的列表（`{this,that,or,not}`）用于与列表中的任何选项进行字面匹配  '
 - en: Sets of characters within square brackets (`[xyz]`) to match any one character
     in the given set
+  id: totrans-48
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '方括号内的字符集（`[xyz]`）用于匹配给定集合中的任意一个字符  '
 - en: A backslash (`\`) to escape special characters
+  id: totrans-49
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 反斜杠（`\`）用于转义特殊字符
 - en: 'For example, take the `facts.os.windows` fact and then match either from `display_id`
     (which was introduced in later versions of Windows 2019) or from `release_id`
     (which was introduced in Windows 2016 and deprecated in Windows 2019). This combination
     allows a consistent Hiera layer for a source that has changed repeatedly and needs
     a combination of facts to find different versions:'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: '例如，取`facts.os.windows`事实，然后从`display_id`（在Windows 2019的后续版本中引入）或`release_id`（在Windows
+    2016中引入并在Windows 2019中弃用）中进行匹配。这个组合允许为一个反复变化的来源创建一个一致的Hiera层，并且需要组合事实来查找不同的版本：  '
 - en: '[PRE3]'
+  id: totrans-51
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'To create a layer containing network information for the network on the primary
     interface or the network domain, the following code could be created, which would
     search through any directory structure in the network folder to match:'
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '要创建一个包含主接口或网络域的网络信息层，可以创建以下代码，它将搜索网络文件夹中的任何目录结构以进行匹配：  '
 - en: '[PRE4]'
+  id: totrans-53
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: If multiple matches are found, the files will be searched in alphanumerical
     order. Also, multiple strings can be used in the search using `globs:` and passing
     an array of strings in a similar fashion to paths.
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: '如果找到多个匹配项，文件将按字母数字顺序进行搜索。此外，多个字符串可以使用`globs:`进行搜索，并以类似路径的方式传递字符串数组。  '
 - en: 'The final file path option is `mapped_paths`. This option works by providing
     a variable containing a collection of strings, a variable name (which maps each
     element of the collection of strings), and a template. For example, if a fact
     called `$oracle_sids` contained the `[''ora1'',''ora2'',''ora3'']` array, the
     following hierarchy would perform lookups in the `/oracle_dbs/ora1.yaml`, `/oracle_dbs/ora2.yaml`,
     and `/``oracle_dbs/ora3.yaml` files:'
+  id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: '最终的文件路径选项是`mapped_paths`。此选项通过提供一个包含字符串集合的变量、一个变量名（该变量映射字符串集合中的每个元素）和一个模板来工作。例如，如果一个名为`$oracle_sids`的事实包含`[''ora1'',''ora2'',''ora3'']`的数组，则以下层次结构将在`/oracle_dbs/ora1.yaml`、`/oracle_dbs/ora2.yaml`和`/oracle_dbs/ora3.yaml`文件中执行查找：  '
 - en: '[PRE5]'
+  id: totrans-56
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: Although we have taken some time to cover globs, it’s important to reiterate
     that this should only be used to understand pre-existing complex data structures
     in code and for you to try and refactor and simplify. *This should not be used
     in new* *code bases*.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: '虽然我们已经花了一些时间来讲解通配符（globs），但需要重申的是，这应该仅用于理解代码中预先存在的复杂数据结构，并帮助你进行重构和简化。*这不应在新的*
+    *代码库* 中使用。  '
 - en: Having discussed the hierarchy in detail, it’s now time to shift focus to the
     data used and how to call the lookups to the hierarchy. As was mentioned in the
     *Using the built-in backends* section, YAML is the most commonly used built-in
     data type and will be used in all examples, but the difference will only be in
     the presentation of the language rather than the actual structures used.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: '在详细讨论了层次结构之后，现在是时候转向使用的数据以及如何调用该层次结构的查找了。正如在*使用内置后端*部分中提到的，YAML是最常用的内置数据类型，并将在所有示例中使用，但差异仅体现在语言的表示方式，而非实际使用的结构。  '
 - en: In the YAML data files, we create key-value pairs and keys with lists of values.
     The keys can just be single values but, more commonly, will be structured with
     the format `<module_name>::<paramater_name>`, where `module_name` can contain
     multiple segments reflecting a certain class namespace within the module.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: '在YAML数据文件中，我们创建键值对和带有值列表的键。键可以是单一值，但更常见的是使用格式`<module_name>::<paramater_name>`来构造，其中`module_name`可以包含多个段，反映模块内的某个类命名空间。  '
 - en: 'To give an example of this, for the `exampleapp` profile module, a data file
     could contain the settings for the `enable_service` parameter to be `true`, it
     could contain an array of options of `[opt1,opt2,opt3]`, and for a `user`’s parameter,
     it could contain a hash of each user’s settings to be created for `exampleuser`
     and `anotheruser`. This would look like this:'
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 举个例子，对于`exampleapp`配置文件模块，一个数据文件可能包含将`enable_service`参数设置为`true`的设置，它可能包含`[opt1,opt2,opt3]`的选项数组，对于`user`的参数，它可能包含一个每个用户设置的哈希，用于创建`exampleuser`和`anotheruser`。这将如下所示：
 - en: '[PRE6]'
+  id: totrans-61
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: Accessing data
+  id: totrans-62
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 访问数据
 - en: 'The next point would be how this hierarchy and data is accessed in Puppet code
     and, as was mentioned at the beginning of this chapter, there are two ways Puppet
     looks up data in code: via the automatic class parameter lookup or via the Puppet
     lookup function. The recommended model involves driving virtually all data required
     via automatic parameter lookups to profile classes using the Role and Profile
     model (discussed in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)) and the Forge.'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一个要点是如何在Puppet代码中访问这个层级和数据，正如本章开头所提到的，Puppet有两种方式在代码中查找数据：通过自动类参数查找或通过Puppet查找函数。推荐的模型是通过自动参数查找将几乎所有需要的数据传递给配置文件类，使用角色和配置文件模型（在[第8章](B18492_08.xhtml#_idTextAnchor212)中讨论）和Forge。
 - en: 'The automatic class parameter lookup works by taking any parameters of a class
     that has been included/declared as a resource and, first, checking whether the
     parameter has been set by the declaration, and if not, performing a Hiera lookup
@@ -344,139 +489,203 @@
     version for a `server1.example.com` node in a `data/nodes/server1.example.com.yaml`
     file, such as setting the version parameter for `profile::oracle` to Oracle 21c
     with the following line:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 自动类参数查找通过获取任何已被包含/声明为资源的类的参数来工作，首先检查参数是否已通过声明设置，如果没有，则对每个`<module_name>::<parameter_name>`形式的参数执行Hiera查找。需要注意的是，这本身不是Hiera中的命名空间键；它只是一个字符串名称，值不能插入到数据结构中。在使用配置文件并具有已设置的配置文件模块和Oracle配置文件的情况下，这可能看起来像是`profile::oracle::version`。为了设置此数据，我们可能会在`data/nodes/server1.example.com.yaml`文件中为`server1.example.com`节点设置特定的版本，如以下行所示，将`profile::oracle`的版本参数设置为Oracle
+    21c：
 - en: '`profile::oracle::version: 21c`'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: '`profile::oracle::version: 21c`'
 - en: If this lookup had failed, it would look to see whether any default value was
     set in the parameter in the class manifest, before then assigning it as `undef`.
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果此查找失败，它将查看类清单中是否为参数设置了任何默认值，然后将其赋值为`undef`。
 - en: The data found in Hiera by default will return as a string or an array of strings;
     we will show later how this can be converted.
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，通过Hiera找到的数据将以字符串或字符串数组的形式返回；稍后我们将展示如何将其转换。
 - en: Note
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: The automatic class parameter lookups do not work for defined resource types,
     only classes. To mimic the functionality, you can use an explicit `lookup()` call
     in your code.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 自动类参数查找不适用于定义的资源类型，仅适用于类。为了模仿这一功能，您可以在代码中使用显式的`lookup()`调用。
 - en: 'The other mechanism in Puppet code is the `lookup` function. It is more direct
     and can be used within Puppet code; it is called with a key, which can be multiple
     segments, each separated by two colons (`::`), or it can be simple global values.
     The colons are used here simply for convention and do not drill down into a data
     structure. To look up the same Oracle parameter, the following example would assign
     it to an `oracle_version` variable:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet代码中的另一个机制是`lookup`函数。它更直接，可以在Puppet代码中使用；它通过一个键调用，这个键可以是多个段，每个段由两个冒号(`::`)分隔，或者它可以是简单的全局值。这里使用冒号只是约定，并不深入到数据结构中。为了查找相同的Oracle参数，以下示例将其赋值给`oracle_version`变量：
 - en: '`$``oracle_version=lookup(profile::oracle::version)`'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: '`$``oracle_version=lookup(profile::oracle::version)`'
 - en: 'If the data is an array, it is possible to access a specific key using dot
     notation:'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果数据是一个数组，可以使用点表示法访问特定的键：
 - en: '`$``exampleuser_id=lookup(profile::exampleapp::users.exampleuser.id)`'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: '`$``exampleuser_id=lookup(profile::exampleapp::users.exampleuser.id)`'
 - en: 'It is possible to provide a default value if no value is returned by using
     the arguments in the function or an options hash (the full options can be viewed
     in the documentation at [https://www.puppet.com/docs/puppet/latest/hiera_automatic.html#puppet_lookup-arguments](https://www.puppet.com/docs/puppet/latest/hiera_automatic.html#puppet_lookup-arguments))
     and providing a value to return – for example, to return the `no id found` string
     if the lookup in the previous example had returned no value, the following could
     be used:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果查找返回的值为空，可以通过函数中的参数或选项哈希提供默认值（完整选项可以在文档中查看：[https://www.puppet.com/docs/puppet/latest/hiera_automatic.html#puppet_lookup-arguments](https://www.puppet.com/docs/puppet/latest/hiera_automatic.html#puppet_lookup-arguments)），并提供一个返回的值——例如，如果上一个示例的查找未返回任何值，可以使用以下内容来返回
+    `no id found` 字符串：
 - en: '`exampleuser_id=lookup(profile::exampleapp::users.exampleuser.id, {default_value
     => ''no` `id found''})`'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: '`exampleuser_id=lookup(profile::exampleapp::users.exampleuser.id, {default_value
+    => ''no` `id found''})`'
 - en: This will be discussed in more detail in the *Pitfalls, gotchas, and issues*
     section, but providing defaults is considered poor practice, as it hides failures
     and may make people assume a value has in fact been found and things are functioning
     correctly. It will also be noticed that the second and third arguments are marked
     as `undef`; these are for data type and the merge strategy, which will be discussed
     next.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将在 *Pitfalls, gotchas, and issues* 部分中详细讨论，但提供默认值被认为是一个不好的实践，因为它隐藏了失败，并可能让人误以为值已经找到且一切正常运行。还可以注意到第二个和第三个参数被标记为
+    `undef`；这些是数据类型和合并策略，将在接下来的部分讨论。
 - en: Note
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: The `lookup` function replaces the legacy `hiera_<data_type>` and `hiera` functions
     that existed with Hiera 3\. As these functions are deprecated, they should not
     be used as they can produce inconsistent results.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: '`lookup` 函数替代了 Hiera 3 中的传统 `hiera_<data_type>` 和 `hiera` 函数。由于这些函数已被弃用，不应使用它们，因为它们可能产生不一致的结果。'
 - en: What has been discussed so far is the simplest case, where we expect to simply
     look up a value and find the first match. This is Hiera’s default behavior and
     allows you to override values to varying degrees of specificity. Sometimes, though,
     you might want to return some combination of all the values present in all the
     layers of the hierarchy. Lookup options can be set in the data files to describe
     how this should happen.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止讨论的内容是最简单的情况，我们只期望查找一个值并找到第一个匹配项。这是 Hiera 的默认行为，允许你根据不同的具体程度重写值。不过，有时候，你可能希望返回所有层级中所有值的某种组合。可以在数据文件中设置查找选项，来描述应该如何进行这种操作。
 - en: 'The `lookup_options` reserved key allows for different merge behaviors to be
     set on lookups that are set against either a particular key or against a regular
     expression following this format:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: '`lookup_options` 保留键允许为查找操作设置不同的合并行为，查找操作可以是针对特定键或遵循以下格式的正则表达式：'
 - en: '[PRE7]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: The most common approach is to put this behavior in the `common.yaml` file,
     but if, say, a node override or some priority override may be more important,
     it can make sense to then put it into different levels of the hierarchy.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 最常见的方法是将这种行为放在`common.yaml`文件中，但如果例如，节点重写或某些优先级重写可能更重要，那么将其放到层次结构的不同层级中也是有意义的。
 - en: 'There are four merge behaviors that can be set with the data files:'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在数据文件中设置四种合并行为：
 - en: '`first` – Return the first match in the hierarchy order'
+  id: totrans-84
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`first` – 返回层次结构顺序中的第一个匹配项'
 - en: '`unique` – Return an array of all matching unique values in the hierarchy'
+  id: totrans-85
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`unique` – 返回层次结构中所有匹配的唯一值的数组'
 - en: '`hash` – Return a hash of shallow merged hash keys using the highest hierarchy
     key match'
+  id: totrans-86
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`hash` – 返回一个哈希值，浅度合并哈希键，使用最高层次的键匹配'
 - en: '`deep` – Return a hash of deep merged hash keys using the highest hierarchy
     key match'
+  id: totrans-87
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`deep` – 返回一个哈希值，深度合并哈希键，使用最高层次的键匹配'
 - en: 'Hiera’s default behavior, `first`, will look for the first value to match in
     hierarchy order. Assuming there is no other `lookup_option` value declared for
     the key, there is no need to implicitly declare it. But if, for example, `common.yaml`
     was set to `unique` and, for our node exception, we wanted to set only the values
     we had declared for `profile:oracle::limits`, we could set the following in our
     node’s YAML data file:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: Hiera 的默认行为 `first` 会按照层次结构顺序查找第一个匹配的值。假设没有为该键声明其他的 `lookup_option` 值，那么就不需要隐式声明它。但是，如果例如，`common.yaml`
+    被设置为 `unique`，而对于我们的节点异常，我们只希望设置在 `profile:oracle::limits` 中声明的值，我们可以在节点的 YAML
+    数据文件中设置以下内容：
 - en: '[PRE8]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'The `unique` keyword will find all matching keys and return a merged and flattened
     array. So, for example, if we wanted to install all requested Oracle versions
     in a profile, we could set the following:'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: '`unique`关键字将查找所有匹配的键，并返回合并后的扁平化数组。因此，例如，如果我们想在一个配置文件中安装所有请求的Oracle版本，我们可以设置如下：'
 - en: '[PRE9]'
+  id: totrans-91
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: If the `11` value was found at the node level, `12` at the organizational level,
     and `11,13` found at the common hierarchy level, the returned value would be an
     array of `[11,12,13]`.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果在节点级别找到了`11`值，在组织级别找到了`12`，并且在公共层级找到了`11,13`，那么返回的值将是一个数组`[11,12,13]`。
 - en: 'The `hash` keyword will merge hashes from all matching levels by merging the
     top-level keys of the hashes together. This essentially performs a shallow hash
     merge, which means that top-level keys are merged but the merge will not recursively
@@ -487,52 +696,76 @@
     levels. It will override and append values as it does so but it won’t recursively
     merge the values in the keys. For example, imagine a lookup was performed on `profile::oracle::limits`
     and at the lowest level, `common.yaml` existed and contained the following:'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: '`hash`关键字将通过合并哈希的顶层键来合并所有匹配级别的哈希。这本质上执行的是浅层哈希合并，意味着顶层键会被合并，但合并不会递归地下降并合并嵌套在其下的数据结构。这将保持键的书写顺序，从最低优先级的数据源中匹配，但会从最高优先级的源中获取值。可以将其理解为在从最高到最低级别的过程中，将键逐步添加到哈希中。它会覆盖并附加值，但不会递归地合并键中的值。例如，假设在`profile::oracle::limits`上执行查找，在最低级别，`common.yaml`存在并包含以下内容：'
 - en: '[PRE10]'
+  id: totrans-94
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'Then imagine that `/node/examplenode.server.com.yaml` had a higher priority
     due to the following `hiera.yaml` section:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后假设`/node/examplenode.server.com.yaml`由于以下`hiera.yaml`部分而具有更高优先级：
 - en: '[PRE11]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'And `/node/examplenode.server.com.yaml` contained the following:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 且`/node/examplenode.server.com.yaml`包含以下内容：
 - en: '[PRE12]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'The hash lookup on `profile::oracle::limits` would return the following:'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 对`profile::oracle::limits`的哈希查找将返回以下内容：
 - en: '[PRE13]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: Note that, in this case, the `profile::oracle::limits.oracle/stack` key was
     taken from the highest priority so only the hard value was seen, and no recursive
     merge was performed. This shortcut syntax with a dot (`.`) can be used to access
     an element in hash or array, where, in the case of an array, the index number
     is used.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，在这种情况下，`profile::oracle::limits.oracle/stack`键是从最高优先级获取的，因此只看到了硬值，没有执行递归合并。使用带点（`.`）的简化语法可以访问哈希或数组中的元素，在数组的情况下，会使用索引号。
 - en: A `deep` merge combines any number of hashes or arrays but is able to merge
     values inside the hash or array recursively. This means that `hash` values are
     merged with another `deep` merge and arrays are not flattened and can contain
     nested arrays. If the previous example lookup options were configured as `deep_merge`,
     then the lookup would return both hard and soft limits for the `oracle/stack`
     key.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: '`deep`合并结合了任意数量的哈希或数组，并且能够递归地合并哈希或数组中的值。这意味着`hash`值与另一个`deep`合并一起合并，且数组不会被扁平化，可以包含嵌套的数组。如果之前的查找选项被配置为`deep_merge`，则该查找将返回`oracle/stack`键的硬性和软性限制。'
 - en: Note
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: Merging more than three nested levels of nesting in a hash will have a serious
     performance impact on Hiera and should be avoided.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 在哈希中合并超过三个嵌套层级会对Hiera的性能产生严重影响，因此应避免这种做法。
 - en: There are also options that can be assigned to affect the merging of arrays.
     For instance, `sort_merged_arrays` will result in the merged array being sorted
     by key rather than the default behavior, where the array is ordered from lowest
@@ -541,112 +774,165 @@
     a `knockout_prefix` key, whereby a key containing a value, normally as double
     dashes (`--`), is used as a prefix before the value and will cause a value to
     be removed instead of added.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有一些选项可以分配以影响数组的合并。例如，`sort_merged_arrays`将导致合并后的数组按键排序，而不是默认行为，即数组按从最低优先级到最高优先级的顺序排序，`merge_hash_arrays`则表示如果设置为`true`，数组中的哈希将进行深度合并。另一个选项允许`deep`合并具有`knockout_prefix`键，其中包含一个值的键，通常以双破折号（`--`）表示，作为值前缀使用，将导致移除而不是添加该值。
 - en: 'For example, if the model given in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)for
     using flexible classes is implemented, using a `deep` merge and a `knockout` prefix
     would allow classes to be added or removed at each hierarchy level:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，如果在[*第 8 章*](B18492_08.xhtml#_idTextAnchor212)中给出的灵活类模型得到了实现，使用 `deep` 合并和
+    `knockout` 前缀将允许在每个层级添加或移除类：
 - en: '[PRE14]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Some example data could be for `node/example.server.com.yaml`, where the highest
     level of the hierarchy, `node`, contained the following code:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 一些示例数据可能是 `node/example.server.com.yaml`，其中，层级的最高级别 `node` 包含以下代码：
 - en: '[PRE15]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'In contrast, `datacenter/europe.dc.1.yaml`, a lower hierarchy, contained the
     following:'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 相比之下，`datacenter/europe.dc.1.yaml` 这个较低层级包含了以下内容：
 - en: '[PRE16]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: This would result in a lookup on `profile::base::extra_classes` containing `gdpr`
     and `pci::dss`, in that order, but not `email`.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将导致 `profile::base::extra_classes` 查找包含 `gdpr` 和 `pci::dss`，按此顺序排列，但不包含 `email`。
 - en: 'So far, the examples have used the most common place to set `lookup_options`
     in `common.yaml`. But `lookup_options` performs a hash merge, which will take
     the highest order of each key found. So let’s say, for example, that `/data/common.yaml`,
     the lowest level, contained the following code:'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，示例使用了在 `common.yaml` 中设置 `lookup_options` 的最常见位置。但 `lookup_options` 执行哈希合并，这将获取每个键找到的最高顺序。所以举个例子，假设
+    `/data/common.yaml`，这个最低层级，包含以下代码：
 - en: '[PRE17]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'And `/data/example.server.com.yaml`, at a higher level, contained the following:'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 而 `/data/example.server.com.yaml`，在更高的层级，包含了以下内容：
 - en: '[PRE18]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: Then a lookup that matched the `profile::base::extra_classes` key in `/data/example.server.com.yaml`
     would use the first match lookup and not a `deep` merge.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，在 `/data/example.server.com.yaml` 中匹配 `profile::base::extra_classes` 键的查找将使用第一个匹配查找，而不是
+    `deep` 合并。
 - en: 'Another lookup option is to use regex and the `convert_to` option, which converts
     values to something other than a string. One particularly useful example of this
     is when using values we wish to keep sensitive, we could simply add a regex string
     in the common level of the hierarchy, which would match all keys beginning with
     `profile` and a final key name that ended with `password` and ensure that the
     parameter was converted to `Sensitive`:'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一种查找选项是使用正则表达式和 `convert_to` 选项，将值转换为其他类型，而非字符串。一个特别有用的例子是，当使用我们希望保持敏感的值时，我们可以简单地在层级的公共级别添加一个正则表达式字符串，这将匹配所有以
+    `profile` 开头，且最终键名以 `password` 结尾的键，并确保该参数被转换为 `Sensitive`：
 - en: '[PRE19]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: In the *Keeping data secure* section, there will be more discussion on securing
     data.
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 在*数据安全保持*部分中，将会有更多关于保护数据的讨论。
 - en: While it is possible to essentially override the lookup settings set in the
     data file in the `lookup` function itself, we would strongly recommend against
     this as it could be confusing to have the data saying one thing and the `lookup`
     function behaving otherwise. It could lead to changes in the data that have unexpected
     consequences for the `lookup` function. If it is required, the syntax can be found
     in the documentation at [https://www.puppet.com/docs/puppet/8/hiera_automatic.html#puppet_lookup](https://www.puppet.com/docs/puppet/8/hiera_automatic.html#puppet_lookup).
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然基本上可以在 `lookup` 函数中覆盖数据文件中设置的查找设置，但我们强烈建议避免这样做，因为数据中可能会说明一种情况，而 `lookup` 函数却表现不同。这可能导致数据的变化对
+    `lookup` 函数产生意外的后果。如果确实需要，语法可以在文档中找到：[https://www.puppet.com/docs/puppet/8/hiera_automatic.html#puppet_lookup](https://www.puppet.com/docs/puppet/8/hiera_automatic.html#puppet_lookup)。
 - en: Interpolation is also available in Hiera data via both variables and functions.
     While this can be useful to avoid the repetition of data, it can also make the
     data vastly more complicated than we would want it to be, and in general, we would
     advise against it.
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 插值也可以通过变量和函数在 Hiera 数据中使用。虽然这可以避免数据的重复，但它也可能使数据变得比我们希望的更加复杂，因此一般建议避免这样做。
 - en: 'As with hierarchies using facts, `trusted` and `server_facts` can provide consistent
     variables, and the variables are interpolated in the same way, so a simple example
     would be to set a `config` file that uses the hostname as follows:'
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 与使用事实的层级相同，`trusted` 和 `server_facts` 可以提供一致的变量，且这些变量以相同的方式进行插值，因此，一个简单的例子是设置一个使用主机名的
+    `config` 文件，如下所示：
 - en: '`tivoli_config_file: ''/opt/app/tivoli/client/%{trusted.hostname}.conf''`'
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: '`tivoli_config_file: ''/opt/app/tivoli/client/%{trusted.hostname}.conf''`'
 - en: 'Hiera provides a limited number of special interpolation functions. They are
     not the same as Puppet functions. The following functions can be used to interpolate
     Hiera data:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: Hiera 提供了有限数量的特殊插值函数。它们不同于 Puppet 函数。以下函数可用于插入 Hiera 数据：
 - en: '`lookup` (or `hiera`)'
+  id: totrans-126
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`alias`'
+  id: totrans-127
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`literal`'
+  id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`scope`'
+  id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Using the same format as variables, a function can be declared as `${<function>(<arguments>)}`.
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
 - en: 'The `lookup` function allows a Hiera value to be looked up from within the
@@ -656,42 +942,54 @@
     the client’s location or be used repeatedly to provide the full location of packages.
     The following example shows how two binaries could provide their full paths using
     a lookup and reduce repetition:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-132
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: This would also make maintenance much simpler; if the artifactory server was
     to change, only one line would need to be updated.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: 'The `alias` function allows for data structures in Hiera data to be returned
     since `lookup` would only return a string. So, if the `base` profile had an `extensions`
     parameter that took an array of strings and we wanted to pass the same list of
     extensions to another profile, `exampleapp`, it would be coded like this:'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-135
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'The `literal` function allows the escaping of the percentage sign (`%`) so
     that it does not assume it is for a variable or function to be interpolated. To
     do this, we use the `%{literal(''%'')}` function where a `%` sign is to be used.
     This can be useful in scenarios such as Apache configuration files or for Windows
     environmental variables; if, for example, we wanted to have the `%PACKAGEHOME%/External`
     string at `profile::nuget::`, then the following code could be used:'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE22]'
+  id: totrans-137
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'The `scope` function is likely only to be used in legacy code. It really just
     interpolates variables and only had a use case when Puppet variables were dynamically
     scoped. The same Tivoli example in this section would be written as `tivoli_config_file:
     ''/opt/app/tivoli/client/%{scope(facts.hostname)}.conf''`.'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: Using custom backends
+  id: totrans-139
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -699,16 +997,19 @@
     written or downloaded from the Forge and configured into Hiera. It is beyond the
     scope of this book to write custom backends but Puppet’s documentation covers
     how to write them at [https://www.puppet.com/docs/puppet/8/hiera_custom_backends.html#custom_backends_overview](https://www.puppet.com/docs/puppet/8/hiera_custom_backends.html#custom_backends_overview).
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: Custom backends use one of three data types, selected based on their performance
     requirements for the type of data being accessed.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: The `data_hash` backend type, as was seen for the built-in backend, is used
     for data sources that are cheap to read, such as files on a disk. This profile
     is used where the data is small, static, can be read all at once, and most of
     it gets used. It returns a hash of key-value pairs.
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
 - en: The `lookup_key` type is used for data sources that are expensive to read, such
@@ -716,12 +1017,14 @@
     part is used, and it can change during compilation. It returns a key pair. The
     most commonly used custom backend is `hiera-eyaml` for encrypting Hiera, which
     will be covered in detail in the *Keeping data* *secure* section.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: The `data_dig` backend type is used for data sources that access arbitrary elements
     of a collection, such as a database. With a similar profile to `lookup_key` but
     accessing subkeys of elements to return a key pair, the function will dig into
     a dotted key.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: A final data type to mention is `hiera3_backend`, which was only relevant as
@@ -729,9 +1032,11 @@
     but details can be found in the Puppet documentation at [https://www.puppet.com/docs/puppet/8/hiera_config_yaml_5.html](https://www.puppet.com/docs/puppet/8/hiera_config_yaml_5.html).
     The Puppet documentation advises how to migrate from Hiera 3 backends if you encounter
     them in legacy code at [https://www.puppet.com/docs/puppet/8/hiera_migrate.html](https://www.puppet.com/docs/puppet/8/hiera_migrate.html).
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: From a user perspective, Hiera version 5 is an evolution of Hiera 3, with Hiera
@@ -739,16 +1044,19 @@
     while Hiera 3 was its own standing implementation. Puppet 7 and below has a dependency
     on a Ruby gem for Hiera version 3 to support any legacy Hiera 3 backends where
     *Hiera:Backend* was extended. This dependency was removed in Puppet 8.
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
 - en: These data types can then be combined with the file paths, as already discussed
     with the built-in backends, but with the additional paths of `uri` and `uris`
     to allow the direction to URIs such as web sources.
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
 - en: The `options` parameter then allows a hash of anything required by the custom
     backend, such as credentials or key information, and the content will depend on
     the implementation.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: 'Most modules will explain in their README file how to use the `options` parameter.
@@ -757,30 +1065,39 @@
     code shows an example assuming that the keys would all start with `secret_`, come
     from a `vault.example.com` server, and have mounts for two teams (`digital` and
     `trade`), which used the node name, location, and `common` for their secret hierarchy:'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE23]'
+  id: totrans-151
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'Another example is [https://forge.puppet.com/modules/tragiccode/azure_key_vault/](https://forge.puppet.com/modules/tragiccode/azure_key_vault/),
     allowing access to secrets in Azure, which, if we were to create a lookup based
     on the department assigned to the server looking for keys starting with `secret`,
     would look like the following:'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE24]'
+  id: totrans-153
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: In [*Chapter 13*](B18492_13.xhtml#_idTextAnchor321), the **Puppet Data Service**
     (**PDS**) will be examined, along with a series of backends useful for extending
     Puppet’s data access.
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
 - en: Now that we have reviewed how Hiera works, let us look at how it works in the
     different layers of Puppet.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: Hiera layers
+  id: totrans-156
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -788,6 +1105,7 @@
     but there are three layers of hierarchy, each of which contains its own configuration
     of levels. When a lookup is performed by Puppet as part of a Puppet run, it will
     look through each of these layers, examining the levels of hierarchy within each.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: The global layer is the first layer and is configured by default in `$confdir/hiera.yaml`,
@@ -799,6 +1117,7 @@
     reviewed in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272). This would leave
     control of the file localized to the Puppet server, which would only be desirable
     if you wanted to step around the code deployment process.
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: The environment layer is the next and main layer of data, and it is configured
@@ -810,6 +1129,7 @@
     the environments, containing a file called a Puppetfile detailing the sources
     of the modules, at which version they should be deployed, and where they should
     be deployed.
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
 - en: 'A choice needs to be made as to whether the `hiera.yaml` file and data will
@@ -821,11 +1141,14 @@
     or group and containing it within the control repo would allow too much access/visibility.
     For example, if our `hiera.yaml` file was configured to use data as a source path,
     we could add Hiera data from a module into that path with an entry into a Puppetfile:'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE25]'
+  id: totrans-161
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'The final layer is the module layer, and this is configured by a `hiera.yaml`
     file inside each module, typically with a data folder in the module too. So, when
     deployed in an environment on a server, the `hiera.yaml` file would be in a location
@@ -839,18 +1162,23 @@
     be configured to allow for increasing granularity of specific OS versions, going
     from defaults and a general OS family such as Windows to a specific full OS version,
     such as AlmaLinux-8.5, as shown in the following code:'
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE26]'
+  id: totrans-163
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: Note
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: The module layer is often seen as an alternative to the `params.pp` class, which
     used to be part of the module pattern and contained default values and Hiera lookup
     calls. It was used before the modern Hiera layers existed with automatic parameter
     lookups.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: You can only bind data keys in the module’s namespace, so in the `exampleapp`
@@ -860,6 +1188,7 @@
     is used to allow application teams to have full control of their environmental
     data for modules without being able to affect other modules. This might be a consideration
     for the profiles modules owned by a particular team who wishes to manage expectations.
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
 - en: '`default_hierarchy` is sometimes known as the fourth layer and is only available
@@ -867,17 +1196,22 @@
     within the module hierarchy. The key difference with this layer is that it will
     only be called if there is no match within the other three layers, so there is
     no merging behavior:'
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE27]'
+  id: totrans-168
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Note
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
 - en: '`default_hierarchy` produces the same behavior as the `params.pp` approach
     did since any match in the three Hiera layers will ignore and not merge any matching
     values.'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
 - en: Having reviewed these layers, this leads to a question of how should the hierarchies
@@ -891,95 +1225,122 @@
     method should allow less data to be managed in Hiera, and if built-in facts are
     not enough, custom facts can be created and multiple facts can be used in a path
     together.
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: The global level lends itself to just being structured on the name of the node
     and data common to all nodes since it would only be used for overrides outside
     of Puppet code environment control.
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
 - en: 'For the environment layer, the common structure of node data to look at is
     as follows:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
 - en: The name of the node
+  id: totrans-174
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The node owner
+  id: totrans-175
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The node’s purpose
+  id: totrans-176
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The location of the node
+  id: totrans-177
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Data common to all nodes
+  id: totrans-178
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'This could lead to a simple hierarchy such as the following:'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE28]'
+  id: totrans-180
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: The module layer, as discussed, then just becomes a focus for defaults for values
     often based on facts such as OS version and platform.
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
 - en: Do not use the `environment` fact itself in any hierarchy. Use the environment
     layer for environment-based data.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: Lab – add data to a module
+  id: totrans-184
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: In this lab, download and update the Grafana module from [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)to
     contain defaults in Hiera data instead of on the parameters.
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
 - en: To do this, let us assume the `common.yaml` file will contain all the present
     defaults in `init.pp`.
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
 - en: 'For Red Hat, we will have the following: d`ownload_source = ''`[https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm](https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm)`''package_provider
     =''yum''`.'
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: 'While for Windows, we will have the following:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE29]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: You can refer to [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch08/grafana](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch08/grafana).
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: An example answer is at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/grafana.](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/grafana
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
 - en: )
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: Later, in the *Keeping data secure* section, it will be shown how the password
     can be properly secured and not just in plain text in the YAML file.
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
 - en: In this section, we have seen how to use the three layers of Hiera and how to
     structure the hierarchy in these layers. Now, we will look at when data should
     be used in Hiera and when it should just be used in code directly.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: Deciding when to use static code or dynamic data
+  id: totrans-195
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -987,24 +1348,29 @@
     over the code examples covered in this book, it probably raises the question about
     when to write code and when to use data. *Figure 9**.1* highlights a decision
     tree to follow:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
 - en: '![Figure 9.1 – Data or code decision tree](img/B18492_09_01.jpg)'
+  id: totrans-197
   prefs: []
   type: TYPE_IMG
 - en: Figure 9.1 – Data or code decision tree
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: The first key thing is if the data doesn’t vary over nodes and it’s only used
     once, the simplest thing is to hardcode the data in Puppet code – for example,
     just directly setting the owner of a file as `exampleuser` in a file resource
     attribute.
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: If a value is used multiple times, then there is clearly a value in assigning
     a variable and using this variable where it is required. This simplifies maintenance
     if the value needs to be changed but does mean you have to keep track of variables
     when reading the code.
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: If, on the other hand, there is variation across nodes and overriding the value
@@ -1014,20 +1380,24 @@
     no longer clearly visible looking at the code and require translation and thought.
     So, if simple conditional logic can be used, it’s generally better to keep the
     values in code.
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
 - en: Once logic becomes more complicated and can vary based on combinations of conditions,
     then we can use Hiera data and an auto parameter lookup, or if it was found to
     be required, the `lookup` function.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
 - en: It is also best throughout this to use the simplest method available at the
     time and escalate through the levels of complexity as code changes and grows.
     Creating complex data structures and performing abstraction for the future simply
     creates complexity and requires more work without really gaining benefits.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
 - en: Keeping data secure
+  id: totrans-204
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1037,6 +1407,7 @@
     to set the state. In this section, we will discuss the methods available to secure
     data, what levels data can be secured at, and the limitations of the methods used
     at each level.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: 'The most common first step is to secure data in storage. This can be achieved
@@ -1044,15 +1415,19 @@
     This module creates `pkcs7` keys, which are then used to encrypt and decrypt data.
     Having followed the instructions in the module to create and distribute keys,
     a hierarchy can be created, such as the following:'
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE30]'
+  id: totrans-207
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: It can simplify the hierarchy to note that the `eyaml` backend can read YAML
     files too, and there’s no reason to separate `yaml` and `eyaml` files into different
     hierarchies assuming their path and options are the same, as shown in the previous
     example.
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
 - en: '`hiera-eyaml` is fine for simple encryption and limited numbers of users involved
@@ -1060,15 +1435,19 @@
     becomes more practical rather than sharing signing keys amongst multiple teams.
     Once the configuration and key management are done, this simply varies by using
     `gpg_gnugpghome` options rather than `pkcs7` key options, such as the following:'
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE31]'
+  id: totrans-210
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: An alternative to these encrypted data file approaches is if an appropriate
     secure key store exists, such as HashiCorp Vault, or a cloud-native key store,
     such as Azure Key Vault, then using a backend that can access these services will
     ensure data is securely stored.
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
 - en: Regardless of the backend choice, this will only ensure the data is secured
@@ -1077,39 +1456,50 @@
     to convert the parameter type to `Sensitive` in Puppet 5.5 and above, and care
     should be taken to ensure all secure parameters are covered either via wildcards
     or explicit naming.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
 - en: Care must be taken to use the `Sensitive` data type well; it can be easy to
     either mistakenly keep it secured so the value can’t be used where it is needed
     or accidentally expose it when using the `unwrap` function.
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
 - en: 'When using `file` and `content`, for example, the following attempt to put
     `secret_value` into a `/etc/secure` file would be exposed on a file diff, which,
     as discussed in [*Chapter 3*](B18492_03.xhtml#_idTextAnchor048), is when a comparison
     of changes to files is recorded into the report logs:'
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE32]'
+  id: totrans-215
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: This could be prevented by setting the `file_diff` parameter to `false` or setting
     the server not to use file diffs.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
 - en: 'Similarly, for templates, care must be taken. If using Puppet 6.2 or greater,
     then templates will work directly with Sensitive values and you can simply use
     the Sensitive value in a template:'
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE33]'
+  id: totrans-218
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: 'For versions below Puppet 6.2, you would need to unwrap the variable in the
     template and then mark the contents as Sensitive, as in this example:'
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
 - en: '`content => Sensitive(epp(''example.epp'', { ''password'' =>` `unwrap($secure_password)})),`'
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
 - en: Using `Sensitive` well keeps the data out of the logs, but unfortunately, not
@@ -1119,33 +1509,41 @@
     and using a `Deferred` function decrypts them at the time of catalog application.
     This keeps secrets out of the catalog and the report produced after a catalog
     is applied.
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
 - en: 'Assuming the instructions to configure `node_encrypt` have been followed on
     the infrastructure, this means the line assigning values to the `content` parameter
     in the previous piece of code could be updated to invoke the `node_encrypt::secret`
     function as follows:'
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE34]'
+  id: totrans-223
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: Note
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
 - en: The current version of `node_encrypt` relies on `Deferred` functions, which
     became available in Puppet 6, so version 0.4.1 needs to be used to work on older
     versions, and you would use the `node_encrypt::file` type instead of the `file`
     type to encrypt file resources.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
 - en: This section has shown how to keep data secure in storage, transport to catalog,
     and report processing, and some of the issues that can be experienced. In the
     next section, we will discuss general issues and problems when handling data in
     Hiera.
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
 - en: Lab – use eyaml to store a secret
+  id: totrans-227
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1156,31 +1554,42 @@
     file on the Puppet primary server. The lookup has a default of not set. In this
     lab, you will encrypt a secret and add it within the OS level so the content of
     the file changes.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
 - en: 'SSH to the primary server and elevate to root:'
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE35]'
+  id: totrans-230
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'Run the `eyaml encrypt –p` command from within the `/etc/puppetlabs/puppet`
     directory and enter a secret of your choice at the prompt:'
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE36]'
+  id: totrans-232
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: 'Copy the output after the string starting with `ENC[` and paste it into the
     data section at `/etc/puppetlabs/puppet/data/os/RedHat.eyaml` so it contains something
     like this:'
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE37]'
+  id: totrans-234
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: Run `puppet agent –t` and observe the change in the `/var/tmp/secret_example`
     content to the content you set.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: This was a very simple example and it should be noted, as was highlighted in
@@ -1189,13 +1598,16 @@
     section, by using the Sensitive option in the lookup `options` parameter. Additionally,
     the public key used for `eyaml` could be copied to a desktop to encrypt secrets,
     if that was secure enough for your organization’s policies.
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
 - en: Now that we have fully reviewed the Hiera configuration, we will show how we
     can understand issues with lookup and data.
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
 - en: Pitfalls, gotchas, and issues
+  id: totrans-238
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1203,16 +1615,19 @@
     complicated to understand why certain answers have been generated or where errors
     have been inserted. This section will focus on approaches to understanding and
     debugging data lookups and tools that can make the data more visible.
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
 - en: 'Hiera problems tend to fall into a few categories: syntax, formatting, backend
     communication and performance issues, hierarchy ordering mistakes, and many others.'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
 - en: The `puppet lookup` command is the best way to test Hiera data and is, in effect,
     like the `lookup` function used in Puppet code. Using this on the primary server,
     the basic syntax of this command is `puppet lookup <key> --node <node_name> --``environment
     <environment_name>`.
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
 - en: This command will return the value, if found, or nothing. It is important to
@@ -1222,84 +1637,105 @@
     levels of logging to allow you to understand why errors such as syntax, formatting,
     or the backend are being generated, while the latter is focused on showing how
     a value was reached, where Hiera looked, and what it found.
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
 - en: 'For example, an `explain` lookup on `motd::content` might look like the following:'
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE38]'
+  id: totrans-244
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: 'Looking at the output from debug, we see far more information with regards
     Facter and other system work going on, as can be seen from the command and sample
     output as follows:'
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE39]'
+  id: totrans-246
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: Without a node being provided, the lookup will assume the lookup is for the
     server you are running the command from, and the environment will default to `production`.
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
 - en: 'In terms of syntax and formatting problems, one of the most common errors is
     when the opening `---` of the YAML file is malformed. This can happen in a couple
     of ways:'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
 - en: 'A space is inadvertently added to the start of the line or a Unicode character
     conversion takes place, changing it to `—`. In this case, an error in `debug`
     will look like this:'
+  id: totrans-249
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`Error: Could not run: (<unknown>): mapping values are not allowed in this
     context at line 2` `column 8`'
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
 - en: 'If a space is inserted within the dashes, such as `-- -`, then an error in
     `debug` will be seen like this:'
+  id: totrans-251
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`Error: Could not run: (<unknown>): did not find expected ''--'' indicator
     while parsing a block collection at line 1` `column 1`'
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
 - en: 'Another common syntax mistake is using key-value pairs without a space between
     the colon symbol (`:`) and the value; so `key: value` and `key : value` are valid
     but `key:value` is not and it will error in debugging like so:'
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
 - en: '`Error: Could not run: (<unknown>): mapping values are not allowed in this
     context at line 3` `column 10`'
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
 - en: 'If tabs are used instead of spaces for indentation, then in debugging, an error
     will be caused such as the following:'
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
 - en: '`Error: Could not run: (<unknown>): found character that cannot start any token
     while scanning for the next token at line 4` `column 1`'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
 - en: For formatting, using single quotes in data with variables will result in a
     literal string of the variable name being returned instead of interpolation.
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
 - en: File permissions can also be an issue and, therefore, it is worth ensuring you
     are running the lookup commands as the same user, as Puppet will be typically
     running under the `pe-puppet` or `puppet` user.
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
 - en: Using `--debug`, it can be useful to see whether custom backends are the areas
     that experience issues, errors, or slowdowns. In general, we would recommend examining
     patterns such as the PDS and external data providers.
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
 - en: Be careful to note this will not debug the actual data but only the `hiera.yaml`
     file, data files that are not valid YAML will just be ignored, which can be seen
     using `--explain`.
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
 - en: In terms of hierarchy problems, this is where the `--explain` flag will prove
@@ -1307,6 +1743,7 @@
     the hierarchies found, the merge strategy, and the paths examined in detail so
     that it becomes clear how it stepped through the hierarchy and how it may not
     be working as expected.
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
 - en: Depending on what variables are being used in your hierarchy, it may be required
@@ -1315,22 +1752,27 @@
     `$server_facts` variables will be available. We strongly advise against using
     arbitrary values from manifests as these can vastly overcomplicate the lookup
     and produce unpredictable results.
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
 - en: From this, it can be seen that you always want to use the `Facter` array, to
     avoid the risk of module variables and top-scope `Facter` variables clashing.
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
 - en: Some other options can be useful to test what would happen if you changed the
     configuration, such as changing the merge strategy with the `--merge` flag or
     by providing updating facts using `--facts`, for example.
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
 - en: The full command reference of options for lookups can be seen at [https://www.puppet.com/docs/puppet/latest/man/lookup.html](https://www.puppet.com/docs/puppet/latest/man/lookup.html).
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
 - en: If updating the global Hiera file, be careful to restart the **Puppet Server
     Services** to ensure it is re-read.
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
 - en: Having touched on the point previously in the *Accessing data* section, we do
@@ -1341,6 +1783,7 @@
     will mask issues in Hiera data or code that won’t be noticed, as the code is successfully
     applied with defaults. The key thing to avoid is passing a default value that
     then requires lots of logic in Puppet code to work out how to translate it.
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
 - en: Classification in Hiera is possible since some users choose to look up Hiera
@@ -1350,6 +1793,7 @@
     much data into Hiera, it can abstract away from clear coding since the data is
     then not directly visible in the code. So, it is best to consider whether the
     complexity elevation is worth it.
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
 - en: One of the issues of Hiera can be its structure, which makes it inaccessible
@@ -1358,103 +1802,131 @@
     ) is an excellent option as it allows graphical search, updates, and deletion
     of Hiera data. However, in production environments, this should be limited to
     just viewing data.
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
 - en: '![Figure 9.2 – Hiera Data Manager example lookup](img/B18492_09_02.jpg)'
+  id: totrans-270
   prefs: []
   type: TYPE_IMG
 - en: Figure 9.2 – Hiera Data Manager example lookup
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
 - en: Another option to make Hiera data more accessible for self-service is the PDS,
     which will be discussed in detail in [*Chapter 13*](B18492_13.xhtml#_idTextAnchor321).
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
 - en: Lab – troubleshoot Hiera
+  id: totrans-273
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'Troubleshoot the Hiera data in the production environment:'
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
 - en: 'SSH to the primary server, elevate to root, and deploy the `lab_error` environment:'
+  id: totrans-275
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '[PRE40]'
+  id: totrans-276
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: 'Perform a lookup with the `debug` flag of the `profile::error::example` key
     on the primary server in the `lab_error` environment and work through the errors
     found, correcting them in your control repo and running the `code deploy` command
     from the previous step:'
+  id: totrans-277
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '[PRE41]'
+  id: totrans-278
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: Resolve the errors in the data in `controlrepo-chapter9/data` and `hiera.yaml`.
+  id: totrans-279
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Run the same command with `explain` to understand how it gets to the current
     solution and why it is not finding a value based on its `os.family` fact:'
+  id: totrans-280
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '[PRE42]'
+  id: totrans-281
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'Update the Hiera data in the `control` repo branch, `lab_error`, and redeploy
     so that the lookup now finds the value for the `os.family` fact of the primary
     node:'
+  id: totrans-282
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '**puppet code deploy environment** **lab_error --wait**'
+  id: totrans-283
   prefs: []
   type: TYPE_NORMAL
 - en: '**puppet lookup profile::error::example --debug --****environment lab_error**'
+  id: totrans-284
   prefs: []
   type: TYPE_NORMAL
 - en: Check the commented solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/data_solutions](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/data_solutions).
+  id: totrans-285
   prefs: []
   type: TYPE_NORMAL
 - en: 'As part of creating the lab environment in the *Technical requirements* section,
     HDM has been installed using the `puppet-HDM` module. Try using HDM to view the
     data following these steps:'
+  id: totrans-286
   prefs: []
   type: TYPE_NORMAL
 - en: Open a web browser at `http://<public IP` `of puppetserver>:3000`.
+  id: totrans-287
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Complete the signup details to create an admin user (the details are not important).
+  id: totrans-288
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Click `non-admin user` (the details again are not important).
+  id: totrans-289
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Click the admin user name on the top right, log out, and then log back in as
     the non-admin user you created.
+  id: totrans-290
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Select `environment production` and `lab_error` in turn.
+  id: totrans-291
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Explore the Hiera keys and values visible to HDM in each environment.
+  id: totrans-292
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-293
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1467,11 +1939,13 @@
     could be put into data files and how lookups can be performed; the types of merge
     were examined here as well as how special setups such as `knockout` prefixes can
     be used in arrays.
+  id: totrans-294
   prefs: []
   type: TYPE_NORMAL
 - en: We then showed how some custom backends can be used that have data types on
     different profiles; typically, these are specific integrations such as Vault or
     EYAML from the Forge, or in-house developed integrations to access data.
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
 - en: We then covered how Hiera worked over three layers – global, environment, and
@@ -1481,6 +1955,7 @@
     to structuring hierarchies were then discussed, including an approach that stepped
     through the name of the node, the node owner, the node’s purpose, the location
     of the node, and common to all nodes’ data.
+  id: totrans-296
   prefs: []
   type: TYPE_NORMAL
 - en: A review of how to make decisions on whether to use data in code or in Hiera
@@ -1489,6 +1964,7 @@
     requiring the full hierarchy to be described accurately. It was advised not to
     build ahead but to refactor as required so as not to make data more complicated
     than it needs to be.
+  id: totrans-297
   prefs: []
   type: TYPE_NORMAL
 - en: We then discussed how to keep data secure in storage and transport, and when
@@ -1498,6 +1974,7 @@
     values were not exposed in logs or code. This did not prevent values in catalogs
     and reports, and the `node_encrypt` module was shown to allow resources and values
     to be encrypted and be applied at configuration time using `Deferred` functions.
+  id: totrans-298
   prefs: []
   type: TYPE_NORMAL
 - en: Approaches to debugging and troubleshooting were then reviewed, highlighting
@@ -1506,6 +1983,7 @@
     and failures with backends. The advice was given to be careful with using Hiera
     as a classifier, as this would abstract classification information away from code,
     but highlighted that the PDS did use this approach in later chapters.
+  id: totrans-299
   prefs: []
   type: TYPE_NORMAL
 - en: In the next chapter, having reviewed the Puppet language in detail, the focus
@@ -1517,9 +1995,11 @@
     such as facts, reports, and catalogs, allowing discovery and examination with
     the **Puppet Query Language** (**PQL**). Compile servers will then be discussed
     as Puppet’s method of scaling horizontally.
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
 - en: Part 3 – The Puppet Platform and Bolt Orchestration
+  id: totrans-301
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1531,26 +2011,32 @@
     procedural scripts and code, which can be traditional scripts in various languages
     or plans based on the Puppet language. We will then review how you can monitor,
     tune, and integrate Puppet infrastructure with various tools and third-party products.
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
 - en: 'This part has the following chapters:'
+  id: totrans-303
   prefs: []
   type: TYPE_NORMAL
 - en: '[*Chapter 10*](B18492_10.xhtml#_idTextAnchor252), *Puppet Platform Parts and
     Functions*'
+  id: totrans-304
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[*Chapter 11*](B18492_11.xhtml#_idTextAnchor272), *Classification and Release
     Management*'
+  id: totrans-305
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[*Chapter 12*](B18492_12.xhtml#_idTextAnchor293), *Bolt for Orchestration*'
+  id: totrans-306
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[*Chapter 13*](B18492_13.xhtml#_idTextAnchor321), *Taking Puppet Server Further*'
+  id: totrans-307
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
