@@ -1,0 +1,1430 @@
+- en: '6'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Verifying Your Code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: For most projects, the first thing a **GitLab CI/CD** pipeline should do is
+    *verify the code*. Different projects will rely on different tasks to perform
+    this critical step, but they usually involve some combination of checking the
+    code quality and running automated functional tests. As a prerequisite for certain
+    kinds of verification, some projects will need to build their code first. This
+    chapter focuses on building and then verifying your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll first discuss whether building the code is necessary, and if so, how to
+    configure a GitLab CI/CD pipeline to carry out that task. Then, we’ll talk about
+    how to use a pipeline to run GitLab’s built-in code quality scanner. Next, we’ll
+    explain how to run automated functional tests within a pipeline. Then, we’ll cover
+    a fascinating variety of automated testing called **fuzz testing**, which can
+    find problems that traditional automated functional tests might miss. We’ll touch
+    on GitLab’s accessibility testing, which ensures that your code can be used by
+    a wide range of people. Finally, we’ll briefly mention a few other ways that you
+    can verify your code, though we won’t have room to describe them in detail. By
+    the end of the chapter, you’ll have an array of tools at your disposal for making
+    sure your code is well written and does what it’s supposed to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These are the main topics of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building code in a CI/CD pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Checking code quality in a CI/CD pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Running automated functional tests in a CI/CD pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Fuzz testing in a CI/CD pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Checking accessibility in a CI/CD pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Additional ways to verify your code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As with the previous chapters, you’ll get the most out of this chapter if you’ve
+    got an account on a GitLab instance (*self-managed* or *Software-as-a-Service*)
+    that you can log in to and use for practicing and experimenting with the concepts
+    discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building code in a CI/CD pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: At the risk of oversimplifying some of the mechanics that happen behind the
+    scenes when you run software, we can generally think of *interpreted* computer
+    languages such as Python or Ruby as executing raw source code, whereas *compiled*
+    languages such as Java, C, or C# must convert that source code into a runnable
+    form by compiling it, and then execute the compiled version of the program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is an important distinction to keep in mind when configuring a pipeline
+    to verify your code because it means that if your project contains any code written
+    in a compiled language (even if it’s only a small portion of your overall project),
+    you probably need to include a build job in your pipeline before any verification
+    jobs take place. We say *probably* because some of the jobs that typically run
+    during the verification stage of a pipeline (for example, Code Quality) look directly
+    at source code, whereas others interact with code as it runs. So, if your pipeline
+    only uses verification scans that focus on source code, you can omit the build
+    step no matter what language you’re using. If you want to include automated functional
+    tests or fuzz testing in your pipeline, you *will* need to build your code first,
+    so read on!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Every language builds its code in a different way, using different tools. Even
+    within a single language, there are sometimes multiple tools or techniques for
+    building code. Let’s look at two different ways to compile Java code and one way
+    to compile C code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These examples are meant to give you the big picture of how to build code within
+    a GitLab CI/CD pipeline. They are not meant to be comprehensive examples of all
+    the ways to accomplish this task. There are so many different languages and tools
+    that we can only give you a few bare-bones examples and then let you adapt and
+    expand them to work with your own languages, tools, constraints, and preferences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compiling Java with javac
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Outside of simple training applications, real-world Java projects rarely use
+    the `javac` compiler to convert Java source code (i.e., files with the `.java`
+    extension) into compiled Java classes (i.e., files with the `.class` extension).
+    Using the `javac` tool is effective when you’re only dealing with a few files,
+    but it can become cumbersome as projects grow in complexity. But just like peanut
+    butter and jelly sandwiches can be a great introduction to cooking even though
+    they’d never be served at a formal dinner at Buckingham Palace, `javac` is a great
+    way to introduce new GitLab users to the concept of using CI/CD pipelines to compile
+    Java code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding your Java application
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s keep things simple by creating a single file application and a single
+    Java package called `com.hatsforcats`. You can use GitLab’s Web IDE editor to
+    create a directory called `src/com/hatsforcats` to store your source code. Inside
+    that directory, use the Web IDE to create a file called `Login.java`. Add this
+    trivial Hello World-style Java code to that file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Configuring your pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Now that your app has been added to the project, it’s time to configure your
+    pipeline. Start with an empty `.gitlab-ci.yml` file in the root of your project’s
+    repository and define a `build` stage for your pipeline using the `stages` keyword:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, you’ll define a pipeline job that lives within the *build* stage and
+    runs `javac`. Let’s stipulate a few extra requirements for this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All the Java source files belong to the `com.hatsforcats` Java package.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Your team’s coding standards require you to put all source code within a `src/`
+    directory that lives in the project’s root directory.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Compiled files should end up in a `target/` directory that lives in the project’s
+    root directory.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To compile your code while satisfying these criteria, you’ll need to define
+    a job in `.gitlab-ci.yml` to do the work. Call it something obvious and put it
+    in the *build* stage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Within that job definition, you’ll want to specify which Docker image the job
+    should run within. The job will need access to the `javac` compiler, so a good
+    image to use is the latest version of `openjdk`. Add this to the job definition
+    (remember to watch your indentation):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the job needs to invoke the Java compiler. Any commands that you list
+    under the `script` keyword will run when the pipeline executes that job:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: No doubt you can figure out the syntax of the `javac` command from the requirements
+    given earlier, but if not, feel free to refer to the Java compiler’s documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Believe it or not, that’s all you need in order to compile Java code within
+    a GitLab CI/CD pipeline!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But to demonstrate that the job works as expected, let’s add more lines to
+    the `script` section of the `compile-java-with-javac` job. The first line will
+    show the contents of the `target/` directory after `javac` has worked its magic.
+    If the compiler worked, this command will display the compiled version of your
+    Java source file when the job runs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next lines will execute your compiled `Login.class` code to prove that
+    it has compiled correctly. Normally, you wouldn’t run your code in a job that’s
+    dedicated to building it, but you’re doing it in this case simply to demonstrate
+    that the compile actually happened:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s the complete text of `.gitlab-ci.yml` that you have assembled. If you’re
+    following along, make sure that your version of that file contains exactly this
+    text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Commit this file and navigate over to the list of pipelines in your project.
+    Zoom in on the pipeline run that was automatically triggered by your commit, zoom
+    in on the `compile-java` job, and see whether you can find text similar to this
+    snippet at the end of the job’s output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can see that the `javac` command ran without emitting any errors, the `ls`
+    command shows a compiled version of `Login.java`, and the class produced the expected
+    output when it was executed. Success!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compiling Java with Maven
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Let’s try a slightly more complicated, albeit probably more realistic, way of
+    compiling the same Java project you set up in the previous section. Instead of
+    using the Java compiler directly, let’s use `*.java` file into a compiled `*.``class`
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring Maven
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Maven is configured via a special file called `pom.xml`. There’s no need to
+    get into the structure or content of that file here, but if you’re curious about
+    what each section does, the Maven documentation can give you all the details.
+    Copy this bare-bones content into a new `pom.xml` file in your project’s root
+    directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding your Java application
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If you’re re-using the same project from the preceding `javac` example, you
+    already have a Java program added to the project’s repository. If you’re using
+    a new project, add this Java code to a new file called `Login.java` in a new `src/com/hatsforcats/`
+    directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Configuring your pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Either make a new `.gitlab-ci.yml` file in your root directory or replace all
+    the content in your existing `.gitlab-ci.yml` file with this configuration code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You’ll notice that the pipeline configuration code for a Maven-powered build
+    is similar to the configuration code for a Java-compiler-powered build, but with
+    a few key differences:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A different value after the `image` keyword means that the GitLab Runner will
+    execute the job within a Maven-based Docker image instead of a Java-based Docker
+    image.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The command to compile the code uses `mvn` instead of `javac`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Maven puts compiled classes in a different directory than the source code by
+    default, so you don’t have to explicitly tell it to do so like you did with `javac`
+    (although notice that its default directory for compiled files isn’t quite the
+    same as the one you specified with `javac`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'After committing this configuration code, you can view the details of the pipeline
+    that is automatically triggered and zoom in on the `compile-java-with-maven` job.
+    You should see something similar to this snippet at the end of the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Maven-driven compile worked correctly, the compiled class appears where
+    you expected it to, and the class gives the expected output when you run it. You’ll
+    never need to run the `mvn compile` command manually again!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compiling C with Gnu Compiler Collection (GCC)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Let’s take a look at building a project based on the **C** programming language.
+    Normally, you would use a tool such as Make to build your C project, just like
+    you use Maven to build a Java project. But to keep this example as simple as possible,
+    you’ll rely on the good old GCC to compile some C code directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re following along at home, you can either make a new project for your
+    C program, or you can re-use the project that you used for the two earlier Java
+    examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding your C application
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Navigate to your project’s repository in the GitLab GUI, add a new file at
+    the root directory called `login.c`, and paste this simple C code into it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Configuring your pipeline
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Setting up a pipeline to use GCC to compile C code isn’t terribly different
+    from what you saw in the Java examples. Here are the main differences:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The job runs in a Docker image that includes the GCC tools.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The job definition’s `script` keyword specifies using `gcc` instead of `mvn`
+    or `javac` to build your code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The job runs the compiled code directly instead of invoking a JVM with the `java`
+    command.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The basic CI/CD configuration code for building and running a C program with
+    GCC could look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: To repeat something we said earlier, you normally would not run your code in
+    the same job as you built it—in fact, you might not run it at all in a pipeline.
+    But you’re running it here just to demonstrate that compiling worked as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'And here’s a snippet from the output of this job, showing that your C program
+    compiled and ran correctly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Storing built code as artifacts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There’s one more keyword you need to know before you can move on to pipeline
+    stages that test the code that you just built: the `artifacts` keyword.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any files that a pipeline job creates—including compiled versions of files that
+    are generated during a build job—are deleted as soon as the job completes. This
+    is very different from how build tools work on the command line. If you type `javac
+    MyApp.java` in a terminal, the `MyApp.class` file that is generated will stick
+    around on your filesystem until you delete it. But in a GitLab CI/CD pipeline,
+    every job operates in its own, self-contained environment. This means that if
+    you compile some files in a `build-java` job and then try to test them in a `test-java`
+    job that lives in a later stage, the `test-java` job will *not* be able to see
+    the files that you so carefully built earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Fortunately, the `artifacts` keyword gives you a workaround. This keyword lets
+    you specify certain files or directories that GitLab should preserve from one
+    job and make available to all later jobs. For example, to preserve the executable
+    `login` file that you generated in the `compile-c` job, you could add these two
+    lines to the bottom of the `compile-c` job definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can specify more than one file to preserve, and you can specify one or
+    more directories to preserve in addition to any individual files. You can also
+    specify subdirectories or files to exclude from the list of artifacts. For example,
+    to save the entire contents of the directory that Maven puts compiled files in,
+    except for files that start with `Test` that exist in any subdirectory, you could
+    add these lines to the bottom of the `compile-java-with-maven` job from earlier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `artifacts` keyword is one of the most important keywords that you’ll use
+    when configuring CI/CD pipelines, and forgetting to use it when it’s needed is
+    a common mistake. If your pipeline isn’t working the way you expect it to, one
+    of the first troubleshooting steps you should try is to check whether you’re specifying
+    artifacts in all of the jobs that generate files that you want to access in later
+    jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that you’ve learned when and how to build your code in a CI/CD pipeline,
+    let’s move on to what is typically the next pipeline step: *checking the quality
+    of* *your code*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Checking code quality in a CI/CD pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One of the many scanners that GitLab makes available to CI/CD pipelines is a
+    special feature that makes sure your project’s code adheres to certain quality
+    standards. GitLab calls this feature, unsurprisingly, **Code Quality**. If you’ve
+    used any sort of linting tool before, you can think of this feature as a turbocharged
+    linter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Code Quality feature relies on an outside service called **Code Climate**.
+    Although this service can scan code written in all the major computer languages,
+    it can’t handle every language out there. You can refer to Code Climate’s official
+    documentation to see a list of supported languages, but rest assured that it works
+    just fine with Java, Python, Ruby, JavaScript, and most other commonly used languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What sorts of problems does the Code Quality feature look for? The general
+    categories it’s interested in include performance, style, complexity, security,
+    and smells (i.e., patterns that indicate a high risk of bugs). The exact violations
+    that it detects vary from language to language, but here are some concrete examples
+    of quality violations it can spot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Functions that take too many parameters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functions with too many exit points
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functions or classes that are too long
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Overly complex logical expressions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Too much or too little vertical whitespace
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Duplicated code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In addition, if your computer language has an established set of stylistic conventions—think
+    of the PEP-8 standard in Python, or the Rubocop rule set in Ruby—the Code Quality
+    feature can be configured to include those rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling Code Quality
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'It couldn’t be easier to add Code Quality to your CI/CD pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Make sure your pipeline has a `test` stage defined (hint: it almost certainly
+    already has this stage, so you probably won’t have to do anything).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Include a GitLab-provided template (i.e., a file that contains additional CI/CD
+    configuration code) called `Code-Quality.gitlab-ci.yml`, which adds a Code Quality
+    job to your pipeline.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*Step 1* will look like this in your project’s `.``gitlab-ci.yml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And *step 2* will look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that if you had already defined other stages, in *step 1*, you would simply
+    add the `test` stage to the existing stages—you wouldn’t delete any existing stages.
+    Similarly, if your pipeline configuration code already includes other templates,
+    in *step 2*, you would add this new template to the existing templates instead
+    of replacing them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Code Quality feature is smart enough to detect all of the computer languages
+    used in your GitLab project and run the appropriate scanners for each language.
+    However, it’s important to understand that because these scanners are all developed
+    by different people or teams outside of GitLab, there’s no guarantee that the
+    scanners will find exactly the same problems in all supported languages. For example,
+    the scanner for one language might be especially good at detecting duplicated
+    code snippets, whereas the scanner for a different language might be especially
+    adept at calling out complex code that should be simplified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing Code Quality results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s see a concrete example of Code Quality in action. Imagine that you have
+    a file called `hats-for-cats.py` in the root directory of your project’s repository,
+    containing this code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are two problems with this code that you would expect Code Quality to
+    catch: the function has too many arguments, and the `TODO` comment should be acted
+    on and removed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you enable Code Quality on the project’s pipeline and then run the pipeline,
+    the pipeline details page will include a new tab called **Code Quality**, which
+    reveals the results of the Code Quality scan:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.1 – Code Quality results in a pipeline details page](img/Figure_6.01_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.1 – Code Quality results in a pipeline details page
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s another place you can see the same information: in a **merge request**.
+    However, the report in a merge request differs from the report in a pipeline details
+    page in one important way. Whereas the pipeline details report shows all the code
+    quality problems found on whatever branch the pipeline ran on, the merge request
+    report shows the difference between code quality problems on the merge request’s
+    source branch and the merge request’s target branch. Since the target branch is
+    almost always your project’s default branch (i.e., main or master), the merge
+    request report shows you whether the work on your source branch is adding new
+    code quality problems or fixing old code quality problems, compared to your stable
+    code base. In other words, it shows whether the commits on your branch are making
+    the project’s code better or worse.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate this, imagine that you make a branch, make a merge request for
+    that branch, and commit a change to the branch that removes the `TODO` comment
+    and adds a new `FIXME` comment. You’d expect the Code Quality report on the merge
+    request to show that one old problem (`TODO`) has been fixed and one new problem
+    (`FIXME`) has been added. And that’s exactly what appears in the merge request
+    report:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.2 – Code Quality results in a merge request](img/Figure_6.02_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.2 – Code Quality results in a merge request
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both report locations—the pipeline details page and the merge request—have an
+    entry for each detected problem. These entries tell you the name of each problem,
+    the filename, and the line number on which the problem occurred. This should be
+    enough detail to let you decide whether to fix or ignore each code quality problem.
+    You may decide to ignore some problems either as false positives or as genuine
+    problems that are too small to be worth fixing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code Quality is one of GitLab’s best and most valuable CI/CD features. It’s
+    such an important tool for keeping your code readable and maintainable that GitLab
+    makes it available on all license tiers of the product, including the Free tier.
+    It’s fast to run, reliable, and effective. There’s really no reason not to use
+    it on all of your projects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running automated functional tests in a CI/CD pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One of the most common tasks in a CI/CD pipeline is running automated functional
+    tests to make sure your code does what it’s supposed to do. For example, you might
+    want to use the `pytest` framework to run a collection of unit tests written in
+    Python to test your Python-based Hats for Cats app. Let’s see how to do that with
+    GitLab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re not familiar with `pytest`, don’t worry. The syntax for `pytest` unit
+    tests is extremely simple and can be understood by anyone with even a little experience
+    of writing automated tests in any language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling automated functional tests
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Imagine that you’ve written three `pytest`-based unit tests to make sure the
+    Hats for Cats app’s login feature works as expected. You might have a file called
+    `test/test_login.py` with these contents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Obviously, these sample tests have placeholder code that forces the first two
+    tests to pass and the third to fail. Real tests would have actual logic that exercises
+    the login feature in various ways, but these simplified examples make GitLab’s
+    automated test feature easier to demonstrate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run these automated tests in your pipeline, add a job that triggers them
+    just like you would from the command line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: This job definition specifies that the job belongs to the `test` stage, and
+    that it must run within a Docker container that has version 3.10 of Python installed.
+    The commands that it runs first install the `pytest` package using the `pip` package
+    manager, and then call the newly installed `pytest` command to run all unit tests
+    that are in the `test/` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After adding this job and running the pipeline, you can inspect the job’s output
+    and see that the tests did indeed run. You can even see the pass/fail results
+    of each test. But the job’s output is hard to parse and a little cryptic. Wouldn’t
+    it be nice if the results of the automated tests showed up in an easy-to-read
+    table somewhere in the GitLab GUI? Fortunately, GitLab can do exactly that. You
+    just need to tweak the job definition a little so that it stores the output of
+    the unit tests in a particular format, and then saves that result file as a GitLab
+    artifact. Adding this code to the end of the existing `unit-tests` job definition
+    will do the trick:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code tells GitLab to preserve the `unit_test_results.xml` file produced
+    by the `pytest` framework. It also designates this file as a report that contains
+    test results that are stored in the JUnit format, which is an industry-standard
+    format that GitLab knows how to ingest and display. Finally, it tells GitLab to
+    hold on to this file regardless of whether any of the tests fail. This last step
+    is important because a failing test will cause the whole `unit-tests` job to have
+    a **failed** status, which would normally cause the artifact to be discarded.
+    But we want to see the results even if—maybe *especially* if—any of the tests
+    fail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing automated functional test results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'After adding the additional code we’ve just described and running a new pipeline
+    instance, a new tab marked **Tests** will appear on the pipeline details page.
+    Lo and behold, clicking that tab shows you an overview of how many automated tests
+    passed and how many failed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.3 – Overview of automated test results](img/Figure_6.03_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.3 – Overview of automated test results
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This table shows one row per job that triggers automated tests. Clicking on
+    any row breaks down the results further, so you can see exactly which tests passed
+    or failed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.4 – Individual automated test results](img/Figure_6.04_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.4 – Individual automated test results
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you might expect, the **View details** button next to each test shows you
+    more information about that test, including the line of code that generated the
+    failed assertion and the history of how often that test has failed in the past.
+    This information helps you debug your product code—or your test, if that’s where
+    the problem lies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.5 – Details of a single automated test](img/Figure_6.05_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.5 – Details of a single automated test
+  prefs: []
+  type: TYPE_NORMAL
+- en: Looking at functional test results in a pipeline details page shows you all
+    the test results for the code in the branch that the pipeline ran against. Sometimes
+    that’s exactly what you want. Other times, you want to know whether the code on
+    a branch is experiencing any new test failures (or has fixed any failing tests)
+    compared to the code on your project’s default branch. In other words, is the
+    feature branch fixing broken code, is it breaking code that used to work, or is
+    it doing some of each?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Fortunately, the automated functional test report that appears in a merge request
+    shows you exactly this information. Imagine that you’re working on a branch and
+    you manage to fix one test that was failing on the default branch, break one test
+    that was passing on the default branch, introduce one new test that passes, and
+    introduce one new test that fails. The merge request for that branch would present
+    a report that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.6 – Merge request’s delta view of automated functional test results](img/Figure_6.06_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.6 – Merge request’s delta view of automated functional test results
+  prefs: []
+  type: TYPE_NORMAL
+- en: This shows that two tests are failing, including the old test that you broke
+    on this branch and one of the new tests that you added to this branch. It also
+    shows that one test failed on the default branch but has been fixed on this branch.
+    The merge request report does not mention the new test you added that is passing,
+    other than to include it in the count of five total tests. This is because you
+    are usually more interested in knowing which tests are failing than in knowing
+    which are passing. If you do want to see the status of all tests—both passing
+    and failing—the **View full report** button will give you that information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running automated tests is often the very first task that a development team
+    configures new pipelines to perform. If you stopped right there, you’d still get
+    a huge amount of value out of GitLab CI/CD pipelines. But there are so many more
+    ways you can verify your code with a pipeline! Let’s look at fuzz testing next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fuzz testing in a CI/CD pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Fuzz testing** is an alternative, less traditional way of finding bugs in
+    your code. Put succinctly, this advanced testing technique sends semi-random data
+    to your code’s functions in an effort to trigger bugs. Although it takes a little
+    more work to set up than the other scanners, it can pay off by spotting bugs that
+    you probably never would have found using other methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reminder about GitLab versions and features
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fuzz testing, like many other features discussed throughout the book, is only
+    available if you’re using GitLab with an Ultimate license. You can find out whether
+    your license tier includes a particular feature by looking up that feature in
+    the official GitLab documentation. Features are often made available in lower
+    tiers after they’ve been restricted to higher tiers for a few years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two ways of performing fuzz testing in GitLab: **coverage-guided
+    fuzz testing** and **web API fuzz testing**. In this book, we will only discuss
+    the former, but the two techniques are similar enough that if you understand one,
+    you’ll easily be able to learn about the other using GitLab’s documentation. From
+    this point forward, whenever we refer to fuzz testing, we’re talking specifically
+    about the coverage-guided variant.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The architecture and workflow of fuzz testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are four architectural components you need to understand in order to
+    use coverage-guided fuzz testing: the **code under test**, the **CI/CD job**,
+    the **fuzz engine**, and the **fuzz target**. Let’s look at each component and
+    then see how they all fit together in the fuzz testing workflow.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code under test
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Fuzz testing targets a single function in your code. That function can be written
+    in any of the languages supported by GitLab’s fuzz tester, and it can be of any
+    length. It must take at least one parameter, but there’s no upper limit on the
+    number of parameters it expects. The function can call other functions, and if
+    a bug is triggered anywhere within that call stack, the fuzz tester will report
+    it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider this Python function to be your code under test. Imagine that it’s
+    in a file called `name_checker.py`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: This simple function takes a string as a parameter. It immediately returns `False`
+    if the string is empty. Otherwise, it returns `True` if the string is `bob` and
+    `False` if it isn’t.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is, of course, a terrible algorithm to use for this simple task, but we’ll
+    ask you to restrain your urge to mutter insulting things about the author of this
+    code and play along for the sake of the demo. Just pretend it was written by a
+    terrified intern on his first day on the job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The intern is not only awful at designing algorithms, but he’s also not a very
+    good coder. You’ve probably already spotted the function’s obvious bug: it doesn’t
+    validate that the string that’s passed in is at least three characters long. As
+    a consequence, if the string is only one character long and that character is
+    `b`, the function will throw an unexpected `IndexError` when it tries to read
+    the non-existent second character of the string. Similarly, if the only two characters
+    in the string are `bo`, it will throw an `IndexError` when it tries to read the
+    third character.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It would be easy for the developer or QA team member responsible for writing
+    tests to forget to test these cases. Let’s see whether fuzz testing will save
+    the day by finding this bug.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A CI/CD job
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Next, you need to define a job in your CI/CD pipeline that’s dedicated to fuzz
+    testing the code under test. You can fuzz-test several different functions in
+    one pipeline, but you’ll need a separate pipeline job for each function to be
+    tested. In this case, your code under test consists of just one function, so you’ll
+    define a single CI/CD job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we get to the job definition, we should explain that the fuzz testing
+    job *must* extend a job called `.fuzz_base`, which is defined in a template provided
+    by GitLab. Before defining the job, you’ll need to include that template by adding
+    a new line to the `includes:` section of `.gitlab-ci.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `.fuzz_base` job that we’ll be extending expects to run in a new stage
+    called `fuzz`, which would have to run after the `build` stage so it can perform
+    fuzz tests on compiled, runnable code. Let’s add that to our list of stages. Assuming
+    that we’ve already defined `build` and `test` stages, the `stages:` section of
+    `.gitlab-ci.yml` would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we’re ready to add a job definition to `.gitlab-ci.yml` that will kick
+    off the fuzz test for our code under test:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: This job, called `fuzz-test-is-bob`, first specifies that it should run in a
+    Docker image that includes the latest version of Python. This is needed because
+    the fuzz engine, fuzz target, and code under test are all written in Python.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, it inherits job configuration details from a parent job called `.fuzz_base`.
+    This parent job is provided by GitLab, and there’s no need for you to know or
+    care what configuration details it provides to your job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then your job specifies two commands to run. The first installs a Python-based
+    fuzz engine from a GitLab-hosted package registry. The second runs a binary called
+    `gitlab-cov-fuzz`, pointing it at the correct fuzz engine and fuzz target. This
+    binary is what actually starts up the fuzz test. You’ll get a better sense of
+    how the fuzz test proceeds from there when we look at the entire fuzz test workflow
+    in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fuzz engine
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The fuzz engine is a GitLab-supplied binary that sends streams of random bytes
+    to the fuzz target. These bytes serve as the basis for input data that the fuzz
+    target will feed to the code under test—but more on that topic is coming in the
+    next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Truth be told, it’s more accurate to call these bytes *semi-random* instead
+    of *random*. This is because the fuzz engine looks at which lines of the code
+    under test were exercised by the last round of data and attempts to mutate that
+    data in such a way that when the mutated data serves as the *next* set of random
+    bytes, it will exercise different lines in the code under test. So, it’s random,
+    but it’s also influenced by the previously used sets of random data. This is where
+    the term *coverage-guided* comes from: the fuzz tester uses code coverage data
+    to influence how it generates the random data to send to the code under test.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fuzz target
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The fuzz target is a small piece of code that you must write in the same language
+    as the code under test. It serves as a translator or intermediary between the
+    fuzz engine and the code under test. The fuzz target has two tasks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transform the random bytes sent to it by the fuzz engine into the data type
+    that the code under test expects to receive for its input parameter(s). For example,
+    it might need to transform the bytes into an array of integers, a string, or an
+    instance of a class.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Call the function in the code under test, passing it the transformed random
+    bytes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For this example, the fuzz target needs to convert the random bytes sent by
+    the fuzz engine into a string, and then pass that string to the `is_bob` function
+    in `name_validator.py`. You can call the file that the fuzz target lives in anything
+    you want, but there’s a fair amount of boilerplate that you must include in order
+    to make it callable from by the fuzz engine. Let’s assume that you call your fuzz
+    target file `is_bob_fuzz_target.py` and you include this content in the file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s look at what’s happening here. The first line makes the code under test
+    available so the fuzz target can pass it random data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next two lines declare a function called `fuzz`, which takes random bytes
+    as input. This is required boilerplate: you have to include these lines.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, the fuzz target takes the random bytes that were sent to it by the fuzz
+    engine and tries to transform them into a string, which is the data type that
+    the code under test expects as input. For many (in fact, most!) collections of
+    random bytes that are passed into the fuzz target, this conversion will fail due
+    to at least one of the bytes falling outside the range of values that map to letters,
+    numbers, punctuation, and other symbols. The `try` and `except` lines take care
+    of this problem: if any of the bytes can’t be converted, the fuzz target simply
+    returns without calling the code under test.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the bytes *are* successfully converted into a string, the fuzz target exercises
+    the code under test by passing the newly generated string to the `is_bob` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The final two lines are more boilerplate that you must include in any Python-based
+    fuzz target.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that the fuzz target must be written in the same language as the code
+    under test. Although the concepts used in non-Python fuzz targets are very similar
+    to what is demonstrated here, the boilerplate and data transformation code will
+    look slightly different in other languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A fuzz testing workflow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here’s how the four components work together to perform fuzz testing whenever
+    you run your project’s pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CI/CD job called `fuzz-test-is-bob` triggers as part of the `fuzz` stage.
+    It downloads the `gitlab-cov-fuzz` binary and the Python-based fuzz engine. It
+    then runs the `gitlab-cov-fuzz` binary, pointing it at the Python fuzz engine
+    and the fuzz target that lives in `is_bob_fuzz_target.py`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The fuzz engine generates a series of random bytes and passes them to the `fuzz`
+    function in `is_bob_fuzz_target.py`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The fuzz target transforms the random bytes into a string, since that’s the
+    data type that the `is_bob` function (i.e., the code under test) expects as input.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The fuzz target passes the string to `is_bob`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If `is_bob` handles the random string gracefully—that is, without crashing or
+    throwing any unexpected exceptions—the fuzz engine looks at which lines of code
+    were exercised by the last series of random bytes and generates a new series of
+    random bytes that are designed to exercise different lines in `is_bob`. This cycle
+    continues, with the fuzz engine generating new bytes with each pass through the
+    cycle.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If, on the other hand, the random string causes `is_bob` to crash or throw an
+    unexpected exception, the fuzz engine reports that to the `fuzz-test-is-bob` CI/CD
+    job, which reports that the fuzz test has found a bug in the code under test.
+    Success! Well, success at triggering a failure, anyway.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Viewing the results of fuzz testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When the fuzz test finds a bug, it displays this information in three places:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The vulnerability report, which you can navigate to by clicking **Security &
+    Compliance** | **Vulnerability Report** in the left navigation pane. This only
+    shows any problems that fuzz testing found on your project’s default branch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **Security** tab on the pipeline details page. This shows any problems that
+    fuzz testing found on whatever branch that pipeline instance ran against.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In a merge request. This shows a *delta* between problems that fuzz testing
+    found on the default branch and problems it found on the source branch of the
+    merge request. If nothing has changed between the default branch and the source
+    branch, the merge request will report that the fuzz test found no problems at
+    all, no matter how many problems actually exist on both branches.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Although the exact bugs reported will vary according to the type of report
+    you’re looking at, the type of details provided by each report will be almost
+    identical. For example, here’s a page from the vulnerability report that presents
+    details about the bug that fuzz testing found in the `is_bob` code under test:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.7 – Fuzz testing bug report](img/Figure_6.07_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.7 – Fuzz testing bug report
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Notice that this report includes a stack trace showing what error was thrown
+    (`IndexError`), and which line threw it (the line with the `return` statement).
+    The report also tells you which random bytes—also called a “sample”—triggered
+    the problem. In this case, the fuzz engine generated a single byte: 62\. It turns
+    out that 62 in UTF-8 corresponds to the lowercase letter of `b`. If you look at
+    the `is_bob` function in the code under test, you should be able to see exactly
+    why an input string consisting of a single letter, `b`, would expose this bug.
+    Isn’t it satisfying when a complicated system such as the fuzz tester works exactly
+    as expected?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extra considerations when fuzz testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Compared to the predictable, logical nature of the other ways you can validate
+    your code with GitLab, fuzz testing is like your erratic uncle who shows up to
+    family gatherings wearing mismatched socks and spewing mysterious comments that
+    could be either deeply profound or utter nonsense, depending on the day. Fuzz
+    testing’s random nature means that its results can be unpredictable. You might
+    run the same fuzz test on the same code under test on 2 different days and find
+    a bug within 10 seconds on the first day, but find nothing after 10 minutes on
+    the second day. You never quite know what fuzz testing will turn up, if anything
+    at all. This isn’t anything to worry about, since a new fuzz testing session will
+    happen every time you run your project’s pipeline; even if it doesn’t find anything
+    today, it might find an important problem tomorrow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keeping in mind that fuzz testing increases its chances of finding problems
+    the longer it runs, some teams choose to run it asynchronously rather than as
+    a normal pipeline job that blocks later stages in the pipeline. This technique
+    is beyond the scope of this book, but GitLab’s documentation explains how to set
+    this up if you’d like to experiment with it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another way that fuzz testing differs from other tests or scanners is that it
+    stops as soon as it finds a single problem, whereas other tools typically continue
+    to run until they’ve found and reported on every issue they’re capable of unearthing.
+    Again, this is normally not a problem since most projects will run fuzz testing
+    tens, hundreds, or thousands of times over the course of their development. But
+    it’s good to understand that just because fuzz testing found a bug today, it doesn’t
+    mean there are more bugs lurking in your code that it might find on subsequent
+    runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that although you can fuzz-test as many functions in your code under
+    test as you’d like, you must create a separate CI/CD job and a separate fuzz target
+    for each function. This can add up to significant overhead when you’re getting
+    fuzz testing off the ground. Fortunately, once everything’s in place and fuzz
+    testing is working as expected, there’s usually no need to change either the jobs
+    or the fuzz targets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fuzz testing with a corpus
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Fuzz testing has a special, optional feature that you can use called a **corpus**.
+    This is a list of random bytes that the fuzz tester can use for two purposes.
+    First, if a particular series of random bytes caused a bug or crash in the code
+    under test, and then your team fixed that bug, it could be useful for future fuzz
+    tests to send exactly the same random bytes to the code under test to make sure
+    that it hasn’t regressed. In other words, once your team fixes a bug, it’s a nice
+    safety measure for the fuzz test to make sure that it stays fixed. If you add
+    the troublesome bytes to the corpus, then all future fuzz test runs will use that
+    series of bytes as one of the values sent to the code under test.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second use of a corpus is to help the fuzz tester find bugs more quickly.
+    When it generates truly random bytes as input to the code under test, it can take
+    a long time to find bugs—if it ever finds them at all. But if you load up the
+    corpus with one or more series of bytes that constitute valid input (i.e., input
+    that the code under test can handle gracefully), then the fuzz test can mutate
+    that valid data and use the mutated data as its next series of input to the code
+    under test. Mutating valid data often results in finding data that triggers bugs
+    far more quickly than relying on truly random bytes as input to the code under
+    test.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up a corpus can be somewhat complicated, especially if you want to make
+    use of a clever GitLab feature that automatically updates the corpus every time
+    the fuzz test finds a bug. The GitLab documentation will lead you through this
+    process if you think a corpus might be useful. We do recommend experimenting with
+    this optional feature because it can hugely increase the power of fuzz testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we’ll move on from the powerful and somewhat exotic bug-finding tool
+    of fuzz testing and look at an important but often-overlooked way of checking
+    the quality of your code: **accessibility testing**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Checking accessibility in a CI/CD pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Not all applications include web interfaces, but whenever you do write a web
+    app, we strongly recommend you use your GitLab CI/CD pipeline to make sure your
+    interface is accessible for people with a range of disabilities. Fortunately,
+    GitLab makes it easy to test your website against the **Web Content Accessibility
+    Guidelines** (**WCAG**) laid out by the World Wide Web Consortium.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These guidelines address a wide assortment of characteristics of websites that
+    could cause accessibility problems. Here are just a few of the things that the
+    WCAG covers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pages that require scrolling both vertically and horizontally
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: HTML heading tags such as `<H1>` that contain no text
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Text that doesn’t contrast strongly enough with its background
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Images that lack an alternative text description
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Button controls that have no name available for screen readers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You might be surprised both at how many accessibility problems this scanner
+    finds in your web interface, and also at how easy it is to fix many of these issues.
+    Don’t feel bad if it finds several accessibility bugs on your site; try pointing
+    the scanner at any popular website and you’ll probably be amazed at the number
+    of basic accessibility violations it exhibits!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling accessibility testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To add accessibility testing to your pipeline, you first need to create a new
+    stage called `accessibility` in your `.``gitlab-ci.yml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: In all likelihood, your project will already have a `stages` section defined,
+    in which case you should just add the new `accessibility` stage to the existing
+    section instead of defining a whole new `stages` section (which would produce
+    a malformed `.``gitlab-ci.yml` file).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, include the GitLab-provided template that contains the accessibility-related
+    job definitions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we said before, if you’ve already defined an `include` section, simply add
+    this template to it instead of defining a new `include` section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, set a global variable that tells the accessibility scanner which website
+    to inspect. This could be your web app in its production environment or in any
+    pre-production, staging, or review environment. It can also be fun (and instructive)
+    to point the accessibility scanner at any site on the web, even if it’s not one
+    you own. Here, we’ll point it at a pretend URL where the Hats for Cats website
+    runs in production:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once again, if you already have a global `variables` section, simply add this
+    new variable to it instead of creating a second `variables` section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Believe it or not, that’s all you need to do. To get accessibility testing up
+    and running in your pipeline. The accessibility scanner doesn’t offer any other
+    configuration options, which makes it extremely simple to set up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing accessibility testing results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The accessibility scanner doesn’t integrate its results into a GitLab dashboard
+    like you saw with the automated functional test results. But it does generate
+    an easy-to-read HTML page that describes all of the less severe problems (called
+    **warnings**) and more severe problems (called **errors**) it finds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To see this page, run a pipeline with accessibility testing enabled and visit
+    the pipeline details page. You’ll see a job called `a11y`, which is the job that
+    runs the accessibility scanner. Click on that job to see the terminal output from
+    the job. You can ignore that output, but in the **Job artifacts** pane on the
+    right, you’ll see a button for browsing any artifacts produced by the job:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 6.8 – Finding the accessibility scanner’s artifacts](img/Figure_6.08_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 6.8 – Finding the accessibility scanner’s artifacts
+  prefs: []
+  type: TYPE_NORMAL
+- en: Clicking this button will show you both JSON and HTML reports generated by the
+    accessibility scanner. These reports both contain the same information about any
+    accessibility violations found on the targeted website. The JSON output can be
+    downloaded, parsed, and integrated into any other dashboard you may have set up.
+    The HTML report is human-readable within your browser and lets everyone on your
+    team see what accessibility-related work you might want to carve out into issues
+    so it can be tracked and managed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s another way to see the findings of the accessibility scanner, other
+    than by looking at one of its two artifacts. Remember how a merge request’s versions
+    of Code Quality reports and automated functional test reports show the difference
+    between code quality or test results on the default branch and code quality or
+    test results on the merge request’s source branch? The merge request report on
+    accessibility violations works in exactly the same way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have a branch with a corresponding merge request, the merge request will
+    show any accessibility violations that were found on the latest pipeline that
+    was run against that branch, as long as those violations are *not* also found
+    on a pipeline run against the default branch at the time the branch was created.
+    In other words, the merge request shows you whether the pipeline’s branch is making
+    your project’s code better (by fixing accessibility problems that were on the
+    default branch) or worse (by adding new accessibility problems that were not on
+    the default branch). This is a great report to have if you’re working on a feature
+    branch and want to make sure your boss doesn’t yell at you because you’re adding
+    more problems than you’re fixing!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additional ways to verify your code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We’ve covered some of the most common ways to verify your code. GitLab offers
+    even more features that help you test your code further. We don’t have enough
+    space to cover all of them in detail, but here’s a quick description of three
+    additional methods you can use to test code. Details for enabling and configuring
+    all of these tools are available in the official GitLab documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code coverage
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Automated functional tests make sure that your code is doing what it’s supposed
+    to do. Having tests in place is a critical part of every software development
+    project, but it’s easy to get a false sense of confidence from seeing that all
+    your tests are passing if you don’t know how much of your code base those tests
+    cover. After all, having 100 passing tests doesn’t do you much good if all of
+    those tests execute the same 5% of your application’s code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code coverage reports give you confidence in the value of your test results.
+    You can configure GitLab to use an appropriate, language-specific code coverage
+    tool to determine exactly which lines of your product code are exercised by your
+    tests. This report is integrated into the GitLab GUI, so it’s easy to tell which
+    lines of code you should target as you write new tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Browser performance testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Since so many of today’s applications are run in a browser, and since browser-based
+    applications are generally much slower than traditional desktop applications,
+    it’s important to keep track of how quickly the various pages of your website
+    load, and to know whether changes you’re making to the code are making those load
+    times better or worse.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab can measure page load times and display the results in merge requests
+    so developers can understand how their proposed code changes affect the performance
+    of their web app. It can even raise a special alert whenever performance degrades
+    beyond a particular user-configurable threshold. The report lets developers fix
+    any performance-related problems that their code has introduced before their code
+    is merged into the stable code base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Load performance testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: While browser performance testing tells you how quickly the frontend GUI of
+    your web app loads, GitLab’s **load performance testing** helps you track the
+    performance of your applications’ backend code. Although this feature can exercise
+    your application in various ways, it’s most commonly used to target your application’s
+    API. For example, it can hammer your application with tens, hundreds, or thousands
+    of simultaneous calls to one or more of your application’s REST API endpoints,
+    and then monitor how quickly your application responds to those calls. You can
+    also use this tool to perform long-running soak tests to see whether your application
+    develops memory leaks or other problems over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The load performance test feature displays its findings in merge requests so
+    developers can understand how any code changes on the branch associated with that
+    merge request affect their applications’ backend performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Once again, you covered a lot of ground in this chapter. You saw how to build
+    code within a GitLab CI/CD pipeline, using a variety of different methods and
+    languages. This doesn’t cover every possible way you could compile or otherwise
+    build your code—we’ve barely scratched the surface of that topic—but you should
+    have a good idea of the general steps involved regardless of what language or
+    tools you use. You also learned that certain kinds of code verification tools
+    require that you build your code first because they interact with your code as
+    it runs. Other tests don’t require this step because they simply scan your source
+    code without running it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, you saw how to use GitLab’s Code Quality feature within your pipelines
+    to make sure your code follows best practices for coding style, adheres to common
+    coding conventions, avoids unnecessary complexity, and doesn’t exhibit any *code
+    smells* that indicate the possible presence of bugs or unexpected behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then you learned how to integrate automated functional tests into GitLab CI/CD
+    pipelines. You saw not only how to trigger these tests from within a pipeline
+    job but also how to ensure that the results can be seen in two different reports
+    within the GitLab GUI. You also discovered how to use the *delta* view of test
+    results within a merge request to learn whether the code on that merge request’s
+    branch is helping or hurting the pass rate of your product’s automated tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next up was fuzz testing, GitLab’s most complicated but perhaps most interesting
+    bug-finding feature. You learned about the four different components that make
+    up the fuzz testing architecture, and you saw how random data flows from one component
+    to the next in an attempt to trip up your code and cause crashes or unexpected
+    exceptions. You became familiar with fuzz testing’s various idiosyncrasies and
+    learned how to accommodate them. Finally, you saw how to use a corpus not only
+    to catch functional regressions in your code but also to speed up fuzz testing
+    and make it more likely to find problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The final tool you got to watch in action was GitLab’s accessibility testing
+    feature. This helps you ensure that your web applications are usable by people
+    with a range of disabilities, maximizing your possible user base.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These tools are a great place to start when it comes to validating your software
+    projects, but GitLab offers several additional ways to inspect your code even
+    more thoroughly. You got a lightning-fast tour of the code coverage tool, browser
+    performance testing, and load performance testing. All of this will reward further
+    exploration using GitLab’s official documentation and some experimentation of
+    your own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once your code has been verified, you can deploy it to a production environment
+    for customers to use, right? Nope. You first need to make sure it doesn’t contain
+    any security vulnerabilities, which is the topic we’ll explore in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL

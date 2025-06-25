@@ -1,0 +1,1071 @@
+- en: '7'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Templating, Iterating, and Conditionals
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will cover advanced structures for the Puppet language, including
+    templates that enable the insertion of variables into templated files. The two
+    formats available in Puppet, **Embedded Ruby** (**ERB**) templates, which are
+    based on native Ruby templating, and **Embedded Puppet** (**EPP**) templates,
+    which are modern Puppet language-based templates, will be discussed, highlighting
+    the differences between the two and the core advantages of using EPP over ERB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, the chapter will delve into the use of iteration and loops in
+    Puppet, showing how iterative functions are used with sections of code known as
+    lambdas in Puppet instead of more traditional `loop` keywords of other languages.
+    Finally, the chapter will examine the different types of conditional statements
+    available in Puppet, including `if`, `case`, and `unless` statements, which are
+    typical of any programming language, and the Puppet-specific selector, which allows
+    a value on a key or variable to be chosen based on a fact or variable. The chapter
+    will also examine the use of regular expressions within conditionals in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Templating formats in Puppet – EPP and ERB
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Iteration and loops
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Conditional statements
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirement
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All code in this section can be tested on the local development server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Templating formats in Puppet – EPP and ERB
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Templating in Puppet allows for the generation of content in a standard format,
+    by substituting variables and using conditional logic to customize the content.
+    Puppet supports two templating formats: ERB, which is a native Ruby templating
+    format ([https://github.com/ruby/erb](https://github.com/ruby/erb)) and has been
+    available in all versions of Puppet; and EPP templates, which are based on the
+    Puppet language, were introduced in Puppet 4, and are available in later versions
+    of Puppet 3 with the future parser enabled.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Templates provide greater flexibility than strings but are less flexible than
+    using resources such as `file_line`, `augueas`, or `concat` for controlling individual
+    or groups of settings. Therefore, a balance of complexity needs to be struck when
+    deciding whether to use templates or resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For relatively short `heredoc` files or simple strings, templates with variable
+    interpolation may be sufficient. However, for more complex files and particular
+    files where multiple modules may be managing different settings or where manual
+    edits may be accepted, using resources for each setting or section would be less
+    complex and more manageable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In older code, it is possible to find that templates were overused, which can
+    reflect the lack of availability of resource types such as `file_line` in previous
+    versions of Puppet. It is important to review what state was being attempted to
+    be achieved and ensure that by using templates to control all the content settings,
+    a whole file is not being unnecessarily enforced, which may contain settings that
+    have become redundant as the underlying application associated with the configuration
+    file has updated and changed its configuration settings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While there is no reason to use ERB for new code, many forge modules and legacy
+    code bases may contain ERB, and thus both formats will be covered in this section
+    to provide understanding. After showing the syntax of both formats, the advantages
+    of using EPP and reasons to convert ERB to EPP will be discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Templates can be generated either by using content in template files or via
+    a string, which is known as an inline template. For template files, ERB uses the
+    `template` function and EPP uses the `epp` function. For inline templates, EPP
+    uses the `inline_epp` function and ERB uses the `inline_template` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EPP templates
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An EPP template file is a text file that contains a mixture of text and Puppet
+    language expressions surrounded by tags. These tags indicate how the Puppet expression
+    should be evaluated and can modify the text in the template, allowing for the
+    creation of a file based on Puppet language features such as variable interpolation,
+    logic statements, and functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Table 7.1* shows the available tag types that can be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Tag Name** | **Starting tag (****with trimming)** | **Ending tag (****with
+    trimming)** | **Purpose** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Parameter | `<% &#124;` (`<%- &#124;`) | `&#124;%>` (`&#124; - %>`) | Declare
+    parameters accepted by the template |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Non-printing expression | `<%` (`<%-`) | `%>` (`<%-`) | Evaluate the Puppet
+    code but don’t print |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Expression printing | `<%=` | `%>` (`-%>`) | Evaluate the code to a value
+    to print |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Comment | `<%#` (`<%#-`) | `%>` (`-%>`) | Allow the addition of comment lines
+    just for the template file itself |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 7.1 – EPP template tags
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a template is evaluated, it switches between text mode and Puppet mode
+    as it encounters start tags, and returns to text mode as it reaches end tags.
+    In text mode, it outputs the text as content, and when it finds a tag, the Puppet
+    code between the start and end tags is evaluated, depending on the kind of start
+    tag.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As noted in *Table 7.1*, some of the tags can be modified with a hyphen (`-`)
+    to trim spaces and new lines as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The parameter tag is optional and, if used, must be the first content in a template
+    file, except for a comment tag, which must use a closing hyphen. It produces behavior
+    similar to how parameters can be declared at the start of Puppet classes, as was
+    shown in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212). The parameters follow
+    the same pattern as a class, so they can optionally include a type at the beginning.
+    They must then have a dollar (`$`) symbol followed by a variable name, optionally
+    followed by an equal (`=`) symbol and a default value, and finally, they must
+    end with a comma.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to have an options parameter containing a string set to an empty
+    string by default, an `application_mode` parameter, which can contain full, partial,
+    or none strings and defaults to `node`, and a `cluster_enabled` parameter, which
+    is a Boolean, the following code would start our template:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: When parameters are passed to an EPP template, they become local scope and can
+    just be called directly by name, but variables from the calling class must be
+    called by full namespace name; this is similar to a defined type. Any parameters
+    without a default value, such as `cluster_enabled` in the preceding example, are
+    mandatory and must be passed in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is recommended to always use hyphens with parameters to avoid any accidental
+    white space at the start of a template.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If parameters are not used, class variables can be directly accessed using the
+    class scope, such as `$example_module::example_param`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parameters allow a template to be more flexible if it is to be used in several
+    different places, ensuring the data is more defined and locked down to requirements
+    and making it clear at a glance what data is consumed. It may become a better
+    option to just use variables when you need to use a lot of variables and parameters
+    would just not scale. Passing parameters not defined in the parameter list will
+    result in a syntax error, although if no parameters are used, any parameters can
+    be passed to the template. Later in this section, it will be seen how to pass
+    a hash to the `epp_template` function when referencing it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `comment` tag in Puppet templates allows for comments to be added within
+    the template file itself. These comments will not appear in the output when the
+    template is evaluated and its content is generated. Here’s an example of what
+    a comment would look like in a Puppet template:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `<%#-` hyphen trimming feature is available from Puppet 6.0.0 onward. Before
+    this, the trimming behavior was assumed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An expression printing tag puts the returned value of a Puppet expression into
+    the output. This can be a variable or fact, the output of a function, or the output
+    for operators. The final output is a string and will be automatically converted
+    if necessary. At its simplest level, this can be used to print a fact as a value.
+    For example, the following line will read `application = exampleapp` if the `application_name`
+    fact contained the `exampleapp` value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This example is also the first time variables have been shown in this context,
+    but they are accessed in the same way as variables in regular Puppet code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Non-printing tags contain iterative and conditional logic. This is different
+    from other tags because the effect of the tag can span multiple lines until another
+    tag closes the iterator or conditional logic. For example, the `if` statement
+    (which will be covered in the *Conditional statement* section) opens with a curly
+    brace, `{`, and closes with a curly brace, `}`. In the following example, we can
+    ensure that if the application name returns `undef` from the `getvar` function,
+    it will not output `application =` as it would have in our previous example. Instead,
+    it will ignore the line if the variable is not defined:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Multiple levels of non-printing tags can be used to create nested `if` or `case`
+    statements as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are some syntax mistakes to be careful with. If a non-printing expression
+    tag contains a comment, it will essentially comment to the end of the line and
+    require the close tag on the next line, as per this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This mistake could clearly happen with a mistyped `comment` tag so care must
+    be taken and any tags, not just a comment closing tag, would be ignored till the
+    new line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To include literal `<%` or `%>` characters in the template output without having
+    them evaluated as EPP tags, you can use an additional `%` character to escape
+    them. For instance, to output `<% Puppet expression example %>` as text, you would
+    write `<%% Puppet expression example %%%>`. Note that the escape only applies
+    to the first `<%` or `%>` encountered, so if you need to escape only one of them
+    in a line, you can use the escape once and then the other symbol normally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EPP templates can be validated using the `puppet epp validate <template_name.epp>`
+    command, and in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212), it will be seen
+    that the **Puppet Development Kit** (**PDK**) will run this command as part of
+    its validation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To test the rendering of templates, the `render` command can be used with a
+    hash of values as required: `puppet epp render <template_name.epp> --values ''{key1
+    => value1, key2 =>` `value2}''`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The full specification for EPP templates can be viewed online at [https://github.com/puppetlabs/puppet-specifications/blob/master/language/templates.md](https://github.com/puppetlabs/puppet-specifications/blob/master/language/templates.md).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After reviewing the syntax of the EPP template file, let’s see how to use the
+    `epp` function in a Puppet resource. The `epp` function can be used with resources
+    such as `file` by passing it to the `content` attribute. Additionally, a key-value
+    hash can be provided to specify the parameters, as discussed in the previous section
+    on the `parameter` tag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you wish to try the preceding example on your developer environment, create
+    a suitable template file on your system and change the `exampleapp` module name
+    to the absolute path containing the template, such as `/var/tmp` or`C:\Users\David
+    Sandilands`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The namespace used in `epp` assumes that either it will form a module path,
+    `<modulename/templatename.epp>`, which translates to `modulepath/modulename/templates/templatename.epp`,
+    or it will be an absolute path on disk. In [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212),
+    the structure of modules will be covered in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inline templates are similar to regular templates, but instead of using a separate
+    template file, they require a string or variable to be passed to them. They are
+    generally used for workarounds or where using a heredoc feels easier than using
+    a template file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One example of a workaround is when using the Vault module, which was discussed
+    in [*Chapter 5*](B18492_05.xhtml#_idTextAnchor123), to retrieve secrets using
+    deferred functions. The Vault module returns a key-value pair, but we may only
+    want to access the value of the password. As the value is deferred, it can’t be
+    manipulated as a string. Using the `inline_epp` function, as shown in the following
+    example, allows us to unwrap the string during agent runtime and apply it to the
+    file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having covered EPP templates for the management of heritage code, we will now
+    review how ERB is different.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ERB templates
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: ERB templates are similar to EPP templates, but there are some differences worth
+    noting. ERB templates are text files that contain a mixture of text and Ruby language
+    expressions surrounded by tags. ERB uses the same tags as EPP, except it does
+    not have parameter tags, and it is not possible to pass parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In ERB, a template has a local scope and a parent scope, which is the class
+    or defined type evaluating the template. Variables in the current scope can be
+    accessed using the `@` symbol, which is how Ruby normally accesses variables.
+    To access variables out of scope, you can use the `scope` object or the older
+    `scope.lookup` function, which was used before the hash format was introduced
+    into Puppet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give some simple Ruby examples, you can use an `if` statement to check whether
+    the `exampleapp_extras` variable does not contain `NONE`, and to output the `extras
+    <exampleapp_version>` string in the template. You can also use an `unless` statement
+    to check whether the `exampleapp_key` variable is not `nil`, and to output the
+    `key <exampleapp_nill>` string if it has a defined value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Iteration in Ruby is similar, with the `each` function also available. The
+    following example shows an array of settings from a variable being output one
+    by one in the template content using iteration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Data from Puppet variables will be translated from their Puppet type to the
+    equivalent Ruby type (more information can be found in the official Puppet documentation
+    at [https://www.puppet.com/docs/puppet/latest/lang_template_erb.html#erb_variables-puppet-data-types-ruby](https://www.puppet.com/docs/puppet/latest/lang_template_erb.html#erb_variables-puppet-data-types-ruby)).
+    However, it is beyond the scope of this book to discuss how Ruby can transform
+    this data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is also possible to call Puppet functions in ERB templates using the `<%scope.function_name(<Name
+    of function>, <Array of` `Arguments>)%>` syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to use the `downcase` function on the `example_variable` variable
+    and output the result to the template, the following code can be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Validating the syntax of an ERB template can be done by running the `erb` command:
+    `erb -P -x -T ''-'' example.erb | ruby -c`. As with EPP, the PDK will check for
+    both types of templates when running validation. Unfortunately, there is no way
+    to render an ERB template.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using the content of an ERB template file in a file looks very similar to EPP,
+    but as discussed, it does not have parameters and uses the `template()`function.
+    Converting the EPP example would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is possible to pass and evaluate multiple template files, which will be
+    concatenated together. For example, updating content as follows would combine
+    the two templates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Inline ERB just uses the `inline_template` function in the same system as inline
+    EPP, and was often written in the past to allow Ruby code to provide a workaround
+    for the lack of iteration/loops provided by past versions of Puppet and perform
+    data transformation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that ERB has been discussed, it is time to highlight why EPP is preferred
+    over ERB and reasons to consider converting heritage code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EPP and ERB comparison
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: After reviewing both syntax templates, it is clear that EPP has several advantages
+    over ERB. Firstly, EPP has significantly better performance than ERB. ERB creates
+    a scope object for all facts and top-scope variables each time a template is evaluated,
+    while EPP only uses facts and variables relevant to the template. In environments
+    with a large number of facts, this can have a significant impact on performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Furthermore, EPP provides greater security because templates can be provided
+    with a limited scope of data to be used and validate that all data exists before
+    use. ERB, on the other hand, has no built-in validation, and non-existent variables
+    will simply be dropped. For example, if a variable in a class has not been evaluated
+    before the template is used, ERB will not catch this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EPP can also be seen as easier to use since it is in the Puppet DSL style and
+    does not require any Ruby knowledge. This makes it easier to code, especially
+    with the ability to use the `puppet epp render` and `validate` commands. Additionally,
+    EPP is under more active development, and recent features, such as templates being
+    able to automatically unwrap sensitive variables in 6.20 and later, will only
+    be available in EPP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Iteration and loops
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Puppet’s approach to iteration and loops is influenced by the fact that its
+    variables are immutable, meaning that once they are set, they cannot be changed.
+    This makes many normal approaches used with `loop` or `do` keywords to transform
+    data impossible. In early versions of the language, this was worked around by
+    passing an array to defined types, as discussed in [*Chapter 3*](B18492_03.xhtml#_idTextAnchor048),
+    or using inline ERB templates with Ruby code to manipulate arrays and hashes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the issue with the defined type approach was that the code doing the
+    work was abstracted away and not visible. Furthermore, every time a different
+    type of iteration was required, it would require its own defined type, bloating
+    the code. Therefore, it is important to review heritage code and refactor these
+    patterns to the approaches that will be discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In modern Puppet, the approach taken is to use iterative functions that pass
+    data from arrays and hashes to lambdas. A lambda is a function with no name, so
+    it cannot be called anywhere else except by a function. A lambda can be attached
+    to any function call, including custom functions. *Table 7.2* provides a full
+    list of functions involved with iteration and lambdas. While some functions may
+    not be considered iterators, they have similar behaviors. It should also be noted
+    that other functions could be combined/chained into these examples, such as `unique`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Function name** | **Purpose** | **Return type** | **Parameters** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `all` | Runs through all elements until `false` is returned from the lambda
+    or completes and returns `true`. | `true` or `false` | 1 or 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `any` | Runs through all elements until `true` is returned from the lambda
+    or completes and returns `false`. | `true` or `false` | 1 or 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `break` | Used within a lambda and stops the iteration. | n/a | n/a |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `each`, `reverse_each`, `tree_each` | Passes each element of a hash or array
+    in turn for the lambda to process (reverse order or recursive variations). | n/a
+    | 1 or 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `filter` | Runs through all elements and matches with lambda code, returning
+    matching elements in an array. | Array | 1 or 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `index` | Runs through all elements and on the first match within lambda
+    code, returns the index of the matching element. | Integer | 1 or 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `lest` | The function takes one argument; if this value is undefined it will
+    run a lambda and return the outcome. If the argument is not undefined it will
+    return the argument. | Any valid type | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `map` | Runs through all elements and applies lambda code to that element.
+    Returns an array of elements post lambda. | array | 1 or 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `next` | Used within a lambda to change the value of the next element in
+    the iteration. | n/a | n/a |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `reduce` | Runs through all elements and applies lambda code passing the
+    outcome forward to each iteration. | array | 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `return` | Used to cause a lambda to return (cannot be used at top scope).
+    | n/a | n/a |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `slice` | Runs through a sliced size of elements such as three elements per
+    iteration. | Array | 1 or size of slice |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `step` | Chained into another iterable function passing a sequence of elements
+    incrementing at a step size from a starting element to a finishing element. |
+    Iterable | n/a |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `then` | Takes one argument and if it is not undefined, it will call a lambda
+    with the argument. Otherwise, it will return `undefined`. | Any valid type | 1
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `with` | Takes one argument and unconditionally passes it to a lambda and
+    runs with the argument. Returns the result of the lambda. | Any valid type | 1
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 7.2 – Functions for iteration and lambdas
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The basic syntax structure for iterative functions using lambdas in Puppet
+    is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As an example, consider using the `each` function to loop around an array,
+    with a single parameter (optionally typed), and printing the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would result in the `notice` function printing for each string in the array,
+    similar to a `for` loop with a `print`/`echo` command in most languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `each` function can also use two parameters, which would give the index
+    as the first parameter and the content of that index as the second parameter.
+    The following code would print `index 2 contains second` for the second iteration
+    of the lambda:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: To test these examples on your developer desktop, simply run `puppet apply -e
+    '<``example code>'`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To clarify, when using the `each` function with a single parameter on a hash,
+    each key-value pair will be passed as an array to the lambda. For example, running
+    the code `[{ key1 => ''val1'', key2 => ''val2'' }].each | $key_pair | { notice
+    $key_pair }` will output two arrays, one for each key-value pair: `[''key1'',
+    ''val1'']` and `[''``key2'', ''val2'']`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If two parameters are used in the lambda, the first parameter will represent
+    the key and the second parameter will represent the value. For example, running
+    the code `[{ key1 => ''val1'', key2 => ''val2'' }].each | $key, $value | { notice
+    "$key contains $value" }` will output two strings, one for each key-value pair:
+    `key1 contains val1` and `key2` `contains val2`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is also worth noting that other data types, such as strings, can be automatically
+    converted into arrays where each character in the string will be treated as an
+    element. Additionally, a range of numbers can be declared using an `Integer` type;
+    for example, running the code `Integer[100, 150].each | Integer $number | { notice
+    $number }` will output all integers from `100` to `150`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, iteration can be nested; for example, to handle a hash with array
+    values, an iterative function can be used within the lambda. Running the following
+    code will output each value in the array of the `key1` key-value pair – `''value1''`
+    and `''value2''`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Overall, this section provides an overview of the most commonly used functions
+    in Puppet, but for more in-depth descriptions, users can refer to the official
+    documentation at [https://www.puppet.com/docs/puppet/latest/function.html](https://www.puppet.com/docs/puppet/latest/function.html
+    ) .
+  prefs: []
+  type: TYPE_NORMAL
+- en: Iterative loops
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The main function reviewed so far is `each`, and there are several functions
+    that perform this loop of elements or manipulate the loop. `reverse_each` simply
+    takes the reverse order of the elements, as its name suggests. `tree_each` allows
+    values in nested arrays/hashes to be returned with different behaviors depending
+    on the flags provided. It is relatively complicated and niche. The `slice` function
+    allows us to take a specific number of elements in each iteration. For example,
+    the following code would pass arrays of three numbers at a time from the sequence
+    to the lambda:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'On the last iteration, it would provide the remaining elements; in this example,
+    an array with just `[151]`. It is also possible to use multiple parameters, but
+    the number of parameters must be the same as the `slice` size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `step` function allows us to choose which elements of an iterable we wish
+    to pass. In this code example, it would start at the first element, then the fourth,
+    the seventh, and so on:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can be useful when chained into another iterable function. The next type
+    of function is for matching patterns. This is a different style of iteration function
+    where instead of just passing the elements to the lambda to perform some action,
+    the iterative function defines how the lambda will return. For example, `all`
+    is looking for all elements to match the check in the lambda to return `true`.
+    If any of the lambdas return `false`, the function will return `false`. For example,
+    the following code would print `true` because all the elements were greater than
+    `99`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `any` function is the opposite of `all`, returning `false` if there are
+    no matches and `true` if the lambda returns `true` in any iteration. The `index`
+    function is similar to `any`, but instead of returning `true` or `false`, it returns
+    the index number of the element that matches, or `undef` if there is no match.
+    For example, the following code would print `20`, as `number` would match the
+    20th element:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: All of the functions can work with two parameters on arrays or hashes, as shown
+    in the examples for the `each` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data transformation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Data transformation is another way iterators are used to iterate through elements
+    and perform adjustments before returning them. This is one of the main reasons
+    why the iterator to lambda pattern was developed, as Puppet is unable to reassign
+    variables. For example, the `map` function iterates over each element and applies
+    a lambda whose result is stored in an array. For example, the following code would
+    divide each element by `1024` and return an array of `[2,` `3, 1]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `filter` function takes each element in the iteration and applies the code
+    in the lambda. If the lambda returns `true`, the element will be added to an array
+    for return. Otherwise, if `false`, it will continue to the next iteration. For
+    example, the following filter would iterate through each array, checking whether
+    the size is greater than `0`, which would result in an output of `[[1, 2, 3],
+    [''a'', ''b'', ''c'']]`, with the second element’s empty array being removed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Both `filter` and `map` can handle one or two parameters, as shown with the
+    `each` function on arrays and hashes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `reduce` function allows for cumulative work to take place in the lambdas.
+    It is different from the other functions and requires two parameters: the first
+    parameter keeps its value through the iterations, while the second is the element.
+    Additionally, the starting value can be chosen for the first parameter by passing
+    a value to the `reduce` function. In this example, the `total` parameter would
+    start at `1` and, in each round, add the element to its total, resulting in `15`
+    being returned and printed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Within a lambda, it is also possible to change the flow of iteration. The `next`
+    function can change what the next element will be: `undef` if nothing is provided
+    to the `next` function, or the value provided to the `next` function. The `break`
+    function stops the iterator at that point in the code and returns to the iterative
+    function, effectively ending the iterator at that point. The `return` function,
+    in comparison, returns from the iterative function, so it will not complete at
+    all and returns to the containing class, function, or defined type.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To demonstrate this change in flow, the first example using `map` over a series
+    of numbers will run a `next` function, and when the element matches `101`, it
+    will replace the next element, `102`, with `1984`, and then a `break` function
+    will be run when the element is greater than `104`. So, with the notice at the
+    end printing, this will return an array of `[100,` `1984, 102]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To highlight the different behavior of replacing the `break` function with
+    a `return` function, the following example will result in nothing being printed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is the reason, in this example, that we have put the function within a
+    class because `return` cannot be called at a top scope level only within a class,
+    function, or defined type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nested data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The last types of functions are useful when handling nested data or generally
+    handling undefined values. `then` is chained after a lambda and if it receives
+    `undef` outputted from that lambda, it will return `undef`; otherwise, it will
+    pass the value to another lambda. So the following example would use the `dig`
+    function to attempt to access a `c` element that doesn’t exist in the second hash
+    in the array, and as `then` would receive `undef`, it would therefore return `undef`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: To clarify the previous statement, if `dig(first, second, 1, d)` is changed
+    to `dig(first, second, 2, d)`, it would then pass `30` to the lambda, which would
+    divide by `10` and print `3`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lest` is the opposite of `then` and returns the value it is defined; otherwise,
+    it passes `undef` to the lambda, which can take an action such as setting a default
+    value instead. This can be useful; when used alongside `then`, taking the preceding
+    example, adding `lest` would allow a value of `undef` to be returned if it is
+    `0`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `with` function is somewhat of a specialist edge, as it is used to pass
+    values through if our lambda is able to handle `undef` or defined values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, having reviewed the various functions and seeing the data transformation
+    and explorations of data possible, it is worth highlighting again how, instead
+    of using a defined type, as was done in the past, when we need to create multiple
+    resources. So, for example, to create a directory for as many instances as requested,
+    the following code could be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having covered how Puppet can perform loops and iteration, the conditional statements
+    will be reviewed next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conditional statements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Puppet has the conditional statements you would expect of any language, with
+    `if`, `unless`, and `case` allowing code behavior to be different depending on
+    things such as facts or data from external sources. Puppet additionally uses selectors,
+    which are similar to a `case` statement but return a value instead of executing
+    code on result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If and unless statements
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `if` statement follows a specific syntax that includes the `if` keyword
+    followed by a condition, an opening curly brace (`{`), the Puppet code to execute
+    if the condition evaluates to `true`, and a closing curly brace (`}`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example is a simple check on a Boolean in `example_bool` to print
+    a notice if it contains `true`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can be optionally extended by adding an `else` keyword after the closing
+    curly brace (`}`) of the `if` statement and then using an opening curly brace
+    (`{`) with Puppet code to perform if the condition is `false`. This is then closed
+    with a closing curly brace (`}`). To also print when `example_bool` is `false`,
+    the code would be updated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, to perform multiple `if` checks together, the `elsif` keyword can
+    be used after the `if` statement’s closing curly brace (`}`), allowing the same
+    `if` syntax to be followed again. This can be nested and repeated as required.
+    To provide an example, following up on the Boolean check with `elsif`, we can
+    add a second check to see whether the value variable is greater than `2`, print
+    a notice if it is, and an `else` statement that prints that both conditions were
+    `false`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `unless` statement is simply the inverse of the `if` statement. It allows
+    you to avoid having to negate a condition, and it can also be used in combination
+    with an `if` statement. However, it has no equivalent to `elsif` and will cause
+    a compilation failure if used. To demonstrate this with the previous `if` example,
+    the `unless` statement can be used instead to check whether `example_bool` is
+    `false` and print a notice in that case:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Any non-Boolean values used in the conditions will be converted to Booleans
+    as per the data type rules, as covered in [*Chapter 4*](B18492_04.xhtml#_idTextAnchor078).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Puppet style guide recommends for the lines which follow the keywords `if`
+    and `unless` that the code should be indented by two spaces and aligned as was
+    shown in the examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Case statement
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `case` statement works by matching the value outputted from a control expression.
+    This is commonly the content of a fact or variable, but it could also be an expression
+    or function. The format starts with the `case` keyword, followed by a control
+    expression, resolving to a value and enclosed within curly braces. Each following
+    line starts with either a matching case or a comma-separated list of cases, followed
+    by a colon, and the Puppet code enclosed within curly braces to be applied for
+    the matching case. The `case` statement is then closed with a curly brace.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to test the value of the `hardwareisa` fact and include a profile
+    based on the type of processor architecture in use, the following code can be
+    used. It includes a Unix profile for `sparc` or `powerpc` values, the Linux 32-bit
+    profile for `i686` and `i386` values, the 64-bit profile for any value ending
+    in `64`, and the default profile for any value failing to match a case:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Puppet style guide recommends always using a `default` case, which can be
+    a failure or even just an empty curly brace.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Selectors
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Selectors are similar to `case` statements, but instead of applying Puppet code
+    for the matching case, they return a value. Selectors can be used wherever a value
+    is expected, such as variable assignment, resource attributes, and function arguments.
+    The Puppet style guide recommends only using selectors in variable assignments
+    to improve readability, but it may be seen in legacy code in resource attributes
+    as it was previously a popular pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The syntax of a selector is a control expression resolving to a value, a question
+    mark (`?`), and an opening curly brace (`{`). It then has a number of case matches,
+    starting with a single case or the `default` keyword, a hash rocket (`=>`), the
+    value to return, and a closing comma. The selector is then closed with a closing
+    curly brace (`}`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example shows the `apache_package_name` variable assigned based
+    on the output of the `os.family` fact, using the `httpd` name for Red Hat, `apache2`
+    for Debian or Ubuntu, `apache-httpd` for Windows, and defaulting to `httpd` if
+    there is no match. A package resource could then use this name to install the
+    relevant package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: As with the `case` statement, the Puppet style guide recommends that selectors
+    always use a `default` case, which can be a failure or even just an empty curly
+    brace.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Capture variables
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If the `case` statement used was a regular expression, then what is known as
+    capture variables will be available within the associated code as number variables
+    such as `$1` and `$2`, with the entire match available at `$0`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To modify the example in the *Case statement* section, if the match was against
+    `amd64`, this would include `profile::linux::amd64`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having reviewed all aspects of templates, conditionals, iterations, and loops,
+    we will now use a lab to recap and bring these concepts together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – creating and testing templates containing loops and conditions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this lab, we will bring together everything you have seen in this chapter
+    so far, testing and validating some example templates and creating a template
+    using logic and iteration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Download the template files at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch07/templates_to_check](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch07/templates_to_check)
+    and validate and parse each of them to ensure the templates produce the following
+    (`<>` shows where interpolation needs to happen):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**“This template was run on a machine with <# number of cpus of your** **machine>
+    cpus”**'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**“The custom fact pack.lab was < set to content of fact or the string ‘not
+    set’ > “**'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hint
+  prefs: []
+  type: TYPE_NORMAL
+- en: You would want to use the `getvar` function to test the fact and test it by
+    passing in a hash, setting it when parsing to test it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**“The system uptime is < showing only days hours mins if they are non zero
+    > “**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**“This machine is <not/is> virtual <and runs** **on <$virtual>”**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a template that prints the following
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**“This is a < os family > machine running version < os release full > ““The
+    following directories are in the path** **< list each** **path >”**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hint
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Use the `split` function ([https://www.puppet.com/docs/puppet/latest/function.html#split](https://www.puppet.com/docs/puppet/latest/function.html#split))
+    to separate the path fact string into an array that can be iterated, and remember
+    that Windows paths are split by ; while Unix/Linux based paths are split by :
+    . See the answer at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch07/2_sample.epp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch07/2_sample.epp).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, the use of templates in Puppet was examined. It showed Puppet’s
+    two types of templates – EPP and ERB – which worked in similar ways, using a mix
+    of plain text and tags surrounding code to allow for Puppet/Ruby to apply logic
+    and variables and create more complex content when evaluated. It was warned that
+    the level of complexity should be carefully considered before using templates
+    instead of functions such as `file_line`, and controlling resources individually.
+    Additionally, because of the lack of functions for a single line or setting control
+    in files, templates had been overused, and heritage code should be examined carefully
+    to ensure that a template was the correct level of complexity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EPP was shown to be the recommended way of producing templates since it was
+    in the Puppet language and easier to learn for a Puppet developer. It was also
+    more secure since it could limit its scope with parameters, and similarly, more
+    performant since it only created a scope for the variables and facts required,
+    unlike ERB, which, for every template used, would generate a scope for all facts.
+    Furthermore, it was mentioned that all Puppet future development work would be
+    for EPP, as was shown by the inclusion of automatic unwrapping of sensitive variables
+    in EPP files, and the capability of rendering a template was only available in
+    EPP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EPP and ERB templates were shown to be referenced and evaluated from files via
+    the `epp` and `template` functions, where multiple files could be combined together.
+    It was also shown that inline templates were possible via the `inline-template`
+    or `inline-epp` functions, where the text could be passed directly to the function
+    instead of being stored in a file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Iteration and loops were then shown, highlighting Puppet’s previous lack of
+    capability to do this with the immutable nature of Puppet variables making more
+    traditional `loop` keywords impractical. Puppet was shown to instead use iterative
+    functions on arrays and hashes, which passed values as parameters to lambda functions.
+    These unnamed lambda functions, which could only be called by other functions,
+    allow the creation of a scope entirely local to the lambda function and, therefore,
+    allow variable names to be reused. The iterative function chooses how values should
+    be passed to the lambda, such as each passing one value or key pair at a time,
+    or `Reduce`, which allows the use of a parameter that is passed through each lambda
+    function along with each value and key pair and can be useful to do cumulative
+    transformations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet’s conditional logic was then discussed, showing it to be similar to most
+    other languages. `if` checks evaluate a check to a Boolean statement/comparison,
+    which if `true`, is acted on with Puppet code. The `else` keyword allows an action
+    to take place if the Boolean was `false`, and the `elsif` keyword allows the chaining
+    of checks together. `unless` was shown to be the inverse of `if`, acting on the
+    check if it was negative and allowing `else` to act if it was `true`, although
+    it had no equivalent of `elsif`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `case` keyword was then discussed. We showed that it works by taking the
+    value and matching it to run Puppet code based on the match or to a default if
+    no value was found. The `selector` keyword was shown to be similar to the behavior
+    of the `case` statement but is used instead of running Puppet code to assign a
+    value. It was highlighted that, despite it being a common pattern in the past
+    to use a selector within resources, this was no longer considered best practice.
+    Finally, capture variables were shown as variables available to conditionals that
+    had used regular expressions to show what the match had been.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having now reviewed the core Puppet language, it is time to learn how to structure
+    the manifest file and classes we have used so far. The next chapter will demonstrate
+    how modules provide the necessary structure to hold the manifests, classes, and
+    other configuration and implementation files that we have examined. The roles
+    and profiles pattern will also be explored, providing an additional abstraction
+    to represent the technology stacks and business needs of customers. Moreover,
+    Puppet Forge will be demonstrated as a source of modules that can be consumed
+    to reduce the need for development and to collaborate with the Puppet community
+    to enhance the available code.
+  prefs: []
+  type: TYPE_NORMAL

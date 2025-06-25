@@ -1,0 +1,1488 @@
+- en: '7'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: A Practical Pipeline for Technical Release Managers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will be a little different from the rest of this book. In this
+    chapter, you will be shown how to build a docker image containing a simple web
+    application that deploys to AWS ECS using GitHub Actions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The testing that’s involved with this exercise includes **HTML scanning**, **NodeJS
+    scanning**, **credential scanning**, and **dependency scanning**. In addition
+    to **static application security testing** (**SAST**), the pipeline features the
+    use of OWASP ZAProxy, a dynamic application security scanner. Together, these
+    quality checks ensure the proper implementation of the **Document Object Model**
+    (**DOM**), checking for known vulnerabilities in the code, and actively checking
+    for security vulnerabilities in the deployed application in the cloud.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The strategy to accomplish this will be broken down into two parts. First, you
+    will be shown how to provision the necessary ECS infrastructure. Second, you will
+    be shown how to configure the GitHub Actions workflow that is necessary to test,
+    build, and then deploy the Docker container to ECS. Together, these two exercises
+    will culminate in your successful utilization of the fundamental concepts used
+    in contemporary application delivery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Examining the pipeline code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provisioning the AWS infrastructure
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring the GitHub Actions workflow
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Before we proceed with the exercises included in this chapter, it is pertinent
+    that you review the GitHub Actions workflow file. Understanding a CI/CD pipeline
+    at its lowest levels is the only way for you to fully comprehend all of the actions
+    that it performs. Having awareness of these intricacies ensures that you gain
+    the context needed to guarantee secure and expeditious software releases. This
+    will also leave you adequately prepared to communicate each step so that you can
+    produce a release to leadership and stakeholders. Simply understanding how a pipeline
+    functions at a high level is insufficient for a DevOps release manager.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find the entire GitHub Actions workflow file at [https://github.com/PacktPublishing/Embracing-DevOps-Release-Management/blob/main/.github/workflows/aws.yml](https://github.com/PacktPublishing/Embracing-DevOps-Release-Management/blob/main/.github/workflows/aws.yml).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is an abridged version of the GitHub Actions workflow script
+    for this chapter’s exercises:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that you have had the opportunity to review the pipeline code in this GitHub
+    Actions workflow, you have a fundamental awareness of each step involved and what
+    work is performed in each one. Let’s proceed with the first set of activities
+    required to produce a fully functioning CI/CD pipeline: provisioning the cloud
+    infrastructure.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Provisioning the AWS infrastructure
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To ensure that this exercise is approachable for as wide of an audience as possible,
+    we will be using ClickOps to provision all of the necessary infrastructure in
+    AWS. ClickOps is the term used to describe the process of manually provisioning
+    cloud resources using the provider’s native web console. As its name suggests,
+    this process involves inputting all the necessary information using a keyboard
+    and mouse. ClickOps is widely considered to be an anti-pattern in the world of
+    DevOps, primarily because it is drastically more inefficient and prone to errors
+    than using **Infrastructure as Code** (**IaC**). However, it is extremely helpful
+    for individuals who do not know how to script, write code, or use the command-line
+    interface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prerequisites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To complete this phase of the guide, you will need to ensure the following
+    prerequisites are met:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You must possess an active **AWS account** that is in good standing ([https://console.aws.amazon.com/console/home?nc2=h_ct&src=header-signin](https://console.aws.amazon.com/console/home?nc2=h_ct&src=header-signin)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Important
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that by following this guide, you will be charged by **Amazon Web Services**
+    (**AWS**) for the resources that you create during the exercise. You will continue
+    to be charged until all of the resources have been terminated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is strongly advised that you terminate all of these resources after you have
+    completed this guide to avoid being billed in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Your AWS IAM user holds an active set of access keys. To learn more about creating
+    IAM access keys, see *Managing access keys for IAM* *users*: [https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Your AWS IAM user must be granted the necessary roles that permit it the ability
+    to provision ECS, ECR, and VPC resources in AWS. For more information, see *Identity-based
+    policy examples for AWS* *ECS*: [https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html#IAM_cluster_policies](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html#IAM_cluster_policies).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `AmazonEC2ContainerRegistryFullAccess`, `AmazonEC2FullAccess`, and `AmazonECS_FullAccess`
+    policies. These are all you’ll need to follow this guide, in addition to being
+    an administrative user in your AWS account:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Granting full access, like we are doing here, is not a best practice for security
+    reasons. We are simply making an exception for this demo to make getting through
+    it easier for beginners who are unfamiliar with IAM. As a result, it is strongly
+    advisable to remove these permissions from your IAM user after this exercise is
+    completed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.1: An example of the necessary IAM Pplicies for your AWS user](img/B21803_07_01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.1: An example of the necessary IAM Pplicies for your AWS user'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding screenshot depicts the AWS IAM policies that are necessary to
+    complete this exercise (mentioned previously). You must add these policies to
+    your chosen IAM user. This can be implemented via the **Add permission** menu
+    in the AWS console. For assistance with this process, please consult the official
+    AWS documentation regarding the management of identity-based policies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html#IAM_cluster_policies](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html#IAM_cluster_policies)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Step 1 – fork the repository
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Follow these steps to fork the repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Click on the drop-down arrow in the fork box and choose **Create a new fork**.
+    Alternatively, go to [https://github.com/PacktPublishing/Embracing-DevOps-Release-Management/fork](https://github.com/PacktPublishing/Embracing-DevOps-Release-Management/fork):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.2: Forking the repository in GitHub](img/B21803_07_02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.2: Forking the repository in GitHub'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.3: Confirming the new fork of this repository](img/B21803_07_03.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.3: Confirming the new fork of this repository'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the fork repository page, specify a value for **Owner** and select **Create
+    fork**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Step 2 – create a default VPC
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we move forward, please note that creating multiple default VPCs in the
+    same region is not possible. If you have mistakenly deleted your default VPC,
+    creating a new one is possible. However, it is important to note that restoring
+    a previously deleted default VPC is not available, nor can you designate a current
+    non-default VPC as a default VPC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish a default VPC via the AWS console, follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Access the Amazon VPC console by navigating to [https://console.aws.amazon.com/vpc/](https://console.aws.amazon.com/vpc/).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select **Your VPCs** from the navigation pane:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.4: Creating a default VPC](img/B21803_07_04.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.4: Creating a default VPC'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select **Actions** and then create the default VPC.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select the **Create default VPC** option. Please close the confirmation message
+    afterward:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.5: Confirming your new default VPC](img/B21803_07_05.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.5: Confirming your new default VPC'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 3 – create an HTTP rule in the default security group
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Whenever a rule is added to a security group, it is automatically applied to
+    all resources linked to that group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish a new security group rule via the AWS console, follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Access the Amazon VPC console by navigating to [https://console.aws.amazon.com/vpc/](https://console.aws.amazon.com/vpc/).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select **Security groups** from the navigation pane:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.6: Accessing the Security groups menu](img/B21803_07_06.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.6: Accessing the Security groups menu'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select the desired security group.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select **Actions**, then **Edit** **inbound rules**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.7: Editing the inbound rules of the default security group](img/B21803_07_07.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.7: Editing the inbound rules of the default security group'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Select **Add rule** and then proceed as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: For **Type**, select the **HTTP** protocol.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For **Source type** (inbound rules), do the following to allow traffic:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Select **Anywhere-IPv4** to enable incoming traffic arriving from any IPv4 address
+    (inbound rules). After doing this, a rule gets automatically added for the 0.0.0.0/0
+    IPv4 CIDR block.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Please provide a short **Description** of this **Security** **group** rule:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Figure 7.8: Adding an HTTP rule to the default security group](img/B21803_07_08.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.8: Adding an HTTP rule to the default security group'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select **Save rules**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Step 4 – create an ECR registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Begin using Amazon ECR by setting up a repository in the Amazon ECR console.
+    The Amazon ECR console provides a step-by-step guide to help you create your initial
+    repository. Before starting, please ensure that you have followed all the necessary
+    steps outlined in the *Amazon ECR setup* *guide*: [https://docs.aws.amazon.com/AmazonECR/latest/userguide/get-set-up-for-amazon-ecr.html](https://docs.aws.amazon.com/AmazonECR/latest/userguide/get-set-up-for-amazon-ecr.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish an image repository via the AWS console, follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A repository is a storage location for Docker or **Open Container Initiative**
+    (**OCI**) images within Amazon ECR. When interacting with Amazon ECR, you need
+    to provide the repository and registry location to indicate the destination or
+    source of the image.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You can access the Amazon ECR console by navigating to [https://console.aws.amazon.com/ecr/](https://console.aws.amazon.com/ecr/).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To ensure that this exercise goes smoothly, it is strongly suggested that you
+    choose the **us-east-1** region:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.9: Selecting the correct AWS region to operate un](img/B21803_07_09.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.9: Selecting the correct AWS region to operate un'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select **Get Started**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select **Private** under **Visibility settings**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To ensure that this exercise goes smoothly, it is strongly suggested that you
+    choose `embracing-devops-release-management` as your **Repository** **name** value.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Important
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note the 12-digit number shown at the beginning of your ECR repository name.
+    This is your AWS account number, and you will need it to complete future steps
+    in this guide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Alternatively, you can browse your **AWS account page** to obtain your AWS
+    account number: [https://console.aws.amazon.com/billing/home?#/account](https://console.aws.amazon.com/billing/home?#/account).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For **Tag immutability**, choose to leave it disabled:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.10: Establishing an ECR repository (registry)](img/B21803_07_10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.10: Establishing an ECR repository (registry)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select **Scan on push** to enable the image scanning feature for this repository.
+    If an ECR repository has **Scan on push** enabled, it will begin scanning images
+    automatically whenever there is a push request; otherwise, users will have to
+    manually initiate the scanning process.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For the **KMS encryption** setting, opt to leave it disabled:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.11: Finishing the ECR repository creation process](img/B21803_07_11.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.11: Finishing the ECR repository creation process'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choose **Create repository**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Step 5 – create an ECS cluster
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Creating an Amazon ECS cluster can easily be done through the user-friendly
+    Amazon ECS console.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure that you’ve implemented the prerequisite steps while *setting up Amazon
+    ECS* ([https://docs.aws.amazon.com/AmazonECS/latest/developerguide/get-set-up-for-amazon-ecs.html](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/get-set-up-for-amazon-ecs.html))
+    and assigned the correct IAM permission to your chosen IAM user before proceeding.
+    For additional details and assistance, refer to the *Cluster Examples* section
+    of the documentation ([https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html#IAM_cluster_policies](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security_iam_id-based-policy-examples.html#IAM_cluster_policies)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Amazon ECS console offers a straightforward method for generating the necessary
+    resources for an Amazon ECS cluster through the creation of an AWS CloudFormation
+    stack.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish an ECS Cluster via the AWS console, follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Access the Amazon ECS console by navigating to [https://console.aws.amazon.com/ecs/v2](https://console.aws.amazon.com/ecs/v2).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To ensure that this exercise goes smoothly, it is strongly suggested that you
+    choose the **us-east-1** region.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select **Clusters** from the navigation pane.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select **Create cluster** from the **Clusters** page:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.12: Establishing an ECS cluster](img/B21803_07_12.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.12: Establishing an ECS cluster'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the `embracing-devops-release-management` as your cluster name so that
+    this exercise goes smoothly.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Expand **Infrastructure**, then select **AWS** **Fargate (serverless)**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.13: Configuring your ECS cluster as AWS Fargate (serverless)](img/B21803_07_13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.13: Configuring your ECS cluster as AWS Fargate (serverless)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Expand **Monitoring**, and then toggle **Use Container Insights** on to enable
+    Container Insights.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Expand **Tags** and then configure your tags to assist with identifying your
+    cluster.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'To add a tag, select **Add tag** and do the following:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Input the key name in the **Key** field
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Input the value name in the **Value** field
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To remove a tag, select **Remove** to the right of the tag’s key and value:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.14: Tagging the ECS cluster infrastructure](img/B21803_07_14.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.14: Tagging the ECS cluster infrastructure'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select **Create**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Step 6 – create an ECS task definition
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You can create a task definition by using the console or by editing a JSON file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish a task definition via the AWS console JSON editor, follow these
+    steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To ensure that this exercise goes smoothly, it is strongly suggested that you
+    choose the **us-east-1** region:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.15: Selecting the correct AWS region to operate in](img/B21803_07_15.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.15: Selecting the correct AWS region to operate in'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, edit the `ECS Task Definition` file in your forked repository:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From GitHub, click on the `task-definition.json` file within this book’s repository
+    ([https://github.com/PacktPublishing/Embracing-DevOps-Release-Management/blob/main/chapter07/task-definition.json](https://github.com/PacktPublishing/Embracing-DevOps-Release-Management/blob/main/chapter07/task-definition.json)).
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'From the `task-definition.json` file page, click on the pencil icon to edit
+    the file:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.16: Editing the ECS task definition in the GitHub text editor](img/B21803_07_16.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.16: Editing the ECS task definition in the GitHub text editor'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Locate the two placeholders for your AWS account ID, which is represented as
+    a string of 12 consecutive “X” characters:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.17: Locating the AWS ID number placeholders](img/B21803_07_17.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.17: Locating the AWS ID number placeholders'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Replace the two placeholders for your AWS account ID with your actual AWS account
+    ID and select **Commit changes**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can browse your **AWS account page** to obtain your AWS account number:
+    https://console.aws.amazon.com/billing/home?#/account.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.18: Replacing the placeholders with your AWS ID number](img/B21803_07_18.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.18: Replacing the placeholders with your AWS ID number'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within the commit confirmation menu, add a meaningful commit message and select
+    **Commit directly to the** **main branch**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.19: Committing your changes in the GitHub text editor](img/B21803_07_19.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.19: Committing your changes in the GitHub text editor'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, choose **Commit changes**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Access the Amazon ECS console by navigating to [https://console.aws.amazon.com/ecs/v2](https://console.aws.amazon.com/ecs/v2).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select **Task definitions** from the navigation pane.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select **Create new task definition with JSON** from the menu on the **Create
+    new task** **definition** page:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.20: Creating a new task definition with JSON](img/B21803_07_20.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.20: Creating a new task definition with JSON'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modify your JSON file in the JSON editor window.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Copy the `task-definition.json` file from the repository that you edited earlier
+    and paste it into the JSON editor box:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 7.21: Copying the task-definition.json file that you edited earlier](img/B21803_07_21.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.21: Copying the task-definition.json file that you edited earlier'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: If there is content in the JSON editor box before you paste your customized
+    `task-definition.json` file into it, ensure that it is removed first. The JSON
+    editor box must be empty before adding your `task-definition.json` file’s contents
+    to it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.22: Confirming and creating the ECS task definition](img/B21803_07_22.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.22: Confirming and creating the ECS task definition'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Select **Create**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Step 7 – create an ECS service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The console enables rapid creation and deployment of a service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish an ECS service via the AWS console, follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To ensure that this exercise goes smoothly, it is strongly suggested that you
+    choose the **us-east-1** region:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.23: Selecting the correct AWS region to operate in](img/B21803_07_23.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.23: Selecting the correct AWS region to operate in'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Access the Amazon ECS console by navigating to [https://console.aws.amazon.com/ecs/v2](https://console.aws.amazon.com/ecs/v2).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select **Clusters** from the navigation pane.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: On the **Clusters** page, select the cluster that you would like to create a
+    service in.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select the **Create** option from the **Services** tab:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.24: Creating a new ECS service for your ECS task](img/B21803_07_24.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.24: Creating a new ECS service for your ECS task'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Provide details about your application’s deployment in the **Deployment** **configuration**
+    section:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.25: Configuring your new ECS service’s launch type](img/B21803_07_25.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.25: Configuring your new ECS service’s launch type'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Under **Compute options**, select **Launch type**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Select **Service** under **Application type**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.26: Naming and configuring the ECS service](img/B21803_07_26.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.26: Naming and configuring the ECS service'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the **Task definition** area, select the version and family that you
+    wish to apply.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To ensure that this exercise goes smoothly, it is strongly suggested that you
+    choose `embracing-devops-release-management` under **Service name**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To specify your **Desired tasks**, input the number of tasks to be initiated
+    and managed within the service.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For **Networking**, the default VPC and its associated networking should automatically
+    populate within the fields. However, ensure that the configuration is configured
+    similar to the following:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.27: Selecting the default VPC for networking – Public IP!](img/B21803_07_27.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.27: Selecting the default VPC for networking – Public IP!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tagging resources is a great way to locate cloud infrastructure after you’ve
+    provisioned it. This is particularly useful after you have created hundreds or
+    thousands of resources.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To add tags to your ECS service, expand **Tags** and then configure your tags
+    to assist with identifying your service and tasks.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To add a tag, select **Add tag** and then do the following:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Input the key name in the **Key** field
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Input the value name in the **Value** field
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To remove a tag, select the **Remove** option to the right of the tag’s key
+    and value.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select **Create**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This concludes the first portion of this guide, *Provisioning the AWS infrastructure*.
+    In this section, you have provisioned the infrastructure that is necessary to
+    support the CICD pipeline operations that are outlined in the second portion of
+    this guide, *Configure the GitHub* *Actions Workflow*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s briefly review what you’ve accomplished so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ve ensured that your AWS IAM user has the necessary permissions assigned
+    so that it can provision the required cloud resources within your AWS account.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You’ve ensured that your AWS account is equipped with a default VPC and associated
+    default networking resources.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You’ve modified the *default security group* within your default VPC so that
+    it includes an HTTP rule. This is required to allow users to browse your web app
+    on port 80, which we will be deploying in the second portion of this guide.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You’ve created the necessary *ECS registry* to store Docker images being produced
+    by your GitHub workflow. We will configure this in the next section of this guide.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You’ve created the necessary *ECS cluster* that will host the Docker containers
+    being produced and deployed by your GitHub actions workflow. We will configure
+    this in the next section of this guide.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You’ve created the necessary *ECS task definition* that will manage the operational
+    activity of your web app deployment. This ensures that the web app deployment
+    is running with all of the appropriate configurations and operates with resiliency
+    in the face of unexpected system issues.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You’ve created the necessary *ECS service* that is associated with your configured
+    ECS task definition. This is required to ensure that the required networking infrastructure
+    is set up so that users can browse your web app running in ECS, from their local
+    web browser.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the next portion of this guide, *Configuring the GitHub Actions workflow*,
+    you will be shown how to configure a GitHub Actions workflow. In this second exercise,
+    you will enable the necessary backend settings, learn how to configure input parameters
+    and inject secrets into the build process, and understand how to initiate a pipeline
+    run and analyze the build logs. Finally, you will be shown how to access the web
+    application that you deployed into ECS, verifying its existence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring the GitHub Actions workflow
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Several configurations will need to be made if you wish to successfully run
+    the GitHub Actions workflow and achieve a successful deployment. Primarily among
+    these are input parameters, which take the form of variables and secrets. Notably,
+    secrets function almost identically to variables, except they are masked in the
+    logs and visible to no one, once they have been configured in the repository settings.
+    Once you can successfully initiate a pipeline run, examine the logging output
+    to verify any issues, failures, and successes. Finally, you will be able to observe
+    the functioning web application running in AWS EC2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prerequisites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To complete this phase of the guide, you will need to ensure you have an active
+    *GitHub account* ([https://github.com/](https://github.com/)) that is in good
+    standing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 1 – configure the necessary GitHub repository variables and secrets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Configuring the backend for GitHub Actions is a simple process, but it does
+    help to know what to look for. In this step, you will enable GitHub Issues for
+    this repository, which allows the pipeline to raise an issue automatically if
+    one is flagged during a build. Crucially, we will also be configuring pipeline
+    variables and secrets so that they can be injected into the pipeline during a
+    run. This is a standard technique in DevOps, allowing the same CI/CD pipeline
+    script to be run in multiple environments with settings unique to each use case,
+    including yours!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To establish the necessary GitHub repository variables and secrets, follow
+    these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In GitHub, navigate to the `embracing-devops-release-management` repository:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.28: Navigating to the Settings menu in your forked repository](img/B21803_07_28.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.28: Navigating to the Settings menu in your forked repository'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Enable GitHub **Issues** for this repository:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.29: Enabling GitHub Issues for your forked repository](img/B21803_07_29.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.29: Enabling GitHub Issues for your forked repository'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the **Security** section of the repository menu, navigate to the **Secrets
+    and** **variables** option:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.30: Accessing the Secrets and variables option for Actions](img/B21803_07_30.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.30: Accessing the Secrets and variables option for Actions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, select **Actions**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the **Actions secrets and variables** menu, choose the **Secrets** tab.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Then, select **New** **repository secret**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.31: Adding secrets to your GitHub Actions repository](img/B21803_07_31.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.31: Adding secrets to your GitHub Actions repository'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will need to provide the GitHub Actions workflow permission to provision
+    resources in your AWS account. To do this, you will need to provide AWS access
+    keys so that AWS CLI operations can be run within the pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a new repository secret for your AWS access key ID and then follow these
+    steps:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the `AWS_ACCESS_KEY_ID`.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the **Secret** field, enter the value for your AWS access key ID.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Choose **Add secret**:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A secret is an environment variable you establish in a repository, organization,
+    or environment. With GitHub Actions, you can integrate the secrets you provide
+    into your workflows. If you deliberately include a secret in a workflow, then
+    GitHub Actions will be able to read the secret during a pipeline run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.32: Adding your AWS access key ID as a pipeline secret](img/B21803_07_32.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.32: Adding your AWS access key ID as a pipeline secret'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitHub will automatically redact any mention of secrets from any logs that may
+    have been generated by a job. It is advisable to refrain from intentionally publishing
+    secrets to the log.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a new repository secret for your AWS secret access key ID:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the `AWS_SECRET_ACCESS_KEY`.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the **Secret** field, enter the value for your AWS secret access key.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Choose **Add secret**:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.33: Adding your AWS secret access key as a pipeline secret](img/B21803_07_33.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.33: Adding your AWS secret access key as a pipeline secret'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the **Actions secrets and variables** menu, select the **Variables** tab.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Then, select **New** **repository variable**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.34: Adding variables to your GitHub Actions repository](img/B21803_07_34.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.34: Adding variables to your GitHub Actions repository'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a new repository variable for your `ECR_REGISTRY`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the `XXXXXXXXXXXX.dkr.ecr.us-east-1.amazonaws.com` as your ECR repository
+    address.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Don’t forget to use your own AWS account ID in the full ECR repository address
+    when entering it into the text box.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One technique to store and reuse configuration information that isn’t sensitive
+    is through variables. Variables are a great way to save configuration information
+    such as compiler flags, usernames, and server names. The runner that executes
+    your workflow is responsible for interpolating variables and they can be created,
+    read, and modified by commands that run in actions or workflow phases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Choose **Add variable**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.35: An example of filling in a GitHub Actions repository variable](img/B21803_07_35.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.35: An example of filling in a GitHub Actions repository variable'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Warning
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, variables render unmasked in your build outputs. If you need greater
+    security for sensitive information, such as passwords, use secrets instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enter the remaining necessary repository variables for the pipeline to operate
+    successfully.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Repeat the process mentioned in *Step 11* until all remaining repository variables
+    have been added:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.36: An illustration of all the necessary pipeline variables](img/B21803_07_36.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.36: An illustration of all the necessary pipeline variables'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following table contains all of the required *variable* names and their
+    *suggested values*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Variable Name** | **Variable Value** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **ECR_REGISTRY** | `XXXXXXXXXXXX.dkr.ecr.us-east-1.amazonaws.com` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **MY_AWS_REGION** | `us-east-1` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **MY_CONTAINER_NAME** | `embracing-devops-release-management` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **MY_ECR_REPOSITORY** | `embracing-devops-release-management` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **MY_ECS_CLUSTER** | `embracing-devops-release-management` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **MY_ECS_SERVICE** | `embracing-devops-release-management` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **MY_ECS_TASK_DEFINITION** | `./``chapter07/task-definition.json` |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Table 7.1: A handy chart containing all of the necessary variables'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensure that `./` is appended to the beginning of the value that’s been set for
+    MY`_ECS_TASK_DEFINITION`. This is a necessary filesystem path and it is a valid
+    syntax that’s required for GitHub Actions to pick up the `task-definition.json`
+    file and use it in the pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 2 – kick off a GitHub Actions workflow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'It is finally time to execute the pipeline. This is where the rubber meets
+    the road and we accomplish what we have set out to do. Proceed with the following
+    steps to initiate the GitHub Actions workflow and deploy your Docker container
+    to ECS:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Navigate to the GitHub **Actions** menu:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.37: Accessing the GitHub Actions menu](img/B21803_07_37.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.37: Accessing the GitHub Actions menu'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Select **I understand my workflows, go ahead and** **enable them**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.38: Enabling GitHub Actions for usage](img/B21803_07_38.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.38: Enabling GitHub Actions for usage'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the **All workflows** menu, under **Actions**, choose the workflow for
+    this exercise and **Deploy to** **Amazon ECS**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.39: Navigating to the Deploy to Amazon ECS workflow menu](img/B21803_07_39.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.39: Navigating to the Deploy to Amazon ECS workflow menu'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the **Deploy to Amazon ECS** workflow menu, choose **Run workflow**, then
+    select **Run workflow**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.40: Initiating a GitHub Actions workflow run](img/B21803_07_40.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.40: Initiating a GitHub Actions workflow run'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding screenshot shows the main menu for the `Deploy to Amazon ECS`
+    GitHub Actions workflow that you have configured, built, and deployed throughout
+    this exercise. This is where you can initiate new workflow runs and find a history
+    of current and previous workflow runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After the pipeline run has been initiated, a new entry will be added to the
+    build history for this GitHub Actions workflow. While the workflow is running,
+    a yellow indicator will appear to the left of the entry in the build history.
+    Upon completing the pipeline, the yellow indicator will transition to red for
+    a failing build, or green for a passing build:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.41: A GitHub Actions workflow actively running](img/B21803_07_41.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.41: A GitHub Actions workflow actively running'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 3 – analyze deployment logs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this step, we will scrutinize the build logs from the GitHub Actions workflow
+    that was run in the previous step. There are three prominent phases in this pipeline.
+    The first phase features static code analysis testing. The second phase includes
+    building the web app into the Docker image. Finally, the last phase features dynamic
+    application security testing to evaluate the container after it has been deployed
+    to ECS. All these activities will be recorded in the GitHub Actions build logs
+    after completion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the GitHub Actions workflow has been initiated, click on the pipeline phases
+    to observe the logs for failures, issues, and successes!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.42: The detailed menu of a single workflow in the build history
+    area](img/B21803_07_42.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.42: The detailed menu of a single workflow in the build history area'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As shown in the following screenshot, the pipeline has been divided into two
+    primary phases, **Test** and **Build & Deploy**. However, it should be noted that,
+    within the **Build & Deploy** phase of the pipeline, a dynamic application security
+    test occurs after the deployment has been completed and before the end of the
+    pipeline phase. You can access the details and history for each of these individual
+    phases to observe the build logs that are associated with each phase:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.43: Examining the different pipeline phases of the workflow](img/B21803_07_43.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.43: Examining the different pipeline phases of the workflow'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having a graphical representation of each phase of the pipeline is convenient
+    to quickly assess its status and organize by logical separation of duties. In
+    this dashboard, you can quickly see who triggered the pipeline, what git commit
+    was associated with the changes, how long the pipeline ran for, and how many artifacts
+    were produced as a result, all at a glance! This is useful enough when you’re
+    looking at just a single pipeline run, but it makes things exponentially easier
+    to understand when you’re parsing hundreds or tens of hundreds of build logs in
+    the history.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following screenshot shows the activities associated with the **Test**
+    phase of the GitHub Actions workflow. As you can see, this includes two SASTs
+    conducted by separate tools – HTMLTest and SAST SCAN. Together, these tests check
+    the repository and try to identify any potential issues with relation to the DOM,
+    NodeJS, JSON, YAML, software dependencies, and credentials existing in the source
+    code. If all tests pass, the **Test** stage of the GitHub Actions workflow will
+    conclude with a green checkmark and the pipeline will move forward to the **Build
+    &** **Deploy** stage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.44: An illustration of the SAST scans running in the pipeline](img/B21803_07_44.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.44: An illustration of the SAST scans running in the pipeline'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following screenshot shows the application build phase of the GitHub Actions
+    workflow. In the **Build & Deploy** phase, the AWS credentials are configured,
+    the web app is built and tagged as a new Docker image, and the new Docker image
+    is published to the ECR repository (registry). After, the ECS task definition
+    gets updated to reflect the new Docker image tag. Finally, the new Docker container
+    gets deployed to ECS:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.45: The Build & Deploy phase operating in the GitHub Actions workflow](img/B21803_07_45.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.45: The Build & Deploy phase operating in the GitHub Actions workflow'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.46: Preparing to deploy the newly built Docker image in ECS](img/B21803_07_46.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.46: Preparing to deploy the newly built Docker image in ECS'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As shown in the following screenshot, the application is already deployed and
+    running in ECS. Thereafter, an automated script is executed during the workflow
+    run to dynamically capture the web application’s public IP address, which then
+    gets stored as an environment variable in the shell. This is performed using the
+    AWS CLI, and it is executed on the GitHub Actions runner. After the IP address
+    is captured as an environment variable, it is used as the target of the OWASP
+    ZAProxy scanner to perform DAST against the application. If any issues are identified
+    by the OWASP ZAProxy, a new GitHub issue is automatically opened in the repository
+    for manual review:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.47: Running a DAST scan in the workflow](img/B21803_07_47.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.47: Running a DAST scan in the workflow'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As shown in the following screenshot, the OWASP ZAProxy has completed its scan,
+    and the results are displayed in the build logs. After all of the operations in
+    the GitHub Actions workflow are complete, the pipeline cleans up the build environment
+    and unsets any secrets and environment variables that were used. At this point,
+    the GitHub Actions runner is gracefully decommissioned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.48: Viewing the results of the OWASP ZAProxy web app scan](img/B21803_07_48.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.48: Viewing the results of the OWASP ZAProxy web app scan'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 4 – observe the deployed application running in AWS ECS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that the GitHub Actions workflow has been completed and the web app has
+    been deployed to ECS, let’s open a browser window and observe our handy work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two easy ways that you can obtain the public IP address of your running
+    web application:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After looking in the deployment logs, you can find the IP address that was
+    used to scan the running web application when an automated scan was performed
+    with OWASP ZAProxy:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.49: Locating the public IPv4 address of the deployed web app](img/B21803_07_49.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.49: Locating the public IPv4 address of the deployed web app'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Open the AWS web console and get the ECS service IP address: [https://console.aws.amazon.com/ecs/v2](https://console.aws.amazon.com/ecs/v2):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Don’t forget to select the correct AWS region that your ECS cluster was deployed
+    in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.50: Navigating to the ECS Clusters menu in AWS](img/B21803_07_50.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.50: Navigating to the ECS Clusters menu in AWS'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Navigate to your ECS cluster:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.51: Accessing the ECS cluster of your web app](img/B21803_07_51.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.51: Accessing the ECS cluster of your web app'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Click on the ECS task associated with your web app deployment:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.52: Navigating to the ECS Tasks menu of your web app](img/B21803_07_52.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.52: Navigating to the ECS Tasks menu of your web app'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Click on the current deployment hash number associated with your ECS task’s
+    deployment:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.53: Accessing the latest version of your ECS task](img/B21803_07_53.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.53: Accessing the latest version of your ECS task'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Look under the **Public IP** heading to obtain your web app’s public IP address:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.54: Locating the current public IPv4 address of your web app](img/B21803_07_54.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.54: Locating the current public IPv4 address of your web app'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If everything has gone correctly and your GitHub Actions workflow has run successfully,
+    you should be able to browse the web app and experience it for yourself. The following
+    screenshot provides an example of what you should see upon accessing the web application
+    with your web browser:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.55: Browsing your web app running in AWS ECS!](img/B21803_07_55.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.55: Browsing your web app running in AWS ECS!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The web application that you deployed into ECS is a simple website that was
+    built using the Bootstrap web kit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This concludes [*Chapter 7*](B21803_07.xhtml#_idTextAnchor120). In this chapter,
+    you have been shown a simple example of CI/CD pipeline code, written as a GitHub
+    Actions workflow. After being exposed to CI/CD pipeline syntax, you now have a
+    fundamental understanding of the way that pipelines are composed and how they
+    can be versioned. This means that you are equipped with the ability to read, write,
+    and comprehend pipeline files and can determine what activities occur within each
+    step therein. Additionally, you have been shown how to provision AWS infrastructure
+    using ClickOps. By leveraging this foundational knowledge, you are poised to build
+    your skills and move toward advanced infrastructure deployment strategies, namely
+    IaC. Not only that, but you have gained essential knowledge that is needed to
+    configure the backend of GitHub Actions. As a result of these activities, you
+    can now prepare end-to-end workflows that cover DevOps release management principles
+    such as testing, building, and deploying applications as Docker containers into
+    the cloud! Finally, you have been given a primer on writing useful documentation
+    that accompanies your software releases, including changelogs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we’ll discuss how CI/CD pipelines enforce good DevOps release
+    management. The topics include balancing CI/CD governance with speed to market,
+    developing your team’s branching strategy, constructing release pipelines, and
+    implementing a change approval process that is appropriate for DevOps release
+    management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Resources
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To learn more about the topics that were covered in this chapter, take a look
+    at the following resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://docs.aws.amazon.com/AmazonECS/latest/userguide/getting-started-fargate.html](https://docs.aws.amazon.com/AmazonECS/latest/userguide/getting-started-fargate.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://docs.aws.amazon.com/AmazonECS/latest/userguide/create-container-image.html](https://docs.aws.amazon.com/AmazonECS/latest/userguide/create-container-image.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://docs.aws.amazon.com/AmazonECS/latest/userguide/get-set-up-for-amazon-ecs.html](https://docs.aws.amazon.com/AmazonECS/latest/userguide/get-set-up-for-amazon-ecs.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://docs.github.com/en/actions/deployment/deploying-to-your-cloud-provider/deploying-to-amazon-elastic-container-service](https://docs.github.com/en/actions/deployment/deploying-to-your-cloud-provider/deploying-to-amazon-elastic-container-service)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://earthly.dev/blog/github-actions-and-docker/](https://earthly.dev/blog/github-actions-and-docker/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Answer the following questions to test your knowledge of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is a GitHub Actions Workflow?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is ClickOps?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is an AWS access key?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is an AWS IAM policy?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is a GitHub repository “fork”?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is an AWS security group?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is an ECS cluster?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is a container image repository?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is an environment variable?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What is a `README.md` file?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

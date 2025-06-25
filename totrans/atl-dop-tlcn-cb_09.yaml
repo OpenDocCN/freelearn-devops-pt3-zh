@@ -1,0 +1,1294 @@
+- en: '9'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Leveraging Docker and Kubernetes for Advanced Configurations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we looked at implementing continuous deployment through
+    Bitbucket Pipelines and worked with various platforms using various technologies.
+    However, we reserved discussions of deploying with Docker and Kubernetes until
+    now. Bitbucket Pipelines can leverage containers for its build environment, as
+    a build package, and even as runners to run pipeline executions. In each case
+    mentioned, you can use a public image or create and use a private image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will examine using Docker container technology and Kubernetes.
+    We’ll cover the following recipes in this chapter while implementing Bitbucket
+    Pipelines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a Docker image as a build environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using containerized services in Bitbucket Pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Docker commands in Bitbucket Pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying a Docker image to Kubernetes using Bitbucket Pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Setting up Docker-based runners in Linux
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s begin our exploration of Docker and Kubernetes in Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Before we begin our exploration, we should identify what’s needed to work with
+    Docker and Kubernetes in our local development environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To work with **Docker images**, you need to make sure Docker applications are
+    installed on your runner machines for executing any Docker commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For development machines that are used to create build environments, a good
+    option is Docker Desktop, an application that provides all the required Docker
+    tools for building, packaging, running, and deploying applications as containers.
+    It is available for Mac, Windows, and Linux machines. More information can be
+    found at [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runners only require Docker applications that can build and run containerized
+    applications. For that, Docker Engine is a good application to install and configure
+    on your runner. It is available for many common Linux distributions, including
+    Ubuntu, Debian, and Red Hat. More information can be found at [https://docs.docker.com/engine/](https://docs.docker.com/engine/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For working with Kubernetes clusters, `kubectl` is the preferred tool. The binary
+    for `kubectl` can be downloaded for Linux, Mac, or Windows. Package managers such
+    as yum for Red Hat Linux, apt for Debian Linux, homebrew for Mac, and chocolatey
+    for Windows can also download and install `kubectl`. More information can be found
+    at [https://kubernetes.io/docs/home/](https://kubernetes.io/docs/home/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sample code for this chapter can be found in the `Chapter9` folder of this
+    book’s GitHub repository [https://github.com/PacktPublishing/Atlassian-DevOps-Toolchain-Cookbook/tree/main/Chapter9](https://github.com/PacktPublishing/Atlassian-DevOps-Toolchain-Cookbook/tree/main/Chapter9)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing containers and Bitbucket Pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One of the most recent advances in technology that furthered the DevOps movement
+    was the introduction of **container** technology. As mentioned in [*Chapter 1*](B21937_01.xhtml#_idTextAnchor019),
+    instead of setting up complete environments as physical or **virtual machines**
+    (**VMs**), an application and its required libraries would reside in a self-contained
+    entity called a container. This container interacts with outside resources through
+    a managing application. At the time of writing, the most popular application for
+    managing containers is Docker Engine from Docker Inc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Containers have allowed for application portability at an unprecedented level.
+    Developers can create an application, package it as a container, and run tests
+    on the application in a test environment managing that container. Deployment to
+    production would use the same container image, but in an environment with possibly
+    more resources, depending on the target, allowing multiple instances of the application
+    container for load sharing or high availability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Bitbucket Pipelines** can work with containers. So, let’s consider some of
+    the uses of containers in Bitbucket Pipelines.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, Bitbucket Pipelines uses Docker images as build. You can define
+    which Docker image to use for your build.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can also use Bitbucket Pipelines to create a Docker container image and
+    update the appropriate Docker container repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bitbucket Pipelines can use runners that can be created from Docker images to
+    execute builds. This may allow for dynamic allocation of runners to perform a
+    build by creating as many Docker containers as needed and destroying those containers
+    when complete. The only limitation to this is the available resources in your
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another application of container technology comes in the form of Kubernetes.
+    Kubernetes was initially developed by Google to abstract applications stored in
+    containers as services and provide an environment for establishing and maintaining
+    clusters of containerized services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, Bitbucket Pipelines can build an application into a Docker container
+    image. This image can be deployed into a Kubernetes cluster as part of the pipeline
+    script.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand how Docker containers work with Bitbucket Pipelines,
+    let’s examine how we can make that happen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a Docker image as a build environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Bitbucket Pipelines uses a Docker image as a platform to execute the commands
+    found in `bitbucket-pipelines.yml`. This image is normally a default provided
+    by Atlassian but can be replaced with a custom image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s examine how Bitbucket Pipelines uses these Docker images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In Bitbucket Pipelines, the runner executes the commands specified on `bitbucket-pipelines.yml`
+    in a build environment. This build environment always uses a Docker container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a Docker image isn’t specified, Bitbucket Pipelines will select a default
+    Docker image for the container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default images used by Bitbucket Pipelines are stored by Atlassian in **Docker
+    Hub** at [https://hub.docker.com/r/atlassian/default-image/](https://hub.docker.com/r/atlassian/default-image/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Version numbers for the default image can be specified. If no version number
+    is specified, the version specified with the **latest** tag will be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following table provides a synopsis of the default image versions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Version** | **Tags** | **Contents** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1.x (deprecated) | `latest` | Platform: `ubuntu 14.04`Packages available
+    out of the box: `wget xvfb curl git: 1.9.1 java: 1.8u66 maven: 3.0.5 node: 4.2.1
+    npm: 2.14.7 nvm: 0.29.0 python: 2.7.6` `gcc: 4.8.4` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2.x (deprecated) |  | Platform: `ubuntu 16.04`Packages available out of the
+    box: `wget xvfb curl ssh git: 2.7.4 mercurial: 3.7.3 java: Open-JDK 1.8u151 maven:
+    3.3.9 node: 8.9.4 npm: 5.6.0 nvm: 0.33.8 python: 2.7.12 gcc: 5.4.0` `ant: 1.9.6`
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3.x (deprecated) |  | Platform: `ubuntu` `20.04 (LTS)`Packages available
+    out of the box: `wget xvfb curl ssh zip jq tar parallel git: 2.39.1 node: 14.17.5
+    npm: 6.14.14 nvm: 0.38.0 python: 3.8.10 gcc: 9.4.0` `ant: 1.10.7` |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4.x (recommended) |  | Platform: `ubuntu` `22.04 (LTS)`Packages available
+    out of the box: `wget xvfb curl ssh zip jq tar parallel git: 2.39.1 node: 18.16.1
+    npm: 9.5.1 nvm: 0.39.2 python: 3.10.6 gcc: 11.3.0` `ant: 1.10.12` |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 9.1 – Default Atlassian build environment Docker images
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An image tagged as `latest` is using an older image with other images that are
+    created more recently. This allows for backward compatibility with older Bitbucket
+    Pipelines builds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To specify the desired version, add the following line to `bitbucket-pipelines.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, `<version number>` represents the desired version or tag (such as `latest`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can specify any Docker image, from a public or private repository, to create
+    our build environment. Let’s examine the methods for doing so in our next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Bitbucket Pipelines can use any Docker image from public or private repositories.
+    The information that’s required differs based on whether the repository is public
+    or private.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s learn how to use a Docker image from a public registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a public image
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A public repository hosts Docker images available for use by anyone. This repository
+    can reside on Docker Hub, another repository, or even a self-published repository,
+    so long as it can be accessed on the internet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at using a public Docker image for your build environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Specify the image by name in the `bitbucket-pipelines.yml` file. If a tag isn’t
+    included, the `latest` tag is implied:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If an account is specified, it should be included as part of the name:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Specific versions can be included after the image’s name with a colon:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If you’re using a public image not hosted on Docker Hub, include the repository’s
+    URL in the image specification:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, you’ve learned how to specify public Docker images for build environments.
+    Now, let’s look at using private images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a private image
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Private Docker repositories are often used by companies and other organizations
+    to store custom Docker images containing that organization’s intellectual property.
+    These repositories are often secured through authentication policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at configuring build environments by using private Docker images:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can add secured variables to store your credentials and refer to the variables
+    in the `bitbucket-pipelines.yml` file. Variables and secrets were discussed in
+    [*Chapter 6*](B21937_06.xhtml#_idTextAnchor103). The following code snippet shows
+    an example of a private Docker Hub repository:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If your private Docker repository uses AWS `aws` section:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Another method of passing AWS credentials involves setting up an IAM role in
+    AWS and setting up Bitbucket Pipelines as a web identity provider. This allows
+    Bitbucket Pipelines to connect to AWS ECR using Open ID Connect. Detailed instructions
+    for this are located at [https://support.atlassian.com/bitbucket-cloud/docs/use-aws-ecr-images-in-pipelines-with-openid-connect/](https://support.atlassian.com/bitbucket-cloud/docs/use-aws-ecr-images-in-pipelines-with-openid-connect/).
+    The following code snippet must then be placed in `bitbucket-pipelines.yml`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If your private Docker repository is located in **Google Container Registry**
+    (**GCR**), you must create a service account in the GCP admin console that grants
+    *Viewer* access to GCR for Bitbucket Pipelines. This will create a private key
+    in JSON format. Download the key and save it in Bitbucket Pipelines as a secured
+    variable. You can then access the image using the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For any other private Docker repository, provide the registry URL and include
+    the credentials as secured variables. This is shown in the following code snippet:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, you’ve seen a variety of places where Bitbucket Pipelines can retrieve
+    Docker images for use as build environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we’ll look at defining and using containerized services while running
+    our Bitbucket pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using containerized services in Bitbucket Pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: You can run multiple services in a Bitbucket pipeline by defining containers
+    to use. Once the pipeline runs, these services are scheduled to run in the step
+    they are invoked. Services that can be invoked in this manner include databases,
+    code analytics, and web services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll look at defining and using containerized services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There are a few things to understand about the limitations of using services
+    implemented in containers during pipeline executions. Let’s take a close look
+    at them now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a limited number of resources available for these containerized services.
+    Any given step in the pipeline can work with a maximum of five services. If you
+    need to run with a larger number of services, you can define a `docker run` or
+    `docker-compose`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each of these services will run without waiting for service startup. While these
+    services are running, you cannot access the services or their logs through REST
+    API calls, although logs should be available through the Bitbucket Pipelines `29418`
+    will be reserved and cannot be used for external actions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most involved limits for services involve memory. Each step can be defined
+    as either a regular step with a 4,096 MB memory limit or as a large build step
+    (defined by adding the `size: 2x` statement in the step definition), which increases
+    the memory limit to 8,192 MB.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The memory in a step is divided into one build container and the number of service
+    containers as defined by the step. A build container requires a minimum of 1,024
+    MB. This amount of memory is needed to handle the build process and any overhead
+    required by Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The remaining memory is then available to the service containers. After memory
+    is allocated by the build container, 3,027 MB or 7,128 MB is left over for the
+    service containers. By default, each service container can receive 1,024 MB or
+    a custom amount between 128 MB and the maximum amount. This can be set by using
+    the `memory` keyword in the service definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your build step includes Bitbucket Pipes, it uses a built-in Docker service.
+    By default, this Docker service occupies 1,024 MB of the build step’s memory but
+    can be configured to a custom amount by setting the memory between 128 MB to the
+    maximum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand these limitations, let’s learn how to define the services
+    that can run on a given step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The following is a set of examples of the types of services that can be defined
+    within a build step. In this recipe, we’re going to look at examples that use
+    them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Database service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Data store (for example, NoSQL) service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Docker-in-Docker service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s look at how to define these services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a containerized database service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s start with what the definition would be for a database service that had
+    all default values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the `definitions:` section, specify the service name in `services:`, add
+    the Docker image using the `image:` keyword, and the necessary credentials (as
+    secure variables) in the `variables:` section. This should look as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To use the service in a step, add the service in the `services:` section of
+    the step. This is shown in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To customize the memory allocation, add the desired amount of memory, in MB,
+    after the `memory:` keyword in the `definitions:` section. The code should now
+    look as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We now have a database service running for our build step with 2,048 MB in its
+    service container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a containerized data store service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s create our data store service in the same manner that we did in the previous
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the `definitions:` section, set up the service name in `services:` and add
+    the Docker image using the `image:` keyword. These additions should look as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To use the service in a step, simply add it to the `services:` section of the
+    step. We’ve also added a command we’re running based on the service. This is shown
+    in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, we’ve learned how to define a containerized service and use it within
+    the build step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s learn how to invoke a Docker-in-Docker service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a service for Docker-in-Docker
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s look at running a Docker service within our build step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the `definitions:` section, set up the service name in `services:`. This
+    should look as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To use the service in a step, add it to the `services:` section of the step.
+    We’ve also added a command we’re running based on the service. This is shown in
+    the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'You can give your Docker services custom names. Define the service with the
+    custom name and set `type:` to `docker`. A detailed example of a custom Docker
+    service with memory size customizations is shown in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, we’ve learned how to define Docker as a service from within Bitbucket
+    Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we’ll learn how to deploy our Bitbucket Pipelines output as a Docker image
+    and push the image to a Docker repository. For that, we need to understand how
+    to execute Docker commands. Let’s see how that’s done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Docker commands in Bitbucket Pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: If you have a Dockerfile in your Bitbucket repository, you can use Bitbucket
+    Pipelines to build the image and push it to your Docker repository. You can do
+    this by executing Docker commands from within the `bitbucket-pipelines.yml` file.
+    Let’s take a closer look at how that’s done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before adding Docker commands to the `bitbucket-pipelines.yml` file, we need
+    to enable the following configurations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Allowing access to the Docker daemon
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Enabling Docker BuildKit
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These configurations are part of `bitbucket-pipelines.yml`. Let’s see where
+    they go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling access to the Docker daemon
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Access to the Docker daemon as a service can be done either by adding Docker
+    as a service to an individual step, which is recommended so that you can keep
+    track of how many services your overall pipeline is running, or by adding Docker
+    as a service to all steps. Let’s see how each alternative is done:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To add Docker as a service for the build step, make sure it is present in the
+    `services:` section of the step. This is illustrated in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'To add Docker as a service globally, add `docker` in the `options:` section
+    and set it to `true`, as shown in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: There are a few things to note about enabling access to the Docker daemon. Docker
+    is defined as a service by default, so we don’t need to define it in the `definitions:`
+    section of `bitbucket-pipelines.yml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These days, creating Docker builds involves using Docker BuildKit. So, let’s
+    learn how to work with Docker BuildKit in Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling Docker BuildKit
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Docker BuildKit is a default part of building when using Docker Desktop or Docker
+    Engine v23.0 and beyond. We want to make sure it is enabled to ensure compatibility
+    with these versions. So, let’s explore how to work with Docker BuildKit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable Docker BuildKit, make sure the `DOCKER_BUILDKIT` environment variable
+    is set to `1`, as shown in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s learn how to use Docker commands in Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: With Docker and Docker BuildKit enabled, we can run most Docker commands. For
+    security, reasons Bitbucket Pipelines has placed limitations on the Docker commands
+    that can be run, as well as the modes of other Docker commands. A detailed list
+    of the restrictions can be found at [https://support.atlassian.com/bitbucket-cloud/docs/run-docker-commands-in-bitbucket-pipelines/](https://support.atlassian.com/bitbucket-cloud/docs/run-docker-commands-in-bitbucket-pipelines/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the meantime, we’ll consider the common use cases for incorporating Docker
+    into Bitbucket Pipelines. These include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a Docker image from a Dockerfile
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing secrets to Docker BuildKit from Bitbucket secured variables
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing secrets to Docker BuildKit from external secret managers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pushing a Docker image to a Docker repository
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s examine these common use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a Docker image from a Dockerfile
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'With Docker BuildKit enabled, Bitbucket Pipelines can build a Docker image.
+    Let’s look at this in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure that a Dockerfile exists at the root level of your Bitbucket repository.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You may want to specify your image’s name as a variable.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Add the following line in the script portion of your build step:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With this done, let’s move on to the next use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Passing secrets to Docker BuildKit with secured variables
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'If we need to pass secrets such as credentials or API keys to a BuildKit build,
+    we can use secured variables in Bitbucket to pass them. Here’s how we can do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create the secure variable in Bitbucket.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'In the Dockerfile, add a `RUN` instruction that mounts the secure variable
+    (using the `--mount=type=secret` flag) into the default Docker secret store `(/run/secrets/*)`.
+    This is illustrated in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'There’s another way secrets can be passed to Docker BuildKit: using an external
+    secret manager. So, let’s explore how to work with external secret managers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Passing secrets to Docker BuildKit with external secret managers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We can also connect to external secret managers such as Hashicorp Vault or
+    Google Cloud Secret Manager to pass secrets such as credentials or API keys to
+    a BuildKit build. Let’s learn how:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the `bitbucket-pipelines.yml` file, get the secret from the manager, place
+    the secret in a pipeline file, add the `--secret` flag, and identify the source
+    as the pipeline file. Remember that the pipeline file will be deleted when the
+    pipeline step is complete and the container is removed. The following code snippet
+    shows `SECRET` as the secure variable:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'In the Dockerfile, add a `RUN` instruction that mounts the secure variable
+    (using the `--mount=type=secret` flag), including the pipeline file containing
+    the secret, into the default Docker secret store (`/run/secrets/*`). This is illustrated
+    in the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, we’ve built an image that passed a secret found in an external source.
+    Now, let’s look at the various actions you can perform, including pushing to a
+    Docker registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pushing a Docker image to a Docker registry
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'You can push images you create to Docker Hub or another registry as part of
+    a Bitbucket Pipelines script execution. Follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create variables for the image name, username for the Docker repository, and
+    password for the Docker repository. The username and password should be secure
+    variables.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Add commands to the script portion of the step to deploy the Docker image.
+    To do this, you must do the following:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Log in to the Docker repository.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Push the image via `docker push`.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The following code snippet shows a basic example of how to build and push a
+    Docker image:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, we’ve learned how to deploy our application as a Docker image by
+    building it and pushing the resulting image to a Docker registry. We can take
+    our example a step further by deploying the Docker image to a Kubernetes cluster.
+    We’ll do this in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying a Docker image to Kubernetes using Bitbucket Pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: A potential next step after building the Docker image is to deploy it to a Kubernetes
+    cluster. By taking advantage of the redundancy capabilities in a cluster, we can
+    perform application upgrades without a service outage occurring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The instructions in this recipe assume that you have an existing Kubernetes
+    cluster or minikube environment that was created manually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, you must manually define a deployment that runs the application
+    in Kubernetes. So, let’s learn how to create a deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Ensure the application name and the Docker registry username are available
+    for easy reference. Execute the `kubectl` command, including the necessary flags,
+    as shown in the following code snippet. These will include the application name
+    and Docker registry name as part of the image name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we have established a deployment in Kubernetes, let’s learn about the
+    continuous deployment aspect of the application when using Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We can integrate with the `kubectl` application from Bitbucket Pipelines in
+    one of two ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a Pipe to integrate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Setting up a service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s take a look at each method in more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing kubectl using pipes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As we saw in [*Chapter 6*](B21937_06.xhtml#_idTextAnchor103), Bitbucket Pipes
+    are pre-packaged integrations with common third-party tools and utilities. They
+    can be easily added into Bitbucket Pipelines steps and will execute through separate
+    containers as services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s learn how to incorporate the pipe for `kubectl`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Set up the `kubeconfig` file for reading. This file needs to be `Base64` encoded
+    and then stored as a secure variable. You can use the following code to do so:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Add the pipe to the script portion of the step. The pipe definition should
+    look like this:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, we have deployed to Kubernetes using a pipe via Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, we need to execute a different version of `kubectl` than what’s provided
+    on a Pipe. In this case, executing from the Atlassian-provided Docker image for
+    `kubectl` is a better alternative. One reason for incorporating a different version
+    may be to ensure compatibility with an existing Kubernetes cluster on a legacy
+    version. Let’s explore that option now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing kubectl using a kubectl Docker image
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Bitbucket Pipelines also has a version of `kubectl` that’s encapsulated in its
+    own Docker image. This image is located on Docker Hub at [https://hub.docker.com/r/atlassian/pipelines-kubectl](https://hub.docker.com/r/atlassian/pipelines-kubectl)
+    and can be used within a Bitbucket Pipelines script to execute `kubectl` commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To deploy on Kubernetes using a `kubectl` service, perform the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the deployment step, define the Docker image using the `image:` keyword.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Set up our `kubeconfig` file. This time, we’re decoding Base64 to create a
+    temporary file that gets destroyed after execution:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Execute the `kubectl` command to apply a new version of the application:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Putting this all together, we have the following code snippet:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: As seen in the *Configuring deployments* recipe in [*Chapter 8*](B21937_08.xhtml#_idTextAnchor149),
+    you can monitor your deployment using the deployment dashboard.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: With that, you’ve learned how to build our application as a Docker image and
+    deploy it to a Kubernetes environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our last stop in examining how we can leverage Docker moves us from pipelines
+    to runners. So, let’s learn how to configure Docker-based runners on Linux.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up Docker-based runners on Linux
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This application of this self-hosted runner allows for the ultimate in dynamic
+    configuration. By allowing runners inside Docker containers, we can add or subtract
+    runners as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll start with a Linux environment, install Docker, and load and run the Docker
+    image for the Bitbucket runner software. Let’s take a look at the complete picture
+    of setting up Docker-based runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Our Linux environment has some prerequisites we must cover before we can proceed.
+    First, we need to understand our Linux environment. This environment should have
+    the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You should be using the 64-bit version of Linux.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A minimum of 8 GB of RAM should be allocated to the host for the runner. If
+    you know that you are going to need a lot of room (for example, due to more build
+    steps), you should allocate more memory.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At least 512 MB must be allocated for the runner container.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Docker v19.03 or above must be installed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'With the Linux environment set up in this manner, we have to look at best practices
+    for our Linux environment recommended by Atlassian. Atlassian recommends the following
+    environment configurations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disabling **swap** space in your Linux environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring `vm.swappiness`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s take a closer look at these recommendations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disabling swap space
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Depending on the Linux distribution you’re using, you may not have the necessary
+    commands installed. If the following commands aren’t available in your Linux environment,
+    you can install them using the distribution’s preferred package manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Check if swap is enabled:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Existing swap partitions will appear, as shown in the following output, if
+    swap is enabled:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Disable swap by executing the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Reboot your Linux machine.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat these steps until no swap partitions appear.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: At this point, we have eliminated one source of swap storage. However, we should
+    eliminate other sources. For that, we will take a look at configuring `vm.swappiness`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring vm.swappiness
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Again, some Linux distributions may not have the commands specified in the following
+    steps. If this is the case, install the required commands using the Linux distribution’s
+    recommended package manager.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s take a close look at correctly configuring `vm.swappiness` to disable
+    swap:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Check the value of `vm.swappiness` using the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: If subsequent examinations of the value of `vm.swappiness` are anything other
+    than `1`, repeat these steps and ensure the setting is configured correctly in
+    `/etc/sysctl.conf`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The next step is highly recommended to maintain the proper operation of your
+    Linux environment. Periodically, stale Docker container images should be cleaned
+    up. Let’s see how to schedule this operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automating the cleanup process for stale Docker images
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Our Linux environment should regularly remove unused Docker images to save
+    on disk space. We want to ensure we have adequate disk space in our Linux environment
+    so that we can continue to operate our runner and ensure its availability for
+    Bitbucket Pipelines jobs. The command to remove unused Docker images is `docker
+    system prune -af`. A common way of scheduling an automated means for running a
+    command is by using **cron**. Let’s see how that can be done:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the correct user, open their `crontab` file by typing the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 0 0 * * 0 docker system prune -af
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Save the file and exit the editor.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: With that, we’ve used cron to automate the deletion of unused Docker images.
+    Now, it’s time to set up our runner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With the preliminary steps out of the way, it’s time to connect our Linux environment
+    to Bitbucket so that it can be used as a runner. Let’s examine how to do that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On Bitbucket, define a new runner. A workplace runner can be defined by clicking
+    the administration cog at the top-right corner of the screen and selecting **Workspace
+    settings**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 9.1 – Selecting Workspace settings in Bitbucket](img/B21937_09_01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.1 – Selecting Workspace settings in Bitbucket
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the menu bar on the left, select **Workspace runners**:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 9.2 – Selecting Workspace runners](img/B21937_09_02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.2 – Selecting Workspace runners
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alternatively, if you’re setting up a runner for use within a repository, select
+    the repository and select **Repository settings** in the repository’s sidebar.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.3 – Selecting Repository settings](img/B21937_09_03.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.3 – Selecting Repository settings
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the **Repository settings** sidebar, select **Runners** under **Pipelines**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 9.4 – Selecting Runners](img/B21937_09_04.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.4 – Selecting Runners
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of whether you’re selecting the runner for the workspace or the repository,
+    you can create the runner by selecting the **Add** **runner** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the modal that appears, select **Linux Docker (x86_64)** or **Linux Docker
+    (arm64)** in the **System and architecture** panel, depending on your underlying
+    hardware platform. Click **Next**.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 9.5 – Selecting Linux Docker under System and architecture](img/B21937_09_05.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.5 – Selecting Linux Docker under System and architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next modal, copy the Docker command that’s displayed and paste it into
+    a Terminal window in your Linux environment. This command goes to the Docker registry
+    to retrieve the Bitbucket Pipelines runner software as a Docker image and creates
+    the container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.6 – Copying the Docker command to pull the runner](img/B21937_09_06.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.6 – Copying the Docker command to pull the runner
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You may want to get the most up-to-date version of the runner when you start
+    the runner again or just to make sure you have the latest one. To perform this
+    update, execute the following `docker pull` command in your Linux environment:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'You may encounter the following error when starting the runner:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: docker run [all existing parameters] -v /mydir:/mydir -e WORKING_DIRECTORY=/mydir
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: With that, we’ve established Docker-based runners for any future executions
+    of Bitbucket Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 3: Maintaining Operations'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: After release, the focus turns to ensuring that the environment, with its new
+    features and products, maintains the same level of performance, scalability, and
+    security as before. Measurements of performance, both in the context of how the
+    system is operating and whether it is delivering its promised value, are taken
+    and displayed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The displays reflect a focus on observability, ensuring not only that the metrics
+    exist but that they are available and visible to everyone: developers, operations
+    people, site reliability engineers, and others in the business.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When problems occur, people from these disciplines come together to collaborate
+    on the problem and find a solution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this part, we will explore how Atlassian tools such as Jira, Opsgenie, and
+    Compass work together and with other tools to allow observability to all disciplines
+    and the rapid escalation and resolution of problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part has the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 10*](B21937_10.xhtml#_idTextAnchor205)*, Collaborating with Operations
+    through Continuous Deployment and Observability*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 11*](B21937_11.xhtml#_idTextAnchor214)*, Monitoring Component Activity
+    and Metrics* *Through CheckOps* *in Compass*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 12*](B21937_12.xhtml#_idTextAnchor240)*, Escalating Using Opsgenie
+    Alerts*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

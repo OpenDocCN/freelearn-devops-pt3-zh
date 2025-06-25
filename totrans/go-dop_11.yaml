@@ -1,0 +1,1212 @@
+- en: 'Chapter 9: Observability with OpenTelemetry'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the early hours of the morning as you are sleeping in bed, your phone starts
+    to ring. It's not the normal ring that you've set for friends and family but the
+    red-alert ring you set for emergencies. As you are startled awake by the noise,
+    you begin to come to your senses. You think of the recent release of your company's
+    application. A sense of dread fills you as you pick up the call to be greeted
+    by the automated voice on the other end, informing you that you've been requested
+    to join a priority video conference with a team debugging a live site problem
+    with the new release. You get out of bed quickly and join the call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you are on the call, you are greeted by the on-call triage team. The triage
+    team informs you that the application is experiencing a service outage affecting
+    one of your largest customers, which represents a substantial portion of your
+    company's revenue. This outage has been escalated by the customer to the highest
+    levels of your company. Even your CEO is aware of the outage. The triage team
+    is unable to determine the cause of the downtime and has called you in to help
+    mitigate the issue and determine the root cause of the outage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You go to work to determine the root cause. You open your administrative dashboard
+    for the application but find no information about the application. There are no
+    logs, no traces, and no metrics. The application is not emitting telemetry to
+    help you to debug the outage. You are effectively blind to the runtime behavior
+    of the application and what is causing the outage. A feeling of overwhelming terror
+    fills you as you fear this could be the end of your company if you are unable
+    to determine what is causing the outage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Right about then is when I wake up. What I've just described is a reoccurring
+    nightmare I have about waking up to an outage and not having the information I
+    need to determine the runtime state of my application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Without being able to introspect the runtime state of your application, you
+    are effectively blind to what may be causing abnormal behaviors in the application.
+    You are unable to diagnose and quickly mitigate issues. It is a profoundly helpless
+    and terrifying position to be in during an outage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Observability is the ability to measure the internal state of an application
+    by measuring outputs from that application and infrastructure. We will focus on
+    three outputs from an application: logs, traces, and metrics. In this chapter,
+    you will learn how to instrument, generate, collect, and export telemetry data
+    so that you will never find yourself in a situation where you do not have insight
+    into the runtime behavior of your application. We will use OpenTelemetry SDKs
+    to instrument a Go client and server so that the application will emit telemetry
+    to the OpenTelemetry Collector service. The OpenTelemetry Collector service will
+    transform and export that telemetry data to backend systems to enable visualization,
+    analysis, and alerting.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An introduction to OpenTelemetry
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Logging with context
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Instrumenting for distributed tracing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Instrumenting for metrics
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alerting on metrics abnormalities
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will require Docker and Docker Compose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's get started by learning about OpenTelemetry, its components, and how OpenTelemetry
+    can enable a vendor-agnostic approach to observability. The code used in this
+    chapter is derived from [https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/examples/demo](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/examples/demo)
+    with some changes made to provide additional clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code files for this chapter can be downloaded from [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9)
+  prefs: []
+  type: TYPE_NORMAL
+- en: An introduction to OpenTelemetry
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: OpenTelemetry began as a project to merge the OpenTracing and OpenCensus projects
+    to create a single project to achieve their shared mission of high-quality telemetry
+    for all. OpenTelemetry is a vendor-agnostic set of specifications, APIs, SDKs,
+    and tooling designed for the creation and management of telemetry data. OpenTelemetry
+    empowers projects to collect, transform, and export telemetry data such as logs,
+    traces, and metrics to the backend systems of choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'OpenTelemetry features the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instrumentation libraries for the most popular programming languages with both
+    automatic and manual instrumentation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A single collector binary that can be deployed in a variety of ways
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pipelines for collecting, transforming, and exporting telemetry data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A set of open standards to protect against vendor lock-in
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this section, we will learn about the OpenTelemetry stack and the components
+    we can use to make our complex systems observable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reference architecture for OpenTelemetry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Next, let''s take a look at a conceptual reference architecture diagram for
+    **OpenTelemetry** (**OTel**):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.1 – OpenTelemetry reference architecture'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_001.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.1 – OpenTelemetry reference architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding reference architecture diagram shows two applications instrumented
+    with the OTel libraries running on hosts, with the OTel Collector deployed as
+    an agent on the hosts. The OTel Collector agents are collecting traces and metrics
+    from the applications as well as logs from the host. The OTel Collector on the
+    left host is exporting telemetry to Backend 1 and Backend 2\. On the right side,
+    the OTel Collector agent is receiving telemetry from the OTel instrumented application,
+    collecting telemetry from the host, and then forwarding the telemetry to an OTel
+    Collector running as a service. The OTel Collector running as a service is exporting
+    telemetry to Backend 1 and Backend 2\. This reference architecture illustrates
+    how the OTel Collector can be deployed as both an agent on a host and a service
+    for collecting, transforming, and exporting telemetry data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The wire protocol the telemetry is being transmitted on is intentionally missing
+    from the reference architecture diagram, since the OTel Collector is capable of
+    accepting multiple telemetry input formats. For existing applications, accepting
+    existing formats such as Prometheus, Jaeger, and Fluent Bit can make it easier
+    to migrate to OpenTelemetry. For new applications, the OpenTelemetry wire protocol
+    is preferred and simplifies collector configuration for ingesting telemetry data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: OpenTelemetry components
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: OpenTelemetry is composed of several components that form the telemetry stack.
+  prefs: []
+  type: TYPE_NORMAL
+- en: OpenTelemetry specification
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The OpenTelemetry specification describes the expectations and requirements
+    for cross-language implementations using the following terms:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**API**: Defines the data types and operations for generating and correlating
+    tracing, metrics, and logging.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**SDK**: Defines the implementation of the API in a specific languages. This
+    includes configuration, processing, and exporting.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Data**: Defines the **OpenTelemetry Line Protocol** (**OTLP**), a vendor-agnostic
+    protocol for communicating telemetry.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For more information about the specification, see [https://opentelemetry.io/docs/reference/specification/](https://opentelemetry.io/docs/reference/specification/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: OpenTelemetry Collector
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The OTel Collector is a vendor-agnostic proxy that can receive telemetry data
+    in multiple formats, transform and process it, and export it in multiple formats
+    to be consumed by multiple backends (such as Jaeger, Prometheus, other open source
+    backends, and many proprietary backends). The OTel Collector is composed of the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Receivers**: Push- or pull-based processors for collecting data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Processors**: Responsible for transforming and filtering data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Exporters**: Push- or pull-based processors for exporting data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each of the preceding components is enabled through pipelines described in YAML
+    configurations. To learn more about data collection, see [https://opentelemetry.io/docs/concepts/data-collection/](https://opentelemetry.io/docs/concepts/data-collection/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Language SDKs and automatic instrumentation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Each supported language in OpenTelemetry offers an SDK that enables application
+    developers to instrument their applications to emit telemetry data. The SDKs also
+    offer some common components that aid in instrumenting applications. For example,
+    in the Go SDK, there are wrappers for HTTP handlers that will provide instrumentation
+    out of the box. Additionally, some language implementations also offer automatic
+    instrumentation that can take advantage of language-specific features to collect
+    telemetry data, without the need of manually instrumenting application code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more information about instrumenting applications, see [https://opentelemetry.io/docs/concepts/instrumenting-library/](https://opentelemetry.io/docs/concepts/instrumenting-library/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The correlation of telemetry
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The correlation of telemetry is a killer feature for any telemetry stack. The
+    correlation of telemetry data enables us to determine what events are related
+    to each other across application boundaries and is the key to building insights
+    into complex systems. For example, imagine we have a system composed of multiple
+    interdependent micro-services. Each of these services could be running on multiple
+    different hosts and possibly authored using different languages. We need to be
+    able to correlate a given HTTP request and all subsequent requests across our
+    multiple services. This is what correlation in OpenTelemetry enables. We can rely
+    on OpenTelemetry to establish a correlation ID across these disparate services
+    and provide a holistic view of events taking place within a complex system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.2 – Correlated telemetry'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_002.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.2 – Correlated telemetry
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have introduced the main concepts in the OpenTelemetry stack.
+    In the next sections, we will learn more about logging, tracing, and metrics and
+    how we can use OpenTelemetry to create an observable system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging with context
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Logging is probably the most familiar form of telemetry. You probably started
+    logging in the first program you ever authored when you printed `Hello World!`
+    to `STDOUT`. Logging is the most natural first step in providing some data about
+    the internal state of an application to an observer. Think about how many times
+    you have added a print statement to your application to determine the value of
+    a variable. You were logging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Printing simple log statements such as `Hello World!` can be helpful for beginners,
+    but it does not provide the critical data we require to operate complex systems.
+    Logs can be powerful sources of telemetry data when they are enriched with data
+    to provide context for the events they are describing. For example, if our log
+    statements include a correlation ID in the log entry, we can use that data to
+    associate the log entry with other observability data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Application or system logs often consist of timestamped text records. These
+    records come in a variety of structures, ranging from completely unstructured
+    text to highly structured schemas with attached metadata. Logs are output in a
+    variety of ways – single files, rotated files, or even to `STDOUT`. We need to
+    be able to gather logs from multiple sources, transform and extract log data in
+    a consumable format, and then export that transformed data for consumption/indexing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will discuss how to improve our logging, moving from plain
+    text to structured log formats, and how to consume and export various log formats
+    using OpenTelemetry. We will learn using Go, but the concepts presented are applicable
+    to any language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our first log statement
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let''s start by using the standard Go log and write `Hello World!`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding `Println` statement outputs `2009/11/10 23:00:00 Hello World!`
+    when run in [https://go.dev/play/p/XH5JstbL7Ul](https://go.dev/play/p/XH5JstbL7Ul).
+    Observe the plain text structure of the output and think about what you would
+    need to do to parse the text to extract a structured output. It would be a relatively
+    simple regular expression to parse, but with the addition of new data, the parse
+    structure would change, breaking the parser. Additionally, there is very little
+    context regarding the event or the context in which this event occurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Go standard library logger has several other functions available, but we
+    will not dive deeply into them here. If you are interested in learning more, I
+    suggest you read [https://pkg.go.dev/log](https://pkg.go.dev/log). For the rest
+    of this section, we will focus on structured and leveled loggers as well as the
+    API described by [https://github.com/go-logr/logr](https://github.com/go-logr/logr).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Structured and leveled logs with Zap
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Structured loggers have several benefits over text loggers. Structured logs
+    have a defined schema of keys and values that can be more easily parsed than plain
+    text. You can take advantage of the keys and values to embed rich information
+    such as a correlation ID or other useful contextual information. Additionally,
+    you can filter out keys that might not be applicable given the log context.
+  prefs: []
+  type: TYPE_NORMAL
+- en: V-levels are an easy way to control the amount of information in a log. For
+    example, an application may output extremely verbose debug logs at the -1 log
+    level but only critical errors at a log level of 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There has been a movement in the Go community to standardize the structured
+    and leveled log interface via [https://github.com/go-logr/logr](https://github.com/go-logr/logr).
+    There are many libraries that implement the API described in the `logr` project.
+    For our purposes, we'll focus on a single structured logging library, Zap, which
+    also has a `logr` API implementation ([https://github.com/go-logr/zapr](https://github.com/go-logr/zapr)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s take a look at the key functions in the Zap logger interface:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding interface provides an easy-to-use strongly typed set of logging
+    primitives. Let''s see an example of structured logging with Zap:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The JSON structured output of the logger provides helpful, easy-to-parse, and
+    contextual information through strongly typed keys and values. In the tracing
+    section of this chapter, we will use these additional keys and values to embed
+    correlation IDs to link our distributed traces with our logs. If you'd like to
+    give it a go, see [https://go.dev/play/p/EVQPjTdAwX_U](https://go.dev/play/p/EVQPjTdAwX_U).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will not dive deeply into where to output logs (such as a filesystem, `STDOUT`,
+    and `STDERR`) but instead assume that the application logs we wish to ingest will
+    have a file representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we are producing structured logs in our application, we can shift gears
+    to ingesting, transforming, and exporting logs using OpenTelemetry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ingesting, transforming, and exporting logs using OpenTelemetry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this example of using OpenTelemetry for ingesting, transforming, and exporting
+    logs, we will use `docker-compose` to set up an environment that will simulate
+    a Kubernetes host, with logs stored under `/var/logs/pods/*/*/*.log`. The OTel
+    Collector will act as an agent running on the host. The logs will be ingested
+    from the files in the log path, routed to appropriate operators in the `filelog`
+    receiver, parsed per their particular format, have parsed attributes standardized,
+    and then exported to `STDOUT` through the `logging` exporter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this demo we will using the code at: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/logging](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/logging).
+    Now let’s take a quick look at the layout of the demo directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `docker-compose.yml` file contains the service definition where we will
+    run the OTel Collector and mount the collector configuration and log files directory,
+    `varlogpods`, to simulate the collector running on a Kubernetes host. Let''s take
+    a look at `docker-compose.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: To run this demo, move to the chapter source code, `cd` into the `logging` directory,
+    and run `docker-compose up`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: OTel Collector configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The OTel Collector configuration file contains the directives for how the agent
+    is to ingest, process, and export the logs. Let''s dive into the configuration
+    and break it down:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `receivers` section contains a single `filelog` receiver that specifies
+    the directories to include and exclude. The `filelog` receiver will start from
+    the beginning of each log file and include the file path for metadata extraction
+    in the operators. Next, let''s continue to the operators:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The filelog operators define a series of steps for processing the log files.
+    The initial step is a router operation that will determine, based on the body
+    of the log file, which parser will handle the log body entry specified in the
+    output of the operator. Each parser operator will extract the timestamp from each
+    record, according to the particular format of the log entry. Let''s now continue
+    to the parsers to see how the parser will extract information from each log entry
+    once routed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: For example, the `parser-crio` operator will perform a regular expression on
+    each log entry, parsing a time variable from the entry and specifying the time
+    format for the extracted string. Contrast `parser-crio` with the `parser-docker`
+    operator, which uses a JSON structured log format that has a JSON key of `time`
+    in each log entry. The `parser-docker` operator only provides the key for the
+    JSON entry and the layout of the string. No regex is needed with the structured
+    log. Each of the parsers outputs to the `extract_metadata_from_filepath`, which
+    extracts attributes from the file path using a regular expression. Following the
+    parsing and extraction of file path information, the `metadata` operation executes
+    adding attributes gathered from the parsing steps to enrich the context for future
+    querying. Finally, the `restructure` operation moves the log key extracted from
+    each parsed log entry to the `Body` attribute for the extracted structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s take a look at the CRI-O log format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let''s look at the Docker log format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When running the example, you should see output like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see from the preceding output, the OTel Collector has extracted the
+    timestamp, body, and specified attributes from the `metadata` operator, building
+    a normalized structure for the exported logging data, and exported the normalized
+    structure to `STDOUT`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have accomplished our goal of ingesting, transforming, and extracting log
+    telemetry, but you should also be asking yourself how we can build a stronger
+    correlation with this telemetry. As of now, the only correlations we have are
+    time, pod, and container. We would have a difficult time determining the HTTP
+    request or other specific information that led to this log entry. Note that `Trace
+    ID` and `Span ID` are empty in the preceding output. In the next section, we will
+    discuss tracing and see how we can build a stronger correlation between the logs
+    and requests processed in our applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instrumenting for distributed tracing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Traces track the progression of a single activity in an application. For example,
+    an activity can be a user making a request in your application. If a trace only
+    tracks the progression of that activity in a single process or a single component
+    of a system composed of many components, its value is limited. However, if a trace
+    can be propagated across multiple components in a system, it becomes much more
+    useful. Traces that can propagate across components in a system are called **distributed
+    traces**. Distributed tracing and correlation of activities is a powerful tool
+    for determining causality within a complex system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A trace is composed of spans that represent units of work within an application.
+    Each trace and span can be uniquely identified, and each span contains a context
+    consisting of `Request`, `Error`, and `Duration` metrics. A trace contains a tree
+    of spans with a single root span. For example, imagine a user clicking on the
+    checkout button on your company's commerce site. The root span would encompass
+    the entire request/response cycle as perceived by the user clicking on the checkout
+    button. There would likely be many child spans for that single root span, such
+    as a query for product data, charging a credit card, and updating a database.
+    Perhaps there would also be an error associated with one of the underlying spans
+    within that root span. Each span has metadata associated with it, such as a name,
+    start and end timestamps, events, and status. By creating a tree of spans with
+    this metadata, we are able to deeply inspect the state of complex applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will learn to instrument Go applications with OpenTelemetry
+    to emit distributed tracing telemetry, which we will inspect using Jaeger, an
+    open source tool for visualizing and querying distributed traces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The life cycle of a distributed trace
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we get into the code, let's first discuss how distributed tracing works.
+    Let's imagine we have two services, A and B. Service A serves web pages and makes
+    requests for data from service B. When service A receives a request for a page,
+    the service starts a root span. Service A then requests some data from service
+    B to fulfill the request. Service A encodes the trace and span context in request
+    headers to service B. When service B receives the request, service B extracts
+    the trace and span information from the request headers and creates a child span
+    from the request. If service B received no trace/span headers, it will create
+    a new root span. Service B continues processing the request, creating new child
+    spans along the way as it requests data from a database. After service B has collected
+    the requested information, it responds to service A and sends its spans to the
+    trace aggregator. Service A then receives the response from service B, and service
+    A responds to the user with the page. At the end of the activity, service A marks
+    the root span as complete and sends its spans to the trace aggregator. The trace
+    aggregator builds a tree with the shared correlation of the spans from both service
+    A and service B, and we have a distributed trace.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more details of the OpenTelemetry tracing specification, see [https://opentelemetry.io/docs/reference/specification/overview/#tracing-signal](https://opentelemetry.io/docs/reference/specification/overview/#tracing-signal).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Client/server-distributed tracing with OpenTelemetry
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In this example, we will deploy and examine a client/server application that
+    is instrumented with OpenTelemetry for distributed tracing, and view the distributed
+    traces using Jaeger. The client application sends periodic requests to the server
+    that will populate the traces in Jaeger. The [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/tracing](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/tracing)
+    directory contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: To run this demo, move to the chapter source code, `cd` into the `tracing` directory,
+    run `docker-compose up -d`, and open `http://localhost:16686` to view the Jaeger-distributed
+    traces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s explore the `docker-compose.yaml` file first to see each of the services
+    we are deploying:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding `docker-compose.yaml` file deploys a Jaeger *all-in-one* instance,
+    an OTel Collector, a client Go application, and a server Go application. These
+    components are a slight derivation from the OpenTelemetry demo: [https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/examples/demo](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/examples/demo).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s take a look at the OTel Collector configuration to get a better
+    understanding of its deployment model and configured behaviors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding OTel Collector configuration specifies that the collector will
+    listen for `14250`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s break down the significant parts of the client `main.go`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`func main()` initializes the tracing provider, which returns a shutdown function
+    that is deferred until `func main()` exits. The `main()` func then calls `continuouslySendRequests`
+    to send a continuous, periodic stream of requests to the server application. Next,
+    let''s look at the `initTraceProvider` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`initTraceProvider()` looks up the OTLP trace endpoint from an environment
+    variable or defaults to `0.0.0.0:4317`. After setting up the trace endpoint address,
+    the code calls `initTracer` to initialize the tracer, returning a function named
+    `closeTraces`, which will be used to shut down the tracer. Finally, the `initTraceProvider()`
+    returns a function that can be used to flush and close the tracer. Next, let''s
+    look at what is happening in `initTracer()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`initTracer()` builds a trace client that connects to the OTLP endpoint over
+    gRPC. The trace client is then used to build a trace exporter, which is used to
+    batch process and export spans. The batch span processor is then used to create
+    a trace provider, configured to trace all spans, and is identified with the `"demo-client"`
+    resource. Trace providers can be configured to sample stochastically or with custom
+    sampling strategies. The trace provider is then added to the global OTel context.
+    Finally, a function is returned that will shut down and flush the trace exporter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have explored how to set up a tracer, let''s move on to sending
+    and tracing requests in the `continuouslySendRequests` func:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the name suggests, the `continuouslySendRequests` func creates a named tracer
+    from the global OTel context, which we initialized earlier in the chapter. The
+    `otel.Tracer` interface only has one function, `Start(ctx context.Context, spanName
+    string, opts ...SpanStartOption) (context.Context, Span)`, which is used to start
+    a new span if one does not already exist in the `context.Context` values bag.
+    The `for` loop in main will continue infinitely creating a new span, making a
+    request to the server, doing a bit of work, and finally, sleeping for 1 second:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`makeRequest()` should look pretty familiar to those of you who have used the
+    Go `http` library. There is one significant difference from non-OTel instrumented
+    HTTP requests: the transport for the `client` has been wrapped with `otelhttp.NewTransport()`.
+    The `otelhttp` transport uses `request.Context()` in the `Roundtrip` implementation
+    to extract the existing span from the context, and then the `otelhttp.Transport`
+    adds the span information to the HTTP headers to enable the propagation of span
+    data to the server application.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have covered the client, let''s see the server `main.go`. The code
+    for this section can be found here: [https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/9/tracing/server/main.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/9/tracing/server/main.go):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`func main.go` calls `initTraceProvider` and `shutdown` in a similar manner
+    to the client `main.go`. After initializing the trace provider, the server `main.go`
+    code creates an HTTP server, handling requests to `"/hello"` on port `7080`. The
+    significant bit is `wrappedHandler := otelhttp.NewHandler(handler, "/hello")`.
+    `wrappedHandler()` extracts the span context from the HTTP headers and populates
+    the request `context.Context` with a span derived from the client span. Within
+    `handleRequestWithRandomSleep()`, the code uses the propagated span context to
+    continue the distributed trace. Let''s explore `handleRequestWithRandomSleep()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `handleRequestWithRandomSleep()`, the request is handled, introducing a random
+    sleep to simulate latency. `trace.SpanFromContext(ctx)` uses the span populated
+    by `wrappedHandler` to then set attributes on the distributed span.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The viewable result in Jaeger at `http://localhost:16686` is the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.3 – The Jaeger client/server-distributed trace'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_003.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.3 – The Jaeger client/server-distributed trace
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding screenshot, you can see the distributed trace between the client
+    and the server, including each span that was created in the request/response cycle.
+    This is a simple example, but you can imagine how this simple example can be extrapolated
+    into a more complex system to provide insight into the difficult-to-debug scenarios.
+    The trace provides the information needed to gain insight into errors as well
+    as more subtle performance issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Correlating traces and logs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the *Logging with context* section, we discussed the correlation of log
+    entries with activities. Without correlation to a given trace and span, you would
+    not be able to determine which log events originated from a specific activity.
+    Remember, log entries do not contain the trace and span data that enables us to
+    build correlated trace views, as we see in Jaeger. However, we can extend our
+    log entries to include this data and enable robust correlation with a specific
+    activity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we use the `zap` structured logger to add the span and
+    trace IDs to the logger, so each log entry written by a logger enhanced with `WithCorrelation()`
+    will contain a strong correlation to a given activity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding log entries to spans
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Correlating logs with traces is effective for building correlations of logs
+    with activities, but you can take it a step further. You can add your log events
+    directly to the spans, instead of or in combination with correlating logs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`SuccessfullyFinishedRequestEvent()` will decorate the span with an event entry
+    that shows as a log entry in Jaeger. If we were to call this function in the client''s
+    `main.go` after we complete the request, a log event would be added to the client
+    request span:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.4 – The Jaeger client/server-distributed trace with the log entry'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_004.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.4 – The Jaeger client/server-distributed trace with the log entry
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, the log entry is embedded within the span visualized in Jaeger.
+    Adding log entries to spans adds even more context to your distributed traces,
+    making it easier to understand what is happening with your application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will instrument this example with metrics to provide
+    an aggregated view of the application using Prometheus.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instrumenting for metrics
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Metrics are measurements at a given moment of a particular aspect of an application
+    during runtime. An individual capture is called a **metric event** and consists
+    of a timestamp, a measurement, and associated metadata. Metric events are used
+    to provide an aggregated view of the behavior of an application at runtime. For
+    example, a metric event can be a counter incremented by 1 when a request is handled
+    by a service. The individual event is not especially useful. However, when aggregated
+    into a sum of requests over a period of time, you can see how many requests are
+    made to a service over that period of time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The OpenTelemetry API does not allow for custom aggregations but does provide
+    some common aggregations, such as sum, count, last value, and histograms, which
+    are supported by backend visualization and analysis software such as Prometheus.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give you a better idea of when metrics are useful, here are some example
+    scenarios:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Providing the aggregate total number of bits read or written in a process
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Providing CPU or memory utilization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Providing the number of requests over a period of time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Providing the number of errors over a period of time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Providing the duration of requests to form a statistical distribution of the
+    request processing time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'OpenTelemetry offers three types of metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`counter`: To count a value over time, such as the number of requests'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`measure`: To sum or otherwise aggregate a value over a period of time, such
+    as how many bytes are read per minute'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`observer`: To periodically capture a value, such as memory utilization every
+    minute'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this section, we will learn to instrument Go applications with OpenTelemetry
+    to emit metrics telemetry, which we will inspect using Prometheus, an open source
+    tool for visualizing and analyzing metrics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The life cycle of a metric
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before we get into the code, let''s first discuss how metrics are defined and
+    used. Before you can record or observe a metric, it must be defined. For example,
+    a histogram of request latency would be defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code fetches a global meter named `demo-client-meter` and then
+    registers a new histogram instrument named `demo_client/reqeust_latency` and `demo_client/request_counts`,
+    a counter instrument, both of which have a description of what is being collected.
+    It's important to provide descriptive names and descriptions for your metrics,
+    as it can become confusing later when analyzing your data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the instrument has been defined, it can be used to record measurements,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code uses the global meter we defined previously to record two
+    measurements, the request latency and an increment for the number of requests.
+    Note that `ctx` was included, which will contain correlation information to correlate
+    the activity to the measurement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After events have been recorded, they will be exported based on the configuration
+    of `MeterProvider`, which which we will explore next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Client/server metrics with OpenTelemetry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We will extend the same client/server application described in the *Instrumenting
+    for distributed tracing* section. Code for this section can be found here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/metrics](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/metrics).
+    The directory has the following layout:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The only addition to the preceding is the `prometheus.yaml` file, which contains
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding configuration informs Prometheus of the endpoint to scrape to
+    gather metrics data from the OTel Collector. Let''s next look at the updates needed
+    to add Prometheus to the `docker-compose.yaml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see from the preceding, we have added some additional ports for
+    Prometheus to scrape on the OTel Collector, and the Prometheus service with `prometheus.yaml`
+    mounted in the container. Next, let''s take a look at the updated OTel Collector
+    configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding configuration has omitted the Jaeger config used in the *Instrumenting
+    for distributed tracing* section for brevity. The additions are the exporter for
+    Prometheus as well as the metrics pipeline. The Prometheus exporter will expose
+    port `8889` so that Prometheus can scrape metrics data collected by the OTel Collector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s break down the significant parts of the client `main.go`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The only difference between the tracing version we explored earlier in the
+    chapter is that instead of calling `initTraceProvider`, the code now calls `initTraceAndMetricsProvdier`
+    to initialize both the trace and metrics providers. Next, let''s explore `initTraceAndMetricsProvider()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The code in `initTraceAndMetricsProvider` establishes the OTel agent address
+    and goes on to initialize the metrics and tracing providers. Finally, a function
+    to close and flush both metrics and traces is returned. Next, let''s explore `initMetrics()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In `initMetrics()`, we create a new `metricClient` to transmit metrics from
+    the client to the OTel Collector in the OTLP format. After setting up the `metricClient`,
+    we then create `pusher` to manage the export of the metrics to the OTel Collector,
+    register `pusher` as the global `MeterProvider`, and start `pusher` to export
+    metrics to the OTel Collector. Finally, we create a closure to shut down `pusher`.
+    Now, let''s move on to explore `continuouslySendRequests()` from client''s `main.go`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: We first create a metrics meter with the name `demo-client-meter`, metric instruments
+    to be used to measure metrics in this function, and a set of common labels to
+    be added to the metrics collected. These labels enable scoped querying of metrics.
+    After initializing the random number generator for artificial latency, the client
+    enters the `for` loop, stores the start time of the request, makes a request to
+    the server, and stores the duration of `makeRequest` as the latency in milliseconds.
+    Following the execution of `makeRequest`, the client executes a random number
+    of iterations between 0 and 7 to generate a random line length, recording a batch
+    of metric events during each iteration, and measuring the count of executions
+    and the random line length. Finally, the client records a batch of metric events,
+    measuring the latency of `makeRequest` and a count for one request.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, how did we define the instruments used in the preceding code? Let''s explore
+    `NewClientInstruments` and learn how to define counter and histogram instruments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`NewClientInstruments()` takes a meter and returns a struct of instruments
+    used by the client. An instrument is used to record and aggregate measurements.
+    This func sets up the two `Int64Counter` and `Int64Histogram` instruments. Each
+    instrument is defined with a well-described name for easier analysis in the backend
+    metric system. The `Int64Counter` instrument will monotonically increase and `Int64Histogram`
+    will record `int64` the values and pre-aggregate values before pushing to the
+    metrics backend.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have covered the client, let''s look at the server''s `main.go`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The server''s `main.go` calls `initProvider()` and `shutdown()` in a similar
+    manner to the client''s `main.go`. The interesting metric measures happen within
+    `handleRequestWithRandomSleep()`. Next, let''s export `handleRequestWithRandomSleep()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, `handleRequestWithRandomSleep()` creates a named meter
+    from the global OTel context, initializes the server instruments in a similar
+    way to the client example, and defines a slice of custom attributes. Finally,
+    the function returns a handler function, which introduces a random sleep and records
+    the request count.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The result is viewable in Prometheus at `http://localhost:9090/graph?g0.expr=rate(demo_server_request_counts%5B2m%5D)&g0.tab=0&g0.stacked=0&g0.show_exemplars=0&g0.range_input=1h`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.5 – The Prometheus server request rate'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_005.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.5 – The Prometheus server request rate
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding screenshot, you can see the average requests per second for
+    the server application in Prometheus. At the bottom of the screenshot, you will
+    see the common labels and other associated metadata that was added in the server
+    `main.go`. Prometheus provides a powerful query language to analyze and alert
+    on metrics. Take some time and explore what you can do in the Prometheus UI. If
+    you'd like to learn more about Prometheus, see [https://prometheus.io/docs/introduction/overview/](https://prometheus.io/docs/introduction/overview/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we learned how to instrument a Go application, export metrics
+    to the OTel Collector, configure Prometheus to scrape metrics from the OTel Collector,
+    and start to analyze metrics telemetry in Prometheus. With these newly gained
+    skills, you will be able to understand more about the runtime characteristics
+    of your applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next up, let’s look at how you can add alerting when your metrics are showing
+    abnormalities that could indicate a problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alerting on metrics abnormalities
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Metrics provide time-series measurements of the behavior of our applications
+    and infrastructure, but they provide no notification when those measurements deviate
+    from the expected behavior of our applications. To be able to react to abnormal
+    behaviors in our applications, we need to establish rules about what is normal
+    behavior in our applications and how we can be notified when our applications
+    deviate from that behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alerting on metrics enables us to define behavioral norms and specify how we
+    should be notified when our applications exhibit abnormal behavior. For example,
+    if we expect HTTP responses from our application to respond in under 100 milliseconds
+    and we observe a time span of 5 minutes when our application is responding in
+    greater than 100 milliseconds, we would want to be notified of the deviation from
+    the expected behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will learn how to extend our current configuration of services
+    to include an Alertmanager ([https://prometheus.io/docs/alerting/latest/alertmanager/](https://prometheus.io/docs/alerting/latest/alertmanager/))
+    service to provide alerts when observed behavior deviates from expected norms.
+    We'll learn how to define alerting rules and specify where to send those notifications
+    when our application experiences abnormal behaviors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for this section is here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/alerting](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/9/alerting).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding and configuring Alertmanager
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We will start by adding the Alertmanager service to the `docker-compose.yaml`
+    file. Let''s look at the updates needed to add Prometheus to the `docker-compose.yaml`
+    file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see from the preceding, we have added a `rules` folder to the `prometheus`
+    service, a new service called `alertmanager`, and a volume to store the `alertmanager`
+    data called `alertmanager-data`. We will discuss the Prometheus `./rules` volume
+    mount and contents later in this section, but for now, know that it contains our
+    alerting rules for Prometheus. The new `alertmanager` service exposes an HTTP
+    endpoint at `http://localhost:9093` and mounts an `alertmanager.yml` configuration
+    as well as a data directory. Next, let''s explore the contents of the `alertmanager.yml`
+    file to see how Alertmanager is configured:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Alertmanager configuration consists mainly of routes and receivers. A route
+    describes where to send an alert based on it either being default or by some criteria.
+    For example, we have a default route and a specialized route in the preceeding
+    Alertmanager configuration. The default route will send alerts to the default
+    receiver if they do not match `exported_job` attribute with the value "`demo-server"`.
+    If alerts match the `exported_job` attribute with value `"demo-server"`, they
+    are routed to the `demo-server` receiver, described in the receivers section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example of Alertmanager receivers, we are using PagerDuty ([https://www.pagerduty.com](https://www.pagerduty.com)),
+    but there are many other receivers that can be configured. For example, you can
+    configure receivers for Slack, Teams, Webhooks, and so on. Note that the `service_key`
+    values for each of the receivers requires a PagerDuty integration key, which can
+    be set up by following the docs for integrating Prometheus with PagerDuty ([https://www.pagerduty.com/docs/guides/prometheus-integration-guide/](https://www.pagerduty.com/docs/guides/prometheus-integration-guide/)).
+    If you wish to use another receiver such as email, feel free to mutate the receivers
+    with email by following the Prometheus guide for email configuration ([https://prometheus.io/docs/alerting/latest/configuration/#email_config](https://prometheus.io/docs/alerting/latest/configuration/#email_config)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will look at the changes that we need to make to the Prometheus configuration
+    in `./prometheus.yaml` to make Prometheus aware of the Alertmanager service and
+    the rules for sending alerts to the Alertmanager service:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding `./prometheus.yaml`, we see the original `scrape_config` and
+    two new keys, `alerting` and `rule_files`. The `alerting` key describes the `alertmanager`
+    services to send alerts and the connection details for connecting to those services.
+    The `rules_files` key describes the glob rules for selecting files containing
+    alerting rules. These rules can be set up in the Prometheus UI, but it is good
+    practice to define these rules declaratively in code so that they are clear and
+    visible to the rest of your team as source code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s look at the `rules` file and see how we describe rules for alerting
+    in `./rules/demo-server.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Rules in `rule_files` are categorized into groups. In the preceding example,
+    we can see a single group named `demo-server` specifying a single rule named `HighRequestLatency`.
+    The rule specifies an expression, which is a Prometheus query. The preceding query
+    triggers when the mean request latency is exceeding 200,000 microseconds, or 0.2
+    seconds. The alert is triggered with a severity label of `page` and an annotation
+    summary of `High request latency`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s run the following to start the services:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After the services start, we should see the following in Prometheus at `http://localhost:9090/alerts`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.6 – The Prometheus alert for HighRequestLatency'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_006.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.6 – The Prometheus alert for HighRequestLatency
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding screenshot shows the alert rules registered in Prometheus. As
+    you can see, the `HighRequestLatency` alert is registered with the command we
+    configured in the `./rules/demo-server` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After roughly 5 minutes of running the service, you should see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.7 – The Prometheus alert for HighRequestLatency triggered'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_09_007.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 9.7 – The Prometheus alert for HighRequestLatency triggered
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding screenshot, you can see the triggered alert for `HighRequestLatency`.
+    This is Prometheus triggering the alert for the mean request latency rising above
+    0.2 seconds. This will then trigger an alert that is sent to the Alertmanager
+    which delegates to the appropriate receiver. The receiver will then send the alert
+    on to the service configured to notify PagerDuty or, perhaps, another receiver
+    you have configured. You have now established a flow for alerting yourself or
+    others on your team that your application has entered into an aberrant state of
+    behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you learned to configure Prometheus alerting rules, deploy
+    Alertmanager, and configure Alertmanager to send alerts to the notification service
+    of your choice. With this knowledge, you should be able to establish rules for
+    defining the normative behavior of your applications and alert you or your team
+    when an application is behaving outside of those bounds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alerting is a key component of reacting to aberrant behaviors in applications.
+    With proper metrics in place, you are now empowered to proactively respond when
+    your applications are not meeting expectations, rather than responding to customer
+    complaints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we explored the basics of OpenTelemetry, how to instrument
+    your applications and infrastructure, and how to export that telemetry into backend
+    visualization and analysis tools such as Jaeger and Prometheus. We also extended
+    the benefits of metrics by integrating alerting rules to proactively notify us
+    when an application is operating outside of expected behavioral parameters. With
+    the application of what you have learned, you will never be caught blind during
+    a support call. You will have the data to diagnose and resolve issues in your
+    complex system. Better yet, you will know about these problems before issues are
+    raised by your customers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also established some relatively simple metrics, traces, and alerts. With
+    this knowledge, you will be able to implement your own traces, metrics, and alerts
+    to empower you and your team to react quickly and efficiently to failures in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will discuss how to automate workflows with GitHub Actions.
+    We will learn about the basics of GitHub actions and build upon that to create
+    our own Go-based GitHub actions to empower you to author any automation allowable
+    by a Turing-complete language.
+  prefs: []
+  type: TYPE_NORMAL

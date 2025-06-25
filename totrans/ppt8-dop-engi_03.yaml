@@ -1,0 +1,1721 @@
+- en: '3'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Puppet Classes, Resource Types, and Providers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will cover how classes and defined types provide structure and
+    a way to group resources, allowing code to be modular and reusable. You will learn
+    about the components that make up resources; types, providers, and the attributes
+    applied to them. You will be shown how to use Puppet commands to understand the
+    current state of the system and by looking at three of the most common resource
+    types – packages, files, and services. You will see how to find out the attributes
+    that are available to a resource and how to declare a state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using these three resource types, you will see how a simple installation of
+    a package, configuration file, and service can be quickly used to start up an
+    application with Puppet code, such as Apache or Grafana. The other core resource
+    types will then be discussed, highlighting the best practices and approaches.
+    A number of metaparameters (attributes that can be applied to any resource) will
+    be discussed, along with some advanced patterns for resource declaration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will then come across some anti-patterns, which, although still documented
+    Puppet language features, are not recommended for use. This will help you understand
+    any legacy code you may encounter and consider where code needs to be refactored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classes and defined types
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Resources, types, and providers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Core resource types
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Metaparameters and advanced features
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Anti-patterns
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Provision a standard sized Puppet server with a Windows client and a Linux
+    client by downloading the `params.json` file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch03](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch03)
+    using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Classes and defined types
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'As discussed in [*Chapter 1*](B18492_01.xhtml#_idTextAnchor018), Puppet code
+    is stored in manifest files ending with `.pp` . It is possible to just write resources
+    into a single manifest file and then, using the `apply` command, `puppet apply
+    example.pp`, enforce the code locally. It can also be done without the manifest
+    file using the `execute` flag with the Puppet code in the field of the command,
+    such as `puppet apply -e ''Package { ''``vscode'': }''`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`puppet apply` can also be run against a directory of manifests and it will
+    parse every file in order, descending a directory structure. In [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272),
+    node definitions will allow us to utilize this.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While both of these approaches are useful for testing and learning purposes,
+    they have a clear limitation in terms of lacking any structure, which will result
+    in both having to run a lot of large static commands or files and having no way
+    to pass data. **Classes** are named sections of code that provide this structure,
+    offering a way of grouping resources together and assigning data, which we can
+    apply to servers. A class definition goes into a manifest file and within the
+    class definition, we put our resource definitions. The syntax is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `class` keyword.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The name of the class.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optional parameters within `( )`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Puppet code with `{}`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`class` parameters allow classes to be supplied with external data. For example,
+    a class might have a resource that installs a package, and a parameter can be
+    used to specify the version of that package to be installed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An optional `inherit` keyword can be added to a class to allow class inheritance,
+    whereby you can create a general base class and then extend it in an inheriting
+    class or classes. This pattern is no longer used and is no longer discussed in
+    the Puppet documentation as of Puppet 6, beyond saying it exists as a keyword.
+    There are better ways to achieve this behavior using data, which we will cover
+    in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common early source of confusion with classes is that this structure only
+    defines a class; it does not declare it to be included in the catalog compiled
+    from the Puppet code. This contrasts with the resource statement in manifests,
+    which by being written and then applied are added to the catalog.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This means running `puppet apply` on a manifest containing a class will do nothing.
+    To add the classes to a catalog, we must declare the class using the `include`
+    function, make a class resource declaration, or we must use an **External Node
+    Classifier** (**ENC**). ENCs will be covered in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272),
+    but for now, they can be understood as Puppet server scripts that identify the
+    classes to be included in a node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Including a class
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `include` function is the simplest way to add classes via the declaration
+    in the code block of a class in a manifest file of `include class_name`. It can
+    be used multiple times across multiple classes and will result in only one entry.
+    To declare a class with `puppet apply` directly, we can instead run `puppet apply
+    –e "include class_name"`, which will test a manifest file with a class. Following
+    the module structure, this would apply the manifest from the `class_name/manifest/init.pp`
+    path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class resource declaration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the next section, resource declaration will be covered in more detail, but
+    declaring a class such as a resource allows us to pass in the attributes we have
+    defined or looked up. It looks like this, but can only be used once in a catalog:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Defined types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A defined type is a block of Puppet code, which, in contrast to a class, can
+    be declared multiple times in a catalog by passing in parameters and a unique
+    name. Like a class, it is by best practice defined in a manifest file by itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The syntax is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Starts with a `define` keyword
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The type name
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Open brackets (`(`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: List of parameters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Open braces (`{`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The resource body
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Close braces (`}`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In addition to the parameter list defined, the `$title` and `$name` variables
+    are available to be used within the definition. This ensures the resources we
+    declare are unique. A very simple example could take a name and a group and ensure
+    a user and a group are created and a file is placed in the `user` home directory
+    owned by the user and group we have created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Defined types are the same as classes; applying the manifest file will not
+    produce anything. A defined type resource declaration must be made in a class,
+    which can then be included:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This example has its dangers since if the second declaration for `user2` also
+    used a group of `group1`, this would result in a duplicated resource declaration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Namespaces
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Namespaces are segments that identify the directory and file structure for
+    classes in manifest files. These namespaces are separated with two colons (`::`),
+    so, for example, the following directories would translate as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **File** **path name** | **Namespace** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| /manifests/base.pp | base |'
+  prefs: []
+  type: TYPE_TB
+- en: '| /manifests/windows/grafana.pp | windows::grafana |'
+  prefs: []
+  type: TYPE_TB
+- en: '| /manifests/linux/apache.pp | linux::apache |'
+  prefs: []
+  type: TYPE_TB
+- en: '| /manifests/linux/ubuntu/landscape.pp | linux::ubuntu::landscape |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 3.1 – Namespace directory translation
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we wanted only to apply the `windows::grafana` class, we could therefore
+    run `puppet apply –e "include windows::grafana"` from within the `manifest` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no limit to the depth a namespace can have, but the best practice would
+    be to stick to a couple of levels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212), we will see modules that
+    have namespaces where the module name is the root level for all classes except
+    one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Resources, types, and providers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Resources are the fundamental basic unit of the Puppet language; every stateful
+    item we wish to describe is a resource. Resources must be unique in terms of what
+    they manage since Puppet has no way of managing or prioritizing conflict between
+    resources. It will simply call out that a clash exists and fail to compile a catalog.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Each resource will have a type, which is a description of what we are configuring,
+    such as a file or a registry setting; parameters, which are variables containing
+    the settings we can customize for the resource; and a provider, which is the underlying
+    implementation allowing Puppet to be OS independent. This provider is often a
+    default based on the OS but can be added as an attribute if required. So, a resource
+    declaration has the following syntax:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Opens with the type name, such as `file`, with no quotes and in lowercase
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A curly brace (`{`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The title of the resource in quotes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A colon (`:`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A list of attribute names and the value of that named attribute with `=>` between,
+    ending with a comma (`,`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A closing curly brace (`}`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Everything between the two curly braces is known as the **resource body**. It
+    is possible to have multiple bodies in a single resource declaration, essentially
+    declaring multiple resources of the same type, but for clarity, I would generally
+    advise against this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As pseudocode, this syntax looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s a real example of ensuring a package named `vscode` is at the latest
+    version on the system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: What was given in the syntax list for both the resource and class declarations/definitions
+    was the minimum required, while the code examples were spaced and broken over
+    several lines for stylistic reasons and following best practices. It is possible
+    to write declarations and definitions as a single line but Puppet has developed
+    a style guide – [https://www.puppet.com/docs/puppet/8/style_guide.html](https://www.puppet.com/docs/puppet/8/style_guide.html)
+    – that we will use throughout this book, along with other opinionated best practices
+    to create readable, maintainable, and simple code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some examples of the style guide being applied in the code examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use a two-space indent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: No trailing whitespace
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attribute names should align
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attribute `=>` symbols should align
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attribute values should align
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Include trailing commas after all attributes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Although there are no limits or syntactical meanings for whitespace, the Puppet
+    language style guide’s recommendations aim to make the code more readable and
+    consistent. The style guide states all attributes should have trailing commas;
+    this ensures adding a new attribute will only show a single change in a Git diff,
+    but you may find some code follows a pattern of having no comma on the last attribute,
+    which would make it clear it was the last element. This will pass linting checks
+    but may cause issues for not meeting Puppet style guides if you wish to get code
+    approved by Puppet for module use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As there are a number of syntactic and stylistic rules, the best way to learn
+    is to use style guide linting, made available via the Ruby gem, `puppet-lint`,
+    with syntax validation made available via the `puppet parser validate` command.
+    The Puppet extension on Visual Studio Code has these commands integrated into
+    its checks, so it highlights syntax and lint issues as you edit. In the screenshot
+    in *Figure 3**.1*, the warning output of the lab is visible with some stylistic
+    and syntactical errors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 3.1 – Visual Studio Code showing syntax and lint issues](img/Figure_03.01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.1 – Visual Studio Code showing syntax and lint issues
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similar effects can be achieved in `vim` using [https://github.com/rodjek/vim-puppet](https://github.com/rodjek/vim-puppet).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Throughout this book, advice will be given on best practices and approaches
+    to coding, with a lot of this advice taken from sources such as the Puppet style
+    guide. One of the best things an organization can do to develop clear and consistent
+    Puppet code is to write its own best practices and style guidelines, building
+    on top of the foundation provided by the Puppet style guide and ensuring it is
+    followed when reviewing code. This can equally disagree with points raised in
+    the style guide or this book, as long as it is best for your organization and
+    developers and it is agreed to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Resources of each type must be uniquely `ntp`, but not two service type resources
+    both titled `ntp`. There are no other limitations on how they are named in terms
+    of characters or spacing, but for performance purposes, titles should be kept
+    short and never be longer than 140 characters. This **title** is what identifies
+    the resource to Puppet itself when it generates a catalog.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `namevar` attribute (also known as the `namevar` by default is the same
+    as the title unless attributes are assigned. In some cases, types will use multiple
+    attributes to define `namevar`, such as a package using the command and name together.
+    This is used in cases where multiple copies of the same configuration can be installed
+    via different mechanisms, such as installing a package of the same name as a Ruby
+    gem and as a **Red Hat Package** **Manager** (**RPM**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Installing the Apache package can demonstrate the difference between `namevar`
+    and `apache_package` name variable is set based on the operating system. For Fedora,
+    the package name will be `httpd`, while for all other operating systems, it will
+    be `apache2`. This means our title for this package resource is `apache`, and
+    when referring to this resource in Puppet code, we can always refer to it as the
+    `apache` resource package, while the target system will refer to it by the appropriate
+    package name, ensuring it is a uniquely managed installation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let us now move on to some practical examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To practice what has been learned so far, look at the file at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/lint_and_validate.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/lint_and_validate.pp)
+    and try to correct the errors highlighted in VS Code. Alternatively, use the `puppet-lint
+    -f` (`-f` automatically fixes issues where possible) and `puppet parser validate`
+    commands from the VS Code integrated terminal or a separate terminal session.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://validate.puppet.com/](https://validate.puppet.com/) can also be used
+    to do validation checks online.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Examining the current system state
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This chapter so far has discussed how resources should be structured and styled
+    and, with all these rules, it can be intimidating when starting to write your
+    own resources. The `puppet resource` command allows us to produce Puppet code
+    from the state of a current machine; this command is supplied parameters of a
+    type and a `namevar` variable. To give an example, looking at the directory on
+    which a Windows desktop puppet has been installed would produce something like
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: From this example, it should be noted that certain attributes are returned only
+    for the information we refer to as properties and cannot be managed by Puppet,
+    such as `mtime` and `ctime`. Other attributes such as `provider` do not need to
+    be declared, as `windows` would be the presumed provider on a Windows machine.
+    Apart from this, with minor adjustments, this output can just be directly put
+    into Puppet manifests and run. (Later in this chapter, we will show you how to
+    review type attributes.)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Visual Studio Code allows you to run Puppet commands via the command palette
+    (*Ctrl* + *Shift* + *P*, or for Mac, *Command* + *Shift* + *P*). Type `puppet
+    resource`, then the resource type, and optionally name `var`. It will then paste
+    the output into your open file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous example, we ran `puppet resource` against a single `namevar`
+    attribute. For certain types, you can discover what the state of every resource
+    of that type would be on a machine, such as running `puppet resource package`
+    for packages. This clearly will not work for the likes of files, as recursively
+    going through every file on a host would produce too much information, but you
+    can quickly produce information on your host’s setup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In VSCode, try opening a new file, running the command palette with `puppet
+    resource`, and just entering `package`. This will list all the packages recognized
+    by Puppet and available Puppet providers. An example of this output is available
+    at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/puppet_resource_package.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/puppet_resource_package.pp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing types with the package, file, and service pattern
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Having discussed the structure and style of declaring resources, the next step
+    is to introduce the core types available to Puppet and how you can discover the
+    attributes and features of a type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The core types are documented online at [https://www.puppet.com/docs/puppet/8/type.html#puppet-core-types](https://www.puppet.com/docs/puppet/8/type.html#puppet-core-types)
+    and can be viewed on the command line with the `puppet describe` Puppet command.
+    Using `puppet describe --list` will list all the types available in your environment;
+    you can then review a type by passing the type name, for example, `puppet describe
+    package`. This documentation is also visible in VS Code when you hover the mouse
+    pointer over the types and attribute names in a resource declaration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Starting with the combination of package, file, and service types, you will
+    be able to install, configure, and start an application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The package type
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Running `puppet describe package` or viewing the web contents at [https://www.puppet.com/docs/puppet/8/types/package.html](https://www.puppet.com/docs/puppet/8/types/package.html),
+    we can view the description of what the type is for and a list of attributes and
+    available providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A package used at its simplest level can just be declared as a package resource
+    with a title:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: This sets several attributes to defaults, resulting in using the default provider
+    for the underlying operating system, such as `yum` for Red Hat or, for Windows,
+    the Windows provider, which handles `.exe` and `.msi` files. It will also install
+    at the latest package version available but, when enforced, will only ensure the
+    package is installed and not maintain it at the latest version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This versioning behavior is controlled by the `ensure` parameter and the example
+    defaulted to a value of `present`, which can also be declared as `installed`.
+    The `latest` value, just as it sounds, ensures the package is at the latest version
+    available to the provider. For more flexible versioning, it is possible to set
+    a value as a string version, such as `1.2.3`, and, depending on the support of
+    the provider, to use ranges, such as `> 1.0.0 < 2.0.0`. Using the value of `absent`
+    is an important part of Puppet, where resources don’t just ensure what is present
+    in the server state but also what should not be there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Related to using the `absent` value for `ensure` is the `purged` value, which
+    is a provider-dependent option. If set to `true`, it removes configuration files
+    on the removal of packages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `providers` attribute is often left as the default, but if it is required
+    to be installed via another package management system such as `pip` or `rubygems`,
+    can be assigned an appropriate provider’s name as its value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To see what providers can be used, the `-p` flag can be used on the `describe`
+    command: `puppet describe` `package -p`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Taking the example of Windows, it is important to note that it tells us the
+    Windows provider is the default provider and it lists the supported features,
+    which are attributes that will work with this provider. This difference in attributes
+    reflects the different underlying commands used by the provider.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `source` attribute is a URL to the package file; this allows for remote
+    calls to web sources such as JFrog Artifactory or locally downloaded files and
+    is a required parameter for certain providers, such as Windows, which requires
+    a location of the `.bin` or `.``exe` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `command` attribute, new since Puppet 6, allows you to select which command
+    the provider should run. This is necessary for situations where you have multiple
+    versions of an installer command available on a machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `name` attribute, which should be the name of the package, will be set as
+    the title by default and combined with the command attribute; since Puppet 6,
+    this is what makes the `namevar` attribute for a package. In Puppet 5, the provider
+    attribute is used instead of the command attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, it may be necessary due to dependency issues to run install commands
+    such as `yum` with multiple packages in a single command. There isn’t a way to
+    do this under the package type; the best approach would be to use an `exec` type,
+    which we will talk about later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, as an exercise, write a manifest for the following; create a new file for
+    each platform example, `package_rhel8.pp`, in `vscode` or a terminal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On RHEL 8, do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Install `rubygem activerecord` so that it is greater than version 7
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Install the latest `cowsay` from `yum`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ensure the `pinball` package is absent from the system in a resource titled
+    `no games`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: View the suggested solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_rhel8_answer.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_rhel8_answer.pp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On Windows Server, do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Install `ruby` and `devkit` from the `.exe` file already downloaded to `c:\tmp\rubyinstaller-devket-3.1.1-1-x64.exe`
+    with the `/VERYSILENT` install option
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Install `rubygem activerecord` so that it is greater than version 7 but less
+    than 9
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ensure the `pinball` package is installed at version `2005-xp` in a resource
+    titled `fun games`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: View the suggested solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_windows_answer.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/package_windows_answer.pp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more advanced Windows package management, it is worth looking at Chocolatey,
+    which will be covered in [*Chapter* *8*](B18492_08.xhtml#_idTextAnchor212) ([https://forge.puppet.com/puppetlabs/chocolatey](https://forge.puppet.com/puppetlabs/chocolatey)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The file type
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Having installed packages, it is then common to add application configuration
+    files and directories to contain them. The file type is ideal for creating files
+    and making directory structures. It can handle the content, ownership, and permissions
+    of files, links, and directories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The simplest declaration of a file type is the title as a fully declared path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Looking at the file type via `puppet describe file`, in this case, there are
+    only two **providers** – a Windows file or a POSIX file, which will match whichever
+    operating system family you are configuring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the `ensure` attribute, there are `present` and `absent` options. Selecting
+    `present` will default to the file value, ensuring the created resource is a normal
+    file but only enforcing that the file path exists regardless of whether it is
+    a symbolic link, a file, or a directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To create and enforce a resource, we must select the value of a file and use
+    `direct` to create a directory or directory nest or `link` to create a symbolic
+    link.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The path is the `namevar` attribute for this type and should be a fully qualified
+    path, or it can default from the title.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, a resource titled `Puppet directory`, which creates `ensure` for
+    the existing `directory` at `C:\ProgramData\PuppetLabs`, is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: For resources we ensure as files, the `content` attribute gives us multiple
+    ways of putting content into the file. The simplest version is simply to put a
+    string of the text into the file but using the functions, file, and template,
+    we can copy the contents of whole files stored in Puppet modules or use templated
+    files, allowing us to substitute values into pre-parsed files. These functions
+    will be covered in detail in [*Chapter 7*](B18492_07.xhtml#_idTextAnchor194) and
+    [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Three attributes are then used to manage ownership and permissions: `user`,
+    `group`, and `mode`. For `user` and `group`, this is as simple as entering the
+    UID and GID or the username and group name. If this is not set, this will default
+    to the user and group Puppet is running under. `mode` deals with permissions using
+    the Unix 4-digit-style permissions mode, but for Windows systems, entering this
+    gives a very rough and limited translation and it is better to leave `mode` undeclared
+    and supplement files with the ACL module: [https://forge.puppetlabs.com/puppetlabs/acl](https://forge.puppetlabs.com/puppetlabs/acl).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give an example of the attributes we have covered, the following declaration
+    creates a file called `config.test` with both `owner` and `group` set and the
+    content of two lines of text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `recurse` parameter allows recursive management of the contents of a directory.
+    If set to `true` when ensuring a directory and using `source`, it will copy the
+    directory contents recursively. It is important to note Puppet is not a file synchronization
+    tool, so do not put too many files under Puppet management, or files that are
+    too big. There is no specific number documented, but a common recommendation is
+    10 or fewer files in a recursive file resource and no greater than 25 MB. This
+    is due to the comparative nature of Puppet, which uses `md5` checksums for content,
+    which are expensive to run over large-sized files or large numbers of files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Information
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case of large numbers of files and directory structure, the module archive
+    – [https://forge.puppet.com/modules/puppet/archive](https://forge.puppet.com/modules/puppet/archive)
+    – can be used to download and extract it into place. Alternatively, when auditing
+    and versioning files, it is better to build a package and manage it with the package
+    resource we spoke of previously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several parameters can provide protection with `recurse` using `max_files`,
+    which can warn or error if a command is going to go over a certain limit. `recurselimit`
+    can be used to limit how many levels of recursion will be performed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are only two scenarios in which it is advised to use this parameter –
+    when you have a small number of files and the content of the files should be enforced,
+    or when also using the `purge` parameter, which, when set to `true`, will ensure
+    no files outside of Puppet’s control will remain in the directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will review data types and variables in detail in the next chapter, but for
+    now, note a parameter that takes `true` or `false` can take a value without quotes,
+    and that is the style this book will use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `purge` parameter can only be used with `ensure` set to `directory` and
+    `recursive` set to `true` and provides a powerful way to ensure the directory
+    only contains files under Puppet management, removing any other files it finds.
+    In the following, we give an example of recursion, ensuring the `/etc/httpd/conf`
+    directory only contains files under Puppet’s control:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is a `recursive_file_permissions` module ([https://forge.puppet.com/modules/npwalker/recursive_file_permissions](https://forge.puppet.com/modules/npwalker/recursive_file_permissions)),
+    which can assist in managing recursive permissions over a large number of files
+    in a performant way. This can be combined with the `archive` module we previously
+    mentioned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `validate_cmd` parameters can be particularly useful with configuration
+    files, where there is a known way to check the file we are putting in place. If
+    the validation command fails, the old file will be left in place, preventing issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `target` parameter is required if ensuring a link. By combining it with
+    the `path` value, we get a symlink, as demonstrated in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `source` parameter can be of several types: URIs, local files, NFS shares,
+    or web or Puppet modules. This can also be presented as an array to provide multiple
+    choices depending on the hostname or operating system, where it would use the
+    first file it could find. In the following code block, we show an example, where
+    `host` would be substituted with the applicable hostname and `operatingsystem`
+    with the locally installed operating system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, on a Windows server called `server1`, applying this resource
+    declaration would look on `nfsserver` under the `exampleapp` share to find the
+    first match, looking for `conf.server1`, then `conf.windows` if it could not find
+    it, and finally `conf`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `backup` parameter is not recommended, as managing and scaling file buckets
+    to store these backups proves difficult, and as we will see in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272),
+    there are better approaches we can consider, managing our code in Git to allow
+    for back-out scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `replace` parameter should be used sparingly, but if set to `true`, allows
+    for a file to have content enforced only if it does not exist. If the file exists,
+    the state is met. This can be useful for applications that require an initial
+    configuration file but then overwrite it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Having discussed a lot of attributes, try practicing constructing examples
+    by writing a manifest file to meet the requirements listed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On a Unix-based system, ensure only Puppet-controlled files are in the `/``etc/sudoers.d`
+    directory.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Add a `/etc/sudoers.d/mongodb` file with `robin All=(ALL) NOPASSWD: su – mongo`
+    content and a validation command, `visudo -c`, owned by `root`, a group of `root`,
+    and permission `0660`.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Create a symlink from `/``opt/mongodb/mongos /home/robin/mongos`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: View the suggested solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_unix_answer.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_unix_answer.pp).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For Windows, see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On a Windows-based system, ensure only Puppet-controlled files are in the `c:`
+    `\inetpub\wwwroot` directory but subdirectories are untouched.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Add a `c:\inetpub\wwwroot\page with source nfsshare1:\\publish\page.html` and
+    a validation command `c:\program` `files\httpvalidator\httpvlidate.exe` file.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Create a symlink from `c:\program files\httpvalidator\httpvlidate.exe C:\Users\david\Desktop`
+    and use the `replace` option to replace the file if it exists.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: View the suggested solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_windows_answer.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/file_windows_answer.pp).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Service types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Having installed software and created configuration files, the next common step
+    is to start services with the service type. Since system services can vary widely
+    in terms of what they support and provide, we must be careful to provide all the
+    necessary parameters. Some services lack proper status commands but can be provided
+    via the parameters of service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running and reviewing the output of `puppet describe service -p`, you will see
+    various providers, although in most cases, the default service provider is what
+    will be required. On certain occasions, such as legacy software on a modern Red
+    Hat system only providing `init` scripts, we may expect to select a different
+    provider.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first two parameters to consider are `enable` and `ensure`. `ensure` accepts
+    the values `stopped` or `running`, which can also be represented as `false` or
+    `true`, respectively. This is a simple binary of whether the service should be
+    running or not. `enable` defines in the service whether it should start on boot
+    and is only provided by certain providers. This can be `true` or `false` to be
+    enabled or disabled, and then there are several provider-dependent options; for
+    example, on Windows, `false` means the service is disabled and cannot be started,
+    and `manual` means the service is set to a manual startup type, which doesn’t
+    start with Windows but does allow the service to be started manually. `true` is
+    an automatic startup type and `delayed` means the service is set to the automatic
+    (*delayed*) startup type, which starts the service a couple of minutes after Windows
+    has started up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One final parameter to highlight for Windows would be `logonaccount`, which
+    specifies an account for the service to run as.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give examples of the attributes we have covered, see the following code
+    for a Windows service, `wuauserv`, a running service with a delayed startup service
+    and running as the `localsystem` user. The `bam` service is stopped and disabled:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Comparing this to `systemd`, the default provider for RHEL 8 and other Linux
+    systems, we can see in the description under supported features that `systemctl`
+    does not have delayed login or `manual` but does have `mask`, which, in system
+    terms, means it disables the service so not even services that are dependent on
+    it can activate it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beware that the defaults for `ensure` and `enabled` are entirely dependent on
+    the underlying provider implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In cases where there are no startup scripts provided for an application, combining
+    the `start` and `stop` parameters, you can use Puppet to bridge this gap, defining
+    which commands start and stop the service in these parameters. The `pattern` parameter
+    would by default take the name of the service and look for the name in the process
+    table to confirm a running status, or you can supply a regular expression, strings,
+    or any permissible Ruby pattern to search the process table. Alternatively, the
+    `status` parameter can be used to point at a status script, which should return
+    a zero-exit code if the service is running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following shows an example of a legacy service with scripts for starting,
+    stopping, and checking the status of the server pulled together in this service
+    resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: It can be seen based on the nature of implementation that a careful parameter
+    choice must be made and that this varies by scenario. Later in this chapter, we
+    will show methods for how to cover these differences while declaring resources
+    using a splat (`*`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running Puppet locally with multiple resources
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212) and [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252),
+    we will cover using Puppet agents and classification to apply Puppet code, but
+    to test the code developed just now, as mentioned at the start of the chapter,
+    `puppet apply` can be used to run code locally. In our labs, we will use Bolt
+    to automatically copy our manifest files to our remote labs and run `puppet apply`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An additional way of applying resources is via the `resource` command we reviewed
+    earlier. Adding parameters and settings to the command will cause it to be applied
+    to the resource. The Puppet service could be enforced as enabled and running with
+    the `puppet resource service puppet ensure=running enable=true` command. You will
+    often see this command in Puppet knowledge base articles when performing fixes
+    to Puppet services since it can usefully start/restart services without having
+    to think about which operating system it is running on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationships will be covered in detail in [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185),
+    but to allow for resources that are dependent on one another, as the package,
+    file, and service pattern requires, the basics of the `require`, `before`, `subscribe`,
+    and `notify` metaparameters need to be known. `require` and `before` mirror one
+    another, creating a relationship between two resources so that when Puppet runs
+    one resource, it will run before the other. It is not semantically important which
+    way you define the relationship, although it may prove more logical where there
+    is a many-to-one relationship to apply the dependency metaparameter to many resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similarly, the `subscribe` and `notify` metaparameters allow a resource to not
+    only have this dependency but also to send refresh events to types that support
+    them if the resource state changes (this can be confirmed in the type documentation
+    using `puppet describe`). This is particularly useful in service resources where
+    updating a configuration file should result in the service restarting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The syntax for these metaparameters is a resource reference, which comprises
+    a resource type with a capital letter and a resource name in square brackets.
+    To give some examples of this, the following shows examples of `before`, `notify`,
+    and `require` being used to make the package, file, and service pattern:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, `package` is installed first, the configuration file is then
+    added, and the service should start. If the configuration file changes state,
+    this will cause the service to restart. In the next section, we will talk in more
+    detail about resource references.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Shorthand can be used to create an array of the same resource types in a dependency:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Running Puppet will generate reports that describe how resources, if not in
+    the desired state, were changed into the correct state and, if the server was
+    in the correct state, will produce little output beyond the time it took to run
+    checks. The code can also be run in `noop`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: So, use the lab environment to apply some Puppet code to our client servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For CentOS, we will install `httpd` and serve a web page displaying *Hello
+    World*. Create an `apache_linux.pp` file; this will require the `httpd` package
+    to be installed and a file to be created at `/var/www/html/index.html` with the
+    following content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: We have a `/etc/httpd/conf/httpd.conf` configuration file with content sourced
+    from [https://raw.githubusercontent.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/main/ch03/httpd.conf](https://raw.githubusercontent.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/main/ch03/httpd.conf)
+    and validated by running `httpd -t -f` and an `httpd` service, which is enabled
+    on boot and running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For Windows, create a `grafana_windows.pp` file; we will install the Grafana
+    server from [https://dl.grafana.com/oss/release/grafana-8.4.3.windows-amd64.msi](https://dl.grafana.com/oss/release/grafana-8.4.3.windows-amd64.msi),
+    ensuring the service is running and enabled and, in the `C:\Program Files\GrafanaLabs\grafana\conf\grafana.ini`
+    configuration file, ensuring the content contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Updating the configuration file should restart the service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can apply the code you have written using Bolt, which will be covered in
+    [*Chapter 12*](B18492_12.xhtml#_idTextAnchor293). Using the `bolt apply apache_linux.pp
+    –server linuxclient.example.com` or `bolt apply grafana_windows.pp –server windowsclient.example.com`
+    command will copy the manifest to the server and run `puppet apply` on the client.
+    For both Linux and Windows examples, test your solution by navigating to `http://hostname:8080`
+    and confirming **Hello World** for Linux or the Grafana login page for Windows
+    is visible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example solutions are available at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/apache_linux.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/apache_linux.pp)
+    and [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/grafana_windows.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/grafana_windows.pp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To test the runs in `noop` mode, you can apply the `_noop => true` option to
+    the Bolt command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While it would be impractical to discuss every core type in detail, the next
+    section will cover at a high level the other core types, which are useful for
+    creating more advanced configurations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Core resource types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we will discuss the core resource types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: User and group types
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The user type and group type are core to most configurations, allowing the `ensure`
+    attribute to be set to `present` or `absent`. With a Unix platform as the provider,
+    the user would normally have a minimum set of attributes of `uid` and `gid`, with
+    the group having a minimum of `gid`. The user can be further enforced via the
+    `password` attribute, which can ensure the limits for any password set, passing
+    an encrypted password and enforcing the home directory and shell. For Windows
+    Server, it is important to note only local users and groups can be managed, although
+    a group resource can manage adding domain accounts to the membership of that group
+    via the `members` parameter. The names are case sensitive in Puppet but case insensitive
+    in Windows. The case should match so we do not lose any of the auto requirements
+    that are formed. Windows also uses multiple types of names, so it can be `<name
+    of computer\<user name>`, `BUILTIN\<username>`, or just `<username>`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, for example, `'DESKTOP-1MT10AJ\david, 'BUILTIN\david'` and `david` are all
+    treated the same by Puppet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code shows examples in Windows and Unix of an account and a group:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: We see here that Windows user David is a member of the administrator’s group
+    and user’s group. We see the user’s group and its list of members. We can then
+    see the detailed setup of a Ubuntu user on Unix with password settings, a home
+    directory, and group settings. Similarly, certain users and groups can be added
+    as resource declarations, ensured absent, and removed from the system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The exec type
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `exec` type is quite different from most Puppet types and can be dangerous
+    if not used correctly. While most Puppet types try to describe the state a server
+    should be in, `exec` provides a way of running scripts or commands on servers.
+    This means declaring an `exec` type takes effort to make sure the resource will
+    be `apt-get update` (the command for updating package sources in Ubuntu), if we
+    use the `onlyif` attribute, `unless`, or `creates`, or if the `exec` has a refresh-only
+    attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the first case, if the command is `exec` reporting runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the `onlyif` attribute, we can declare a command that if it returns `true`,
+    then our `exec` will run. `unless` is the opposite of `onlyif`, using a command
+    that if it returns `true`, then our `exec` will not run. Finally, `creates` looks
+    for a file to be created to show the script has run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This first example looks at disabling public Chocolatey access unless the command
+    finds in the sources that it is already disabled:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This second example shows an example command, which generates a file using
+    the `cowsay` command unless that file has already been created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is an optional PowerShell provider to allow `exec` to run PowerShell
+    scripts: [https://forge.puppet.com/puppetlabs/powershell](https://forge.puppet.com/puppetlabs/powershell).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The third scenario uses the `refreshonly` attribute, so using the `notify`
+    and `subscribe` attributes, we can set the `exec` to only run if another resource
+    is refreshed. The following `exec` can be useful when scripts are simply not going
+    to be replaced by Puppet code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: This might be the case if the script/command is vendor-provided or simply a
+    heritage script that works, and the effort of refactoring it into Puppet code
+    would not be worth it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On Unix platforms, a recent feature called parametrized execs was introduced
+    with Puppet 6.24+ and 7.9+, allowing you to pass a `command` attribute as an array,
+    the first part of the array being the command and the second part being the arguments.
+    This uses the secure method of parametrized system calls to ensure code cannot
+    be injected. In the following example, a traditional `exec` with just the command
+    would run all the commands separated by the semi-colon, in our simple example
+    echoing `real parameters` and running `rm`, while with the improvement of parametrized
+    execs, it will take the second argument as a string to be passed and echo it,
+    ensuring the original purpose of the command and preventing command injection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: This example using `echo` is obviously simplified and it will become clearer
+    where this plays a part when we look at [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)
+    and [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233). There, we will see how user
+    data can be fed into Puppet code and that we must code defensively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Augeas type
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Augeas is a type only available on Linux; it was used more historically in earlier
+    versions of Puppet when the options for manipulating files were much more limited,
+    but in more advanced situations, it can have its uses. It can be computationally
+    more expensive, so you should be careful in how you use it. Augeas can parse files
+    in their native formats into a tree, which you can then manipulate. It uses lenses
+    to perform these translations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give an example, if we want to manipulate the `access.conf` file, we can
+    view the file using `augtool` (the CLI interface for Augeas) and print it using
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s say our file contains the following lines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This would result in the following being printed using the default lens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This allows you to make programmatical references to individual sections and
+    values in the syntax, so if in the client state, you wanted to remove any entry
+    with the user `john` from all entries, `augtool` could run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use this in Puppet, Augeas only has one `changes`, which is the Augeas command
+    you wish to run, `lens` if you wish to use a different translation from the default,
+    and `onlyif`, which can perform a check of the content of the tree to see whether
+    the change needs to be run. Creating the previous example as a Puppet resource
+    would look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Augeas is a powerful tool but should be used sparingly. More details on the
+    syntax can be found at [http://augeas.net/docs/](http://augeas.net/docs/) and
+    [https://forge.puppet.com/modules/puppetlabs/augeas_core/reference](https://forge.puppet.com/modules/puppetlabs/augeas_core/reference).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The notify type
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `notify` type is used to send messages to the logs. This is more likely
+    to be used for debugging purposes than production use, as it is not idempotent,
+    and it will cause the Puppet report to see changes on every run. Using the `message`
+    parameter as a string of what to print will take a default from the title. A simple
+    example would be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `notice` function can be more practical for printing messages, as they will
+    not show up in the Puppet report change logs. See [*Chapter 5*](B18492_05.xhtml#_idTextAnchor123).
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are more core types, but the commands demonstrated in this chapter to
+    list types available, view the attribute, and provide documentation should give
+    you the ability to understand how to go on and investigate other types that you
+    may find useful, including types installed from `puppet forge`, which will be
+    covered in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Information
+  prefs: []
+  type: TYPE_NORMAL
+- en: Throughout this chapter, we have highlighted resources coming under Puppet’s
+    control by being added to the catalog, whether they enforce presence or absence.
+    Puppet has no concept of back-out, so removing a resource from Puppet’s control
+    will just leave it unmanaged as it was set in the last Puppet run. This should
+    therefore always be considered in your back-out process for a code change.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Metaparameters and advanced resources
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This section will start by looking at metaparameters, which are attributes
+    that work on any resource type. For the lab work, we covered `before`, `required`,
+    `notify`, and `subscribe`, which were used to create dependencies between resources.
+    To follow this, there are several other useful attributes with a range of effects
+    on resources. To see the full documentation of metaparameters on types and providers,
+    the `meta` flag can be added to the `describe` command: `puppet describe <file`
+    `type> --meta`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: audit
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `audit` metaparameter allows us to monitor unmanaged Puppet parameters;
+    this could either be an array list of attributes or all for monitoring all undeclared
+    attributes. In the following example, we declare this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This creates a `/opt/puppetlabs/puppet/cache/state/state.yaml` file on Puppet
+    Enterprise or `/var/lib/puppet/state/state.yaml` in the open source version of
+    Puppet, which records the audit state. Applying the preceding resource would produce
+    the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: As the resource was created, its state will be recorded as changing from `absent`
+    to `present`, and it will then be reported whether the previously recorded value
+    was found to have changed on Puppet runs. The `state.yaml` file would update to
+    this new value, so it’s important to take action on this change if it is required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: tag
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `tag` parameter allows us to apply tags to our resource, which can be a
+    single string or multiple tags with an array of strings. By default, several tags
+    are applied to a resource: the title, resource type, and the class the resource
+    is contained in. Tags are particularly useful in scenarios where we only want
+    to run parts of our manifests since both Puppet local and agent-based runs can
+    take a `--tag` flag to run only resources with a particular tag.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, let’s look at the Puppet resources in a manifest called `example.pp`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: The group will have the `group`, `ubuntu`, `pci`, and `sox` tags while the user
+    will have the `user`, `ubuntu`, and `pci` tags. Additionally, both would have
+    a tag of the class name, `example::access`. With the `puppet apply` `--tags` `pci
+    example.pp` command, both resources would be applied similarly; `ubuntu` would
+    apply both while running with a tag of `sox` would just run the group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are further metaparameters, such as `alias` and `loglevel`, that are simply
+    not in common use although they have no risks worth discussing in detail; they
+    can be read about at [https://www.puppet.com/docs/puppet/8/metaparameter.html](https://www.puppet.com/docs/puppet/8/metaparameter.html)
+    or by running `puppet describe <any` `type> -m`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The resource declarations shown before now have followed the same simple declaration
+    pattern, but there are several other methods to allow more flexibility and advanced
+    features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The resources metatype
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Puppet has a `resources` metatype, which can be used to ensure unmanaged resources
+    of a type are removed. If it is thought of like the output of the `<type>` Puppet
+    resource, finding anything with no matching `namevar` attributes from your code
+    to mark as `absent`. It uses four attributes; a `purge` attribute, which can be
+    `true` or `false`, and two attributes relevant when you are using resources on
+    the user type – `unless_system_user`, which accepts `true`, `false`, or a specified
+    minimum UID and ensures the system definition, or you can define integers or an
+    array of integers in the `minimum_uid` parameter, which will be protected from
+    the purge. To generate a list of numbers, the `range()` function from the `stdlib`
+    module can make this easier. We will discuss functions in [*Chapter 5*](B18492_05.xhtml#_idTextAnchor123),
+    to make it clear how functions work. As with all resources, the metaparameters
+    can be used and **noop** is advisable here, as purging all users may be too aggressive,
+    so seeing which users will be removed may initially be the best reporting to see:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `ssh_authorized_key` type should be managed on the *user* type via the `purge_ssh_keys`
+    attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Arrays of titles
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When declaring several resources with the same attributes, the title can be
+    declared as an array of resources, acting like multiple resource declarations.
+    We will cover arrays in [*Chapter 4*](B18492_04.xhtml#_idTextAnchor078), but for
+    now, understand an array of titles can be used with opening square brackets and
+    a separating comma, so the title for a resource would be like the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Overriding parameters
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here’s the syntax for a resource reference:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Type starting with a capital
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Title in square brackets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Opening curly brace (`{`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attributes to override
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Closing curly brace (`}`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'It is possible to override attributes of a declared resource. In this example,
+    we set `Audit` to `true` and `group` to `other_group` on the `resource /``opt/example/bin`
+    file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is best used combined with the array of titles so that common defaults
+    can be defined and then particular attributes set for a named resource. In this
+    book, we recommend using this sparingly to avoid confusion when everything is
+    declared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Attribute splats
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The attribute splat (`*`) is a mechanism of using a hash to fill out attributes
+    of a type; this can be useful in situations where we want to cover the differences
+    in attributes used by different providers. In a resource using the normal syntax,
+    you can have set of the attributes as `*` and then create a hash of the attributes
+    you would use. We will cover hashes, variables, and case statements in [*Chapter
+    4*](B18492_04.xhtml#_idTextAnchor078) and [*Chapter 7*](B18492_07.xhtml#_idTextAnchor194),
+    but for this example, it should be clear that we are setting the package options
+    hash to contain a `name` attribute equal to `apache2` for Debian and `httpd` as
+    a default:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: This results in the package `http` resource using the name `http2` for Ubuntu
+    and Debian systems and `httpd` by default for any other systems. This feature
+    should be used carefully so as not to detract from readability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To practice a little of what we have discussed, let us follow up on our previous
+    example and have a single manifest, `all_grafana.pp`, which can install, configure,
+    and run Grafana on both Linux and Windows. As we have not covered facts yet, understand
+    that as in our previous example, a case statement could use `$facts ['os']['family']`
+    to look for Red Hat or Windows to distinguish between our two clients. Note the
+    `rpm install` file is available at [https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm](https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm)
+    and the configuration file for Linux is at `/etc/grafana/grafana.ini`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a second exercise, create a separate manifest to create some users on the
+    Linux client, `linux_users.pp create 3 users exampleappdev`, `exampleapptest`,
+    `exampleappprod`, and a group, `exampleapp`, with all the users using this group
+    as their primary group. `exampleappprod` should purge `ssh` keys from `authorized`.
+    Finally, it should check whether there are any other non-system-level users on
+    the client (but not enforce anything).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As per the previous lab, you can test your manifests by running a `bolt` command
+    with your manifest name and client name listed: `bolt apply manifestname.pp –``server
+    servername.example.com`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/all_grafana.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/all_grafana.pp)
+    and [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/linux_users.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch03/linux_users.pp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Anti-patterns
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will talk about some resource features you will find documented
+    and useable with Puppet but that this book strongly recommends you do not use
+    and make it part of your best practices to avoid. The resource features we highlight
+    here are powerful but make resource declarations harder to read and require more
+    translation and calculations required to see the state we are attempting to get
+    the server into.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Abstract resource types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'An abstract resource type is used for declaring a resource when we do not want
+    to predefine a type and may decide which resource we will use based on the client.
+    In this simple example, a variable is set to the type and the resource is then
+    declared using the `Resource[<TYPE>] { <RESOURCE` `BODY>}` syntax:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A simple translation of this statement would be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: This book recommends against using abstracts, it is not commonly used, and it
+    makes the code a lot less readable, particularly for less experienced Puppet users.
+    The best approach is to use `case` statements or `if` statements, which we will
+    cover in [*Chapter 7*](B18492_07.xhtml#_idTextAnchor194). If there is too much
+    divergence in the code, it becomes best to separate the resources into separate
+    classes and not force platforms that share little in resource types together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defaults
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There are two methods of declaring defaults, but this book advises against using
+    either. A default body with multiple bodies in a resource declaration breaks good
+    practices around single purposes for a declaration, and a default resource statement
+    can be dangerous in terms of understanding its scoping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A default resource body
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Here, a resource can have a default body, following the same syntax as a normal
+    resource declaration but starting one of the bodies with `default:`; the ordering
+    of the bodies does not matter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This example shows two sets of arrays of titles, taking the defaults and changing
+    the default mode for the second array of the titles set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: As discussed when declaring resources, this book strongly recommends keeping
+    a clear single-purpose resource declaration as grouping multiple bodies together
+    makes the code harder to read. The recommended method for comparable results is
+    to use arrays of titles and override parameters where appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Resource default syntax
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The second method is to use a default resource statement syntax:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The type starting with a capital and `{`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A List of attributes and default values
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ending with `}`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the type has multiple namespaces, such as `concat::fragment`, then each namespace
+    section should be capitalized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this example, we use a file to set the default for all files resources that
+    do not declare a value for an attribute’s owner group or mode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Commonly used in early versions of Puppet, this is now considered only suitable
+    for use on the `site.pp` file (a global settings file we will cover in [*Chapter
+    11*](B18492_11.xhtml#_idTextAnchor272)). This is a result of Puppet no longer
+    using a dynamic scope for variable lookup and default resources still being dynamically
+    scoped, which can result in scope creep and unintentionally affect other resources
+    in your catalog. (Scope will be discussed in detail in [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185)).
+    Since having defaults in `site.pp` makes them unexpected and less visible, this
+    book recommends against using resource defaults.
+  prefs: []
+  type: TYPE_NORMAL
+- en: schedule
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`schedule` is a metaparameter used in conjunction with the schedule resource
+    type. This allows us to describe a specific schedule with a resource type, which
+    defines when a particular resource can be run so that if Puppet is applied outside
+    of this time, it will ignore the resource and how many times it can run in this
+    period. The schedule resource type uses various attributes to describe ranges,
+    repetition, or days: a simple example would be to cover the hours 6 p.m. to 9
+    a.m. over Friday night and Saturday morning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That could then be applied to a resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: This book advocates against this use case. It may seem tempting, particularly
+    for highly regulated environments that have restricted windows for changes, but
+    Puppet should enforce the expected state, so diverging from this state should
+    be an issue. Creating schedules makes it obscure as to what will be applied and
+    opens the state to periods of vulnerability where servers are only partially enforced
+    by Puppet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exporters and collectors
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Exporting and collecting Puppet resources happens when Puppet tries to allow
+    information to be exchanged between nodes for interdependency. It allows a resource
+    to be declared and run on one node and then other nodes to also apply these resources.
+    This is done by exporting the information to the `PuppetDB` database, which Puppet
+    runs will consult with when collecting. This means it can only be run via a Puppet
+    agent setup and not via local Puppet runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Exporting a resource just involves adding `@@` in front of a normal resource
+    declaration. The exported resource must be unique in `PuppetDB`, so commonly the
+    hostname fact (a variable containing the hostname) is used in the declaration.
+    In this example, a host entry is being exported to be put in the host file of
+    each collecting server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Collecting the resource then involves declaring a collector, which is the type
+    starting with a capital and a *spaceship* (`<<| |>>`) declaration; inside this,
+    tags can be declared to filter the collection. Completing this example, this collection
+    would ensure all exported host resources tagged `oracle` would be applied to the
+    server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Exporting and collecting have two key issues; the first is it becomes harder
+    to read the code and understand the resources that may be applied to a node. The
+    second is it complicates the scalability and high-availability considerations
+    for your Puppet infrastructure setup. As a result, by best practice, this book
+    recommends avoiding any use of exporters and collectors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, you learned about declaring resources and the syntax and styling
+    checks that can be performed to develop consistent code. Classes were shown to
+    be a way to group resources and allow us to call classes and apply these groups
+    of resources to servers. Defined types were then shown as a way to create repeatable
+    patterns of Puppet code, which can vary by parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We showed how to explore and use types and providers and saw some of the most
+    commonly used core types and how to use them well. The file, package, and service
+    types were shown to provide a great foundation for installing, configuring, and
+    starting an application. It was seen how Puppet resources can relate to each other
+    to ensure an order and how to then apply these resources written locally to servers
+    for testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The chapter covered the core resource metaparameters to understand how to use
+    various features of resources – tagging to allow filtered runs of resources; auditing
+    to monitor changes, which happen to unmanaged attributes on a resource, and using
+    `noop` to allow a resource to be declared as non-executable but reported on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, various anti-patterns were covered – default resources, which have
+    scoping issues; default bodies, which result in overloaded resource statements;
+    schedules, which make understanding Puppet runs complex; and export and collectors,
+    which have issues both in terms of scalability and availability and in terms of
+    abstracting data away from the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will cover variables and data types, which will allow
+    us to assign values to variables and control what those values are and how they
+    can be interacted with. This will allow us to reduce duplication and make our
+    resources easier to update and manage, as well as providing a way to pass in data
+    to our classes.
+  prefs: []
+  type: TYPE_NORMAL

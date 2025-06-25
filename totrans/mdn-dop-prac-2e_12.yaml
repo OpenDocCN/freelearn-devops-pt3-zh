@@ -1,0 +1,1530 @@
+- en: '12'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Continuous Deployment/Delivery with Argo CD
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we looked at one of the key aspects of modern DevOps
+    – **continuous integration** (**CI**). CI is the first thing most organizations
+    implement when they embrace DevOps, but things don’t end with CI, which only delivers
+    a tested build in an artifact repository. Instead, we would also want to deploy
+    the artifact to our environments. In this chapter, we’ll implement the next part
+    of the DevOps toolchain – **continuous** **deployment/delivery** (**CD**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The importance of CD and automation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CD models and tools
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Blog App and its deployment configuration
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Continuous declarative IaC using an Environment repository
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to Argo CD
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installing and setting up Argo CD
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing sensitive configurations and secrets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying the sample Blog App
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will spin up a cloud-based Kubernetes cluster, **Google
+    Kubernetes Engine** (**GKE**), for the exercises. At the time of writing, **Google
+    Cloud Platform** (**GCP**) provides a free $300 trial for 90 days, so you can
+    go ahead and sign up for one at [https://console.cloud.google.com/](https://console.cloud.google.com/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will also need to clone the following GitHub repository for some exercises:
+    [https://github.com/PacktPublishing/Modern-DevOps-Practices](https://github.com/PacktPublishing/Modern-DevOps-Practices).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to clone the repository into your home directory,
+    and `cd` into the `ch12` directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, let’s get started!
+  prefs: []
+  type: TYPE_NORMAL
+- en: The importance of CD and automation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: CD forms the Ops part of your DevOps toolchain. So, while your developers are
+    continuously building and pushing code and your CI pipeline is building, testing,
+    and publishing the builds to your artifact repository, the Ops team will deploy
+    the build to the test and staging environments. The QA team is the gatekeeper
+    that will ensure that the code meets a certain quality, and only then will the
+    Ops team deploy the code to production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, for organizations implementing only the CI part, the rest of the activities
+    are manual. For example, operators will pull the artifacts and run commands to
+    do the deployments manually. Therefore, your deployment’s velocity will depend
+    on the availability of your Ops team to do it. As the deployments are manual,
+    the process is error-prone, and human beings tend to make mistakes in repeatable
+    jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the essential principles of modern DevOps is to avoid **toil**. Toil
+    is nothing but repeatable jobs that developers and operators do day in and day
+    out, and all of that toil can be removed by automation. This will help your team
+    focus on the more important things at hand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With **continuous delivery**, standard tooling can deploy code to higher environments
+    based on certain gate conditions. CD pipelines will trigger when a tested build
+    arrives at the artifact repository or, in the case of GitOps, if any changes are
+    detected in the Environment repository. The pipeline then decides, based on a
+    set configuration, where and how to deploy the code. It also establishes whether
+    manual checks are required, such as raising a change ticket and checking whether
+    it’s approved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While **continuous deployment** and delivery are often confused with being the
+    same thing, there is a slight difference between them. Continuous delivery enables
+    your team to deliver tested code in your environment based on a human trigger.
+    So, while you don’t have to do anything more than click a button to do a deployment
+    to production, it would still be initiated by someone at a convenient time (a
+    maintenance window). Continuous deployments go a step further when they integrate
+    with the CI process and will start the deployment process as soon as a new tested
+    build is available for them to consume. There is no need for manual intervention,
+    and continuous deployment will only stop in case of a failed test.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The monitoring tool forms the next part of the DevOps toolchain. The Ops team
+    can learn from managing their production environment and provide developers with
+    feedback regarding what they need to do better. That feedback ends up in the development
+    backlog, and they can deliver it as features in future releases. That completes
+    the cycle, and now you have your team churning out a technology product continuously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'CD offers several advantages. Some of them are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Faster time to market**: CD and CI reduce the time it takes to deliver new
+    features, enhancements, and bug fixes to end users. This agility can give your
+    organization a competitive edge by allowing you to respond quickly to market demands.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Reduced risk**: By automating the deployment process and frequently pushing
+    small code changes, you minimize the risk of large, error-prone deployments. Bugs
+    and issues are more likely to be caught early, and rollbacks can be less complex.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Improved code quality**: Frequent automated testing and quality checks are
+    an integral part of CD and CI. This results in higher code quality as developers
+    are encouraged to write cleaner, more maintainable code. Any issues are caught
+    and addressed sooner in the development process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Enhanced collaboration**: CD and CI encourage collaboration between development
+    and operations teams. It breaks down traditional silos and encourages cross-functional
+    teamwork, leading to better communication and understanding.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Efficiency and productivity**: Automation of repetitive tasks, such as testing,
+    building, and deployment, frees up developers’ time to focus on more valuable
+    tasks, such as creating new features and improvements.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Customer feedback**: CD allows you to gather feedback from real users more
+    quickly. By deploying small changes frequently, you can gather user feedback and
+    adjust your development efforts accordingly, ensuring that your product better
+    meets user needs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Continuous improvement**: CD promotes a culture of continuous improvement.
+    By analyzing data on deployments and monitoring, teams can identify areas for
+    enhancement and iterate on their processes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Better security**: Frequent updates mean that security vulnerabilities can
+    be addressed promptly, reducing the window of opportunity for attackers. Security
+    checks can be automated and integrated into the CI/CD pipeline.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Reduced manual intervention**: CD minimizes the need for manual intervention
+    in the deployment process. This reduces the potential for human error and streamlines
+    the release process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scalability**: As your product grows and the number of developers and your
+    code base complexity increases, CD can help maintain a manageable development
+    process. It scales effectively by automating many of the release and testing processes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Cost savings**: Although implementing CI/CD requires an initial investment
+    in tools and processes, it can lead to cost savings in the long run by reducing
+    the need for extensive manual testing, lowering deployment-related errors, and
+    improving resource utilization.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Compliance and auditing**: For organizations with regulatory requirements,
+    CD can improve compliance by providing a detailed history of changes and deployments,
+    making it easier to track and audit code changes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It’s important to note that while CD and CI offer many advantages, they also
+    require careful planning, infrastructure, and cultural changes to be effective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are several models and tools available to implement CD. We’ll have a look
+    at some of them in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CD models and tools
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'A typical CI/CD workflow looks as described in the following figure and the
+    subsequent steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.1 – CI/CD workflow](img/B19877_12_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 – CI/CD workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your developers write code and push it to a code repository (typically a Git
+    repository).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Your CI tool builds the code, runs a series of tests, and pushes the tested
+    build to an artifact repository. Your CD tool then picks up the artifact and deploys
+    it to your test and staging environments. Based on whether you want to do continuous
+    deployment or delivery, it automatically deploys the artifact to the production
+    environment.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Well, what do you choose for a delivery tool? Let’s look at the example we covered
+    in [*Chapter 11*](B19877_11.xhtml#_idTextAnchor1412), *Continuous Integration*.
+    We picked up the **posts** microservice app and used a CI tool such as GitHub
+    Actions/Jenkins that uses **Docker** to create a container out of it and push
+    it to our **Docker Hub** container registry. Well, we could have used the same
+    tool for deploying to our environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if we wanted to deploy to `kubectl apply`. We could easily do this
+    with any of those tools, but we chose not to do it. Why? The answer is simple
+    – CI tools are meant for CI, and if you want to use them for anything else, you’ll
+    get stuck at a certain point. That does not mean that you cannot use these tools
+    for CD. It will only suit a few use cases based on the deployment model you follow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several deployment models exist based on your application, technology stack,
+    customers, risk appetite, and cost consciousness. Let’s look at some of the popular
+    deployment models that are used within the industry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simple deployment model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The **simple deployment model** is one of the most straightforward of all:
+    you deploy the required version of your application after removing the old one.
+    It completely replaces the previous version, and rolling back involves redeploying
+    the older version after removing the deployed one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.2 – Simple deployment model](img/B19877_12_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2 – Simple deployment model
+  prefs: []
+  type: TYPE_NORMAL
+- en: As it is a simple way of deploying things, you can manage this using a CI tool
+    such as **Jenkins** or **GitHub Actions**. However, the simple deployment model
+    is not the most desired deployment method because of some inherent risks. This
+    kind of change is disruptive and typically needs downtime. This means your service
+    would remain unavailable to your customers for the upgrade period. It might be
+    OK for organizations that do not have users 24/7, but disruptions eat into the
+    **service-level objectives**(**SLOs**) and **service-level agreements** (**SLAs**)
+    of global organizations. Even if there isn’t one, they hamper customer experience
+    and the organization’s reputation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, to manage such kinds of situations, we have some complex deployment
+    models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Complex deployment models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Complex deployment models**, unlike simple deployment models, try to minimize
+    disruptions and downtimes within the application and make rolling out releases
+    more seamless to the extent that most users don’t even notice when the upgrade
+    is being conducted. Two main kinds of complex deployments are prevalent in the
+    industry; let’s take a look.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Blue/Green deployments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Blue/Green deployments** (also known as **Red/Black deployments**) roll out
+    the new version (*Green*) in addition to the existing version (*Blue*). You can
+    then do sanity checks and other activities with the latest version to ensure that
+    everything is good to go. Then, you can switch traffic from the old to the new
+    version and monitor for any issues. If you encounter problems, you switch back
+    traffic to the old version. Otherwise, you keep the latest version running and
+    remove the old version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.3 – Blue/Green deployments](img/B19877_12_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.3 – Blue/Green deployments
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can take Blue/Green deployments to the next level using canary deployments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Canary deployments and A/B testing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Canary deployments** are similar to Blue/Green deployments but are generally
+    utilized for risky upgrades. So, like Blue/Green deployments, we deploy the new
+    version alongside the existing one. Instead of switching all traffic to the latest
+    version at once, we only switch traffic to a small subset of users. As we do that,
+    we can understand from our logs and user behaviors whether the switchover is causing
+    any issues. This is called **A/B testing**. When we do A/B testing, we can target
+    a specific group of users based on location, language, age group, or users who
+    have opted to test Beta versions of a product. That will help organizations gather
+    feedback without disrupting general users and make changes to the product once
+    they’re satisfied with what they are rolling out. You can make the release generally
+    available by switching over the total traffic to the new version and getting rid
+    of the old version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.4 – Canary deployments](img/B19877_12_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.4 – Canary deployments
+  prefs: []
+  type: TYPE_NORMAL
+- en: While complex deployments cause the least disruption to users, they are generally
+    complex to manage using traditional CI tools such as Jenkins. Therefore, we need
+    to get the tooling right on it. Several CD tools are available in the market,
+    including **Argo CD**, **Spinnaker**, **Circle CI**, and **AWS Code Deploy**.
+    As this entire book is focused on GitOps, and Argo CD is a GitOps native tool,
+    for this chapter, we will focus on Argo CD. Before we delve into deploying the
+    application, let’s revisit what we want to deploy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Blog App and its deployment configuration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Since we discussed the Blog App in the last chapter, let’s look at the services
+    and their interactions again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.5 – The Blog App and its services and interactions](img/B19877_12_5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.5 – The Blog App and its services and interactions
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far, we’ve created CI pipelines for building, testing, and pushing our Blog
+    App microservice containers. These microservices need to run somewhere. So, we
+    need an environment for this. We will deploy the application in a `posts` microservice
+    as an example in the previous chapter, and I also left building the rest of the
+    services as an exercise for you. Assuming you’ve built them, we will need the
+    following resources for the application to run seamlessly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**MongoDB**: We will deploy an auth-enabled MongoDB database with root credentials.
+    The credentials will be injected via environment variables sourced from a Kubernetes
+    **Secret** resource. We also need to persist our database data, so for that, we
+    need a **PersistentVolume** mounted to the container, which we will provision
+    dynamically using a **PersistentVolumeClaim**. As the container is stateful, we
+    will use a **StatefulSet** to manage it and, therefore, a headless **Service**
+    to expose the database.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`posts`, `reviews`, `ratings`, `and` `users` microservices will interact with
+    MongoDB through the root credentials injected via environment variables sourced
+    from the same **Secret** as MongoDB. We will deploy them using their respective
+    **Deployment** resources and expose all of them via individual **ClusterIP Services**.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Frontend**: The *frontend* microservice does not need to interact with MongoDB,
+    so there will be no interaction with the Secret resource. We will also deploy
+    this service using a **Deployment** resource. As we want to expose the service
+    on the internet, we will create a **LoadBalancer Service** for it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can summarize these aspects with the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.6 – The Blog App – Kubernetes resources and interactions](img/B19877_12_6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.6 – The Blog App – Kubernetes resources and interactions
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, as we’re following the GitOps model, we need to store the manifests of
+    all the resources on Git. However, since Kubernetes Secrets are not inherently
+    secure, we cannot store their manifests directly on Git. Instead, we will use
+    another resource called **SealedSecrets** to manage this securely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 2*](B19877_02.xhtml#_idTextAnchor134), *Source Code Management
+    with Git and GitOps*, we discussed application and environment repositories forming
+    the fundamental building blocks of GitOps-based CI and CD, respectively. In the
+    previous chapter, we created an application repository on GitHub and used GitHub
+    Actions (and Jenkins) to build, test, and push our application container to Docker
+    Hub. As CD focuses on the Ops part of DevOps, we will need an **Environment repository**
+    to implement it, so let’s go ahead and create our Environment repository in the
+    next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuous declarative IaC using an Environment repository
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As we know by now, we must create a GKE cluster to host our microservices. So
+    far, we’ve been using `gcloud` commands to do this; however, because `gcloud`
+    commands are not declarative, using them is not ideal when implementing GitOps.
+    Instead, we’ll use **Terraform** to create the GKE cluster for us. This will ensure
+    we can deploy and manage the cluster declaratively using a Git Environment repository.
+    So, let’s go ahead and create one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating and setting up our Environment repository
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Navigate to [https://github.com](https://github.com) and create a repository
+    using a name of your choice. For this exercise, we will use `mdo-environments`.
+    Once you have done that, navigate to Google Cloud Shell, generate a `ssh-key`
+    pair using the `ssh-keygen` command, copy the public key to GitHub (refer to [*Chapter
+    2*](B19877_02.xhtml#_idTextAnchor134)*, Source Code Management with Git and GitOps*,
+    for step-by-step instructions), and clone the repository using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s copy a `.gitignore` file for Terraform to ensure that we do not unexpectedly
+    check in Terraform state, backend, or `.tfvars` files by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s push this code to GitHub using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we’ve pushed our first file and initialized our repository, let’s
+    structure our repository according to our environments. We will have two branches
+    within the Environment repository – **dev** and **prod**. All configurations in
+    the **dev** branch will apply to the **development environment**, and those on
+    **prod** will apply to the **production environment**. The following diagram illustrates
+    this approach in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.7 – CD process](img/B19877_12_7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.7 – CD process
+  prefs: []
+  type: TYPE_NORMAL
+- en: The existing repository has a single branch called `master`. However, since
+    we will be managing multiple environments in this repository, it would be good
+    to rename the `master` branch to `prod`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go to `https://github.com/<your_user>/mdo-environments/branches` and click the
+    pencil icon beside `prod` and click on **Rename Branch**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we’ve renamed the branch, let’s remove the existing local repository
+    and clone the repository again using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We want to start with the dev environment, so it will be good to create a branch
+    called `dev` from the `prod` branch. Run the following command to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can start writing the Terraform configuration within this directory.
+    The configuration is available in `~/modern-devops/ch12/mdo-environments/environments`.
+    Copy everything from that directory to the current directory using the following
+    commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Within the `terraform` directory, there are several Terraform files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `cluster.tf` file contains the configuration to create the Kubernetes cluster.
+    It looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: It creates two resources – a `cloud platform` **OAuth scope**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We name the service account with a combination of the `cluster_name` and `branch`
+    variables. This is necessary as we need to distinguish clusters between environments.
+    So, if the cluster name is `mdo-cluster` and the Git branch is `dev`, we will
+    have a service account called `gke-mdo-cluster-dev-sa`. We will use the same naming
+    convention on the GKE cluster. Therefore, the cluster’s name would be `mdo-cluster-dev`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have a `provider.tf` file that contains the `provider` and `backend` configuration.
+    We’re using a remote backend here as we want to persist the Terraform state remotely.
+    In this scenario, we will use a `provider.tf` file looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we’ve specified our default `region` and `zone` within the `provider`
+    config. Additionally, we’ve declared the `gcs` backend, which only contains the
+    `prefix` attribute with a value of `mdo-terraform`. We can separate configurations
+    using the prefixes to store multiple Terraform states in a single bucket. We have
+    purposefully not supplied the `bucket` name, which we will do at runtime using
+    `-backend-config` during `terraform init`. The bucket name will be `tf-state-mdo-terraform-<PROJECT_ID>`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: As GCS buckets should have a globally unique name, it is good to use something
+    such as `tf-state-mdo-terraform-<PROJECT_ID>` as the project ID is globally unique.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also have the `variables.tf` file, which declares the `project_id`, `branch`,
+    `cluster_name`, and `location` variables, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have the Terraform configuration ready, we need a workflow file
+    that can be applied to our GCP project. For that, we’ve created the following
+    GitHub Actions workflow file – that is, `.github/workflows/create-cluster.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is a two-step build file. The first step installs Terraform, while the
+    second step applies the Terraform configuration. Apart from that, we’ve specified
+    `./terraform` as the working directory at the global level. Additionally, we’re
+    using a few secrets in this file, namely `GCP_CREDENTIALS`, which is the key file
+    of the service account that Terraform uses to authenticate and authorize the GCP
+    API, and the Google Cloud `PROJECT_ID`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve also supplied the bucket name as `tf-state-mdo-terraform-${{ secrets.PROJECT_ID
+    }}` to ensure that we have a unique bucket name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we’ve used Terraform workspaces to manage multiple environments, the preceding
+    code selects an existing Terraform workspace with the branch name denoted by `${GITHUB_REF##*/}`
+    or creates a new one. Workspaces are important here as we want to use the same
+    configuration with different variable values for different environments. The Terraform
+    workspaces correspond to environments, and environments correspond to the Git
+    branch. So, as we have the `dev` and `prod` environments, we have the corresponding
+    Terraform workspaces and Git branches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the Terraform and workflow configuration, we can deduce that we will need
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A **service account** for Terraform to authenticate and authorize the GCP API
+    and a JSON key file that we need to add as a GitHub secret
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **project ID** that we’ll configure as a GitHub secret
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A **GCS bucket** that we’ll use as a backend for Terraform
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'So, let’s go ahead and create a service account within GCP so that Terraform
+    can use it to authenticate and authorize with the Google APIs. Use the following
+    commands to create the service account, provide relevant **Identity and Access
+    Management** (**IAM**) permissions, and download the credentials file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: You will see a file called `key-file` within your working directory. Now, navigate
+    to `https://github.com/<your_github_user>/mdo-environments/settings/secrets/actions/new`
+    and create a secret named `GCP_CREDENTIALS`. For the value, print the `key-file`
+    file, copy its contents, and paste it into the **values** field of the GitHub
+    secret.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, create another secret, `PROJECT_ID`, and specify your GCP project ID within
+    the **values** field.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next thing we need to do is create a GCS bucket for Terraform to use as
+    a remote backend. To do this, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Additionally, we need to enable the GCP APIs that Terraform will use to create
+    the resources. To do this, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So, now that all the prerequisites have been met, we can push our code to the
+    repository. Run the following commands to do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As soon as we push the code, we’ll see that the GitHub Actions workflow has
+    been triggered. Soon, the workflow will apply the configuration and create the
+    Kubernetes cluster. This should appear as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.8 – GitOps with GitHub Actions and Terraform](img/B19877_12_8.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.8 – GitOps with GitHub Actions and Terraform
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To verify whether the cluster has been created successfully, run the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the `mdo-cluster-dev` cluster is running successfully in the
+    environment. If we make any changes to the Terraform configuration, the changes
+    will automatically be applied. We’ve successfully created our Environment using
+    an Environment repository. That is the *push model GitOps* in action for you.
+    Now, we need to run our application in the environment; to manage and deploy the
+    application, we will need a dedicated CD tool. As stated previously, we will use
+    Argo CD for this, so let’s look at it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to Argo CD
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Argo CD is an open source, declarative, GitOps-based CD tool designed to automate
+    deploying and managing applications and infrastructure on Kubernetes clusters.
+    Argo CD serves as a robust application controller, efficiently managing and ensuring
+    the smooth and secure operation of your applications. Argo CD works in the *pull-based
+    GitOps model* and, therefore, polls the Environment repository regularly to detect
+    any configuration drift. Suppose it finds any drift between the state in Git and
+    the actual state of applications running in the environment. In that case, it
+    will make corrective changes to reflect the desired configuration declared in
+    the Git repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Argo CD is tailored explicitly to Kubernetes environments, making it a popular
+    choice for managing applications on Kubernetes clusters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to the traditional Kubernetes manifest YAML files, Argo CD offers
+    support for various alternative methods of defining Kubernetes configurations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Helm charts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kustomize
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ksonnet
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Jsonnet files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Plain YAML/JSON manifest files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Integration with other customized configuration management tools through plugins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Within Argo CD, you can define applications encompassing both a *source* and
+    a *target*. The source specifies details about the associated Git repository,
+    the location of the manifests, helm charts, or kustomize files, and then applies
+    these configurations to designated target environments. This empowers you to monitor
+    changes within a specific branch, tag, or watch particular versions within your
+    Git repository. Diverse tracking strategies are also at your disposal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can access a user-friendly web-based UI and a **command-line interface**
+    (**CLI**) to interact with Argo CD. Moreover, Argo CD facilitates reporting on
+    the application’s status via sync hooks and app actions. If any modifications
+    are made directly within the cluster that deviate from the GitOps approach, Argo
+    CD can promptly notify your team, perhaps through a Slack channel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following diagram provides an overview of the Argo CD architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.9 – Argo CD architecture](img/B19877_12_9.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.9 – Argo CD architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, without further ado, let’s spin up Argo CD.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing and setting up Argo CD
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Installing Argo CD is simple – we need to apply the `install.yaml` manifest
+    bundle that’s available online at [https://github.com/argoproj/argo-cd/blob/master/manifests/install.yaml](https://github.com/argoproj/argo-cd/blob/master/manifests/install.yaml)
+    on the Kubernetes cluster where we wish to install it. For a more customized installation,
+    you can refer to [https://argo-cd.readthedocs.io/en/stable/operator-manual/installation/](https://argo-cd.readthedocs.io/en/stable/operator-manual/installation/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we’re using GitOps for this chapter, we will not deploy Argo CD manually.
+    Instead, we will use Terraform to set it up using the Environment repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The resources for this section are present in `~/modern-devops/ch12/environments-argocd-app`.
+    We will use the same Environment repository as before for managing this environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, let’s `cd` into the `mdo-environments` local repository and run
+    the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s look at the directory structure to understand what we’re doing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the structure is similar to before, except for a few changes.
+    Let’s look at the Terraform configuration first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Terraform changes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `terraform` directory now contains two more files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`argocd.tf`: This contains the Terraform configuration for deploying Argo CD'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`app.tf`: This contains the Terraform configuration for configuring Argo CD
+    apps'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s explore both files in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: argocd.tf
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'This files starts with the `time_sleep` resource with an explicit dependency
+    on the `google_container_cluster` resource. It will sleep for 30 seconds after
+    the cluster is created so that it is ready to serve requests:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To connect with GKE, we will use the `gke_auth` module provided by `terraform-google-modules/kubernetes-engine/google//modules/auth`.
+    We will add an explicit dependency to the `time_sleep` module so that authentication
+    happens 30 seconds after the cluster is created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we’ve authenticated with the GKE cluster, we need to apply manifests
+    to deploy Argo CD to the cluster. We will use the `gavinbunney/kubectl` plugin
+    ([https://registry.terraform.io/providers/gavinbunney/kubectl/latest/docs](https://registry.terraform.io/providers/gavinbunney/kubectl/latest/docs))
+    for that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start by defining some data sources to help generate Kubernetes manifests
+    that we will apply to install Argo CD. We will create two `kubectl_file_documents`
+    data sources for the namespace and Argo CD app that point to the corresponding
+    `namespace.yaml` and `install.yaml` files within the `manifests/argocd` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using these data sources, we can create two `kubectl_manifest` resources for
+    the namespace and Argo CD app. These resources will apply the manifests within
+    the GKE cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we’ve added the configuration to install Argo CD, we also need to configure
+    argo CD Applications. To do that, we have the `app.tf` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: app.tf
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Similar to the Argo CD configuration, we have a `kubectl_file_documents` data
+    source reading from the `manifests/argocd/apps.yaml` file; the `kubectl_manifest`
+    resource will apply the manifest to the Kubernetes cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: We’ve also modified the `provider.tf` file, so we’ll explore that next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: provider.tf
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Within this file, we have included the `kubectl` provider, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s inspect the manifests directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Kubernetes manifests
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The manifests directory contains Kubernetes manifests that we will apply to
+    the Kubernetes cluster. As we’re setting up Argo CD first, it only contains the
+    `argocd` directory at the moment; however, we will extend this to add further
+    directories later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `manifests/argocd` directory contains the following files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`namespace.yaml`: The manifest to create the `argocd` namespace where Argo
+    CD will run.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`install.yaml`: The manifest to create the Argo CD application. The manifest
+    is downloaded from the official Argo CD release URL.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`apps.yaml`: This contains an Argo CD **ApplicationSet** configuration.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: While the `namespace.yaml` and `install.yaml` files are self-explanatory, let’s
+    discuss the `apps.yaml` file and the Argo CD ApplicationSet resource in more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Argo CD Application and ApplicationSet
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To manage applications declaratively, Argo CD uses the `source` attribute and
+    where it needs to apply them using the `target` attribute. An Application resource
+    caters to one application. For example, to deploy our Blog App, we will need to
+    create an Application resource like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This manifest defines an Argo CD Application resource with the following sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`project`: We can organize applications into distinct projects. In this case,
+    we will stick to the `default` project.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`source`: This section defines the configuration Argo CD requires to track
+    and pull the application configuration from the Git repository. It typically contains
+    `repoURL`, `targetRevision`, and the `path` value where the application manifests
+    are located.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`destination`: This section defines the `target` value to which we want to
+    apply the manifest. It typically contains the `server` section and contains the
+    Kubernetes cluster’s URL.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`syncPolicy`: This section defines any policies Argo CD should apply while
+    syncing the Blog App from the Git repository and what to do when it detects a
+    drift. In the preceding configuration, it would try to correct any drift from
+    the Git repository automatically as `selfHeal` is set to `true`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We can very well go ahead and define multiple application manifests for each
+    application. However, for larger projects, it might turn out to be an overhead.
+    To manage this, Argo CD provides a generic way of creating and managing applications
+    via the `ApplicationSet` resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `ApplicationSet` resource provides us with a way to dynamically generate
+    Application resources by using a defined pattern. In our case, we have the following
+    structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, logically, for every subdirectory of the `manifests` directory, we would
+    need to create a new application with the directory name. The respective application
+    configuration should source all manifests from the subdirectory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ve defined the following `ApplicationSet` within the `apps.yaml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`ApplicationSet` has the following sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`generators`: This section defines how Argo CD should generate Application
+    resources. We’ve used the `git` generator, which contains the `repoURL`, `revision`,
+    and `directories` sections. The `directories` section defines the directory from
+    where we would want to source our applications. We’ve set that to `manifests/*`.
+    So, it will look for every subdirectory within the `manifests` directory. We have
+    also defined an exclude directory called `manifests/argocd`. This is because we
+    don’t want Argo CD to manage the configuration to deploy itself.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`templates`: This section defines the template for creating the application.
+    As we can see, the contents are very similar to an Application resource definition.
+    For `metadata.name`, we specified `{{path.basename}}`, which means it will create
+    Application resources with the subdirectory name as we intended. The `template.spec.source.path`
+    attribute contains the source path of the corresponding application manifests,
+    so we’ve set that to `{{path}}` – that is, the subdirectory. So, we will have
+    `blog-app` and `<other-app>` applications based on the preceding directory structure.
+    The rest of the attributes are the same as those for the Application resource
+    we discussed previously.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now that we’ve configured everything we need to install and set up Argo CD,
+    let’s commit and push this configuration to the remote repository by using the
+    following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will see that GitHub will run the Actions workflow on update and deploy Argo
+    CD. Once the workflow is successful, we can go ahead and access the Argo CD Web
+    UI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing the Argo CD Web UI
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before we can access the Argo CD Web UI, we must authenticate with the GKE
+    cluster. To do so, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To utilize the Argo CD Web UI, you will require the external IP address of
+    the `argo-server` service. To get that, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now know that Argo CD is accessible at [https://34.122.51.25/](https://34.122.51.25/).
+    Upon visiting this link, you’ll notice that username and password are required
+    for authentication:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.10 – Argo CD Web UI – login page](img/B19877_12_10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.10 – Argo CD Web UI – login page
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Argo CD provides an initial `admin` user by default, and the password for this
+    user is stored in the `argocd-initial-admin-secret` **Secret** resource as plaintext.
+    While you can use this default setup, it’s worth noting that it is generated from
+    the publicly available YAML manifest. Therefore, it’s advisable to update it.
+    To do so, execute the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, allow two minutes for the new credentials to be generated. After that,
+    execute the following command to retrieve the password:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that you have the necessary credentials, log in and you will see the following
+    page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.11 – Argo CD Web UI – home page](img/B19877_12_11.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.11 – Argo CD Web UI – home page
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve successfully set up Argo CD. The next step is to deploy our application;
+    however, as we know that our application uses Kubernetes Secrets, which we cannot
+    store on Git, we will have to find a mechanism to store it securely. To solve
+    that problem, we have Bitnami’s **SealedSecret** resource. We’ll look at that
+    in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing sensitive configurations and Secrets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Sealed Secrets** solves the problem of *I can manage all my Kubernetes config
+    in Git, except Secrets*. Sealed Secrets function as secure containers for your
+    sensitive information. When you require a storage solution for secrets, such as
+    passwords or keys, you place them in these specialized packages. Only the Sealed
+    Secrets controller within Kubernetes can unlock and access the contents. This
+    ensures the utmost security and protection for your valuable secrets. Created
+    by *Bitnami Labs* and open sourced, they help you encrypt your Kubernetes Secrets
+    into Sealed Secrets using asymmetric cryptography that only the Sealed Secrets
+    controller running on the cluster can decrypt. This means you can store the Sealed
+    Secrets in Git and use GitOps to set up everything, including Secrets.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Sealed Secrets comprises two components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A client-side utility called `kubeseal` helps us generate Sealed Secrets from
+    standard Kubernetes Secret YAML
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A cluster-side Kubernetes controller/operator unseals your secrets and provides
+    the key certificate to the client-side utility
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The typical workflow when using Sealed Secrets is illustrated in the following
+    diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.12 – Sealed Secrets workflow](img/B19877_12_12.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.12 – Sealed Secrets workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s go ahead and install the Sealed Secrets operator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing the Sealed Secrets operator
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To install the **Sealed Secrets operator**, all you need to do is download the
+    controller manifest from the latest release at [https://github.com/bitnami-labs/sealed-secrets/releases](https://github.com/bitnami-labs/sealed-secrets/releases).
+    At the time of writing this book, [https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.23.1/controller.yaml](https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.23.1/controller.yaml)
+    is the latest controller manifest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a new directory called `sealed-secrets` within the `manifest` directory
+    and download `controller.yaml` using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, commit and push the changes to the remote repository. After about five
+    minutes, Argo CD will create a new application called **sealed-secrets** and deploy
+    it. You can visualize this in the Argo CD Web UI as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.13 – Argo CD Web UI – Sealed Secrets](img/B19877_12_13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.13 – Argo CD Web UI – Sealed Secrets
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the Kubernetes cluster, `sealed-secrets-controller` will be visible in the
+    `kube-system` namespace. Run the following command to check this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the controller is running and ready. We can now install the client-side
+    utility – `kubeseal`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing kubeseal
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To install the client-side utility, you can go to [https://github.com/bitnami-labs/sealed-secrets/releases](https://github.com/bitnami-labs/sealed-secrets/releases)
+    and get the `kubeseal` installation binary link from that page. The following
+    commands will install `kubeseal` `0.23.1` on your system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To check whether `kubeseal` has been installed successfully, run the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since `kubeseal` has been installed, let’s go ahead and create a Sealed Secret
+    for the `blog-app`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating Sealed Secrets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To create a Sealed Secret, we have to define the Kubernetes Secret resource.
+    The `mongodb-creds` Secret should contain some key-value pairs with the `MONGO_INITDB_ROOT_USERNAME`
+    key with a value of `root` and the `MONGO_INITDB_ROOT_PASSWORD` key with any value
+    you want as the password.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we don’t want to store the plaintext Secret as a file, we will first create
+    the Kubernetes secret manifest called `mongodb-creds` using the `--dry-run` and
+    `-o yaml` flags and then pipe the output directly to `kubeseal` to generate the
+    `SealedSecret` resource using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This generates the `mongodb-creds-sealed.yaml` Sealed Secret, which looks like
+    this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see, the Sealed Secret is very similar to the Secret manifest. Still,
+    instead of containing a Base64-encoded secret value, it has encrypted it so that
+    only the Sealed Secrets controller can decrypt it. You can easily check this file
+    into source control. Let’s go ahead and do that. Move the Sealed Secret YAML file
+    to the `manifests/blog-app` directory using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we’ve successfully generated the Sealed Secret and moved it to the
+    `manifests/blog-app` directory, we’ll set up the rest of our application in the
+    next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying the sample Blog App
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To deploy the sample Blog App, we need to define application resources. We’ve
+    already discussed what our app is composed of. We have defined the application
+    bundle as a Kubernetes manifest file called `blog-app.yaml`. We need to copy this
+    YAML to the `manifests/blog-app` directory using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’ve prebuilt the microservices and used the required `git-sha` as the tag,
+    as we did in the previous chapter. You can edit the YAML and replace it with your
+    image for each application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once done, commit and push the changes to the `mdo-environments` repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As soon as you push the changes, you should notice that the `blog-app` application
+    starts appearing in the Argo CD UI in less than five minutes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![ Figure 12.14 – Argo CD Web UI – Applications](img/B19877_12_14.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.14 – Argo CD Web UI – Applications
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Wait for the application to progress. Once it turns green, you should see the
+    following within the application:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.15 – Argo CD Web UI – blog-app](img/B19877_12_15.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.15 – Argo CD Web UI – blog-app
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that the application is all synced up, we can check the resources that
+    were created within the `blog-app` namespace. Let’s list the Services first using
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, it lists all the Services that we’ve defined. Note that the *frontend*
+    service is of the `LoadBalancer` type and has an **External IP**. Note down this
+    External IP as we will use it to access our application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s list the **pods** to see whether all the microservices are running
+    fine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, all pods are running fine. Note that the `mongodb-0` pod contains
+    a numeric prefix, but the rest of the pods have random UUIDs. You might recall
+    that when we created a `mongodb-creds` secret has been created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see that the `mongodb-creds` Secret has been created. This shows
+    us that SealedSecret is working fine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s go ahead and access our application by opening `http://<frontend-svc-external-ip>`.
+    If you see the following page, the application was deployed correctly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.16 – Blog App home page](img/B19877_12_16.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.16 – Blog App home page
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an exercise, play around with the application by clicking on **Sign In**
+    > **Not a user? Create an Account** and then fill in the details to register.
+    You can *create* a new **Post**, add **Reviews**, and provide **Ratings**. You
+    can also *update* your reviews, *delete* them, update ratings, and more. Try out
+    the app to see whether all aspects are working correctly. You should be able to
+    see something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.17 – Blog App posts](img/B19877_12_17.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.17 – Blog App posts
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we’re happy with the application, we can raise a pull request from the `dev`
+    branch to the `prod` branch. Once you merge the pull request, you will see that
+    similar services will emerge in the production environment. You can use pull request-based
+    gating for CD as well. This ensures that your environments remain independent
+    while being sourced from the same repository, albeit from different branches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter has covered continuous deployment and delivery, and we understood
+    the need for CD and the basic CD workflow for a container application. We discussed
+    several modern deployment strategies and how CI tools cannot fulfill those responsibilities.
+    Using the GitOps principles, we created an Environment repository and deployed
+    our GKE-based environment using GitHub Actions by employing the push-based model.
+    Then, we looked at using Argo CD as our CD tool and installed it. To avoid committing
+    sensitive information in Git, such as secrets, we discussed Bitnami’s Sealed Secrets.
+    We then deployed the sample Blog App using Argo CD, using GitOps all the while.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will explore another vital aspect of modern DevOps –
+    securing the deployment pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Answer the following questions to test your knowledge of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which of the following are CD tools? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Spinnaker
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. GitHub
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Argo CD
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. AWS Code Deploy
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: CD requires human input for deployment to production. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Argo CD supports Blue/Green deployments out of the box. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What would you use to initiate deployment using Argo CD?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Trigger the pipeline manually
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Check in changes to your Git repository
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Use CI to trigger Argo CD pipelines
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Argo CD pipelines don’t react to external stimuli
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: An Argo CD ApplicationSet helps generate applications based on templates. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What branch names should you prefer for your Environment repository?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. `dev`, `staging`, and `prod`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. `feature`, `develop`, and `master`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. `release` and `main`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following deployment models does Argo CD use?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Push model
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Pull model
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Staggering model
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: You should use Terraform to install Argo CD as you can store all configurations
+    in Git. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Argo CD can sync resources from which of the following sources? (Choose two)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Git repository
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Container Registry
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. JFrog Artifactory’s raw repository
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: What would Argo CD do if you manually changed a resource outside Git?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Argo CD would change the resource so that it matches the Git configuration
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Argo CD would notify you that a resource has changed outside Git
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Argo CD would do nothing
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: You can check in Sealed Secrets to a Git repository. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Answers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Here are the answers to this chapter’s questions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A, C, and D
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

@@ -1,0 +1,1313 @@
+- en: '7'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Kubernetes Monitoring and Observability
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Monitoring and observability for both Ops and Dev teams have always been crucial.
+    Ops teams used to be focused on infrastructure health (virtual machines, bare-metal,
+    networks, storage, and so on) and Devs used to be focused on application health.
+    With Kubernetes, those lines are blurred. In a standard data center environment,
+    it’s easy to split who’s conducting monitoring and observability in a very traditional
+    sense. Kubernetes blends those lines because, for example, Pods are, in a sense,
+    infrastructure pieces because they have to scale and are sort of *virtual machines*
+    in the traditional sense. They are what holds the application. However, the application
+    is running in a Pod, so if you’re monitoring a Pod, you’re automatically monitoring
+    the containers that are running inside of the Pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because these lines are blurred, both teams are doing both parts of the monitoring
+    process. On a platform engineering or DevOps engineering team, those teams would
+    monitor both application pieces and infrastructure pieces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s no longer a line that’s used to divide which team monitors and creates
+    observability practices around specific parts of Kubernetes. Instead, the goal
+    is now to have a more unified front to ensure that the overall environment and
+    applications are working as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you’re going to dive in from a theoretical and hands-on perspective
+    to truly get an understanding of monitoring and observability in Kubernetes. The
+    goal is for you to be able to take what you learn and what you’ve implemented
+    in your lab from this chapter and truly start to use it in production. First,
+    you’ll learn what monitoring and observability actually are. Next, you’ll learn
+    what monitoring and observability mean for the infrastructure layer, which is
+    the virtual machines running the Kubernetes environment, and the specifics around
+    Control Plane and worker node monitoring. After that, you’ll dive into monitoring
+    and observability for specific Kubernetes resources such as Pods and Services.
+    To finish up, you’ll look at specific tools and platforms that are typically used
+    in today’s world for monitoring and observability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Without monitoring, engineers wouldn’t know what’s happening inside a system
+    or application. It’s the job of a DevOps and platform engineer to have that information
+    and make good use of that information by fixing whatever is broken.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How monitoring is different than observability
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Monitoring and observability tools for Kubernetes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Observability practices
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kubernetes resource monitoring
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter isn’t going to be a full-blown explanation of monitoring. Although
+    there will be some brief explanations as a refresher/starting point, it’s important
+    that you have some experience in monitoring and observability. For example, maybe
+    you’ve used the Kubernetes Dashboard before or you’ve looked at pre-populated
+    monitors inside of Azure or AWS. It could even be experience monitoring from your
+    local desktop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can find the GitHub repo here: [https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch7/prometheus/helm](https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch7/prometheus/helm)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How is monitoring different than observability?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Two of the closest workflows and the two that are most often interchanged from
+    a verbiage and explanation perspective are monitoring and observability. Although
+    this chapter isn’t dedicated to observability, to truly understand the differences
+    between monitoring and observability, you must understand both and ultimately
+    see how they work. After the explanations in this section, you’ll see that there
+    are key differences between observability and monitoring, along with differences
+    in how they should be used, when they should be used, and the best practices for
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What you might experience in organizations, depending on how mature their engineering
+    teams are, is that monitoring and observability get thrown into one category.
+    They are both either looked at the same way, or engineering teams think they’re
+    doing observability when really all they’re doing is monitoring. One of the goals
+    of this chapter is to give you the ability to differentiate between the two because
+    there can be some blurred lines depending on what platforms and tools you’re using.
+    For example, let’s take two of the most popular platforms – Datadog and New Relic.
+    Both of these platforms are looked at as monitoring platforms and observability
+    platforms. They can both do monitoring and observability, and they do them well.
+    This is not always the case though. A platform such as Prometheus is just for
+    observability and collecting metrics, but you can pair it with a monitoring platform/tool
+    such as Grafana to give you a visual of what’s happening inside of an environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring and observability are both lengthy topics, especially in Kubernetes.
+    The way that monitoring and observability are thought of in Kubernetes is similar
+    to other platforms and systems, but vastly different.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, you’re going to look at what monitoring and observability
+    are and how to know which you should use. We’ll also explore a few monitoring
+    versus observability examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What’s monitoring?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Have you ever opened up **Task Manager** in Windows, gone to the performance
+    settings, and looked at the memory and/or CPU usage? What about **Activity Monitor**
+    on macOS to see what applications and programs were using memory and CPU? If you’ve
+    done either of these things, which it is safe to assume that most engineers have
+    done at one point or another, you’ve officially monitored a system! Now, you may
+    be thinking to yourself that checking out the memory and CPU on a desktop or laptop
+    is drastically different, but it’s actually not. Regardless of whether it’s a
+    desktop or an entire server rack, RAM is RAM, CPU is CPU, and storage is storage.
+    It doesn’t change across systems. The only thing that changes is the amount of
+    CPU, memory, and storage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, what is monitoring?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Monitoring is the ability to view system resources, performance, and usage
+    in real time. You can monitor anything in a Kubernetes cluster including the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Worker nodes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Control Planes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pods
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deployments
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ConfigMaps
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As well as these, you can also monitor literally any other Kubernetes resource
+    that’s running in your cluster. From the application level to the infrastructure
+    level to the networking level, it can all be monitored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With monitoring can come the creation of alerts. I remember when I first got
+    into tech and got my first internship, the coolest thing to me was walking into
+    a **network operations center** (**NOC**) and seeing all the big screens with
+    all the monitors on them. It was like we were protecting nuclear launch codes.
+    It was amazing to see that every single system could be watched so engineers could
+    understand what was happening underneath the hood.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In today’s world, engineers are still using things such as big monitors in a
+    NOC, but with working from home and the remote world being the new norm, engineers
+    are also logging in to monitoring platforms to view how systems are working. Engineers
+    can log in to tools such as Datadog, CloudWatch, or Azure Monitor and see everything
+    that’s happening with every service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s take a look at the screenshot in *Figure 7**.1* from Azure. As you can
+    see, there are a ton of monitoring options available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.1 – The AKS monitoring options'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_01.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.1 – The AKS monitoring options
+  prefs: []
+  type: TYPE_NORMAL
+- en: The monitoring options that you see in the **Monitoring** section also contain
+    some observability practices (such as **Metrics**), which goes back to a point
+    made earlier in the chapter – there’s some confusion when splitting up monitoring
+    and observability practices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a monitoring perspective, what you should care about are the actual monitors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.2 – AKS Monitoring'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_02.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.2 – AKS Monitoring
+  prefs: []
+  type: TYPE_NORMAL
+- en: The monitoring information that you can pull from AKS, or nearly any other Azure
+    service, gives you the ability to see what’s happening right now or what’s been
+    happening for an extended period of time. This gives you the ability to understand
+    how a system is performing but from an ad hoc perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.3 – The hardware metrics'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_03.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.3 – The hardware metrics
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea of this type of monitoring is to see and understand how cluster resources
+    such as CPU, memory, storage, and bandwidth (inbound and outbound) are performing
+    to ensure that you can make decisions about how a cluster should be managed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can also monitor applications that are running to see the uptime, how many
+    resources they’re consuming, and the overall performance of the apps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring specifics on a Kubernetes cluster
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The components on a Control Plane that you should monitor are the API server,
+    etcd (the cluster store), controllers, and schedulers. The components on a worker
+    node that you should monitor are Kubelet, container runtime, kube-proxy, and DNS.
+    There’s also the need to monitor Pods, but you’ll be learning more about that
+    at the end of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In any circumstance, whether it’s components on the Control Plane or components
+    on the worker node, you should ensure that the Metrics Server is running. You
+    can technically retrieve metrics via the `/metrics/resource` endpoint (example:
+    `/metrics/pods`), but that would mean you have to query each resource. The Metrics
+    Server goes to each resource, fetches the metrics, and exposes them instead of
+    you having to retrieve them one by one. You can find the Metrics Server, which
+    you can use across any Kubernetes cluster, here: [https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml](https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Metrics Server endpoint comes from the Kubernetes **Specific Interest Group**
+    (**SIG**) and can be deployed anywhere. Whether it’s a Kubernetes cluster running
+    in AWS or a Kubeadm cluster running on virtual machines on your Windows 10 laptop,
+    it doesn’t matter where the cluster exists.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What’s the downside to monitoring?
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The downside of monitoring, although it’s powerful, is that there’s not much
+    that you can do with the data unless it’s happening in real time. Sure, you can
+    get alerts if there’s an issue with a resource, but this means that an engineer
+    would have to be on-call to fix the issue. They have to stop what they’re doing
+    to put out a fire. With the way that the tech world is going, this is not a sustainable
+    model anymore.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Along with that, engineers want to spend more time creating value-driven work.
+    They don’t want to wake up at 2:00 A.M. due to getting an alert or stop coding
+    a new feature because of an alert. Instead, they want a way to create automated
+    and repeatable processes for an alert. For example, if an alert goes off, engineers
+    want a way to create an automated process that can fix the problem if it happens.
+    Then, they don’t have to stop what they’re doing to go put out a fire and can
+    continue creating value-driven work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is where observability comes into play.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What’s observability?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Because monitoring and observability are sometimes used interchangeably when
+    explaining them, it’s important to understand their differences. This way, as
+    you dive deeper into monitoring, it’s easier to understand the distinctions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observability is mostly what you’ll see in Kubernetes and almost every other
+    cloud-native system. However, monitoring and observability are starting to blend
+    together in terms of what they mean. For example, in *Figure 7**.1*, you saw the
+    **Monitoring** section. Under the **Monitoring** section, there was a subsection
+    for **Metrics**. The thing is, metrics technically fall under observability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason why monitoring and observability are getting mashed together, or
+    in other words, the reason why observability is becoming more popular, is that
+    with observability, you can actually make decisions and automate workloads based
+    on the data that you receive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key data points for observability practices are logs, metrics, and traces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Again, we don’t want to go too deep in this section because observability has
+    an entire chapter to itself. Just remember three key things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observability gives you the ability to perform an actual action with the data
+    you’re receiving. That action could be to automatically fix a resource that’s
+    causing problems.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It’s becoming increasingly popular over traditional monitoring.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Observability has three key aspects: logs, metrics, and tracing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A quick note on metrics
+  prefs: []
+  type: TYPE_NORMAL
+- en: Metrics for most Kubernetes resources are exposed. They’re exposed via the `/metrics/resource`
+    endpoint. For example, `/metrics/pods` would be for the Pods Kubernetes resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make things a bit easier, the Metrics Server, which isn’t installed on Kubernetes
+    out of the box (depending on the cloud provider, but out of the box means a raw
+    Kubernetes cluster installation), can scrape and consolidate all of the metric
+    endpoints for the Kubernetes resources. This way, you don’t have to attempt to
+    consume each metric via the resource one by one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To kick things up a notch, there’s the kube-state-metrics tool, which you can
+    install on a Kubernetes server; its job is to focus on the health of the Kubernetes
+    resources/objects on your cluster. For example, if the Pods are actually available
+    and ready is what kube-state-metrics will look at and confirm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re wondering what the difference is between the Metrics Server and kube-state-metrics,
+    the Metrics Server shows cluster resource usage such as CPU and memory. On the
+    other hand, kube-state-metrics is concerned with the health of the Kubernetes
+    resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring versus observability examples
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When thinking about how to implement monitoring, observability, or both, it’s
+    best to think about the implementation details from a scenario perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s take two scenarios – one for a containerized application from a monitoring
+    perspective and then taking the same containerized application, but looking at
+    it from an observability perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following examples won’t be a complete step-by-step guide. The code works,
+    but it won’t be explained in terms of how exactly to deploy and run it. Feel free
+    to go through it on your own system, but the aim in this chapter is to show examples
+    of the workflow rather than a complete step-by-step tutorial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring use case
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The first scenario can be thought about as, for example, a frontend application.
+    It could be an Nginx web app, which is simple and hosts a website. It could be
+    something as simple as the following Nginx configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the preceding Kubernetes manifest, you can picture an application that’s
+    running with two replicas on a Kubernetes cluster. To retrieve the memory and
+    CPU information of the Pod, you can run the `kubectl` `top` command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Figure 7.4 – The top command'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_04.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.4 – The top command
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An error can sometimes occur if the Metrics API isn’t enabled, as it’s disabled
+    by default. If you’d like to enable it, check the documentation for where you’re
+    running the Kubernetes cluster. As an example, here’s how you’d enable the Metrics
+    API on `minikube`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To stress-test the workload, you can use a stress/performance testing tool
+    such as `k6`. The following is an example configuration that you can use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can then save the preceding configuration and use it as a stress test with
+    the following command, which specifies 100 virtual users and runs for 30 seconds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Figure 7.5 – The benchmark test'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_05.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.5 – The benchmark test
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Running the `kubectl top` command again, you can see that the memory increased:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.6 – The kubectl top command for a Pod'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_06.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.6 – The kubectl top command for a Pod
+  prefs: []
+  type: TYPE_NORMAL
+- en: After logging in to a piece of monitoring software, such as the Kubernetes Dashboard
+    (which you’ll learn about in the upcoming section), you will be able to see the
+    CPU and memory utilization for both Pods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.7 – The Pods running'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_07.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.7 – The Pods running
+  prefs: []
+  type: TYPE_NORMAL
+- en: This information gives you the ability to monitor what happens when more and
+    more users access your application, which is very common for a frontend application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observability use case
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The second scenario is going to be around checking out the Nginx Pods and Services
+    that can be created from the Nginx configuration in the previous section. Ultimately,
+    you’ll be able to see how you can capture and view metrics data in an observability
+    tool. Although *Figure 7**.8* shows Prometheus, regardless of which observability
+    tool you use, you’re still going to see the same data because it’s being retrieved
+    via the Kubernetes Metrics API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the Metrics Server is enabled on a Kubernetes cluster, it exposes several
+    resource metric endpoints. One of the resource metric endpoints is Pods. You can
+    confirm that your Pod metrics are getting ingested into Prometheus based on **Service
+    Discovery**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.8 – A Pod discovery'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_08.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.8 – A Pod discovery
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can then confirm how Pods are running based on different queries that Prometheus
+    allows you to check with. For example, the following screenshot shows Kubernetes
+    Service resource information, and you can see that the Nginx service is running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.9 – Kubernetes Service metrics'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_09.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.9 – Kubernetes Service metrics
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can also dive a little deeper and query based on certain hardware resources,
+    such as memory and CPU. This way, you can understand how many resources (memory,
+    CPU, and so on) are being taken up by each Pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following snippet is a query to see memory usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice how a Pod name is specified; this will show you the observability metrics
+    around memory for the specified Pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring and observability tools for Kubernetes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Typically, in any tech book, the theory/practical knowledge comes first, then
+    the tooling. However, monitoring and observability are a bit different because
+    you can’t really talk about the specifics without mentioning or showing a certain
+    tool/platform. Because of this, prior to jumping into the specifics around *how*
+    to monitor and implement observability, you’re going to learn about a few key
+    tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of this section is to help you first understand what the tools look
+    like and then take the theory that you learn and utilize it in the tools. When
+    you combine the knowledge and visuals (UI) of the tools with the understanding
+    of what true monitoring and observability are, you can successfully implement
+    them in your environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the interesting things about monitoring is that you can fully understand
+    it from a theoretical perspective, but implementing it can be a challenge. For
+    example, you can understand what the metrics endpoint in Kubernetes is, how it
+    works, what metrics are exposed, and what resources you can monitor from those
+    metrics. However, actually setting up a platform to *listen* to the metrics and
+    configuring that listener is vastly different than reading about how metrics work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although this section won’t cover all the tools and platforms used to monitor
+    Kubernetes, this list is a great place to start as they are the most widely used
+    in organizations. The good news is that even if you come across a monitoring tool
+    that isn’t covered in this section, monitoring is monitoring. That means once
+    you understand monitoring and how it works with Kubernetes, you’re pretty much
+    good to go in terms of learning other monitoring tools. It’s all the same stuff
+    at the end of the day. The underlying components of what monitoring is doesn’t
+    change. The only thing that changes is how the dashboards look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this section, you’re going to learn about the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The built-in Kubernetes Dashboard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cloud-specific monitoring and observability tools
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Grafana/Prometheus
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How to use and set monitoring tools
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Kubernetes Dashboard
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The Kubernetes Dashboard is as *native* as it gets in terms of monitoring and
+    observability. Although it’s not configured out of the box, it’s fairly easy to
+    get configuration across almost any environment. It’s the quickest way to see
+    what’s happening inside a Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’re using `minikube` for this because it’s straightforward. If you decide
+    to use the Kubernetes Dashboard on another Kubernetes cluster, the visual of the
+    dashboard itself isn’t going to be any different. The only difference will be
+    the Kubernetes resources that you see.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, start `minikube`. If you don’t have `minikube` already installed, you
+    can install it here: [https://minikube.sigs.k8s.io/docs/start/](https://minikube.sigs.k8s.io/docs/start/):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Figure 7.10 – Starting minikube'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_10.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.10 – Starting minikube
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, run the following command to start the dashboard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Figure 7.11 – The default Kubernetes Dashboard'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_11.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.11 – The default Kubernetes Dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, you can see several different pieces of information about your
+    `minikube` cluster, from Pod info to other Kubernetes resources. You can see Pods
+    that are running and healthy, and workloads that may need to be fixed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.12 – A Deployment example'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_12.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.12 – A Deployment example
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, you can see the overall deployment status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.13 – The Pod status'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_13.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.13 – The Pod status
+  prefs: []
+  type: TYPE_NORMAL
+- en: After that, you can dive even deeper to see Pods running in the **Deployments**
+    tab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.14 – The Pods running'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_14.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.14 – The Pods running
+  prefs: []
+  type: TYPE_NORMAL
+- en: One thing to point out here is that the Kubernetes Dashboard is almost never
+    used for a production-level scenario. It’s typically used to look at some information
+    quickly if needed. For true observability and alerting in an environment, one
+    of the more appropriate (production-ready) monitoring and observability tools
+    is typically used, which you’ll see next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Azure Monitor
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If you strictly have Azure workloads or even workloads outside of Azure and
+    you’re utilizing Azure Arc (like on-premises), Azure Monitor is a great built-in
+    solution. You have the ability to capture logs and metrics, create alerts, and
+    see in real time what’s happening inside your environment. For example, you can
+    view the CPU and memory usage of a cluster, along with the Pod and other Kubernetes
+    resource data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In [*Chapter 2*](B19116_02.xhtml#_idTextAnchor038), you learned how to create
+    an AKS cluster with Terraform. You can utilize that same code for this section.
+    For a quicker reference, here is the link: [https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch2/AKS](https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch2/AKS).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once your AKS cluster is configured, log in to the Azure portal and go to **Kubernetes
+    services**. Then, you should see an **Insights** tab under **Monitoring**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enable Insights by clicking the blue **Configure azure** **monitor** button.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.15 – Azure Insights'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_15.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.15 – Azure Insights
+  prefs: []
+  type: TYPE_NORMAL
+- en: Azure Insights gives you the ability to monitor everything in your AKS cluster
+    from the entire environment, to the nodes, all the way down to the Pods and containers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.16 – Insights data'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_16.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.16 – Insights data
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, by diving into **Containers** (Pods), you can see the status, utilization,
+    and uptime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.17 – The Container data'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_17.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.17 – The Container data
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within **Nodes**, you can see the specific Pods running on each worker node,
+    including the health of the Pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.18 – The Node data'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_18.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.18 – The Node data
+  prefs: []
+  type: TYPE_NORMAL
+- en: Azure Monitor and Insights is a great overall solution for Kubernetes workloads.
+    If you’re in the Azure ecosystem, I wouldn’t recommend looking at another solution.
+    Stick to what’s native.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AWS Container Insights
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Container Insights is part of the AWS CloudWatch family and gives you the ability
+    to view containerized workloads for performance and monitoring-related actions.
+    You can create alerts based on Container Insights, along with pull logs and metrics
+    to take action on anything that may occur from an automated and repeatable perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In [*Chapter 2*](B19116_02.xhtml#_idTextAnchor038), you learned how to create
+    an EKS cluster with Terraform. You can utilize the same code for this section.
+    For a quicker reference, here is the link: [https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch2/AWS](https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch2/AWS).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After you run the EKS Terraform configuration, run the following command to
+    retrieve the Kubernetes configuration (`kubeconfig`) from the EKS cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To confirm that your current context is set, run the following command and
+    you should see a similar output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, configure AWS Container Insights for your cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After the preceding code runs, you’ll see an output similar to the terminal
+    output pasted here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: At this point, if you log in to AWS and go to **CloudWatch** | **Container Insights**,
+    you can see that Container Insights is properly configured.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.19 – The Container Insights output'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_19.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.19 – The Container Insights output
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we’ll dive into a very popular stack in the Kubernetes space – Grafana
+    and Prometheus.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Grafana/Prometheus
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Arguably, the most popular implementation of a monitoring/observability scenario
+    for Kubernetes is Grafana and Prometheus. Grafana and Prometheus work outside
+    of Kubernetes environments as well, but they became extremely popular in the Kubernetes
+    ecosystem. In fact, there’s even a Prometheus operator for Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Aside from the standard monitoring and observability benefits, engineers really
+    enjoy the combination because it’s 100% open source. In Grafana for example, you
+    can create any type of dashboard you want with a little bit of code and it’s all
+    free. Grafana and Prometheus can also run anywhere. The stack can run inside your
+    Kubernetes cluster or completely separate on its own servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although you can configure Prometheus and Grafana separately with all the bells
+    and whistles, we’re going to utilize the power of the **Prometheus Community Helm
+    Chart**. The reason why is that it radically simplifies the Prometheus and Grafana
+    installation from an automated and repeatable standpoint. It installs both Prometheus
+    and Grafana, along with setting up dashboards for us.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before jumping in, one thing that you’ll always need to do no matter what monitoring
+    and observability platform you’re on is to ensure that you are collecting metrics
+    in the way you’re expecting. For example, the Kubernetes Metrics Server or an
+    adapter of sorts. For example, Prometheus has an adapter that can be used instead
+    of the Metrics Server. You can also go straight to the source by utilizing the
+    metrics endpoint from `/metrics/resource` (for example, `/metrics/pods`), but
+    generally, engineers opt to use the Metrics Server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.20 – The metrics Pods'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_20.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.20 – The metrics Pods
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you don’t expose the metrics endpoint, Kubernetes won’t allow the system
+    to consume said metrics. In terms of enabling the Metrics Server, it all depends
+    on where you’re running Kubernetes. For example, in AKS, it’s automatically exposed
+    for you. If you don’t see the metrics Pods in the `kube-system` namespace for
+    your Kubernetes cluster (depending on what environment you deployed Kubernetes
+    in), check the documentation for that type of Kubernetes environment to see how
+    you can enable the metrics endpoint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, add `helm repo` for `prometheus-community`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, ensure that the repo is up to date:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the last step, install the Helm chart in the `monitoring` namespace:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once installed, you should see several Kubernetes resources created in the
+    `monitoring` namespace. To access Grafana, you can use port forwarding:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The default username/password for Grafana is `admin/prom-operator`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After logging in to Grafana, check out the Pods in the dashboard for the `kube-system`
+    namespace. You can see that metrics are being ingested by Prometheus and pushed
+    to Grafana from all namespaces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To see metrics, go to **Dashboards** | **Browse**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.21 – Browsing the dashboards'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_21.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.21 – Browsing the dashboards
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Click the **Kubernetes / Compute Resources / Namespace (****Pods)** option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.22 – The Pods dashboard'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_22.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.22 – The Pods dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Change the namespace to a namespace that has Pods already, such as `kube-system`,
+    and you can see the Pod metrics in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.23 – The namespace selection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_23_NEW.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.23 – The namespace selection
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prometheus/Grafana is a powerful combination that allows you to stay vendor
+    neutral and get everything you need as an open source option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observability practices
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now, let’s define what observability truly is by looking at logs, traces, and
+    metrics. When you use tools such as Prometheus, you’re doing a *piece* of observability.
+    When you use other tools such as Logz.io or another log aggregator, you’re using
+    another piece of observability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Logging is aggregating and storing logged event messages written by programs
+    and systems. As you can imagine, depending on how verbose the logs are set in
+    an application, there will be a lot of events. A sysadmin’s favorite tool is a
+    log because it literally shows everything and anything that could happen from
+    an event’s perspective. However, it’s not efficient to simply comb through all
+    of it with your eyes. Instead, using observability practices, you can send the
+    logs to a log aggregator and ensure that a specific type of log that occurs can
+    trigger an alert or some type of automation to go in and fix the issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.24 – Logging service discovery'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_24.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.24 – Logging service discovery
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are a few logging practices when it comes to containers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Application forwarding**: Sending logs directly via the app. For example,
+    maybe you have some code inside of your application using a Prometheus library
+    that collects the logs, metrics, and traces, and sends it to whatever backend
+    logging platform you’re using.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Sidecar**: Using a sidecar container to manage logs for an app. For example,
+    you can containerize some logging systems to run as a secondary/sidecar container
+    inside of your Pod(s). The sidecar container’s job is to do one thing; retrieve
+    and send logs about what’s happening on the Pod.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Node agent forward**: Run a Pod on each worker node that forwards all container
+    logs to the backend.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Metrics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Metrics are about collecting time series data, which is used to predict expected
+    ranges and forecast values, showing it in dashboards (such as Grafana or another
+    UI-centric dashboard), and alerting on it. Metric endpoints will give a bunch
+    of information that you can act upon. From a pure Kubernetes perspective, the
+    metrics endpoint collects Kubernetes resource data from the kubelet that’s running
+    on each worker node and exposes it to the API server through the Metrics API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned in this chapter, there’s a metrics endpoint that runs as a Pod.
+    Depending on the type of Kubernetes cluster you’re running, the Pod could either
+    be enabled by default or it may be something that you have to turn on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, in an AKS cluster, the metrics Pod is running, which means all
+    of the Kubernetes resources have a metrics endpoint that can be consumed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.25 – The metrics Pod'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_25.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.25 – The metrics Pod
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For another type of Kubernetes cluster, such as something running on Kubeadm,
+    you would have to enable the metrics endpoint by deploying the Pod. You can do
+    that by deploying the Kubernetes manifest in the `kubernetes-sigs` repo on GitHub:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, that’s not all. Because a cluster configuration such as Kubeadm has
+    node IPs that aren’t part of the certificate SAN on the cluster, the metrics endpoint
+    will fail due to a TLS connection error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To get around this, you have to add the following line to a few configurations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are two places you need to add it to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the Kubeadm config. You can edit it by running `kubectl edit cm -n kube-system
+    kubeadm-config` and then add in the `serverTLSBootstrap:` `true` line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.26 – The kubeadm config'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_26.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.26 – The kubeadm config
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, you’ll have to update the kubelet on each node (all Control Planes and
+    worker nodes) with the same line. To edit the kubelet on each node, you can run
+    the following command and add in the configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Figure 7.27 – The kubelet config'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_27.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.27 – The kubelet config
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traces
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Traces are all about telling you the health of an application from an end-to-end
+    perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can think of a trace as the *path* or *journey* of a request as it goes
+    through the system. For example, when you go to `www.google.com`, although it
+    happens extremely fast, there’s a bunch of work that’s happening underneath the
+    hood. At a high level, the `GET` request that you’re creating to reach `www.google.com`
+    is going through the frontend, then probably some middleware, then to the backend.
+    When you Google something such as `top ten places to go in the summertime`, there
+    are several requests that are occurring to retrieve that information from the
+    backend database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The journey from when you perform a Google search request to when the information
+    is portrayed to you – that journey is what a trace is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because it’s a long journey, although only seconds to us humans, it can give
+    us a lot of information from an engineering perspective on how an application
+    is performing. We can then take action on that performance concern from a repeatable
+    methodology instead of fixing the issue manually, or from a troubleshooting perspective.
+    If you’re looking at a trace and realize that the *journey* stopped or was held
+    up once it hit the backend, you now know where to start troubleshooting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring Kubernetes resources
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous section, you learned all about monitoring from an overall observability
+    perspective, in particular setting up certain tools and ensuring that they work
+    for you. Now it’s time to go underneath the Kubernetes hood and begin to think
+    about what can be monitored from a resource perspective. Remember, a Kubernetes
+    resource (sometimes called an object) can be anything, from Services, to Ingress
+    controllers, to Pods. Because of that, there’s a lot to monitor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Think about it from this perspective. You’re running a Pod that’s running a
+    container inside of the Pod. The Pod itself is running great. The container image
+    works, with no CPU or memory issues, and all of the events state that the Pod
+    is up and running successfully. However, there’s a problem – the binary (the app
+    entry point) running inside of the container may be down, or not working as expected.
+    Because of this, you need a way to truly see even underneath the hood of a Pod
+    itself!
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you’ve learned throughout this book, it doesn’t really matter where you’re
+    running Kubernetes. The core components of how it runs and how you would interact
+    with it are the same. That’s no different for monitoring. Because of that, this
+    section of the chapter will show monitoring in AKS. However, as you’ll quickly
+    see, it doesn’t matter whether these Pods are running in AKS or not. They would
+    be looked at (monitored) the same way even if you use a different monitoring system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code in this section, along with the demo app being deployed, can be used
+    on any Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring Pods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Inside a Pod is either one or more containers. Whether it’s one container or
+    multiple containers, the containers are what’s actually running an application.
+    Perhaps it’s a core app, a logging software, or even something such as HashiCorp
+    Vault or a service mesh proxy. These containers that are beside the main app are
+    called sidecar containers. Because there are multiple containers running inside
+    a Pod, you must ensure that each container is actually up and running as expected.
+    Otherwise, the Pod itself may be running properly, and the main app may even be
+    running properly, but the full workload, such as the sidecar containers, may not
+    be.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, ensure that the HashiCorp Consul Helm chart exists:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, create a new namespace called `consul`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the `consul` namespace exists, deploy Consul to Kubernetes inside of the
+    `consul` namespace:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The last step is to deploy the demo app and ensure that the annotation for
+    injecting `consul` as a sidecar exists:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After deploying the app, you should see an output similar to the following
+    screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.28 – Linkerd deployment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_28.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.28 – Linkerd deployment
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Log in to the Azure portal, go to your AKS cluster, and turn on Azure Insights
+    if it’s not already on:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.29 – Enabling container insights'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_29.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.29 – Enabling container insights
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once **Insights** is enabled, you should be able to see several resources available.
+    Click on the **Controllers** button.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.30 – The Controllers dashboard'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_30.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.30 – The Controllers dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: Looking at the **Controllers** dashboard, you can see all the Kubernetes resources
+    running along with the status, uptime, and how many containers exist in each resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.31 – The Kubernetes resources running'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_31.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.31 – The Kubernetes resources running
+  prefs: []
+  type: TYPE_NORMAL
+- en: Drilling in a bit deeper, you can see that for each resource with more than
+    one Pod, you’re able to see the different containers available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.32 – The resources in Pods'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_32.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.32 – The resources in Pods
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But as always, things may go wrong. You can see in the following screenshot
+    that there’s a Kubernetes resource running, but some of the containers aren’t
+    running as expected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.33 – The warning resource'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_33.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.33 – The warning resource
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you dive into it a bit deeper, you can see the status of the container is
+    waiting to be created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.34 – The warning explanation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_07_34.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 7.34 – The warning explanation
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, even though the Pod may be up and running, as in the application running
+    inside of the container, other sidecar containers may not be. On the outside looking
+    in, the app is up so it appears that everything is working as expected. However,
+    after giving it a closer look, you can see that it’s not. This is the big difference
+    between monitoring an app running on a server and a Pod. Within a Pod, there may
+    be more than one binary to worry about.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covered a lot. It’s roughly 35 pages, and the thing is, these topics
+    can be two or three books in themselves. Because of that, not everything was covered
+    at the specific depth that’s most likely needed. However, the good news is that
+    you now have a solid understanding of how to start thinking about implementing
+    these platforms, technologies, and methodologies in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We went over quite a few topics in this chapter, covering what monitoring is,
+    what observability is, and the overall differences between the two. You then dove
+    into the specific tools and platforms available to make monitoring and observability
+    come to life in your Kubernetes environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next and final chapter, you’ll learn about security from a Kubernetes
+    perspective.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '*Hands-On Kubernetes on Azure – Second Edition* by Nills Franssens, Shivakumar
+    Gopalakrishnan, and Gunther Lenz: https://www.packtpub.com/product/hands-on-kubernetes-on-azure-second-edition/9781800209671'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Hands-On Infrastructure Monitoring with Prometheus* by Joel Bastos and Pedro
+    Araújo: [https://www.packtpub.com/product/hands-on-infrastructure-monitoring-with-prometheus/9781789612349](https://www.packtpub.com/product/hands-on-infrastructure-monitoring-with-prometheus/9781789612349)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

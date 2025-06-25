@@ -1,0 +1,1430 @@
+- en: '4'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The On-Prem Kubernetes Reality Check
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: I know what you’re thinking – *0n-prem? Why is this guy teaching us about on-prem
+    Kubernetes? It’s all in* *the cloud!*
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although it may seem like that from tech marketing and large cloud providers
+    screaming Kubernetes at the top of their lungs, in the production world, there
+    are a lot of on-prem Kubernetes clusters and a lot of engineers managing them.
+    Mercedes-Benz, a popular German car manufacturer, hosts over 900 Kubernetes clusters
+    on OpenStack, which is a private cloud solution. All those clusters are sitting
+    in a data center, not in the public cloud. If you peel back the layers of the
+    onion and wonder how cloud providers are running Kubernetes clusters, they’re
+    doing something similar. They have several data centers that are running Kubernetes
+    just like you would on-prem or on a server that you can buy on eBay. The only
+    difference is the cloud providers are running Kubernetes at a major scale around
+    the world. However, the *how* in how Kubernetes is running isn’t any different
+    than how anyone else is running Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The truth is, this chapter could be an entire book – it could probably be a
+    few books. Kubernetes, especially when it’s not abstracted away in the cloud,
+    is an extremely large topic. There’s a reason why people say that Kubernetes is
+    like a data center within itself. How and where you run on-prem Kubernetes alone
+    is a deep topic. For example, what size infrastructure to use, how to scale your
+    workloads, vertical and horizontal scaling, network bandwidth, high availability,
+    and a lot more go into the conversation of what systems to use and where to run
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you’re going to understand just how complex running
+    on-prem Kubernetes can be, but at the same time, how rewarding it can be to an
+    organization that’s putting a lot of effort into Kubernetes. You’ll have the hands-on
+    skills and theoretical knowledge to understand how to think about scaling an organization’s
+    Kubernetes environment. One thing you’ll learn from this chapter is it’s a lot
+    less about using the *cool tech* and more about thinking from an architecture
+    perspective about how a platform team should look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding operating systems and infrastructure
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Troubleshooting on-prem Kubernetes clusters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introducing hybrid services
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exploring networking and system components
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Getting to know virtualized bare metal
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This chapter will be a combination of hands-on and theoretical knowledge. Because
+    we only have one chapter to cover this topic, it’s safe to say that we can’t show
+    everything you’ll need to know. However, this should be a good starting point
+    for your production journey.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To complete this chapter, you should first go over [*Chapter 2*](B19116_02.xhtml#_idTextAnchor038)
+    and [*Chapter 3*](B19116_03.xhtml#_idTextAnchor060). Although that might sound
+    obvious, we want to point it out as it’s crucial to understand the different deployment
+    methods before diving into the on-prem needs of Kubernetes. Because cloud-based
+    Kubernetes deployments abstract a lot of what you would do with on-prem, it still
+    shows you the overall workflow of what components need to be deployed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To work on this chapter, you should have some type of infrastructure and troubleshooting
+    background. When it comes to on-prem Kubernetes clusters, they are extremely infrastructure-heavy,
+    so getting through this chapter without that knowledge may be difficult. At the
+    very least, you should have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linux knowledge
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Server knowledge
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The code for this chapter can be found in this book’s GitHub repository at [https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch4](https://github.com/PacktPublishing/50-Kubernetes-Concepts-Every-DevOps-Engineer-Should-Know/tree/main/Ch4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the Kubeadm section of this chapter, you can follow along if you have two
+    virtual machines available for your use. If you don’t, it’s perfectly fine: you
+    can view this chapter from a theoretical perspective if that’s the case. However,
+    if you have two extra VMs available, whether they’re on-prem or in the cloud,
+    it would help you understand the overall explanations of this chapter a bit more..'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding operating systems and infrastructure
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Everything starts at a server. It doesn’t matter if you’re running workloads
+    on the cloud, on serverless platforms, or containers – everything starts at a
+    server. The reason why engineers don’t always think about servers, or where workloads
+    start in today’s world, is that the underlying infrastructure is abstracted away
+    from us. In the cloud world, there aren’t a lot of times when you’ll have to ask,
+    *what hardware are you using to run these VMs? Dell? HP?* Instead, you’re worried
+    about what happens after the servers are deployed, which is sometimes called Day-Two
+    Ops (insert more buzzwords here). What we mean by that is instead of ordering
+    servers online, racking them, and configuring some virtualized hypervisor on them
+    (ESXi, KVM, Hyper-V, and so on), engineers are more concerned now with automation,
+    application deployments, platforms, and scalability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In many start-ups and small-to-medium-sized organizations, the typical reality
+    is cloud computing. For larger organizations, another reality is on-prem workloads
+    that are either virtualized or purely bare metal. If the combination of the cloud
+    and on-prem gets brought up in discussion, this is where things such as hybrid
+    solutions come into play, which you’ll learn about later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s say you’re reading this right now and you’re working 100% in the cloud.
+    You still need to understand VM sizes, scaling, the location of the VMs (the data
+    center – regions, availability zones, geographies, and so on), network latency,
+    and a large number of other pieces that fall into the systems and infrastructure
+    category. For example, in the previous chapter, you learned about choosing worker
+    node sizes for high CPU, high memory, and medium CPU/memory workloads within DigitalOcean
+    and Linode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you’re going to learn about the core system and infrastructure
+    needs that you must think about when architecting an on-prem Kubernetes platform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubeadm Deployment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before jumping into the theory, I wanted to showcase how you can bootstrap a
+    Kubernetes cluster with Kubeadm. The primary reason is to show you what the process
+    of actually deploying Kubernetes looks like while the pieces aren’t abstracted
+    away from you. Abstraction is a great thing, but it’s only a great thing once
+    you know the manual method of deployment. Otherwise, abstraction just ends up
+    causing confusion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the Virtual Machines, the installation is based on Ubuntu. However, if you’re
+    using another Linux distribution, it will work, but you’ll need to change the
+    commands a bit to reflect the specific distro. For example, Ubuntu uses the Aptitude
+    package manager and CentOS uses the Yum package manager.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Control Plane and Worker Node
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let’s get started.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, ensure that you update Ubuntu:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Install transport layer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Install Kubernetes package on Ubuntu:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Update Ubuntu again now that the Kubernetes package exists:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Next, change to the root user:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Install and configure the CRI-O container runtime:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Exit out of root:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Update Ubuntu again now that `CRI-O` is available:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Install `CRI-O`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Reload the Daemon and enable CRI-O:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Check to see CRI-O is installed properly:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Turn off swap:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Configure `sysctl` settings and `ip` tables:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Install kubeadm:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The next step is configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring the Control Plane
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We need to define variables for the `kubeadm init` command. This will consist
+    of IP addresses and the Pod CIDR range. Depending on where you are deploying it,
+    you could either have just a public subnet, or a public and private subnet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have just a public subnet, use the same value for the `ip_address` and
+    `publicIP`, along with the `CIDR` range. If you have a private and public subnet,
+    use the public IP for the `publicIP`, the private IP for the `ip_address`, and
+    the private IP range for the `CIDR`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, initialize `kubeadm` on the Control Plane:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you are deploying in the cloud, you may find yourself in a situation where
+    the `init` fails because the Kubelet connect communicate with the API server.
+    This typically happens in public clouds due to network restrictions. If it happens
+    to you, open up the following ports:  .'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the Kubeadm `init` is successful, you’ll see a few command outputs that
+    show how to join more Control Planes and how to join Worker Nodes. Copy the Worker
+    Node join command and run it on the Ubuntu server that you configured as the Worker
+    node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, install the CNI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you don’t want to use Weave, you can see the network frameworks listed here:  .'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we will look at system size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: System size
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Considerations about the system type, size, and how many nodes will be incredibly
+    crucial for how you decide to think about on-prem deployments. What it all comes
+    down to is what you’re planning on running on a Kubernetes cluster. If you’re
+    just starting with your first Kubernetes cluster and you want to try containerizing
+    an application to see how it works, how the dependency works, and ultimately starting
+    on your journey, it’s going to be different than if you’re running 50+ Kubernetes
+    clusters that are running stock trading/quants applications. At the end of the
+    day, the system size that you use will be solely based on what workload you’re
+    running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before you even think about creating a Kubernetes cluster on-prem, you must
+    think about two important aspects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do I have the hardware available and if not, what hardware do I have to buy?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What type of applications am I planning on running for the next 3 to 6 months?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For example, let’s say that you buy 10 servers that you’re planning on running
+    your application on. What size do the servers need to be? How will scaling work?
+    Do you have a combination of memory-intensive apps and standard everyday apps?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another big consideration here is *scaling*. If you’re scaling horizontally,
+    that means more Pods will be created, so more virtualized hardware will be consumed.
+    If you’re scaling vertically, that means your Pods’ memory and CPU are increasing
+    without you creating more Pods (which is known as vertical autoscaling). Not only
+    do you have to plan for what applications you’re going to be running right off
+    the bat, but you also have to plan for how those applications will be used. If
+    you have 500 users today and you’re planning on having 2,000 users in 3 months
+    based on company projections, that means the Pods will have an increased velocity
+    in usage and that you may need more Pods. More usage means autoscaling, and autoscaling
+    means more resources are needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sizing considerations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The following is a list of standard sizing considerations for when you’re building
+    out a Kubernetes cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Standard workers**: These are your everyday web server Pods or middleware
+    that still require virtualized hardware resources, but not at the same level as
+    more intense applications. They are your more *generic apps* if you will. The
+    worker nodes running here are mid-to-large in terms of size. If you’re just starting
+    to get a Kubernetes cluster up and running and you’re maybe moving one or two
+    containerized apps to Kubernetes as you get going, standard workers will be just
+    fine to get the ball rolling.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Memory-intensive workers**: Applications that you know will require more
+    memory/RAM than others should be accounted for with worker nodes that contain
+    more RAM than the standard servers that are running as worker nodes. You want
+    to ensure that if a Pod has to scale in replicas, or more Pods are added, you
+    have enough memory. Otherwise, Pods won’t start and will stay pending until memory
+    is allocated to them, and the scheduler can re-try scheduling the Pod for a node.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**CPU-intensive workers**: Some applications will require more CPU and available
+    threads to run the app. The same rules as those for memory-intensive apps apply
+    here – if the scheduler can’t schedule the Pods because there aren’t enough resources
+    available, the scheduler will wait until resources free up.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Special-case workers**: A special-case Pod would usually be something such
+    as an application that’s running a graphically intensive workload that needs a
+    specific type of **Graphics Processing Unit** (**GPU**), which means the worker
+    node needs a dedicated GPU or an app that requires faster bandwidth, so it requires
+    a certain type of **Network Interface** **Card** (**NIC**).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: System location
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When you run Kubernetes, there are primarily two types of nodes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Control Plane**: The Control Plane is where the API server lives. Without
+    the API server, you can’t do much inside Kubernetes. It also contains the scheduler
+    (how Pods know what node to go on), controller manager (controllers for Pods,
+    Deployments, and so on to have the desired state), and the cluster store/database
+    (etcd).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Worker node**: Worker nodes are where the Pods are installed after the Control
+    Plane and on the worker node(s) run. They run the kubelet (the agent), container
+    runtime (how containers run), kube-proxy (Kubernetes networking), and any other
+    Pod that’s running.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Keeping these two node types in mind, you’ll have to figure out what automation
+    techniques you want to use to run them and ultimately where/how you want to run
+    them. It’s a consideration that you shouldn’t take lightly. The last thing that
+    you want is to deploy Pods, then realize that the nodes they’re running on can’t
+    handle the type of containerized app that’s running. As mentioned previously,
+    the Control Plane is where the Kubernetes API sits. The Kubernetes API is how
+    you do everything in Kubernetes. Without it, Kubernetes wouldn’t exist. With that
+    being said, choosing where and how to run the Control Plane is the make or break
+    between properly using Kubernetes and spending your days constantly troubleshooting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Explaining the Control Plane and worker nodes could take a chapter in itself.
+    Because this book already expects you to know Kubernetes, we’re not diving into
+    the types of Kubernetes nodes all that much. However, if you don’t know about
+    the control plane and worker nodes, we highly recommend you take the time to learn
+    about them before continuing. A great place to start is the Kubernetes docs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data centers and regional locations
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Data centers go down. Regions go down. **Internet Service Providers** (**ISPs**)
+    go down. When you’re architecting where you want Kubernetes to run, there are
+    several things that you must take into consideration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first is where you’re running. For example, if your customers are in the
+    UK, and you decide to run your data center in New Jersey, there’s going to be
+    a ton of bandwidth issues and latency. Instead, it would make more sense to have
+    a data center and a few co-locations throughout the UK.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Speaking of co-locations, you must make sure that you don’t have a single point
+    of failure. The reality is that data centers do go down. They have internet issues,
+    flooding, electric issues, and outages. If that occurs, the last thing that you
+    want is to only have a single location. Instead, you should think about, at the
+    very least, two data center locations. If one of the data centers fails, high
+    availability needs to be put in place to *turn on* the other data center. For
+    example, you could have a *hot/hot* or *hot/cold* high availability scenario.
+    *Hot/hot* is recommended as all the data is being replicated by default to the
+    second data center. If the first data center goes down, the second data center
+    picks up where the first left off. Another consideration is where the data centers
+    are. If the two data centers are only 5 miles away from each other and a storm
+    comes, both could be impacted. Because of that, you want to put some distance
+    between data centers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Where and how to run Kubernetes
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As you saw in the previous sections, the first step to figuring out your on-prem
+    Kubernetes infrastructure is deciding what hardware and resources you need to
+    run the applications you’re planning on running. Next, it’s all about figuring
+    out what type of worker nodes you need. It’ll most likely be a combination of
+    standard worker nodes and more intensive worker nodes with extra CPU and RAM.
+    The final step (at least for this section) is figuring out how and where to run
+    it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several other options, but the following are a few of the popular
+    ones:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**OpenStack**: Although a lot of engineers in today’s world think OpenStack
+    is dead, a lot of very large organizations are still using it. For example, almost
+    every Telco provider uses OpenStack. Mercedes-Benz (at the time of writing) is
+    hosting over 900 (yes, 900) Kubernetes clusters running in OpenStack. OpenStack
+    gives you the feeling of being in the cloud, but it’s all on-prem and you’re hosting
+    the private cloud yourself. The Open Infrastructure Foundation has put a lot of
+    emphasis behind running Kubernetes on OpenStack with tools such as Magnum, which
+    is the standard for running orchestration platforms (Kubernetes, Mesos, Docker
+    Swarm, and so on), and Loki, which is the Linux/OpenStack/Kubernetes/infrastructure
+    stack.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Kubeadm**: If you don’t want to go the OpenStack route and if you’re using
+    something such as a hypervisor, kubeadm is arguably the best option. There are
+    a few different automated ways to get a Kubernetes cluster up and running, but
+    kubeadm is more or less the most sophisticated. Using kubeadm, you can create
+    a Kubernetes cluster that conforms to best practices. Other than installing the
+    prerequisites on the Linux server for Kubernetes to run, kubeadm is pretty much
+    automated. kubeadm has a set of commands that you can run that goes through several
+    checks on the Linux server to confirm that it has all of the prerequisites and
+    then installs the Control Plane. After that, there’s an output on the terminal
+    that gives you a command to run more Control Planes and/or run worker nodes. You
+    copy the command from the output, paste it into another server that you’re SSH’d
+    into via the terminal, and run it. kubeadm is cool as well because it introduces
+    you to the fact that running Kubernetes on-prem is straightforward. You can even
+    run it on your laptop or a Rasberry Pi. There isn’t a high threshold to meet to
+    run it, especially in a Dev environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rancher**: Rancher acts as both a Kubernetes cluster creation tool and a
+    Kubernetes cluster manager. Within Rancher, you can create a Kubernetes cluster
+    and host it on Rancher, create a Kubernetes cluster in the cloud, or create a
+    raw Kubernetes cluster by provisioning Linux virtual machines. You can also manage
+    your Kubernetes clusters from Rancher. For example, if you have a bare-metal Kubernetes
+    cluster that’s running with kubeadm or in OpenShift, you can manage it via Rancher.
+    You can also manage cloud Kubernetes clusters.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Kubespray**: Kubespray, although (in our opinion) isn’t the best production-level
+    option to go for, is still an option. Kubespray uses either Ansible or Vagrant
+    to deploy a production-ready Kubernetes cluster on virtual machines or in the
+    cloud. Because all you need is kubeadm instead of other *middleware*, such as
+    Vagrant or Ansible, going straight for kubeadm saves you those extra hops needed
+    to get a cluster created. Funnily enough, Kubespray uses kubeadm underneath the
+    hood for cluster creation ([https://github.com/kubernetes-sigs/kubespray/blob/master/docs/comparisons.md](https://github.com/kubernetes-sigs/kubespray/blob/master/docs/comparisons.md)),
+    so that solidifies even more that there’s something to say about not going the
+    extra hops to use Kubespray and instead, just go straight to kubeadm.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Operating system
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To run the Kubernetes platform, you need an operating system to run it on.
+    The two options that you have are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Run a bare-metal server and have the operating system run directly on the server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Have a virtualized hypervisor, such as ESXi, that virtualizes the hardware and
+    allows you to install the operating system on top of it
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In today’s world, chances are you’re going to use a hypervisor. Unless there’s
+    a specific need to run bare-metal servers and run the operating system directly
+    on the server, engineers typically opt for a hypervisor. It’s much easier to manage,
+    very scalable, and allows you to get a lot more out of the hardware.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When it comes to the operating system options, more or less, there are typically
+    two available options. One is certainly used more than the other, but the other
+    is gaining increased popularity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linux
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: More likely than not, you’ll be running worker nodes as Linux distributions.
+    The most popular battle-tested distributions are Red Hat, CentOS, and Ubuntu.
+    Linux is usually the *out-of-the-box* solution when it comes to Kubernetes worker
+    nodes, and at the time of writing this book, you can only run Kubernetes Control
+    Planes on Linux servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Windows
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Although not seen all that much, especially with open-sourced and cross-platform
+    versions of .NET, you can run Windows Server as a Kubernetes worker node. If you
+    want to run Windows Server as a worker node, there are a few considerations. First,
+    you must be running Windows Server LTSC 2019 or above. At the time of writing
+    this book, the two options available are Windows Server 2019 and Windows Server
+    2022.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the Windows Server option, you will have to buy licenses and keep **Client
+    Access License** (**CAL**) considerations in mind.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you have an understanding of the overall operating system and infrastructure
+    components of an on-prem Kubernetes cluster, in the next section, you’ll learn
+    how to troubleshoot the environment you’re building.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Troubleshooting on-prem Kubernetes clusters
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: If you come from a systems administration/infrastructure background, troubleshooting
+    Kubernetes clusters is going to come to you pretty naturally. At the end of the
+    day, a Kubernetes cluster consists of servers, networking, infrastructure, and
+    APIs, which are essentially what infrastructure engineers are working on day to
+    day.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re a developer, some of these concepts may be new to you, such as troubleshooting
+    networks. However, you’ll be very familiar with a few troubleshooting techniques
+    as well, such as looking at and analyzing logs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The whole idea of troubleshooting a Kubernetes cluster is to look at two pieces:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cluster itself
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Pods running inside the cluster
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The cluster itself, including networking, servers, operating systems, and scalability,
+    is going to be thought of from more of an infrastructure perspective, where something
+    such as the **Certified Kubernetes Administrator** (**CKA**) comes into play nicely.
+    The Pods, Deployments, container errors, and Pods not starting properly are going
+    to be thought of more from a developer perspective, so learning the concepts of
+    the **Certified Kubernetes Application Developer** (**CKAD**) would be a great
+    stepping stone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you’re going to learn about the key ways to think about troubleshooting
+    Kubernetes clusters and how to figure out problems in a digestible way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Server logs and infrastructure troubleshooting
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Although there’s an entire chapter in this book that goes over logging and observability
+    ([*Chapter 7*](B19116_07.xhtml#_idTextAnchor161)) let’s talk about logging in
+    a cluster sense. Typically, when you’re working with any type of observability
+    metrics, such as logging, in the Kubernetes world, engineers are primarily thinking
+    about the logs for an application. Those logs will help them troubleshoot a failing
+    app and figure out what happened in the first place. However, from a Kubernetes
+    on-prem perspective, server logging is a crucial piece.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the most part, unless otherwise specified, all the logs from the Control
+    Plane and worker nodes typically go into `/var/log` on the Linux server. For Control
+    Planes, the logs are at the following paths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`/``var/log/kube-apiserver.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`/``var/log/kube-scheduler.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`/``var/log/kube-controller-manager.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For worker nodes, the logs are at the following paths:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`/``var/log/kubelet.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`/``var/log/kube-proxy.log`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Out of the box, there isn’t a specific logging mechanism that Kubernetes uses.
+    That’s essentially up to you to decide. The two primary ways that engineers capture
+    logs for clusters are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use a node logging agent that runs on every node across the cluster
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Have a log aggregator capture the logs from `/var/log` and send them to a logging
+    platform
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can find more documentation on troubleshooting clusters at [https://kubernetes.io/docs/tasks/debug/debug-cluster/](https://kubernetes.io/docs/tasks/debug/debug-cluster/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Network observability
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The networking piece of a Kubernetes cluster, which you’ll learn about shortly,
+    is an extremely complex piece of Kubernetes within itself. Networking inside of
+    Kubernetes is just as important as the Kubernetes API and all the other pieces
+    that make up Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The two things that you want to look out for are **cluster latency** and **Pod
+    latency**. With cluster latency, it’s most likely going to come down to the standard
+    systems administration troubleshooting around checking bandwidth, QoS on routers,
+    how many packets are getting pushed through, NICs, and more. From a Pod latency
+    perspective, it’ll most likely start at the cluster level in terms of the issues
+    that the cluster may be having, but to troubleshoot, you’ll most likely look into
+    something such as a service mesh.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Service mesh is a huge topic in itself, which could probably cover an entire
+    course/book, but you’ll learn how to get started with it in the *Exploring networking
+    and system* *components* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubernetes metrics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Most resources created in Kubernetes (Deployments, Pods, Services, and so on)
+    have a metrics endpoint that can be found via the `/metrics` path when making
+    an API call on Kubernetes resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The metrics server collects logs from kubelets, which are agents that run on
+    each Kubernetes node, and exposes them to the Kubernetes API server through the
+    metrics API. However, this is primarily used for autoscaling needs. For example,
+    the metrics will tell Kubernetes, *Hey, Pods are running low on memory utilization;
+    we need a new Pod to handle application utilization*. Then, the vertical or horizontal
+    autoscaler will kick off and do its job to create a new Pod, or vertically scale
+    the current Pod(s).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you want to collect metrics for, say, the monitoring platform that you use
+    for observability, you’d want to collect metrics from the `/metrics/resource/resource_name`
+    kubelet directly. Many observability platforms such as Prometheus will ingest
+    these metrics and use them for troubleshooting and performance troubleshooting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: crictl
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Inside of every Kubernetes cluster, specifically running on the worker nodes,
+    is a container runtime. Container runtimes such as containerd and CRI-O are mostly
+    used in Kubernetes environments. Those container runtimes help make containers
+    and Pods run. Because of that, it’s important to ensure that the container runtime
+    is working as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`crictl` helps you troubleshoot the container runtime. You can run a few commands
+    directed at a Pod that’ll help you understand what’s happening inside of a container.
+    Keep in mind that `crictl` is in beta, but it’s still a great troubleshooting
+    tool.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following example, `crictl` is listing a set of Pods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, it can look inside each Pod to see the containers that are running:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also list out containers that are running and bypass Pods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can find more information about `crictl` at [https://github.com/kubernetes-sigs/cri-tools/blob/master/docs/crictl.md](https://github.com/kubernetes-sigs/cri-tools/blob/master/docs/crictl.md).
+  prefs: []
+  type: TYPE_NORMAL
+- en: kubectl
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Wrapping up this section, let’s talk about the `kubectl` command, which is
+    the typical way that engineers interact with Kubernetes via the CLI. You’ll see
+    three primary commands for troubleshooting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`kubectl describe`: This command tells you the exact makeup of the Kubernetes
+    Deployment, such as how it’s running, what containers are running inside of it,
+    ports that are being used, and more. This is a great first step to understanding
+    what could be going wrong inside of a Deployment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, if you had a Deployment called `nginx-deployment`, you’d run the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: The following output showcases how `describe` looks for Deployments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.1 – Kubernetes Deployment output'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_01.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.1 – Kubernetes Deployment output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`kubectl cluster-info dump`: This command is a literal dump of every single
+    thing that’s happened on the cluster that was recorded. By default, all of the
+    output is sent STDOUT, so you should ideally send the output to a file and look
+    through it as it’s extremely verbose with a lot of data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following screenshot has been cut off for simplicity, but it’s an example
+    of the information shown with the `kubectl cluster-info` `dump` command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.2 – Cluster dump output'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_02.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.2 – Cluster dump output
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`kubectl logs`: This command is the bread and butter to understanding what’s
+    happening inside of a Pod. For example, let’s say that you have a Pod called `nginx-deployment-588c8d7b4b-wmg9z`.
+    You can run the following command to see the log output for the Pod:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The following screenshot shows a sample of what logs look like for Pods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.3 – Nginx Pod log output'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_03.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.3 – Nginx Pod log output
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of where a Kubernetes cluster is running, you’re always going to
+    have to troubleshoot certain aspects of it. The tips in this section should help
+    in an on-prem, and even sometimes a cloud, scenario.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing hybrid services
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: From 2014 to 2015, what most organizations and engineers alike were reading
+    sounded something similar to *data centers will go away*, *the cloud is the future*,
+    and *everyone that isn’t in the cloud will be left behind*. Organizations started
+    to feel pressured to move to the cloud and engineers started to get nervous because
+    the skills they had honed for years were becoming obsolete. Coming back to the
+    present, which is 2022 at the time of writing this book, mainframes still exist…
+    so, yes, many organizations are still running on-prem workloads. Engineers that
+    have an infrastructure and systems background are doing quite well for themselves
+    in the new cloud-native era. The reason why is that 100% of the skills they have
+    learned, other than racking and stacking servers, are still very relevant for
+    the cloud and Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the *Understanding operating systems and infrastructure* section, you may
+    remember reading about on-prem workloads and how they’re still relevant in today’s
+    world. Although tech marketing may be making you feel otherwise, the truth is
+    that on-prem workloads are still very much used today. They’re used so much that
+    organizations such as AWS, Microsoft, and Google are realizing it, and they’re
+    building services and platforms to support the need for a true hybrid environment,
+    which means using on-prem and cloud workloads together, often managed in the same
+    location.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you’re going to learn about the major cloud provider hybrid
+    services, along with a few other companies that are helping in this area.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Azure Stack HCI
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Azure Stack HCI** is the hybrid cloud offering from Microsoft. It gives you
+    the ability to connect your on-prem environment to Azure. Azure Stack HCI typically
+    comes running inside of a server from a vendor, though you can install it yourself
+    on a compatible server with compatible hardware. It installs similar to any other
+    operating system, but there’s a lot of complexity around the requirements. A few
+    of the requirements include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At least one server with a maximum of 16 servers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Required to deploy to two different sites
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All servers must have the same manufacturer and use the same model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At least 32 GB of RAM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Virtualization support on the hardware (you have to turn this on in the BIOS)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can dive into the requirements a bit more; you’ll find that it goes pretty
+    in-depth. From a time perspective, you’re probably better off buying an Azure
+    Stack HCI-ready server from a vendor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An interesting part of Azure Stack HCI is underneath the hood – it’s pretty
+    much just Windows Server 2022 running Windows Admin Center. Because of that, you
+    could completely bypass Azure Stack HCI and do the following instead:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Run a bunch of Windows Server 2022 Datacenter servers.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Cluster them up.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Install Windows Admin Center.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Connect the servers to Azure.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Run AKS on the servers.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Google Anthos
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Anthos** is arguably the most mature hybrid cloud solution that’s available
+    right now. There are a ton of ways to automate the installation of Anthos with,
+    for example, Ansible, and the hardware requirements to get it up and running are
+    far more lite (at the time of writing this book) compared to Azure Stack HCI.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The hardware requirements are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Four cores for CPU minimum, Eight cores recommended
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 16 GB of RAM minimum, 32 GB recommended
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 128 GB storage minimum, 256 GB recommended
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Like Azure Stack HCI, Anthos runs on-prem in your data center and connects to
+    GCP to be managed inside of the GCP UI or with commands/APIs for GCP. The goal
+    here is to run GCP to manage Kubernetes clusters on-prem and in the cloud.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A quick note about other infrastructure managers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Although perhaps not considered hybrid cloud in itself as a platform, there
+    are a few platforms that help you manage workloads anywhere. Two of the primary
+    ones at the time of writing are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Azure Arc**: Azure Arc, as the name suggests, requires an Azure subscription.
+    However, the cool thing about it is that you can manage Kubernetes clusters anywhere.
+    If you have Kubernetes clusters in, for example, AWS, you can manage them with
+    Azure Arc. If you have Kubernetes clusters on-prem, you can manage them with Azure
+    Arc.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rancher**: Rancher is a vendor-agnostic solution that does all the management
+    goodness that Azure Arc does, with a few other key features such as logging, deployments
+    of Kubernetes servers, and security features to help you fully manage your Kubernetes
+    clusters that are running anywhere.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the next section, you’ll learn about the overall network administration that’s
+    needed inside of a Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exploring networking and system components
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Networking in a Kubernetes cluster, aside from the Kubernetes API itself, is
+    what makes Kubernetes truly *tick*. Networking comes into play in various ways,
+    including the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pod-to-Pod communication
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Service-to-Service communication
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How nodes talk to each other inside of the cluster
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How users interact with your containerized applications
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Without networking, Kubernetes wouldn’t be able to perform any actions. Even
+    from a control plane/worker node perspective, worker nodes can’t successfully
+    communicate with control planes unless proper networking is set up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section could be, at the very least, two chapters in itself. Because we
+    only have one section to hammer this knowledge down, let’s talk about the key
+    components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: kube-proxy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When you first start to learn about how networking works inside of Kubernetes
+    and how all resources communicate with each other, it all starts with kube-proxy.
+    kube-proxy is almost like your switch/router in a data center. It runs on every
+    node and is responsible for local cluster networking.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It ensures the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: That each node gets a unique IP address
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It implements local iptables or IPVS rules
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It handles the routing and load balancing of traffic
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It enables communication for Pods
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In short, it’s how every resource in a Kubernetes cluster communicates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CNI
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first step is kube-proxy, but to get it deployed, it needs to have a backend.
+    That *backend* is the **Container Network Interface** (**CNI**). Attempting to
+    run kube-proxy without a CNI is like trying to run a network on Cisco without
+    having Cisco equipment – it doesn’t work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CNI is a network plugin, sometimes called a network framework, that has
+    the responsibility of inserting a network framework into a Kubernetes cluster
+    to enable communication, as in, to enable kube-proxy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are a ton of popular CNIs, including the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Weave
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Flannel
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calico
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kubernetes resource communication
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When you deploy Pods, especially microservices, which are *X* number of Pods
+    running to make up one application, you need to ensure that Pod-to-Pod communication
+    and Service-to-Service communication work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pods communicate with each other via an IP address, which is given by kube-proxy.
+    The way that services communicate with each other is by hostname and IP address,
+    which is given by CoreDNS. Services provide a group of Pods associated with that
+    service with a consistent DNS name and IP address. CoreDNS ensures the translation
+    from hostnames to IP addresses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DNS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Under the hood, Kubernetes runs **CoreDNS**, a popular open source DNS platform
+    for converting IP addresses into names. When a Pod or a Service has a DNS name,
+    it’s because the CoreDNS service (which is a running Pod) is running on Kubernetes
+    properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Service mesh and Ingress
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Much like a lot of the other topics in this chapter, service meshes could be
+    an entire chapter – the two topics mentioned here could be an entire book. However,
+    let’s try to break it down into one section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An Ingress controller lets you have multiple Kubernetes Services being accessed
+    via one controller or load balancer. For example, you could have three Kubernetes
+    services named App1, App2, and App3, all connected to the same Ingress controller
+    and accessible over the `/app1`, `/app2`, and `/app3` paths. This is possible
+    via routing rules, which are created for the Ingress controller.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A service mesh, in short, helps you encrypt east-west traffic or service-to-service
+    traffic, and troubleshoot network latency issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, depending on the service mesh that you use, you may not need an Ingress
+    controller as the service mesh may come built with one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For Ingress controllers, check out Nginx Ingress, Traefik, and Istio. For service
+    meshes, check out Istio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, you’re going to learn about the ins and outs of how to
+    think about virtualized bare metal and a few vendors that help on this journey.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting to know virtualized bare metal
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'If/when you’re planning to run Kubernetes on-prem, two questions may pop up:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Where are we going to run Kubernetes?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How are we going to run Kubernetes?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In today’s world, chances are you’re not going to run Kubernetes directly on
+    bare metal (although you could, and some companies do). You’ll probably run Kubernetes
+    on a hypervisor such as ESXi or in a private cloud such as OpenStack. You may
+    also run Kubernetes on virtualized bare metal, which is different than running
+    it on a hypervisor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, let’s learn what virtualized bare metal is and a few ways that
+    you can run it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Virtualizing your environment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When thinking about virtualized bare metal, a lot of engineers will most likely
+    think about a hypervisor such as VMware’s ESXi or Microsoft’s Hyper-V. Both are
+    great solutions and allow you to take a bare-metal server that used to only be
+    able to run one operating system and run multiple operating systems. There are
+    many other pieces to a virtualized environment, such as virtualized hardware,
+    networking, and more, all of which are extensive topics and could be an entire
+    book in itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This not only helps you use as many resources out of the server as you can,
+    but it also allows you to save on cost because servers are expensive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other solution is to run as close to bare metal as possible, but you don’t
+    host it. Instead, you *rent* bare-metal servers from a hosting provider. When
+    you rent the servers, they give you SSH or RDP access and you can access them
+    the same way that you would if the servers were running in your data center. There’s
+    a UI that you can use to create the servers, maybe some automated ways to do so
+    if the platform allows it, and you can create Windows and/or Linux servers like
+    you would on any other platform, such as if you were creating a web service or
+    a server to host applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Where to run Kubernetes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When thinking about where you’d want to run ESXi or Hyper-V, that’ll most likely
+    come down to what servers you currently have, the partnerships with vendors your
+    business has, and what resources (CPU, RAM, and so on) you need on the servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When it comes to the “*as close to bare metal as possible*” option, although
+    there are many vendors, two stick out in the Kubernetes space:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Equinix**: Equinix allows you to – not only from a UI perspective but also
+    from an automation perspective – use tools such as Terraform to create virtualized
+    bare-metal servers for both Linux and Windows distributions. You can also manage
+    networking pieces such as BGP and other routing mechanisms, as well as use on-demand,
+    reserved, and spot servers:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Figure 4.4 – Equinix metal server creation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_04.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.4 – Equinix metal server creation
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following screenshot, you can see the general starting point in Equinix
+    to start deploying servers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.5 – Equinix Metal deployment page'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_05.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.5 – Equinix Metal deployment page
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**OpenMetal**: OpenMetal is a full-blown virtualized bare-metal solution for
+    running OpenStack. One of the cool parts about OpenMetal is that you get true
+    SSH access to the literal servers that are running OpenStack, so you have a ton
+    of flexibility and customization options, just like you would in any OpenStack
+    environment. The only thing you don’t have access to is the actual hardware itself
+    as that’s managed by OpenMetal, but you most likely don’t want access to it anyway
+    if you’re looking for a virtualized bare-metal solution:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Figure 4.6 – OpenMetal dashboard'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_06.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.6 – OpenMetal dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following screenshot shows the standard UI in OpenStack, which is running
+    on OpenMetal. This shows that nothing is different from using OpenStack on any
+    other environment, which is great for engineers that are already used to it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.7 – OpenStack’s Overview dashboard'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B19116_04_07.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 4.7 – OpenStack’s Overview dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re interested in running Kubernetes on-prem, but still want the feel
+    of a *cloud*-based environment, OpenStack running on OpenMetal is a great place
+    to start.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: There’s a lot that wasn’t talked about in this chapter – storage, different
+    interface types, hardware types, the ins and outs of Kubernetes clusters, and
+    a lot more. The reason why is that this chapter could only be so long and a lot
+    of the topics could take up an entire chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, the goal of this chapter was to give you a place to start.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you learned throughout this chapter and may have come to realize, managing
+    Kubernetes on-prem can almost feel like an entire data center within itself. You
+    have networking concerns, scalability concerns, storage concerns, network concerns…
+    the list goes on and on. However, if you want the flexibility of managing Kubernetes
+    yourself without relying on a cloud provider, then this chapter went over what
+    you should think about from the beginning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running Kubernetes on-prem is no easy task. You will most likely have to have
+    a team of engineers – or at the very least two to three engineers with a very
+    strong systems administration and network administration background. If you don’t
+    already have those skills, or if your team doesn’t, this chapter should have given
+    you a good starting point on where to look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you’ll start looking at the *how* and *why* behind deploying
+    applications on Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To learn more about the topics that were covered in this chapter, take a look
+    at the following resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*OpenStack Cookbook*, by Kevin Jackson, Cody Bunch, and Egle Sigler: [https://www.packtpub.com/product/openstack-cloud-computing-cookbook-fourth-edition/9781788398763](https://www.packtpub.com/product/openstack-cloud-computing-cookbook-fourth-edition/9781788398763)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

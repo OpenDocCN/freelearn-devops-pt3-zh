@@ -1,0 +1,1401 @@
+- en: '11'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Classification and Release Management
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The focus of this chapter will be on how Puppet deploys code and classifies
+    this code to servers. Environments will be examined first, showing how this creates
+    isolated groups of servers with particular versions of modules. We will discuss
+    how this can provide both static and temporary environments. We will show how
+    modern Puppet uses directory-based environments to have environment code in a
+    specific location that `site.pp` main manifest file or a collection of manifests,
+    using Hiera lookups within these node definitions or with an **External Node Classifier**
+    (**ENC**) script run by the primary server. The implementation of the **classification
+    service** for Puppet Enterprise will be discussed, showing how it builds on top
+    of these solutions using its own ENC script and the additional feature of node
+    groups in the web console.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Puppet agent run will be looked at in detail to show the steps involved
+    and how data is loaded, cached, and refreshed when a catalog is compiled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It will then be shown how to use the control repo structure with Puppetfiles
+    to manage modules to deploy code into environments using `r10k` or `g10k`, with
+    a discussion of various methods to synchronize code depending on the configuration
+    of the local infrastructure. The PE-specific implementation, `r10k`, will then
+    be discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed the technical structures for classification and release management,
+    focus will then be put on the challenges and limitations of using this with regulated
+    processes and multiple teams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet environments
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding node classification
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Puppet runs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing and deploying Puppet code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Lab—classifying and deploying code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Clone the control repo from [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
+    to your `controlrepo-chapter11` GitHub account and update the following files
+    in this repo:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Puppetfile` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/Puppetfile).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Build a standard cluster with three clients by downloading the `params.json`
+    file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/params.json)and
+    updating it with the location of your control repo and your SSH key for the control
+    repo. Then, run the following command from your `pecdm` directory:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Puppet environments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Puppet environments are a way to define specific versions of modules, manifests,
+    and data to be used for groups of servers. Unfortunately, *environment* is a general
+    technology term used for other purposes in organizations, and can easily be confused.
+    The best advice would be to always say **Puppet code environment** if used in
+    discussions outside of a purely Puppet context. This prevents a Puppet environment
+    being associated directly with anything else.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modern Puppet environments are dynamic directory-based, which means the Puppet
+    server—or, in the case of `puppet apply`, the client—will look for the assigned
+    environment to exist within a directory. Several variables set the location of
+    related directories, including the `environments` directory itself, and we strongly
+    recommend leaving all these settings at default to avoid confusion and issues.
+    We will now look at the levels of code directories and paths within an environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Environment directories and paths
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first level is the code and data directory set by the `codedir` variable
+    in `puppet.conf`, defaulting to `/etc/puppetlabs/code` for Unix and `%PROGRAMDATA%\PuppetLabs\code`
+    for Windows (this is normally `C:\ProgramData\PuppetLabs\code`). Puppet Server
+    does not use the `codedir` setting in `puppet.conf` and uses `jruby-puppet.master-code-dir`
+    in `puppetserver.conf`, so both would need to be set if changed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prior to `Puppet 3.3`, environments were declared in the `puppet.conf` file
+    and each environment had to be declared in a section with `modulepath` and `manifests`
+    variables set. This is still technically possible in Puppet today if `codedir`
+    was not set but there is no reason to implement this approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code and data directory contains two directories. First, there is a module
+    directory to provide global user modules included in the default `basemodulepath`
+    variable in `puppet.conf`. This `basemodulepath` variable by default contains
+    `$codedir/modules:/opt/puppetlabs/puppet/modules` on Unix and `$codedir\modules`
+    on Windows. The extra directory for Unix is used by the PE Server installation
+    to place modules used to configure PE. These modules are prefixed with `pe` to
+    avoid confusion with any modules that are already in use in environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second directory is an environment directory; by the default setting of
+    `environmentpath` in `puppet.conf`, this is `$codedir/environments` and is where
+    environments will be viewed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: NOTE
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `codedir` directory is used to contain global Hiera data and configuration
+    and, by default, `hiera_config` settings. If it finds a `$codedir/hiera.yaml`
+    file, it will override the default `$confdir/hiera.yaml` file, which is now standard,
+    as discussed in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within the `environments` directory, each environment to be created will have
+    a directory that can have a name containing lowercase letters, numbers, and underscores.
+    Each environment directory can contain the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet modules in directories specified by `$modulepath`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hiera data configured in a `hiera.yaml` file in the directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Classification data in a manifest or set of manifests in a directory specified
+    by `$manifest`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Environment configuration data in an `environment.conf` file in the directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Having reviewed the directories and paths of environments, we will now look
+    at the environment configuration files in more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Environment configuration files
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Environment configuration data can be set in an `environment.conf` file within
+    the `environment` directory; this file has an INI-style format like `puppet.conf`
+    but with no sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, if the `modulepath` environment variable is not set in `environment.conf`,
+    it will be set to `$environmentpath/$environment/modules:$basemodulepath`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, in Unix-based systems, by default this will be the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In Windows systems, it will be this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Remember to use a semicolon (`;`) to separate Windows directories in a list
+    and a colon (`:`) for Unix systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the *Managing and deploying Puppet code* section, we will discuss how the
+    modules are deployed into this directory and how to list the contents of each
+    directory in `modulepath`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Never set a `modulepath` variable to read from another environment directory.
+    In the *Puppet runs* section, we will discuss the potentially inconsistent effects
+    of environment data being cached and refreshed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `manifest` variable can be a single manifest file or a directory containing
+    multiple manifests that will be read in alphabetical order. Puppet will see this
+    variable as containing a directory if the path ends with a forward slash (`/`)
+    or a full stop (`.`) and will recognize if it is a directory. If there is no setting
+    in `environment.conf`, the default will be a directory at `$environmentpath/$environment/manifests`,
+    which is `/etc/puppetlabs/code/environments/$environment/manifests` for Unix-based
+    systems and `C:/ProgramData/PuppetLabs/code/environments/$environment/manifests`
+    for Windows-based systems. The directory environment will never use the global
+    `manifest` setting from `puppet.conf`. In the next section, we will go into further
+    detail about how node definitions and Hiera lookups can be used to classify servers
+    in this environment with these manifests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `environment_timeout` variable states how long Puppet Server will cache
+    a particular environment, overriding what is set. Puppet advises not to set this
+    in `environment.conf`, only using the global version in `puppet.conf`, and to
+    only use `0` or `unlimited`. The role of caching will be discussed further in
+    the *Puppet runs* section of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `config_version` variable can set a script to run once the catalog has
+    compiled and return the output as part of the logging. If not set by default,
+    a script will return the time the catalog was compiled in the Unix epoch format
+    (the number of seconds that have elapsed since January 1, 1970 midnight UTC/GMT).
+    For the default epoch script, the output will appear as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: A more useful example will be shown when using Git-based deployment solutions
+    in the *Managing and deploying Puppet* *code* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`environment.conf` and the `config_version` script can use the `basemodulepath`,
+    `environment`, and `codedir` global variables.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have reviewed the configuration of environments, it is useful to
+    understand how we can validate the configuration and the types of environments
+    deployed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Environment validation and deployment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The settings discussed in `puppet.conf` and `environment.conf` can be checked
+    by using the `puppet config print` command, deploying the `--environment` flag
+    to look at a particular environment and `--section` for a particular section in
+    `puppet.conf`. For example, to check the `codedir` variable in `puppet.conf` and
+    the `modulepath` variable in the production environment, the following commands
+    could be run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: By default, Puppet Server will create a production environment but a Puppet
+    client running `apply` will not. For both scenarios, production is the default
+    environment Puppet will run from. In the next section of this chapter, we will
+    show how servers get classified into other environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are three environmental strategies: permanent, temporary, and organizational
+    silos. Permanent environments are long-lived and the environment naming typically
+    matches the server’s use, such as if the server is a product or development server.
+    Temporary environments are those that can be used in situations such as testing
+    changes before they are promoted, while organizational silo environments reflect
+    divided infrastructure where different teams such as Windows and Linux teams own
+    different servers and have different environments. These strategies can be mixed
+    together as required to meet your organization’s approach.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we’ve learned about Puppet code environments, we will see how to classify
+    clients based on their use in an environment and set of modules from that environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding node classification
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Classification of a node involves finding which environment a node should use,
+    which classes should be applied to a node, and which parameters should be applied
+    to a node. The ideal scenario is to have a single role class applied to a host,
+    but the business logic can be more complicated. This applies to both agent runs
+    to the Puppet Server and `puppet` `apply` runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having defined what node classification is, we will now look at the methods
+    that can be used for classification, taking node definitions first as the simplest
+    approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Node definitions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The most basic method of node classification is using a `puppet.conf` will be
+    used. The node name will be the same as the `certname` setting from `puppet.conf`,
+    which by default is the node’s **fully qualified domain** **name** (**FQDN**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The syntax of a node definition is set out here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `node` keyword
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A node name as a quoted string, `default`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A mixture of the following Puppet code items within curly braces (`{}`):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Class declarations
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Variables
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Resource declarations
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Collectors
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Conditional statements
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Chaining relationships
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functions
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is recommended to keep node definitions down to a minimum and only use class
+    declarations and variables. If any manifest contains a node definition, then the
+    node definitions must match all nodes, or compilation for nodes that do not match
+    will fail. This is normally made safe by ensuring there is a default definition
+    even if the default definition contains no code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A node will only match one node definition, and this is prioritized by the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An exact name match
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A regex match (multiple regex matches are unpredictable, and only one will be
+    used)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default` (the keyword that nodes will match if they have failed to match any
+    other definition)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A prioritization step before `default` would look for any partial matches of
+    the hostname if `strict_hostname_checking` were set to `false` in the `puppet.conf`
+    primary server. To avoid this insecure matching, it is set to `true` by default
+    in Puppet 5.5.19 + and 6.13.0+, and in Puppet 7 onward was removed as an option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following code will classify `server1.exampleapp.com` to the
+    `role::oracle` class and `server2.exampleapp.com` and `server3.exampleapp.com`
+    to the `role::apache` class. Any other servers that end with `exampleapp.com`
+    will be classified to `role::example_common_windows` or `role::example_common_linux`
+    depending on the OS family, such as `server5.exampleapp.com`, and any other node
+    will be classified to `role::common`, such as `server1.anotherapp.com`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is a default to have a `site.pp` file in a `manifest` directory to keep
+    things simple, but multiple manifests in this directory can contain node definitions
+    that could be used to organize the files based on organization, use case, or ownership.
+    It is clear having many node definitions simply will not scale; a recommended
+    way of keeping node definitions simple is to use a default definition that looks
+    at the certificate of the node to have a `pp_role` extension that contains the
+    name of the role, as shown in this code example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the `getvar` function to avoid issues with hosts without certificates
+    and the `defined` function to confirm the declared role is visible in the environment,
+    it will include the role declared in the certificate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any code applied outside of the node definitions will apply to all nodes, but
+    setting uncontrolled global defaults like this is not a recommended approach.
+    In the previous code block, role classes were used, but any class could be included
+    for exceptions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A local `puppet apply` call will not look for manifests in the `manifest` variable
+    setting from `puppet.conf` but is expected to do what is passed on the command
+    line either via the `–e` flag or by passing a specific manifest file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having looked at the code-driven approach of node classification, we will now
+    look at how Hiera data can be used to classify nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classifying nodes with Hiera
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A more data-driven approach can be made in the default node definitions with
+    Hiera arrays using the `lookup` function. While the `lookup` function could be
+    used outside of the node definition, we recommend avoiding this to ensure, if
+    any other node definition were specifically added for a node, it would have the
+    expected result of only applying the node definition and not a less predictable
+    mix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first step would be, as we saw in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233),
+    to ensure an appropriate Hiera hierarchy is in place for each environment, assuming
+    a simple hierarchy of node, OS, and defaults in the `hiera.yaml` environment,
+    as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We could then add a lookup within a `default` node definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: While it would seem more appropriate to call the variable `class`, this is not
+    possible due to `class` being a reserved word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Data in the environment-level Hiera could then be added to a `common.yaml`
+    file to ensure that by default, servers get the `core` role:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we create an `os/RedHat.yaml` file in the data file containing the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This would ensure all servers from the Red Hat family such as CentOS would
+    get assigned the `role::core::redhat` class. To assign a particular role to a
+    server, we create a `node/exampleapp.example.com.yaml` file, containing the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would assign the `role::docker` class to the `exampleapp.example.com` node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To allow exceptions and a more complex combination setup, hashes instead of
+    arrays could be used, changing the lookup in `site.pp` from a unique to a deep
+    merge strategy and the data from an array to a hash:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this case, we could use keys within Hiera that are only visible in Hiera
+    to take over the role construct and use profiles directly, setting a `common.yaml`
+    file to ensure the default classification gets a core profile and a security profile:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, for a specific server `exampleapp.example.com`, the `security_profile`
+    variable could be set in `node/exampleapp.example.com.yaml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would override the security profile key and result in `exampleapp.example.com`
+    being classified as `profile::security::legacy` and `profile::core`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'More complex Hiera-based key lookups could be constructed to look up based
+    on Facter values, but since this is not a recommended approach in this book, enough
+    detail has been shown to understand how Hiera can be used. It is worth seeing
+    the `psick` module [https://forge.puppet.com/modules/example42/psick](https://forge.puppet.com/modules/example42/psick)
+    by example42 that uses the Hiera approach and can be used to have a preset and
+    staged way of including modules in the Linux case. Including the `psick` class
+    and simply setting the Hiera keys with hashes would be enough to classify a host:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having reviewed the code and data approaches for classification in detail, we
+    will now cover the more advanced approach of using ENC scripts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ENC scripts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An ENC is a script that the Puppet Server or a `puppet apply` call can run.
+    The requirements of the script are to take an argument of the `certname` of the
+    client and return either a nonzero return code for unknown nodes or a YAML output
+    containing the classes, parameters, and environment for catalog compilation. Inside
+    this ENC, it is possible to access various external data source references such
+    as PuppetDB or internal data sources of your organization. It is not important
+    which language the ENC is written in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example output would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, it can be seen the server will have the `role::core::windows`
+    class applied and the `sqlserver_instance` class with associated parameters, a
+    list of parameters that will be global variables in the catalog, and an environment
+    of **user acceptance** **testing** (**UAT**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: It would normally be better to pass class parameters via Hiera data but this
+    is just to demonstrate what is possible in the ENC output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To configure the use of ENC scripts, two variables must be set in `puppet.conf`:
+    first, `node_terminus`, which defaults to `plain`, to only use the manifests to
+    define classification. Setting `node_terminus` to `exec` causes the second variable,
+    `e``xternal_nodes`, to be checked, which should be set to the location of a script.
+    For example, the Foreman project uses an ENC that is defined in `puppet.conf`
+    by its configuration module as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The contents of the script can be seen here: [https://github.com/theforeman/puppet-puppetserver_foreman/blob/master/files/enc.rb](https://github.com/theforeman/puppet-puppetserver_foreman/blob/master/files/enc.rb).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The configuration module for placing this script can be found at [https://forge.puppet.com/modules/theforeman/puppetserver_foreman](https://forge.puppet.com/modules/theforeman/puppetserver_foreman).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Developing ENCs is beyond the scope of this book, and it would be advisable
+    to avoid the complexities involved in accessing external data this way as it can
+    be expensive to access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have covered how ENC scripts work, but PE uses its own type of ENC script
+    with additional features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PE classifier
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: PE provides its own ENC classifier that accesses the classification service
+    API, which is a Clojure app, and stores node group information in the **PostgreSQL**
+    classification database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is configured by setting `node_terminus = classifier` in `puppet.conf`
+    by the installer and should not be changed as it will not be supported.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`node_terminus` for PE used to be called `console` on PE 4 and previous versions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The node groups come in two types: environment and classification. The environment
+    groups are used to assign environments to nodes, while the classification nodes
+    are intended for assigning classes and adding parameters and variables. The node
+    groups can be viewed and configured from the PE web console in the **Node** **groups**
+    section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All node groups can contain rules to define based on facts or by directly naming
+    servers to be contained by a node group. They can contain any classes with any
+    defined class parameters that will be classified to these matching nodes, parameters
+    known as configuration data that act like Hiera data, acting as overrides and
+    taking precedence over Hiera, and variables that are declared as global variables
+    for the group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Older versions of PE did not enable configuration data by default and a section
+    in `/etc/puppetlabs/puppet/hiera.yaml` had to be added:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`hierarchy: - name: "Classifier Configuration Data"` `data_hash: classifier_data`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By default, as pictured in *Figure 11**.1*, PE will have an **All Nodes** node
+    group as a containing parent node group for all configurations, and beneath that
+    split out to **All Environments**, an environment group acting as a parent group
+    for all declared environment groups, and **PE Infrastructure**, a classification
+    group used for configuring the PE architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.1 – PE default node groups](img/B18492_11_01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.1 – PE default node groups
+  prefs: []
+  type: TYPE_NORMAL
+- en: The environment groups are marked in *Figure 11**.1* as `trusted.extensions.pp_environment`
+    fact in a rule to match production or development into groups of the same name
+    and ensure the named environment is assigned. If `trusted.extensions.pp_environment`
+    is not set, the `pp_enviroment` trusted fact prevents the server from being moved
+    to another environment without regenerating the server certificates, which will
+    require access to both the client and primary server. The `puppet agent –``t --environment=myfeaturebranch`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Approaches to the development and deployment of environments will be discussed
+    further in the *Managing and deploying Puppet code* section, but it may prove
+    necessary to have more environment levels between production and development,
+    in which case the recommended approach would be to create a node group of that
+    environment name under all environments and create a rule matching `trusted.extensions.pp_environment`
+    with your set environment name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Environment groups should be kept simple, so avoid assigning any class parameters
+    or variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When classification groups are nested, they inherit the definition from their
+    parent group. When creating a group structure, it will make sense to start with
+    a general layer of configuration and narrow it down to classification groups that
+    are more specific. This can be seen in the `puppet_master_host` are set, which
+    apply to all Puppet infrastructure hosts, and then have specific services and
+    functions such as a compiler or PuppetDB, which will be configured only on a subset
+    of nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It can be confusing because this inheritance applies to rules as well, so if
+    the parent rule has already set a rule limiting nodes, the child node groups’
+    rules will be combined with the parent node group. This also applies to the pinning
+    of nodes; you cannot just ignore rules and pin any server visible to the primary
+    server. It is also important to note if the child node group contains no rules,
+    it will not apply classification, even that inherited from a parent group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further confusion can arise from the purpose of the environment variable in
+    classification node groups; this does not define where the assigned classes will
+    run from but, in fact, tells the node group the environment in which to look for
+    available class names. This can create issues if node groups are shared between
+    development and production nodes and new classes are initially introduced to a
+    development environment before being promoted to production, so it can often be
+    the case that it makes the most sense for application node groups to use the lowest
+    level of environment to have full visibility of classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To keep things simple, it is recommended to use straightforward classification
+    roles that are kept as children of all nodes and simply have rules matching `trusted.extensions.pp_role`
+    to a specific class role name, and then assign that role class to the classification
+    role group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To automate the creation of node groups, the `node_manager` module ([https://forge.puppet.com/modules/WhatsARanjit/node_manager](https://forge.puppet.com/modules/WhatsARanjit/node_manager))
+    can be used to manage them through Puppet code, which is how the `peadm` module
+    itself configures Puppet node group information. For example, `peadm` ensures
+    that nodes with the `puppet/puppetdb-database` trusted extension are assigned
+    to the **PE Database** node group with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `node manager` module has the `purge_behavior` setting, which, if set to
+    `none` for resources, ensures only the specific changes you wish to make are applied
+    to node groups. By default this is set to `all`, removing any settings you have
+    not declared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Alternatively, the APIs can be used to perform backups and restores of node
+    group data, saving to a file with `/classifier-api/v1/groups` and restoring with
+    `/classifier-api/v1/import-hierarchy`. `Peadm` implements backup and restore classification
+    tasks using these APIs: [https://github.com/puppetlabs/puppetlabs-peadm/tree/main/tasks](https://github.com/puppetlabs/puppetlabs-peadm/tree/main/tasks).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since PE version 2019.2, a `$pe_node_groups` top-scope variable that returns
+    all node groups is available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A further method to use external data to add classes with the **Puppet Data
+    Service** (**PDS**) will be shown in [*Chapter 13*](B18492_13.xhtml#_idTextAnchor321).
+    But having reviewed the various methods of classification, we will now discuss
+    best-practice approaches to classifying nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recommended approach
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A mixture of ENCs and node definition approaches can be used as it will merge
+    the information, but this can make it harder to understand where classification
+    has taken place. It would be best practice to choose one option if possible or
+    at least to be clear on the purpose of each mechanism, such as node definition
+    to match roles based on certificate and Hiera to match node exceptions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Presuming classification has not already been chosen by your organization or
+    is specific within your configuration model, such as using Foreman or `psick`,
+    we recommend the simple pattern of assigning a default node definition based on
+    the `pp_role` extension in the certificate for open source Puppet: use node groups
+    matching the `pp_role` extension against node group role, and `pp_environment`
+    against the environment to be used for PE. This is what Puppet Support expects
+    and is the built model, but it limits the use of any variables or configuration
+    data within the Hiera data setup.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other mechanisms in sections *Node definitions* and *Classifying nodes with
+    Hiera* were discussed since in many organizations, classification will already
+    be in place and will not be easily changed and therefore must be understood. It
+    is important to know if complex classifications must be produced; this can mean
+    data is not being put in the right place or—worse—Puppet is not being used well
+    and too many variations of servers are being produced. When we maintain tight
+    standards with minimal exceptions, servers can be disposed of and rebuilt easily,
+    reducing operational complexity and the cognitive load of support teams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you have understood how servers are classified to an environment and
+    to classes, we will show how different data is loaded and cached during Puppet
+    runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet runs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, the steps of a Puppet run and classification will be detailed.
+    For the case of Puppet runs, a `puppet apply` command should be considered as
+    the equivalent of a Puppet server and client on the same node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When a catalog request is made by a client, four things are sent to the server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The node name
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The node’s certificate (not sent for `apply`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Facts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The requested environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The node name is the `certname`, and along with the requested environment is
+    embedded in the API request made—for example, `/puppet/v3/catalog/exampleserver.example.com?environment=uat`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The certificate can contain extensions, which will be turned into trusted facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the server receives the agent data, it asks the configured node terminus
+    for a node object. In the case of `plain`, this will be blank, or for `exec` or
+    `classifier`, YAML output will be returned containing classes, parameters, and
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, `puppet.conf` sets `strict-environment-mode` to `false`, and this
+    returned environment will override the agent request; if it is set to `true`,
+    the catalog compilation will fail. The `agent_specified_environment` fact will
+    appear if the agent specified an environment on the Puppet run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The variables will then be set from the facts as both top-scope variables and
+    the `$facts` hash, extensions in the certificate as trusted facts in the `$trusted`
+    hash, and parameters returned from the node terminus as top-scope variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main manifest will then be evaluated, looking for it to be defined by the
+    environment configuration first and then the client’s `puppet.conf` file if it
+    is unset. If any node definitions exist, Puppet will attempt to match the `certname`
+    and fail compilation if it does not.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any resources outside of the node definition are evaluated and added to the
+    catalog and any classes. As was noted in the *Node definitions* section, it is
+    not recommended to declare anything outside of node definitions. The matching
+    node definition will then evaluate the code, overriding any top-scope variables
+    with variables declared in the node definition, adding resources to the catalog,
+    and loading and declaring classes in the node definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet will then load the manifest containing classes declared in the main manifest
+    using the `modulepath` variable configured for the environment. As a class is
+    loaded, the code is evaluated and resources are added to the catalog, and any
+    classes declared within them will be loaded and evaluated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet then loads and evaluates the classes that were returned from the node
+    object.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having seen how Puppet classifies nodes and how agent runs process these classification
+    methods, it is now time to see how the environments are managed and deployed to
+    the primary server to make the right versions of code available to the nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing and deploying Puppet code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: By default, just creating the folders and dropping module contents into place
+    combined with the `puppet module install` command to automate pulling from the
+    Forge API is enough to make modules visible in environments and to allow them
+    to be wrapped up in package management to create versions. But this is not an
+    approach that we recommend as it centralizes the deployment of modules and environments,
+    most likely making a single team a gatekeeper. We will see that control repos
+    provide more flexible control.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most common approach is to use a Git repository known as a control repo.
+    Puppet provides a template for this repository at [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Puppet Forge author example42 provides its own templated control repo for
+    use with its integrations and pre-designed implementation approaches: [https://github.com/example42/psick](https://github.com/example42/psick).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Puppet’s control repo template contains many of the directories and files discussed
+    in the first section of the chapter, along with Hiera data and some additional
+    files specific to module deployment. *Figure 11**.2* shows the contents of the
+    Puppet control repo:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.2 – File structure of the Puppet control repo template](img/B18492_11_02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.2 – File structure of the Puppet control repo template
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the first section of this chapter, *Puppet environments*, we discussed many
+    files and directories, with `environment.conf`, config version scripts, and the
+    `manifests` directory for classification. Also visible is the Hiera configuration
+    in `hiera.yaml` and a data directory showing a simple initial two layers of nodes,
+    to match specific node names and common data, to act as a default for nodes that
+    do not match. The `site-modules` directory intends to show that ad hoc plans and
+    tasks can be deployed as part of this control repo as well as potentially give
+    a home to roles and profiles. The `scripts` directory is also worth reviewing
+    to see in the config version script at [https://github.com/puppetlabs/control-repo/blob/production/scripts/config_version.sh](https://github.com/puppetlabs/control-repo/blob/production/scripts/config_version.sh)
+    how it will add Git revision control information about the environment to the
+    run. The part that we have not reviewed is the Puppetfile file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Puppetfile file is a Ruby-based `moduledir` as a variable or the `installpath`
+    parameter on a particular module. We do not recommend this as good practice as
+    it can be confusing to users unfamiliar with your environment and, if set to be
+    outside the environment directory, can affect caching and make the environment
+    inconsistent. This will be discussed later in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Puppetfile module declarations at their simplest level contain the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mod` keyword'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A name in single quotes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Optionally a comma, then a version number or the `:``latest` keyword
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, the following code block assumes Puppet Forge as the source and
+    installs the latest version of `dsc-octopusdsc` if the module is not present,
+    but will not result in the module being updated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: This piece of code will install `puppetlabs-chocolatey` to the fixed version
+    6.2.0 and will install `puppetlabs-stdlib` and keep updating it to the latest
+    version. It is important to note this will not result in Puppet Forge dependencies
+    being installed—this must be managed within the Puppetfile manually. Looking at
+    module documentation on the Puppet Forge you will see example code on how to add
+    the modules to Puppetfiles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access modules within other Git repositories, the `git` option and the HTTP
+    address to the repository should be given. These can then be paired with one of
+    the following options to clone a specific version of the Git repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ref`, with a reference to a tag, a commit, or a branch'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tag`, with a specific tag'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`commit`, with a specific commit reference'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`branch`, with the name of a branch or the `:control_branch` keyword (which
+    will automatically look up the control repo’s branch name)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`default_branch`, a branch to use if all the preceding options fail'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following code demonstrates how the `git` options in the preceding list
+    can be mixed and matched:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code block takes `examplemodule1` at `tag` version `v.0.1` and `examplemodule2`
+    at `commit` version `68a140bd096a55019b3d5c8c347436b318779161` from the same Git
+    organization. For `anothermodule`, if a branch with the same name as the environment
+    that we are trying to deploy exists, it will use that; otherwise, it will clone
+    at the `main` branch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In air-gapped environments where access to the Puppet Forge API is limited or
+    in regulated environments where it is an audit requirement to have a company-stored
+    copy of all code, it may prove necessary to download copies of code from the Forge
+    and use it from your organization’s own Git system. In this case, it is strongly
+    advised that you follow the project URL on the module page, perform a Git clone
+    of the source of the Puppet Forge module, and then change the remote directory
+    to your own Git repository copy. This ensures the commit history is maintained
+    and on a regular basis, you can simply clone the code again and add new commits
+    to your own local repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of how Forge modules are downloaded, if they are not coming directly
+    from the Forge at their latest version it is important to frequently check versions
+    and make this part of a regular cycle to test and update. This ensures you are
+    getting the latest features and fixes and means you avoid having to perform large
+    version upgrades that are harder to test. Following the **Content and Tooling**
+    (**CAT**) team at [https://puppetlabs.github.io/content-and-tooling-team/blog/](https://puppetlabs.github.io/content-and-tooling-team/blog/)
+    can help keep track of module releases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: JFrog Artifactory users can use a Puppet Forge plugin to synchronize and host
+    modules internally, as documented at [https://www.jfrog.com/confluence/display/JFROG/Puppet+Repositories](https://www.jfrog.com/confluence/display/JFROG/Puppet+Repositories).
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this structure to manage several environments, it is simply a case of creating
+    branches on the Git repository, with each branch representing an environment that
+    can have its own independent content to be deployed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To manage deployment, the standard system used for `r10k`, and the system used
+    for `r10k` but has further integrations for PE.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The installation instructions for `r10k` are straightforward and available direct
+    from the repository at [https://forge.puppet.com/modules/puppet/r10k](https://forge.puppet.com/modules/puppet/r10k).
+    Instructions to configure Code Manager in PE either in node groups or via Hiera
+    are available at [https://puppet.com/docs/pe/2021.7/code_mgr_config.html](https://puppet.com/docs/pe/2021.7/code_mgr_config.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In both cases, as part of these instructions, an SSH key will be generated to
+    allow for communication between `r10k` and any Git repositories you have declared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An alternative option for Puppet Open Source is to use `g10k` `(`[https://forge.puppet.com/modules/landcareresearch/g10k](https://forge.puppet.com/modules/landcareresearch/g10k)),
+    which is a rewrite of `r10k` in **Go** and has substantial performance improvements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can still use `r10k` directly in PE, but this is not an approach Puppet
+    will provide support for.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For open source Puppet, having configured and deployed `r10k`, it is then possible
+    to run a `sudo -H -u puppet r10k deploy production` command to deploy a specific
+    branch or leave off an environment name to deploy all available environments.
+    A Webhook can also be configured using the Sinatra server, as detailed in the
+    `r10k` instructions at [https://forge.puppet.com/modules/puppet/r10k/readme#webhook-support](https://forge.puppet.com/modules/puppet/r10k/readme#webhook-support).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For PE, Puppet Code Manager is a `/code-manager` API using a token generated
+    in the PE `puppet code deploy` command. For example, the following code will generate
+    a token for the currently logged-in user for the next 2 hours and then deploy
+    in the production environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In either version, to see the deployed modules you can use `puppet module --list`,
+    which will also show any dependency issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Puppet Code Manager uses `r10k` underneath. To get more detailed debugging
+    information, the following command can be run, which is used for deploying in
+    production:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`runuser -u pe-puppet -- /opt/puppetlabs/puppet/bin/r10k -c /opt/puppetlabs/server/data/code-manager/r10k.yaml
+    deploy environment production --puppetfile --``verbose debug2`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For these deployments, it is important to understand caching that can take place.
+    All Puppet code is read and parsed when the environment is loaded—as is the `hiera.yaml`
+    file—and it is not re-read until the environment cache is expired, or the JRuby
+    instance is refreshed. The `environment.conf` file by default sets this to `unlimited`.
+    While Puppet templates and Hiera data are read anew from disk on every function
+    call, they are not cached. This means that if any local edits take place to Hiera
+    data or Puppet templates outside of `r10k`, they will be viewed. It also means
+    that if environments have module paths that look into other environments, a deployment
+    would result in it only seeing the Hiera and template updates. This is why it
+    is strongly recommended to avoid this approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using compilers to synchronize code, open source Puppet,\ has various
+    options depending on your environment as to how to deploy the code: installing
+    and running `r10k` on every compiler node, performing a `rsync` operation from
+    the primary server to compilers, or using a read-only **network file share** (**NFS**)
+    from the primary to all compilers. This choice will be entirely down to what is
+    best for your organization in terms of network configuration and security standards.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On PE, Code Manager has a specific implementation using the file sync client
+    and server, as shown in *Figure 11**.3*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.3 – Puppet Code Manager architecture](img/B18492_11_03.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.3 – Puppet Code Manager architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: A code deployment request will come in a request with an RBAC token either via
+    the command line or tooling. This will pull down the code to the commit staging
+    directory on the primary server. The file sync clients for all infrastructure
+    nodes have a polling watcher that sees the deployment and alerts the file sync
+    process. This will result in the file sync process doing one of two things, depending
+    on whether lockless code deploys are enabled (which were introduced in PE 2021.2).
+    If lockless code deploys are not enabled on the relevant server, all JRuby instances
+    will need to be reserved to prevent any catalog runs using inconsistent environments.
+    Remembering how different environment data is cached in the *Puppet runs* section,
+    once reserved, the files will be synced into the environment directory, and the
+    JRuby instances released. This does mean code deployments can be impactful on
+    performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If lockless code deployment is enabled, symbolic links or symlinks are used
+    for the environment directories, which means the file sync will synchronize to
+    a folder named after the version commit and, on completion of synchronization,
+    redirect the environment symlink to this new folder. This requires more disk space
+    because more environments will be deployed at once but ensures catalogs can continue
+    to run since they will use the directory the symlink had when they started to
+    run. To enable lockless code deploys, follow the instructions at [https://puppet.com/docs/pe/2021.7/lockless-code-deploys.html](https://puppet.com/docs/pe/2021.7/lockless-code-deploys.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand how Puppet deploys code to environments, we will look
+    at workflows that can be used to manage the promotion of module code through those
+    environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a workflow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are two common approaches for creating a workflow to deploy code. The
+    first method is to put the control repo as a central gatekeeper of versions. This
+    means that every module declaration on the Puppetfile has specific versions and
+    typically will have the lowest-level environment updated with a specific reference
+    such as `tag`, `commit`, or `branch`. These changes are tested in feature branches
+    and then promoted through environments by merging the changes from one branch
+    to the next, running the code on servers, and confirming expected results. For
+    example, the steps involved in such as process may include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a feature branch of the control repo and updating the `module1` tag
+    version from 1.1 to 1.2
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merging the feature branch with the development branch and deploying development
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merging the development branch with the UAT branch and deploying UAT
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merging UAT with production and deploying production
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is not a natural Git flow and does not use the main branch. It is very
+    focused on deployment, requiring a lot more management of environments. This approach
+    can be particularly difficult with multiple teams since it will result in the
+    requirement of a gatekeeper such as the Puppet platform team to manage changes
+    to the Puppetfile control repo and manage the schedule of when code deployments
+    are made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If this approach is taken, it is advisable to have multiple control repos using
+    the prefix configuration settings—this can be useful for teams that want to use
+    different sets of modules, such as Windows and Linux, or want to have isolation
+    and protection around the control repo and have separate ownership of code and
+    servers but want to share infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second approach is to have all modules in the Puppetfile in the control
+    repo set to use a branch of `control_branch` and a default of `main`. Maintenance
+    of the Puppetfile will then only involve the addition and removal of modules.
+    The management of versions will be on the modules themselves, with code changes
+    pushed to the main branch from temporary feature branches before being merged
+    into each static environment branch. Here’s an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a feature branch on `module1` and control repo testing code changes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merge the feature branch of `module1` with `main`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merge changes of the module branch from main to development, then deploy and
+    test
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merge changes of the module branch from development to UAT, then deploy and
+    test
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Merge changes of the module branch from UAT to production, then deploy and test
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using pipelining tools as part of the **pull request** (**PR**) and deployment
+    process is strongly advised. **Continuous Delivery for PE** (**CD4PE**) (discussed
+    in [*Chapter 14*](B18492_14.xhtml#_idTextAnchor340)) comes with prebuilt checks
+    to make this easier, but various tools exist, such as Jenkins or GitHub, with
+    which you can ensure the pre-commit hook checks and testing we discussed in [*Chapter
+    8*](B18492_08.xhtml#_idTextAnchor212)are performed before a PR can be completed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some excellent sources of existing pre-commit hooks to copy into place can be
+    found at [https://pre-commit.com/hooks.html](https://pre-commit.com/hooks.html),
+    [https://github.com/pre-commit/pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks),
+    and [https://github.com/mattiasgeniar/puppet-pre-commit-hook](https://github.com/mattiasgeniar/puppet-pre-commit-hook).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – classifying and deploying code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this lab, complete the following tasks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a node definition that assigns the `motd` module to any node with `node`
+    in the certname in the `manifest/site.pp` file of the production environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `motd` module is already in the `Puppetfile` file in the production control
+    repo
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The defaults for `motd` should be fine using `include motd`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See an example solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/default.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/default.pp)
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a node definition to assign the `icinga2` module to all Windows nodes
+    that get created
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `icinga2` module is already in the `Puppetfile` file in the production control
+    repo
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The defaults for `icigna2` should be fine using `include incigna2`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Windows nodes will always contain `windows-node` in the `certname`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To deploy on the PE web console, run the `peadm code_manager` task from the
+    `'deploy production'` action string
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See an example solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/node.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/node.pp)
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Create and deploy a development environment, adding the `docker` module:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: On the GitHub web page, go to your control repo and select the arrow next to
+    the production branch, and type `development`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Click the text generated below, which should say `create branch: development`
+    `from ''production''`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Add the line `mod 'puppetlabs-docker'`, latest to `Puppetfile`, making sure
+    you are on the development branch
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: On the PE web console, run the `peadm code_manager` task from the task menu,
+    entering the `'deploy development'` action string
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Create a node group for a role that includes Docker pinning one of your nodes
+    to it and development, then promote the development branch to production and deploy:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a node group called `docker` by selecting `apply docker`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See sample solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group1.png](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group1.png),
+    [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group2.png](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group2.png),
+    and [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group3.png](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group3.png)
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we discussed how Puppet environments can be used to manage
+    specific versions of modules, classification, and data to apply to groups of Puppet
+    clients. The directory structure and variables to configure this was reviewed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The options to classify servers into environments and to assign classes and
+    parameters were reviewed, looking at node definitions in manifest files, using
+    Hiera in the node definitions to create more complex data-driven calculations,
+    and then ENC scripts that can access sources such as PuppetDB and return YAML
+    output of classes, environment, and parameters for classification. PE was then
+    shown to build on the ENC approach with its own ENC script used in conjunction
+    with node groups to store data on how to classify servers into environments and
+    assign classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It was highlighted that the various methods could be used together but the recommended
+    approach was to keep it simple; for open source Puppet, just use a default node
+    definition to look for `pp_role` trusted facts to classify and to put the environment
+    setting in `puppet.conf`, while for PE, it was recommended to use 1-to-1 matching
+    of node groups with `pp_role` and `pp_environment` trusted facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It was then shown how a Puppet catalog request sends data to the Puppet server
+    and how classification files and scripts are used to generate catalogs highlighting
+    how different types of Puppet resources are cached.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The methods of deploying environments were then shown, using a Git-based Puppet
+    control repo to contain the files and directories of environments, with each Git
+    branch representing a particular environment. The Puppetfile was shown as a way
+    to list which modules should be deployed to an environment, specifying the version
+    and location of the module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It was then discussed how `r10k` and the PE Code Manager implementation on top
+    of `r10k` can deploy code to servers. For servers using compilers, we reviewed
+    various approaches to keep code deployed on all infrastructure, which would depend
+    on local infrastructure and standards. For PE, it was shown that Code Manager
+    contained **File sync**, which kept code synchronized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Workflow approaches were then viewed, showing the more gated and traditional
+    approach of using a control repo with a Puppetfile at set versions and updating
+    the lowest-level environment such as development before pushing these module version
+    changes up through the environments. The second recommended approach showed the
+    control would rely on the modules themselves and the control repo would look for
+    environment-named branches, allowing teams to work and deploy independently. Highlighting
+    the idea in either of these systems is to use a proper pipelining tool with Webhooks
+    to automate deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having focused on Puppet infrastructure and language for stateful configuration
+    management in this chapter, the next chapter will look at Bolt and orchestrator
+    to show how procedural tasks can be run either using Bolt as an independent tool
+    or through the PE infrastructure via the PE orchestrator.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,894 @@
+- en: 'Chapter 15: Programming the Cloud'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: You've probably heard the saying *the cloud is just someone else's computer*.
+    While it is somewhat true, it is also wildly off target. Cloud service providers
+    offer virtual machines running in their data centers that you can use in exchange
+    for money, so in that way, you are using someone else's computer. However, it
+    misses the bigger picture of what a cloud service provider is. A cloud service
+    provider is a collection of hundreds of application-hosting, data, compliance,
+    and computing infrastructure services that run in hundreds of data centers across
+    the globe and are exposed through a fully programmable API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will learn how to interact with a cloud API using Microsoft
+    Azure. We'll start by learning a bit about the nature of the APIs, including how
+    they are described and where to find additional documentation about them. We'll
+    learn the fundamentals of identity, authentication, and authorization. We'll then
+    apply what we have learned in a set of examples using the Azure SDK for Go to
+    build cloud infrastructure and utilize other cloud services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of the chapter, you will be equipped with the knowledge to work effectively
+    with Microsoft Azure and will have gained the transferable skills to work with
+    other cloud service providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is the cloud?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Learning the basics of the Azure APIs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building infrastructure using Azure Resource Manager
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using provisioned Azure infrastructure
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This chapter will require the following tools:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The Azure CLI: [https://docs.microsoft.com/en-us/cli/azure/install-azure-cli](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Code files downloaded from GitHub: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What is the cloud?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The scale of capital investment in the Amazon, Microsoft, and Google cloud physical
+    computing infrastructure is monumental. Imagine the investment needed to build
+    200+ physical data centers with multiple redundant power and cooling systems,
+    featuring state-of-the-art physical security. These centers are resilient in the
+    face of a natural disaster. Even then, you are just scratching the surface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These data centers require one of the largest interconnected networks on the
+    planet to link them together. All of that infrastructure won't function without
+    vast amounts of power and cooling, preferably from sustainable sources. For example,
+    Azure has been carbon-neutral since 2012 and is committed to being carbon-negative
+    by 2030\. When people talk about hyper-scale cloud, they are talking about the
+    planet-scale operations of these cloud service providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ever wonder what it would be like to visit one of these data centers? For example,
+    to access an Azure data center, there are multiple levels of security you must
+    go through. You must first request access to the data center and provide a valid
+    business justification. If access is granted, when you arrive at the data center's
+    permitter access point, you'd notice the panoply of cameras, tall steel fences,
+    and concrete surrounding the perimeter. You'd verify your identity and pass to
+    the building entrance. At the building entrance, you'd be greeted by security
+    officers who will once again verify who you are using two-factor authentication
+    with biometrics. Upon passing biometric scanning, they'd guide you to the specific
+    section of the data center where you have been approved to operate. As you proceed
+    to the data center floor, you'd pass in and out through a full-body metal detection
+    screening to ensure that you don't leave with anything you shouldn't. Security
+    at these data centers is taken very seriously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Still think this sounds like *someone else's computer*?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The physical infrastructure of cloud service providers is awe-inspiring. However,
+    we should change our focus from the scale of cloud service provider operations
+    to how cloud services are exposed to developers. As we mentioned initially, cloud
+    service providers expose the functions of the cloud through APIs, which developers
+    can use to manage infrastructure and applications running on the cloud. We can
+    use these APIs to build applications that can leverage hyper-scale cloud infrastructure
+    to become planet-scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Learning the basics of the Azure APIs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we know the path to programming the cloud is through APIs, let's learn
+    a bit more about them. It's important to establish some background on how a large
+    system of APIs comes together to form a consistent programmatic interface. We
+    will also learn where you can find code and documentation when you run into challenges.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we are going to discuss how the major clouds define APIs and
+    produce **Software Development Kits** (**SDKs**) for programming against the cloud
+    APIs. We will learn where to find these SDKs, and where to find documentation
+    about the APIs and SDKs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will also learn about identity, **Role-Based Access Control** (**RBAC**),
+    and **resource hierarchy** in Microsoft Azure. Finally, we'll create and log in
+    to a free Azure account, which we will use in the subsequent sections to program
+    the cloud.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A background on cloud APIs and SDKs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we discussed in the previous section, cloud service providers expose APIs
+    for management of and access to hundreds of services, spread across a vast number
+    of regions. These APIs are commonly implemented using **Representational State
+    Transfer** (**REST**) or **Google Remote Procedure Call** (**gRPC**). Within each
+    cloud service provider, there is likely an equal number of engineering teams building
+    these APIs. It is imperative to provide a consistent representation of resources
+    in these APIs so that, when viewed as a whole, each service provides similar behavior.
+    Each cloud service provider takes its own approach to this problem. For example,
+    at Microsoft Azure, the rule for defining REST APIs is codified by the **Microsoft
+    Azure REST API Guidelines** ([https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md](https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md)).
+    These rules provide guidance to service teams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Developers don't usually use cloud APIs directly via HTTP but rather through
+    the use of SDKs. These are collections of libraries that provide access to the
+    APIs for a given language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, Azure ([https://github.com/Azure/azure-sdk-for-go](https://github.com/Azure/azure-sdk-for-go)),
+    AWS (https://github.com/aws/aws-sdk-go), and Google ([https://github.com/googleapis/google-api-go-client](https://github.com/googleapis/google-api-go-client))
+    all have Go SDKs for their clouds and many other languages. These SDKs do their
+    best to eliminate the boilerplate code needed for programmatically accessing clouds'
+    APIs, simplifying what the developer needs to write to program against them. Besides
+    the documentation published by cloud providers, always remember that GoDocs are
+    your friend. For example, the GoDocs for the Azure Blob storage service ([https://github.com/Azure/azure-kusto-go](https://github.com/Azure/azure-kusto-go))
+    provide useful information for using the SDK.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These SDKs, for the most part, are generated based on machine-readable API specifications.
+    When you have hundreds of services and multiple languages, it will not scale well
+    to have an enormous number of humans writing SDKs by hand. Each cloud solves this
+    problem in its own way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, Microsoft Azure generates almost all of the Azure API reference
+    documentation ([https://docs.microsoft.com/en-us/rest/api/azure/](https://docs.microsoft.com/en-us/rest/api/azure/))
+    and SDKs using OpenAPI specifications in the Azure REST API Specs repository ([https://github.com/Azure/azure-rest-api-specs](https://github.com/Azure/azure-rest-api-specs)).
+    The entire process for producing documentation and generating SDKs is hosted on
+    GitHub and powered by open source tools such as the AutoRest code generator ([https://github.com/Azure/autorest](https://github.com/Azure/autorest)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fun Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of this book's authors, David Justice, established this process at Azure
+    and had the first commit to the Azure REST API Specs repository ([https://github.com/Azure/azure-rest-api-specs/commit/8c42e6392618a878d5286b8735b99bbde693c0a2](https://github.com/Azure/azure-rest-api-specs/commit/8c42e6392618a878d5286b8735b99bbde693c0a2)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Microsoft Azure identity, RBAC, and resource hierarchy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To prepare us for interacting with the Azure API, we need to understand some
+    basics – identity, RBAC, and resource hierarchy. **Identity** establishes the
+    user, or principal, interacting with the API. RBAC defines what the identity can
+    do within the API. The resource hierarchy describes the relationship between the
+    resources in the Azure cloud. RBAC roles and rights describe what a principal
+    can do with a given resource or resource hierarchy. For example, a user can be
+    assigned the contributor rights to an Azure subscription and be able to mutate
+    resources within that subscription.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Identities in Azure live in **Azure Active Directory** (**AAD**). This is an
+    enterprise identity and access management service. It provides single sign-on,
+    multifactor authentication, and conditional access, among other features. Identities
+    in AAD reside within one or more tenants. Tenants contain multiple identities.
+    Identities can be user identities, which represent humans and have interactive
+    authentication flows, or they can be service principals, which represent non-human
+    identities such as applications that do not have interactive authentication flows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The root of resources in Azure is an Azure subscription. A subscription is a
+    logical container that contains Azure resource groups. Each resource such as a
+    virtual machine, storage account or virtual network, resides within a resource
+    group. A resource group is a logical entity that associates multiple Azure resources
+    so that you can manage them as a single entity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Identities are granted RBAC roles and rights to interact with Azure subscriptions
+    and resources alike. You can think of AAD and Azure as separate systems that are
+    bound together by RBAC rights and roles. We will not dive deeply into each RBAC
+    role or right, but you can find more information about them in the Azure built-in
+    roles documentation ([https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles](https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have some basic understanding of the cloud we will be working in,
+    let's get started.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating an Azure account and accessing the API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To run the rest of the examples in this chapter, you will need an Azure account.
+    If you do not have an Azure account, you can sign up for a free account with $200
+    of Azure credits ([https://azure.microsoft.com/en-us/free/](https://azure.microsoft.com/en-us/free/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once you have an account, log in with the Azure CLI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This command will log you into your Azure account and set the default context
+    for your primary Azure subscription. By default, when you create an Azure account,
+    your identity will be granted the `owner` role in the subscription. The `owner`
+    role grants full access to manage all resources, including the ability to assign
+    roles in Azure RBAC. To see what subscription is active, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding command output shows the name of the subscription and other details
+    about the current context of the Azure CLI. In the following command, we will
+    use the `az` CLI to directly interact with the Azure API:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding command will list the subscriptions your identity has access to
+    via RBAC rights. Note that as part of the Azure REST API guidelines, all Azure
+    APIs must be used with an `api-version` query parameter. This is enforced to ensure
+    that API consumers can always rely on the stability of the request and response
+    format for a specified `api-version`. The APIs are updated often, and without
+    specifying the `api-version` query parameter of a given API, a consumer would
+    possibly be subject to breaking changes in the API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s run the same request using the `debug` flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Executing any command with the Azure CLI using `--debug` will output the HTTP
+    request details, showing output containing something similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This output is incredibly useful for seeing what was sent to the Azure API in
+    HTTP. Also, note that the URI, `https://management.azure.com/...`, corresponds
+    to **Azure Resource Manager** (**ARM**). ARM is a composite service composed of
+    resource provider services for each resource in Azure and is responsible for mutating
+    resources in it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we learned about how the major clouds define APIs and produce
+    SDKs for the APIs. We also learned specifically about Azure identities, RBAC,
+    and resource hierarchies. This information may be specific to Azure, but all major
+    clouds follow the same pattern. Once you learn how one of the clouds approaches
+    **Identity and Access Management** (**IAM**), it's roughly transferable to other
+    clouds. Lastly, we signed into an Azure account for use in subsequent sections
+    and learned how to directly access the Azure REST API through the Azure CLI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will use the Azure SDK for Go to mutate cloud infrastructure.
+    Let's get started on programming the Azure cloud with Go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building infrastructure using Azure Resource Manager
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Cloud APIs are bifurcated into two categories, the management plane and the
+    data plane. The management plane is an API that controls the creation, deletion,
+    and mutation of infrastructure. The data plane is an API exposed by provisioned
+    infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, the management plane would be used to create a SQL database. The
+    data plane for the SQL database resource would be the SQL protocol for manipulating
+    data and structure within the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The management plane is serviced by the cloud resource API, and the data plane
+    is serviced by the API exposed by the provisioned service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will learn how to use the Azure SDK for Go to provision
+    infrastructure in Azure. We will learn how to create and destroy resource groups,
+    virtual networks, subnets, public IPs, virtual machines, and databases. The goal
+    of this section is to build awareness of the Azure Go SDK and how to interact
+    with ARM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Azure SDK for Go
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we discussed in the previous section, cloud SDKs simplify the interaction
+    between a given language and a cloud provider's API. In the case of Azure, we
+    will be using the Azure SDK for Go ([https://github.com/Azure/azure-sdk-for-go/](https://github.com/Azure/azure-sdk-for-go/))
+    to interact with the Azure APIs. Specifically, we'll use the latest edition of
+    the SDK ([https://github.com/Azure/azure-sdk-for-go#management-new-releases](https://github.com/Azure/azure-sdk-for-go#management-new-releases)),
+    which has been redesigned to follow the Azure design guidelines for Go ([https://azure.github.io/azure-sdk/golang_introduction.html](https://azure.github.io/azure-sdk/golang_introduction.html)).
+    For the latest information about packages and docs, be sure to check out the Azure
+    SDK Releases page ([https://azure.github.io/azure-sdk/releases/latest/mgmt/go.html](https://azure.github.io/azure-sdk/releases/latest/mgmt/go.html)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code for this section is located in the GitHub code folder for this chapter
+    [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up your local environment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To run the code for this section, you will need to set up a `.env` file. Run
+    the following commands from the `./chapter/15` directory of the repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: This command will create a `.ssh` directory in `./chapter/15`, generate an SSH
+    key pair within that directory, and ensure that proper permissions are set on
+    the key pair.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding command creates an SSH key that does not have a passphrase. We
+    are only using this key pair as an example. You should provide a strong passphrase
+    for real-world usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s set up a local `.env` file that we will use to store environmental
+    variables used in the examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, this command will create an`.env` file that contains two environment variables,
+    `AZURE_SUBSCRIPTION_ID` and `SSH_PUBLIC_KEY_PATH`. We derive the value for the
+    Azure subscription ID from the Azure CLI's current active subscription.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have set up our local environment, let's build an `cloud-init` provisioning
+    script and provide access using SSH via a public IP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an Azure virtual machine
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let''s get started by running the example, and then we''ll delve into the code
+    for building the infrastructure. To run the example, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: After running `go run ./cmd/compute/main.go`, you should see something similar
+    to what is shown in the previous command block. As you can see from the output,
+    the program built several bits of infrastructure, including an Azure resource
+    group, network security group, virtual network, and virtual machine. We'll discuss
+    every piece of infrastructure in more detail soon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the output states, you can also use SSH to access the virtual machine as
+    described in the output. We'll use this to explore the provisioned state of the
+    virtual machine to confirm that the `cloud-init` provisioning script ran as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you visit the Azure portal, you should see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.1 – The Azure portal virtual machine infrastructure'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_15_001.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 15.1 – The Azure portal virtual machine infrastructure
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding screenshot, you can see the resource group as well as all of
+    the infrastructure created. Next, let's look at the code that provisioned this
+    infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Provisioning Azure infrastructure using Go
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In these examples, you will see how to build Azure API clients, probe for credentials
+    for accessing APIs, and mutate infrastructure. Many of these examples use abbreviated
+    error-handling behavior to keep the code as concise as possible for illustrative
+    purposes. `panic` is not your friend. Please wrap and bubble your errors as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start with the entry point of `go run ./cmd/compute/main.go` and learn
+    how to use Go to provision cloud infrastructure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we load environment variables in the local `.env` file
+    using `godotenv.Load()`. In `main`, we create a new `VirtualMachineFactory` to
+    manage the creation and deletion of Azure infrastructure. Once the infrastructure
+    is created in `factory.CreateVirtualMachineStack`, we print the SSH connection
+    details and prompt for user confirmation to delete the infrastructure stack.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s dive into the VM factory and see what is included in the VM stack:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code defines the structure of `VirtualMachineFactory`, which is responsible
+    for the creation of and access to the Azure SDK API clients. We instantiate those
+    clients using the `NewVirtualMachineFactory` func, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code builds a new default Azure identity credential. This credential is
+    used to authenticate the client to the Azure APIs. By default, this credential
+    will probe multiple sources for an identity to use. The default credential will
+    probe for environment variables first, then it will attempt to use an Azure managed
+    identity ([https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview)),
+    and finally, it will fall back to using the Azure CLI's user identity. For this
+    example, we are relying on the Azure CLI identity to interact with the Azure APIs.
+    This is convenient for development but should not be used for a deployed application
+    or script. Non-interactive authentication requires either an Azure service principal
+    ([https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals](https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals))
+    or an Azure managed identity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The VM factory builds each of the Azure API clients using `subscriptionID`,
+    the credential, and the `New*` function for each of the clients. `BuildClient()`
+    builds each client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we know how credentials and the API clients are instantiated, let''s
+    dive into the creation of infrastructure in `CreateVirtualMachineStack`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we created the idea of a stack – a collection of related
+    infrastructure. We created a new stack with a given location, a human-readable
+    name, and the contents of the SSH public key path. Subsequently, we created each
+    of the Azure resources needed to create a VM with public SSH access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s explore each of the `create` and `get` funcs in `CreateVirtualMachineStack`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, `createResourceGroup` calls `CreateOrUpdate` on `groupsClient`
+    to create an Azure resource group in the specified location. An Azure resource
+    group is a logical container for Azure resources. We will use the resource group
+    as a container for the rest of our resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s dive into the network security group creation function, `createSecurityGroup`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we built an Azure network security group, which contains
+    a single security rule to allow network traffic on port `22`, enabling SSH access
+    for the VM. Note that rather than calling `CreateOrUpdate`, we call `BeginCreateOrUpdate`,
+    which issues `PUT` or `PATCH` to the Azure API and starts a long-running operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A long-running operation in Azure is one that – once the initial mutation is
+    accepted –executes until it reaches a terminal state. For example, when creating
+    a network security group, the API receives the initial mutation and then starts
+    to build the infrastructure. After the infrastructure is ready, the API will indicate
+    it is completed through the operation state or the provisioning state. `poller`
+    takes care of following the long-running operation to completion. In `HandleErrPoller`,
+    we follow the polling to completion and return the final state of the resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s explore the creation of the virtual network via `createVirtualNetwork`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the previous code block, we built an Azure virtual network for our VM. The
+    virtual network is set up with a `10.0.0.0/16` `10.0.0.0/24` CIDR. The subnet
+    references the network security group we built in the previous code block, which
+    causes the rules in the network security group to be enforced on the subnet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have built the networking for our VM, let''s build it via `createVirtualMachine`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is not much to show for `createVirtualMachine()`. As you can see, the
+    same pattern of resource creation through a long-running API invocation is applied
+    in this code. The interesting bits are in `linuxVM()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `linuxVM`, we specify the location, name, and properties of the VM. In the
+    properties, we specify the type of hardware we'd like to provision. In this case,
+    we are provisioning a Standard D3v2 (you can read more about it at [https://docs.microsoft.com/en-us/azure/virtual-machines/dv3-dsv3-series](https://docs.microsoft.com/en-us/azure/virtual-machines/dv3-dsv3-series))
+    hardware **Stock-Keeping Unit** (**SKU**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also specify our `StorageProfile`, which is used to specify the OS as well
+    as the data disks we''d like attached to the VM. In this case, we specify that
+    we''d like to run the latest version of Ubuntu 18.04\. Both `NetworkProfile` and
+    `OSProfile` are a little too complex to include in this function, so let''s explore
+    them individually in the following code block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `networkProfile()`, we create `NetworkProfile`, which specifies that the
+    VM should have a single network interface using IPv4 and be exposed via a public
+    IP. The network interface should be allocated on the subnet that we created in
+    `createVirtualNetwork()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s explore the `OSProfile` configuration via `linuxOSProfile()` in
+    the following code block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `linuxOSProfile`, we create an `OSProfile`, which includes details such as
+    the admin username, computer name, and SSH configuration. Take note of the `CustomData`
+    field used for specifying the Base64-encoded `cloud-init` YAML, which is used
+    to run the initial configuration of the VM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s explore what we are doing in the `cloud-init` YAML:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the VM is created, the following `cloud-init` instructions are executed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the packages on the Ubuntu machine are upgraded.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, the `nginx` and `golang` packages are installed via the **Advanced Package
+    Tool** (**APT**).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, `runcmd echos "hello world"`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`cloud-init` is super-useful for bootstrapping VMs. If you have not used it
+    previously, I highly recommend exploring it further ([https://cloudinit.readthedocs.io/en/latest/](https://cloudinit.readthedocs.io/en/latest/)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can verify `cloud-init` executed by accessing the VM using SSH and executing
+    commands similar to the following. Remember, your IP address will be different
+    than what is shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, `nginx` and `go` have been installed. You should also see the
+    APT mutations and *hello world* in `/var/log/cloud-init-output.log` on the provisioned
+    VM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have provisioned and created an Azure VM and related infrastructure! Now,
+    let's destroy the entire stack of infrastructure. You should be able to press
+    *Enter* in the shell where you are running `go run ./cmd/compute/main.go`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s see what happened when we called `factory.DestroyVirtualMachineStack`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `DestroyVirtualMachineStack`, we simply call `BeginDelete()` on the group's
+    client, specifying the resource group name. However, unlike other examples, we
+    do not wait for the poller to complete. We send the `DELETE HTTP` request to Azure.
+    We do not wait for the infrastructure to be completely deleted; instead, we trust
+    that the acceptance of `delete` means that it will eventually reach the deleted
+    terminal state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now built and cleaned up a stack of infrastructure using the Azure SDK
+    for Go. We have learned how to create resource groups, virtual networks, subnets,
+    public IPs, and VMs, and how a pattern can be extended to any resource in Azure.
+    Additionally, these skills are applicable to each of the major clouds, not just
+    Azure. AWS and GCP both have similar concepts and API access patterns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we'll build an Azure Storage account and learn a bit about
+    using the data plane of a cloud service by uploading files and then providing
+    constrained access to download those files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using provisioned Azure infrastructure
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous section, we built a stack of computing and networking infrastructure
+    to illustrate how to manipulate cloud infrastructure. In this section, we will
+    pair a provisioning infrastructure with the Azure control plane and use the infrastructure
+    through the provisioned service's data plane.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we are going to build a cloud storage infrastructure. We will
+    use Azure Storage to store files and provide constrained access to those files
+    via shared access signatures ([https://docs.microsoft.com/en-us/azure/storage/common/storage-sas-overview](https://docs.microsoft.com/en-us/azure/storage/common/storage-sas-overview)).
+    We will learn how to use ARM to fetch account keys and use those keys to provide
+    constrained access to storage resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an Azure Storage account
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let''s get started by running the example, and then we''ll delve into the code
+    for building the infrastructure and using the provisioned storage account. To
+    execute the example, run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see from the previous output, the example creates a resource group
+    and a storage account, fetches an account key, and then uploads all of the images
+    in `./blobs` to the cloud. Finally, the example prints out URIs for each of the
+    images using shared access signatures. If you click on one of those URIs, you
+    should be able to download the image we uploaded to the storage account.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What happens when you try to download `img1.jpeg` without the query string –
+    for example, using the `https://fallingrain.blob.core.windows.net/jd-imgs/img1.jpeg`
+    link? You should get an access denied message.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's see how we can use Azure Storage to upload files and constrain access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Provisioning Azure Storage using Go
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this example, we are going to provision an Azure resource group and an Azure
+    Storage account. We are using abbreviated error-handling behavior to keep the
+    code as concise as possible for illustrative purposes. As I said in the previous
+    section, panic is not your friend. Please wrap and bubble your errors as appropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start with the entry point of Go `run ./cmd/storage/main.go`, and learn
+    how to use Go to provision the storage account:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Similar to the VM infrastructure example in the previous section, we create
+    `StorageFactory` using `NewStorageFactory()` and then use it to create and destroy
+    the storage stack. In the middle, we call `uploadBlobs()` to upload the image
+    files and `printSASUris()` to generate and print shared access signatures for
+    each of the uploaded files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start by taking a look at how we provision the storage infrastructure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The storage factory looks similar to `VirtualMachineFactory` from the previous
+    section. However, the storage factory only uses the resource group and storage
+    clients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s explore `CreateStorageStack()` to see how we create the Azure
+    Storage account:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we create a human-readable name for the stack, which
+    we will use to name the resource group and the storage account. We then populate
+    the stack fields with created resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'I will not cover `createResourceGroup()`, as it was covered in the previous
+    section. However, `createStorageAccount()` and `getPrimaryAccountKey()` are interesting.
+    Let''s explore what they do:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, `createStorageAccount()` creates a new block blob, with
+    premium tier performance, and a locally redundant Azure Storage account. Block
+    blobs ([https://docs.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs#about-block-blobs](https://docs.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs#about-block-blobs))
+    are optimized for uploading large amounts of data and, as the name implies, are
+    broken into blocks of arbitrary size. Locally redundant storage ([https://docs.microsoft.com/en-us/azure/storage/common/storage-redundancy#locally-redundant-storage](https://docs.microsoft.com/en-us/azure/storage/common/storage-redundancy#locally-redundant-storage))
+    means that each block is replicated 3 times within the same data center and is
+    guaranteed to provide 99.999999999% (11 nines!) durability over a given year.
+    Finally, the premium tier ([https://docs.microsoft.com/en-us/azure/storage/blobs/scalability-targets-premium-block-blobs](https://docs.microsoft.com/en-us/azure/storage/blobs/scalability-targets-premium-block-blobs))
+    of Azure Storage indicates that the storage account will be optimized for applications
+    that consistently require low latency and high transaction throughput for block
+    blob mutations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond the configuration of the storage account, provisioning is handled in
+    a similar way to the rest of the resources we have provisioned thus far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To generate shared access signatures for uploaded blobs, we need to acquire
+    a storage account key that is provisioned when the storage account is created.
+    Let''s see how we can request the storage account keys:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this code, we fetch the account keys by calling `ListKeys` on the storage
+    client. We return the first account key returned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have provisioned the storage infrastructure and fetched the storage
+    account key, we are ready to use the storage service to upload files and provide
+    constrained access to the files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Azure Storage
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let''s upload the files in `./blobs` to our storage account with the `uploadBlobs`
+    func:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we create a service client to interact with the storage
+    service client. With `serviceClient`, we can define a new storage container called
+    `jd-imgs`. You can think of a storage container as an entity similar to a directory.
+    After specifying the container, we call `create` to request the storage service
+    to create the container. Once we have a container, we then iterate over each image
+    in the `./blobs` directory and upload them using the block blob client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Until this point, we have been using the Azure CLI identity as our credential
+    for interacting with Azure services. However, when we instantiated `serviceClient`,
+    we instead began using the Azure Storage account keys to interact with our storage
+    account. Let''s take a look at `ServiceClient()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we create a new credential using the storage account
+    name and the value of the account key. We construct `ServiceClient`, using the
+    blob endpoint for the storage account and the newly constructed shared key credential.
+    The shared key credential will be used for all clients that derive from the service
+    client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have uploaded the files as block blobs, let''s see how we can create
+    signed URIs to provide constrained access:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: We construct `ServiceClient` and establish a container client in the preceding
+    code block. Then, we iterate over every file within the local `./blobs` directory
+    and create a blob client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The blob client has a helpful method called `GetSASToken`, which generates a
+    shared access token given blob access permissions and a validity time span. In
+    our case, we are granting read access that starts immediately and expires in 2
+    hours. To create a complete URI to access the blob, we need to combine the blob
+    URL and the query string generated by the shared access token. We do that with
+    `blobClient.URL()`, `"?"`, and `sasQuery.Encode()`. Now, anyone with the signed
+    URI will have access to read the file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this final section, we built and used cloud storage infrastructure to store
+    files and provide constrained access to those files by using shared access signatures.
+    We learned how to fetch account keys and use them to provide constrained access
+    to storage resources. Using these skills, you can combine permissions and other
+    constraints to tailor access to your needs. Providing constrained access in this
+    way is a powerful tool. For example, you can create a write-only URI to a blob
+    not yet created, pass the URI to a client, and then have them upload a file without
+    having access to any other files in the storage account.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Azure Storage is only one service out of hundreds that you can use to build
+    applications in the cloud. Each cloud service provider has analogous storage services
+    that operate in a similar way. The examples shown in this chapter are specific
+    to Microsoft Azure, but they can be easily emulated for other clouds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Azure Storage example is useful for illustrating the separation between
+    the management plane and the data plane of the cloud. If you look closely, you
+    can observe a significant similarity in **Create, Read, Update, and Delete** (**CRUD**)
+    resource operations using ARM in contrast to interacting with the Azure Storage
+    service, container, and blob clients. Resource management is uniform within a
+    cloud. The data plane for databases, storage services, and content delivery networks
+    is rarely uniform and often exposed through purpose-built APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we learned that the cloud is not just someone else's computer.
+    The cloud is a planet-scale web of high-security data centers filled with computing,
+    networking, and storage hardware. We also learned the fundamentals of identity,
+    authentication, and authorization, with specifics drawn from Microsoft Azure.
+    We briefly covered Azure RBAC and its relationship with AAD identities. Finally,
+    we learned how to provision and use cloud resources using Microsoft Azure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You should be able to take what you learned here and apply it to provisioning
+    and using cloud services to achieve your goals. These skills were focused on Microsoft
+    Azure, but the skills learned here are easily transferred to the AWS or Google
+    clouds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we're going to explore what happens when software operates
+    in less-than-perfect conditions. We will learn to design for chaos.
+  prefs: []
+  type: TYPE_NORMAL

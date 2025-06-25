@@ -1,0 +1,1021 @@
+- en: '8'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Packaging and Deploying Code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapters, you learned how to use GitLab for source code management,
+    as well as to set up CI/CD pipelines that build, test, and perform security scanning
+    against the code you’ve checked in. You have hopefully now developed a confident
+    understanding of both the infrastructure around GitLab CI/CD and the syntax used
+    to author pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will continue our journey through the stages of software
+    development, focusing now on packaging and deploying code. We will use a combination
+    of GitLab’s built-in features and common industry tools to deploy our code to
+    an endpoint or environment. The goal is to answer the question, *how do we make
+    the application we have built and tested available to* *our users?*
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will introduce new vocabulary, adding to our knowledge of GitLab
+    CI/CD syntax. It will also mention, and the examples will use, third-party tools
+    such as Docker, as well as cloud service providers such as Google Cloud Platform.
+    Since this book’s core focus is on GitLab’s features and we don’t have the space
+    for a technical deep dive into every tool that could be used with GitLab, you
+    may be unfamiliar with some of the technologies referenced in this chapter. We
+    will therefore strive to use industry-standard language, focus on each tool’s
+    integration with GitLab, and provide examples that can be replicated without requiring
+    further knowledge from the reader. After completing this chapter, you will be
+    equipped with the skills needed to use GitLab’s native package and container registry
+    features for hosting completed builds. You will also extend your knowledge of
+    GitLab CI/CD to include deploying to review and production environments, using
+    traditional or cloud-native infrastructures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is how we’ll cover the topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Storing code in GitLab’s package registry for later re-use
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Storing code in GitLab’s container and package registries for later deployment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying to different environments using GitLab Flow
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying to a review app for testing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying to real-world production environments
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying to a Kubernetes cluster
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Like the previous chapters, you’ll get the most out of this chapter if you
+    have an account on a GitLab instance (SaaS or self-managed). Moreover, the topics
+    and examples in this chapter will increasingly focus on deploying to environments
+    that live outside GitLab. The infrastructure tools that are referenced include
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A server hosting GitLab (or GitLab.com)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Self-hosted runners (or SaaS runners hosted on GitLab.com)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Docker (also available on SaaS runners hosted on Gitlab.com)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kubernetes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cloud platform services (such as Amazon Web Services, Google Cloud Platform,
+    or Heroku)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you wish to minimize the amount of tooling you need to install and maintain
+    yourself, we recommend using GitLab.com with SaaS runners. We also recommend creating
+    an account on a cloud service platform if you wish to practice deploying to live
+    or complex infrastructure. Just be aware of the potential charges when using these
+    services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Storing code in GitLab’s package registry for later re-use
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As part of the goal of serving as a complete DevOps platform, GitLab includes
+    the option to enable package and container registries in each project. The package
+    registry supports hosting software packages and language packs in a variety of
+    formats, and the container registry serves as a repository of purpose-built container
+    images. These features allow teams to conveniently host, organize, and version-control
+    completed builds alongside their source code. We will discuss the package and
+    container registries in turn.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Locating GitLab’s container and package registries
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: GitLab projects technically support three types of built-in registries. They
+    are package, container, and infrastructure registries that can be used to store
+    completed code, whether for use by end users or other software projects. This
+    book will focus on the package and container registries; the infrastructure registry
+    is a recent addition to GitLab that is specifically for hosting Terraform modules.
+    GitLab also supports pushing artifacts to external or third-party registries,
+    though that is beyond the scope of what we will cover here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Figure 8**.1* shows where GitLab’s packages and container registries can be
+    found at both the project and group level, under **Packages and registries** in
+    the left navigation pane.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.1 – Packages and registries in the left sidebar](img/B18073_08_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.1 – Packages and registries in the left sidebar
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you hover over **Packages and registries**, you will see that each of the
+    package, container, and infrastructure registries have a dedicated page to navigate
+    to, as shown in *Figure 8**.2*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.2 – Packages and registries sub-menu items](img/B18073_08_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.2 – Packages and registries sub-menu items
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we have not yet configured or pushed artifacts to any of the registries,
+    we will see an appropriate message when we navigate to the registry page. *Figure
+    8**.3* shows the message we see on the **Package Registry** page, along with a
+    reference to the GitLab documentation for using the package registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.3 – Project package registry with no packages](img/B18073_08_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.3 – Project package registry with no packages
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Figure 8**.4* shows us an unpopulated **Container Registry**. Here, GitLab
+    suggests Docker commands we could use to build a containerized version of our
+    application that we then push to the container registry.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.4 – Project container registry with no container images](img/B18073_08_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.4 – Project container registry with no container images
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will soon see that a typical way to push to GitLab’s registries is to configure
+    CI/CD jobs that execute commands to build an artifact, authenticate it with the
+    registry, and push the artifact to the registry, often using GitLab’s API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting started with the package registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The package registry is enabled by default in GitLab, though it can be disabled
+    by GitLab administrators at the instance level. In project settings, you can also
+    choose to toggle the package registry feature on or off under **Settings** | **General**
+    | **Visibility, project features, permissions**. If **Packages** is toggled off,
+    the feature will not be available in the left sidebar. *Figure 8**.5* shows where
+    the package registry can be enabled or disabled in the project settings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.5 – Enabling the package registry in project settings](img/B18073_08_5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.5 – Enabling the package registry in project settings
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The question now arises, how do we use the package registry? That is, how do
+    we populate it with our software? There are two primary steps to populate the
+    package registry: authenticate to the registry, and build and upload packages
+    using CI/CD jobs. But before diving into those steps, let’s first list the package
+    formats supported by GitLab.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supported package formats
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As of this writing, the following package manager formats are generally available
+    and fully supported in GitLab’s package registry:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generic packages
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Maven
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: npm
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: NuGet
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyPI
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following package formats are either behind a feature flag or have known
+    issues with their use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Composer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Conan
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Debian
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Go
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Helm
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ruby Gems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each package manager has its own configuration format and syntax. To maintain
+    consistency, as well as to keep our focus on the concepts underlying GitLab’s
+    package, we will show examples using generic package formats. We will start with
+    authenticating to GitLab’s package registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Authenticating to the registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We mentioned earlier in this chapter that working with GitLab’s registries
+    takes place largely through CI/CD jobs. The actions of authenticating, uploading
+    to, and using packages from the package registry should be represented by job
+    tasks defined in GitLab CI/CD configurations. In general, you can authenticate
+    to GitLab’s package registry with one of the following four types of credentials:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A personal access token, to authenticate with a user’s permissions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A project deploy token, for accessing all packages in a project
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A group deploy token, for accessing all packages in all projects in a group
+    or its subgroups
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A job token, for accessing packages in the project for which the CI/CD job is
+    defined
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploy tokens and job tokens are not tied to users
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unlike personal access tokens, deploy tokens and job tokens are special kinds
+    of GitLab credentials that are not tied to a particular user, but rather can serve
+    as an alternative way to authenticate without specifying user credentials. Deploy
+    tokens and job tokens are often used to programmatically access a repository,
+    or in our case, read and write to the package registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our example, we’ll create a project-level deploy token in the Hats for Cats
+    project. *Figure 8**.6* shows where we can create a new deploy token under project
+    **Settings** | **Repository** | **Deploy Tokens**. Here, we can give the token
+    a human-readable name, an optional expiration date, and an optional username that’s
+    specific to the token (if we don’t enter an optional username, GitLab will auto-generate
+    one for us).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we select which permissions we want to grant the token. The permission
+    names can appear slightly ambiguous, but `read_registry` and `write_registry`
+    refer to reading and writing to the *container* registry only, while `read_package_registry`
+    and `write_package_registry` refer to reading and writing to the package registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.6 – Creating a new deploy token](img/B18073_08_6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.6 – Creating a new deploy token
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once we create a deploy token, GitLab will provide a password that we’ll need
+    to save somewhere safe (see *Figure 8**.7*). We will use the deploy token password
+    to authenticate our commands to the package or container registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.7 – Deploy token password](img/B18073_08_7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.7 – Deploy token password
+  prefs: []
+  type: TYPE_NORMAL
+- en: Don’t forget to save your deploy token!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Be sure to save the password for the deploy token somewhere safe and secure!
+    Once you leave the page, you will not be able to recover the password, as GitLab
+    will not persistently store the credential.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After you finish creating the deploy token and saving the password, GitLab will
+    show the token and its details under **Active Deploy Tokens**, as shown in *Figure
+    8**.8*. A project maintainer or owner can choose to revoke the token if it should
+    no longer be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.8 – Active deploy tokens](img/B18073_08_8.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.8 – Active deploy tokens
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now use the token we created to authenticate to the registry. The exact
+    syntax we’d use for authentication would depend on our package manager, that is,
+    the type of package we are creating or using. In the simplest case, we may include
+    our credentials in the header of a `curl` command, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: When run in a CI/CD job, the preceding command authenticates to the project’s
+    package registry in which the pipeline is running. The authentication credentials
+    are provided by the `--user` flag, where we provide the username and password
+    (shown as a placeholder here) for our deploy key. The output of the command will
+    be to download the `my_app.tar.gz` package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a deploy key is a programmatic way to pull or download from the registry.
+    Downloading package files can also be done via the UI. *Figure 8**.9* shows an
+    example of a `stable_releases` package, version 0.0.1, that has been added to
+    the package registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.9 – Entry in the package registry](img/B18073_08_9.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.9 – Entry in the package registry
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we click on **stable_releases**, we see downloadable application files under
+    the **Assets** heading (see *Figure 8**.10*). We see the filenames (and file types
+    by their extensions), size, and creation date. Selecting the filename downloads
+    the file to your local computer. Under **History**, we see when it was published
+    to the registry, which pipeline build pushed the package, which commit launched
+    the pipeline, and the package name and version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.10 – Package files and build history](img/B18073_08_10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.10 – Package files and build history
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand how to authenticate to and access packages in the package
+    registry, we will now use CI/CD jobs to build, push, and update packages in the
+    registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building and pushing packages to the package registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we’ve mentioned several times already, GitLab recommends using CI/CD jobs
+    to build and publish to the registry. Technically, writing to the registry can
+    just take place via API calls, so GitLab CI/CD isn’t strictly required. However,
+    build and artifact management is well suited to GitLab Flow, and it is helpful
+    to have the process standardized in a similar manner to your other software development
+    workflows. For that reason, we will create a CI/CD pipeline to build and push
+    to the registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The exact job syntax will be dependent on the programming languages and package
+    managers you use to build software. The GitLab documentation has specific syntax
+    examples for authenticating, reading, and writing to the registry using Python,
+    Maven, and other tools. To keep things conceptual, and because we don’t have the
+    space to showcase every supported language or tool, we will use generic packages
+    as our example, and our commands will be `curl`-style API calls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A CI/CD configuration may look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding example `.gitlab-ci.yml` content contains two stages: a `build`
+    stage that compiles a C-style application and a `publish` stage that pushes the
+    build artifact to the package registry. The `build` stage contains one job that
+    builds our code. We then create an archive file containing the completed build
+    and supporting files. The archive file is specified as an artifact in the build
+    job so that the downstream `publish` job will have access to it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `publish_to_registry` job authenticates to the registry and uploads the
+    build artifact. Note the presence of some dynamic CI/CD variables in the `curl`
+    command (that is, the terms beginning with `CI_`). These variables are a convenient
+    way to reference the correct URL and path to the registry in your project. Note
+    we also categorize the build as a generic package, part of “stable release” version
+    0.0.1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We might also add a Unix timestamp to distinguish between different builds
+    in the registry. We can modify the build job as follows to include a timestamp
+    in the artifact filename:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*Figure 8**.11* shows the updated file asset in the registry. Note the timestamp
+    in the filename in the `tar` command in the build script. The archive size and
+    creation date are also shown. A developer can then click the filename to download
+    the archive, which they can then unpack on their local system.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.11 – File in the package registry with a timestamp](img/B18073_08_11.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.11 – File in the package registry with a timestamp
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building and pushing packages to the container registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: GitLab also has a container registry for storing Docker images. Like the package
+    registry, Docker images can be created and pushed to the registry with CI/CD jobs.
+    Authentication is conceptually similar to the package registry, but you’d use
+    container platform tools such as Docker to authenticate, build, push, and pull
+    container images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following Docker command can be used to authenticate to the container registry,
+    using our deploy token from earlier. We will use similar Docker commands to also
+    build a containerized version of our application and push it to the registry:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our CI/CD job for “containerizing” our application and pushing it to the registry
+    might look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s explain what is happening in the preceding CI/CD job, step by step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We name the job `publish_to_container_registry` as part of the**publish** stage.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'We then include two containers in the CI/CD job runtime environment: a container
+    with the official Docker tooling (`image: docker:stable`) and a service container
+    with “Docker-in-Docker” tooling (`docker:dind`). The latter container type allows
+    us to build containers inside our already-containerized CI/CD job environment
+    (hence the Docker-*in*-Docker moniker).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, we define a variable called `IMAGE` that will specify the name of our
+    container image, as well as its destination endpoint in the container registry.
+    The `IMAGE` variable will be referenced as arguments to the `docker` command.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Finally, the script section of our CI/CD job contains three commands:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The first command, `docker login`, authenticates to the container registry using
+    our deploy token
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second command, `docker build`, builds a containerized version of our application
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The final command, `docker push`, then pushes the newly built container image
+    to the container registry
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Be careful when building containers with Docker-in-Docker
+  prefs: []
+  type: TYPE_NORMAL
+- en: While it’s simple and straightforward, Docker-in-Docker uses the `--docker-privileged`
+    flag by default, which can give the service running the containers root access
+    to the host machine. If this is a security concern, GitLab also provides instructions
+    for using a build tool called **kaniko** to build container images from a Dockerfile.
+    See the GitLab documentation for more details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It turns out that if we just add the preceding job to our CI/CD pipeline configuration
+    and then run the pipeline, the job will fail. That is because we are missing another
+    required component of building a container image. A file in our repository called
+    `Dockerfile` is required to act as a “recipe” for how our container image will
+    be built and what it should contain. Normally, a Dockerfile will contain instructions
+    such as dependencies that should be installed, services that should be started,
+    or ports that should be open. In this example, we will keep the Dockerfile extremely
+    simple. A very minimal Dockerfile might contain the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding Dockerfile does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It uses a minimal Linux distribution called Alpine Linux as the base operating
+    system for the container we are building
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It creates a directory in the container called `public-app/`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It puts all our repository files in the `public-app/` directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It makes `public-app/` the working directory when the container is launched
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Figure 8**.12* shows how our project repository might look after we update
+    our `.gitlab-ci.yml` file and create the Dockerfile.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.12 – Our repository with the Dockerfile](img/B18073_08_12.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.12 – Our repository with the Dockerfile
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, when we run a CI/CD pipeline, we can see the Docker commands represented
+    in the `publish_to_container_registry` job log, as shown in the following screenshot
+    (*Figure 8**.13*). Notice how the output of the `docker build` command shows it
+    following the recipe we specified in `Dockerfile`. The job script ends with confirmation
+    that the container image was pushed to the project’s container registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.13 – Job log for publishing to the container registry](img/B18073_08_13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.13 – Job log for publishing to the container registry
+  prefs: []
+  type: TYPE_NORMAL
+- en: Checking the container registry, we in fact see a reference to the container
+    name as we specified in the CI/CD job (*Figure 8**.14*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.14 – Image repository in the container registry](img/B18073_08_14.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.14 – Image repository in the container registry
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we click on the container name, we can see the builds themselves (*Figure
+    8**.15*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.15 – Latest artifact in the project container registry](img/B18073_08_15.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.15 – Latest artifact in the project container registry
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, everything we have discussed covers finding, authenticating to, and
+    writing to GitLab’s package and container registries. In the next section of this
+    chapter, we will actually use and deploy the assets we have created and uploaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Storing code in GitLab’s container and package registries for later deployment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GitLab’s package and container registries are useful not only for making software
+    available for users to download but also for storing packages and libraries for
+    use in CI/CD pipelines, or for deployment to an environment. In this section,
+    we will discuss how to programmatically interact with the registries via CI/CD
+    jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using images from the container registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the previous section, we built a containerized version of our app and pushed
+    the image to GitLab’s container registry. Recall that the CI/CD jobs we used to
+    build the container image themselves run in containers, hence the reference to
+    terms such as `docker:stable` and `docker:dnd`. In this example, we are pulling
+    from a public container registry, that is, Docker Hub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, we can also pull container images we have pushed to GitLab’s container
+    registry and use them as the basis for running our CI/CD jobs. We can use them
+    in our pipelines just as we did with public container images, using the `image`
+    keyword, like in the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*Figure 8**.16* shows our job output when we pull our container from the local
+    registry to run our job.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: .
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.16 – Using a local container in a CI/CD job](img/B18073_08_16.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.16 – Using a local container in a CI/CD job
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the job log shows GitLab pulling the image from the container registry,
+    as well as the contents of the container’s filesystem (that is, the files we included
+    when we built the container in the first place).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using packages from the package registry
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Using packages in the package registry follows a similar theme as publishing
+    packages to the registry. The exact step and syntax for pulling from the registry
+    will depend on the package type. In general, you’ll be required to specify the
+    group and project where the package lives (i.e., the namespace in GitLab), the
+    package name, and the package version. Consistent with the example from earlier,
+    we might use a CI/CD job to pull down and run a generic package from our registry:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The job log in *Figure 8**.17* shows the output of authenticating and pulling
+    down the package file via GitLab’s API. In this example, the package is then extracted
+    from its archive file and run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.17 – Using the package from the registry in a CI/CD job](img/B18073_08_17.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.17 – Using the package from the registry in a CI/CD job
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab’s documentation shows different steps to authenticate and download packages
+    for different package managers, but the principles remain the same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand how we can publish download packages in the context of
+    CI/CD jobs, we will next incorporate these steps into a typical GitLab development
+    workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying to different environments using GitLab Flow
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have so far discussed how to store and use our completed code by publishing
+    to and pulling from GitLab’s package and container registries. Now, we will learn
+    about some of GitLab’s features for organizing deployments of code to particular
+    environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab has two terms, **environments** and **deployments**, that are used to
+    describe and categorize the location and version of a deployed application. An
+    environment is represented by a name and a URL, which serve as organizational
+    labels inside GitLab. Whenever an application is deployed to that environment
+    via CI/CD, GitLab creates and categorizes it as a new deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Environments are created via the `testing`, and the generic app to an environment
+    called `production`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*Figure 8**.18* shows that environments are represented in the GitLab UI under
+    **Deployments** | **Environments**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.18 – Environments in the GitLab UI](img/B18073_08_18.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.18 – Environments in the GitLab UI
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each environment is updated when a new commit creates a pipeline with a CI/CD
+    job deploying to that environment. The GitLab UI shows the commit SHA for the
+    latest deployment, the GitLab user who triggered the commit, the branch it was
+    triggered on, and the CI/CD job deploying to that environment. The `https://prod.example.com`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that by integrating environments into GitLab CI/CD, we can set up
+    more advanced workflows, such as using CI/CD keywords like **rules** to ensure
+    certain environments are only updated when code changes on certain branches. The
+    next section in this chapter will show such an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying to a review app for testing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GitLab has a feature called a `.gitlab-ci.yml` file that creates a job that
+    deploys to a review app environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.19 – Enable Review App](img/B18073_08_19.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.19 – Enable Review App
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are two key items to note in the job content. The first is the use of
+    predefined CI/CD variables to specify the environment name and URL. The name of
+    the review environment will be dynamically updated based on the triggering branch,
+    and the URL will be updated based on the dynamic environment name. This is useful
+    for spinning up temporary ad hoc environments during the development process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second item to note in the review app CI/CD job is its `only`/`except` keywords.
+    The review app environment will *only* be deployed when a pipeline is triggered
+    on a Git branch, *except* the main branch. The logic is that a branch represents
+    a development line, but the main branch might be a more stable staging or production
+    environment that is static rather than dynamic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One other useful element of review apps is their easy accessibility from a merge
+    request. If a merge request pipeline has a review app job defined for the triggering
+    branch, a link to the review app’s URL will be accessible from the merge request
+    page (see *Figure 8**.20*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.20 – View review app from a merge request](img/B18073_08_20.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.20 – View review app from a merge request
+  prefs: []
+  type: TYPE_NORMAL
+- en: The link to the review environment can also be seen on the CI/CD job log (see
+    *Figure 8**.21*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.21 – Review app CI/CD job log](img/B18073_08_21.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.21 – Review app CI/CD job log
+  prefs: []
+  type: TYPE_NORMAL
+- en: To summarize, review apps simply extend our understanding of environments to
+    include dynamic creation and updates. They are best used to represent rapidly
+    changing development environments and are easily accessible for developers and
+    reviewers to preview the latest version of their applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have learned about previewing changes with review apps, let’s finally
+    turn to how we might deploy into production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying to real-world production environments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the examples presented so far, we have shown that environments are simply
+    organizational categories in GitLab with associated names and URLs. In the real
+    world, however, environments represent actual infrastructure, be it your computer’s
+    or someone else’s. That means recognizing the constraints on the available resources
+    and the importance of proper security and access control.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this day and age, it is increasingly common to use cloud service providers
+    such as AWS, Microsoft Azure, and Google Cloud Platform for application hosting.
+    These services not only outsource the need for infrastructure management but they
+    also provide programmatic interfaces for managing your environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, suites of developer tools for managing these resources have accompanied
+    the rise of cloud service providers, apart from the cloud vendor-provided tools.
+    Software such as Terraform, Ansible, and Chef is available to declaratively manage
+    cloud resources. That is, they let you store descriptions of infrastructure as
+    text in a Git repository. Thus, similar workflows for infrastructure change management
+    can be used as those for managing application development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is more to cloud service utilization than we could possibly cover within
+    this one chapter. However, it is worth pointing out how GitLab can assist with
+    one of the most important aspects of application environment administration: secret
+    management. We’ve already explained the concept of CI/CD variables and how they
+    can be used in CI/CD configurations and exported to the environments where jobs
+    run. For variables of a sensitive nature, such as deploy keys, GitLab provides
+    a special place in group- or project-level settings so that their values are not
+    exposed in the project’s repository.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Say, for example, you wish to deploy to an environment hosted in AWS. You will
+    be required to provide credentials to authenticate to AWS, generally in the form
+    of an AWS access key and a secret key. However, you would not want to directly
+    enter those values into your CI/CD deployment scripts, as that leaks your credentials
+    into the code base and its version history.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can instead navigate to your project’s `.gitlab-ci.yml` file, just like
+    any other variable, without having to hardcode their values into the configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.22 – Project-level CI/CD variables](img/B18073_08_22.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.22 – Project-level CI/CD variables
+  prefs: []
+  type: TYPE_NORMAL
+- en: Importantly, creating a variable in this way provides some additional gatekeeping
+    on its use and exposure. Aside from setting the variable’s name and value, you
+    can limit the environments in which it can be used. You can also choose to limit
+    the variable to protected branches and tags (that is, branches and tags with restrictions
+    on who can contribute to or modify them). And *Figure 8**.23* shows you can also
+    mask the variable, meaning that job logs would only display asterisks or **[MASKED]**
+    if there were an attempt to leak its value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.23 – Project-level CI/CD variable settings](img/B18073_08_23.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.23 – Project-level CI/CD variable settings
+  prefs: []
+  type: TYPE_NORMAL
+- en: These explanations only scratch the surface of deployment considerations in
+    real-world environments. However, in these security-conscious times, we found
+    it best to focus on the key area of secret management to demonstrate how GitLab
+    can make the deployment process seamless and secure. In the next and final section,
+    we’ll learn about GitLab’s integration with Kubernetes for cloud-native deployments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying to a Kubernetes cluster
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We previously discussed the ubiquity of cloud services as alternatives to self-hosted
+    infrastructure. In a similar vein, container orchestration systems such as Kubernetes
+    have become increasingly popular as alternatives to the manual management of bare-metal
+    servers or container hosts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying to Kubernetes with GitLab CI/CD can be conceptually similar to the
+    workflows we have covered thus far. You can set up a GitLab runner with a Kubernetes
+    executor, which communicates to the clusters using the Kubernetes API. Alternatively,
+    GitLab optionally offers an additional approach called the **GitOps workflow**,
+    which is not wholly reliant on CI/CD pipelines. We will summarize each of them
+    in turn.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CI/CD workflow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Using the concepts so far, you can use a normal CI/CD setup to deploy containerized
+    applications to Kubernetes. This requires a runner registered with the Kubernetes
+    executor. During runner registration, information such as cluster host and authentication
+    information is provided. The CI/CD script will then include direct API calls in
+    the cluster, specifying commands to build, test, or deploy your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because this workflow involves runners sending imperative commands to a Kubernetes
+    cluster, we call this a **push-based** workflow. It’s convenient in that there
+    are no additional dependencies required to interact with Kubernetes. However,
+    we can run into issues if the cluster or deployments have changed in any way outside
+    the CI/CD workflow, causing potential problems if the cluster is in a state other
+    than what the CI/CD jobs expect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this reason, GitLab increasingly recommends a different approach to working
+    with Kubernetes called a GitOps workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A GitOps workflow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: GitLab provides an alternative method of Kubernetes integration that does not
+    use CI/CD directly. Rather, it uses an agent installed on a Kubernetes cluster
+    that communicates back to the GitLab instance. These steps can be performed by
+    navigating to **Infrastructure** | **Kubernetes clusters** in your project and
+    then selecting **Connect a cluster** to follow the provided instructions for creating
+    and registering a new agent (see *Figure 8**.24*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.24 – Connecting a Kubernetes cluster to GitLab](img/B18073_08_24.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.24 – Connecting a Kubernetes cluster to GitLab
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once a connection is established, the agent will automatically detect changes
+    when configuration and deployment files are updated in the repository and will
+    change the cluster state accordingly. This is due to the bidirectional streaming
+    between the cluster agent and GitLab server. Essentially, the agent initiates
+    all communication to work around any networking restrictions that obstruct the
+    Kubernetes cluster (see *Figure 8**.25*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.25 – GitLab agent for Kubernetes architecture](img/B18073_08_25.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.25 – GitLab agent for Kubernetes architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab therefore refers to the GitOps workflow as a **pull-based approach**,
+    one that is increasingly favored over traditional pushes by CI/CD pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we described various ways of packaging and deploying our code.
+    This included making use of GitLab’s package and container registries, CI/CD environments,
+    and methods for interacting with cloud-native infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even if you may not use all of the discussed features or services in your day-to-day
+    work, we hope this chapter provided a useful bridge to more practical, real-world
+    use cases of GitLab’s features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next chapter will build upon what we’ve learned already. It will also introduce
+    advanced features for improving CI/CD speed and performance, increasing developer
+    productivity, and optimizing your ability to quickly build and ship software.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Part 3 Next Steps for Improving Your Applications with GitLab
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This part of the book leads you through advanced CI/CD pipeline topics. These
+    include speeding up pipelines using directed acyclic graphs, integrating third-party
+    tools into pipelines, using pipelines to spot performance problems in your code,
+    and many other topics. You will also get a chance to review everything you’ve
+    learned so far with an end-to-end example demonstrating how to use GitLab to take
+    a realistic software project through the entire software development life cycle.
+    Finally, you’ll learn how to fix common problems with GitLab pipelines and get
+    a peek at where GitLab might be going in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This section comprises the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 9*](B18073_09.xhtml#_idTextAnchor227), *Enhancing the Speed and Maintainability
+    of CI/CD Pipelines*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 10*](B18073_10.xhtml#_idTextAnchor250), *Extending the Reach of CI/CD
+    Pipelines*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 11*](B18073_11.xhtml#_idTextAnchor268), *End-to-End Example*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 12*](B18073_12.xhtml#_idTextAnchor300), *Troubleshooting and the
+    Road Ahead with GitLab*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

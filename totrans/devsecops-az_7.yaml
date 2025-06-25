@@ -1,0 +1,2112 @@
+- en: <st c="0">7</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="2">Implementing Security in the Test and Release Phases of DevOps</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="64">The goal of the</st> **<st c="81">test</st>** <st c="85">phase is
+    to</st> <st c="98">make sure the compiled application provides the expected functionalities
+    and does not contain any bugs that were not detected in the</st> <st c="231">build
+    phase.</st> <st c="244">The goal of the</st> **<st c="260">release</st>** <st
+    c="267">phase is to prepare and deliver the tested application for deployment
+    to production or other target environments.</st> <st c="382">Depending on a project’s
+    release strategy, the test and release phases often overlap.</st> <st c="468">It
+    is common to release software into a pre-production environment for automated
+    runtime testing, using tools such as Selenium, before releasing it to production.</st>
+    <st c="631">In this chapter, we will cover DevSecOps practices to secure and integrate
+    security into these phases.</st> <st c="734">By the end of this chapter, you will
+    understand these key</st> <st c="792">security practices:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="811">Ensuring that release artifacts are built from</st> <st c="859">protected
+    branches</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="877">Implementing a code</st> <st c="898">review process</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="912">Selecting a secure</st> <st c="932">artifact source</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="947">Implementing a process to validate</st> <st c="983">artifact integrity</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1001">Managing secrets securely in the</st> <st c="1035">release phase</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1048">Validating and enforcing runtime security with</st> <st c="1096">release
+    gates</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1109">Let’s</st> <st c="1116">get started!</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="1128">Technical requirements</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="1151">To follow along with the instructions in this chapter, you will
+    need</st> <st c="1221">the following:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="1235">A PC with</st> <st c="1246">internet connection</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1265">An active</st> <st c="1276">Azure subscription</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1294">An Azure</st> <st c="1304">DevOps organization</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1323">A GitHub</st> <st c="1333">Enterprise organization</st>
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="1356">Understanding the continuous deployment phase of DevOps</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**<st c="1412">Continuous Deployment (CD)</st>** <st c="1439">is a DevOps practice
+    where code changes that have been successfully</st> <st c="1508">integrated and
+    passed automated testing are automatically transitioned to the production environment.</st>
+    <st c="1610">Activities</st> <st c="1621">in this phase include packaging the
+    code into deployable formats, storing the packages in an artifact repository,
+    and validating the software in a pre-production runtime environment before its
+    final transition to the production</st> <st c="1849">runtime environment.</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="1869">The process ensures that new features, bug fixes, and updates are
+    rapidly and consistently delivered to users without manual intervention, enabling
+    a seamless flow from development to deployment.</st> <st c="2066">The key to a
+    successful CD is a robust automated testing framework that validates changes and
+    ensures the stability and reliability of the application in a</st> <st c="2222">real-world
+    setting.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*<st c="2241">Figure 7</st>**<st c="2250">.1</st>* <st c="2252">shows a simplified
+    example of a DevOps CD process.</st> <st c="2304">In the scenario, an application
+    package, labeled as</st> *<st c="2356">APP:V1</st>*<st c="2362">, is published
+    into the artifact store from the build process.</st> <st c="2425">The creation
+    of the new package initiates a CD pipeline, which automatically deploys it to
+    a staging environment for testing.</st> <st c="2551">Once the testing has successfully
+    passed, the package is deployed to the production environment where it becomes
+    available for</st> <st c="2678">end-user access.</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.1 – Continuous delivery example scenario](img/B19710_07_01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="3035">Figure 7.1 – Continuous delivery example scenario</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="3084">Implementing</st> <st c="3098">security in the CD phase involves
+    securely storing the release artifacts, validating their security before release,
+    ensuring</st> <st c="3223">the runtime environment’s security before software
+    deployment, and using</st> **<st c="3296">infrastructure as code</st>** <st c="3318">(</st>**<st
+    c="3320">IaC</st>**<st c="3323">) to automatically configure the runtime environment’s
+    security.</st> <st c="3389">Let us review</st> <st c="3403">these areas.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="3415">Protecting release artifacts in the release phase</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="3465">DevOps processes are about speed and agility.</st> <st c="3512">The
+    aim is to remove obstacles that could slow down</st> <st c="3564">the</st> <st
+    c="3568">speed to market.</st> <st c="3585">It is not unusual for code changes
+    to move from a developer’s workspace to the production environment</st> <st c="3687">within
+    minutes, mainly driven by automation and with few manual checks.</st> <st c="3759">It
+    is impressive to read about the deployment figures from organizations that are
+    more mature in their DevOps practices.</st> <st c="3880">For example, Netflix
+    maintains over 600 services in production and does around 100 deployments a day;
+    Uber operates over 1,000 services in production with several thousand deployments
+    weekly; WeChat has more than 3,000 services in production and manages approximately
+    1,000</st> <st c="4154">deployments daily!</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="4172">Note</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="4177">For information that highlights the deployment pace of companies
+    such as Netflix, Uber, and WeChat, please refer to this</st> <st c="4299">document:</st>
+    [<st c="4309">https://learn.microsoft.com/en-us/dotnet/architecture/cloud-native/definition</st>](https://learn.microsoft.com/en-us/dotnet/architecture/cloud-native/definition)<st
+    c="4386">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="4387">To integrate security in the release phase, start by reviewing
+    your CI/CD process and ensuring that no one (person or application) can deploy
+    code changes or new artifacts without</st> <st c="4568">strict reviews and approvals.</st>
+    <st c="4598">The</st> <st c="4602">reviews should include both automated checks
+    and human-led reviews.</st> <st c="4670">Following zero-trust principles, you
+    have to assume that an attacker might eventually gain access to a system within
+    your CI/CD process (source control, CI system, or artifact repository).</st> <st
+    c="4859">To mitigate this, we need to implement measures that prevent any single
+    entity from independently pushing code ch</st><st c="4972">anges or release artifacts
+    through the</st> <st c="5012">release pipeline.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="5029">Ensuring that release artifacts are built from protected branches</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="5095">Implementing</st> <st c="5109">security in the test and release
+    phases of DevOps starts with the security of the artifacts that will be deployed
+    – we refer</st> <st c="5234">to them as</st> **<st c="5245">release artifacts</st>**<st
+    c="5262">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="5263">Note</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="5268">A release artifact is software or a software component that is
+    packaged and ready for deployment.</st> <st c="5367">Artifacts vary depending
+    on the technology stack and target deployment platforms.</st> <st c="5449">For</st>
+    <st c="5453">example, Java applications are typically packaged as</st> `<st c="5649">.dll</st>`
+    <st c="5653">or</st> `<st c="5657">.exe</st>` <st c="5661">files) are the compiled
+    code artifacts</st> <st c="5701">that are deployed to run on the .NET runtime.</st>
+    <st c="5747">In JavaScript</st> <st c="5761">or Node.js projects,</st> `<st c="5890">package.json</st>`
+    <st c="5902">file.</st> <st c="5909">For</st> <st c="5913">Python applications,</st>
+    `<st c="5941">.whl</st>`<st c="5945">) files are a more modern packaging format,
+    aimed at replacing egg files.</st> <st c="6020">They facilitate the distribution
+    and installation of Python libraries and applications.</st> <st c="6108">For containerized
+    solutions, applications are packaged as</st> <st c="6166">container images.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="6183">A good starting point is to protect all branches that are used
+    to create these release artifacts.</st> <st c="6282">In GitHub Enterprise, this
+    can be done with</st> **<st c="6326">Branch protection rules</st>**<st c="6349">,
+    and in Azure DevOps, this can be done with</st> **<st c="6394">Branch Policies</st>**<st
+    c="6409">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="6410">To implement in GitHub Enterprise, navigate to</st> **<st c="6458">Repository
+    Settings</st>**<st c="6477">, then</st> **<st c="6484">Code and automation</st>**
+    <st c="6503">|</st> **<st c="6506">Branches</st>** <st c="6514">|</st> **<st c="6517">Branch
+    protection rules</st>**<st c="6540">, and then click on</st> **<st c="6560">Add
+    rule</st>**<st c="6568">.</st> *<st c="6570">Figure 7</st>**<st c="6578">.2</st>*
+    <st c="6580">shows an example of a branch protection rule that is used to protect
+    any branch</st> <st c="6661">that contains the word “release.” This requires admin
+    permissions or a custom role with the</st> **<st c="6753">Edit repository</st>**
+    **<st c="6769">rules</st>** <st c="6774">permission.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.2 – Sample branch protection rule in GitHub Enterprise](img/B19710_07_02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="7593">Figure 7.2 – Sample branch protection rule in GitHub Enterprise</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="7656">To implement in Azure DevOps, go to</st> **<st c="7693">Project
+    Settings</st>** <st c="7709">|</st> **<st c="7712">Repos</st>** <st c="7717">|</st>
+    **<st c="7720">Repositories</st>**<st c="7732">, select a</st> **<st c="7743">repository</st>**<st
+    c="7753">, choose</st> **<st c="7762">Policies</st>** <st c="7770">|</st> **<st
+    c="7773">Branch Policies</st>**<st c="7788">, and select a</st> **<st c="7803">branch</st>**
+    <st c="7809">(note that you may need to scroll down to see your list of branches).</st>
+    *<st c="7880">Figure 7</st>**<st c="7888">.3</st>* <st c="7890">shows an example
+    of a branch policy in Azure DevOps.</st> <st c="7944">This requires admin permissions
+    or a custom role with the</st> **<st c="8002">Edit</st>** **<st c="8007">policies</st>**
+    <st c="8015">permission.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.3 – Sample branch protection rule in Azure DevOps](img/B19710_07_03.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="8687">Figure 7.3 – Sample branch protection rule in Azure DevOps</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="8745">Overall, both platforms offer similar branch protection features.</st>
+    <st c="8812">GitHub Enterprise may not have</st> <st c="8843">direct branch protection
+    settings for build validation and human reviews, but these capabilities can be
+    achieved through alternative methods (see</st> *<st c="8989">Figure 7</st>**<st
+    c="8997">.4</st>*<st c="8999">).</st> <st c="9003">A notable distinction is the
+    lack of support for requiring signed commits in Azure DevOps, which is available
+    in GitHub Enterprise.</st> <st c="9135">For a detailed comparison of branch protection
+    features between the two platforms, see</st> *<st c="9222">Figure 7</st>**<st
+    c="9230">.4</st>*<st c="9232">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.4 – Branch protection feature comparison](img/B19710_07_04.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="9716">Figure 7.4 – Branch protection feature comparison</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="9765">Following zero-trust principles, we also want to make sure that
+    branch protection policies are enforced for everyone, including administrators.</st>
+    <st c="9910">This is extremely important since administrator accounts are often
+    targeted for account hijacking due to their</st> <st c="10021">privileged role.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="10037">Adopt a zero-trust approach to all main release branches for everyone
+    with exceptions only in rare scenarios</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="10146">In GitHub</st> <st c="10157">Enterprise, we can activate the</st>
+    **<st c="10189">Do not allow bypassing the above settings</st>** <st c="10230">option
+    in our branch protection rule (see</st> *<st c="10273">Figure 7</st>**<st c="10281">.5</st>*<st
+    c="10283">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.5 – Enforce branch protection settings for everyone in GitHub Enterprise](img/B19710_07_05.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="10729">Figure 7.5 – Enforce branch protection settings for everyone in
+    GitHub Enterprise</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="10810">In Azure DevOps, there is no equivalent setting for this, but
+    we can restrict or audit roles/users with permissions to bypass policies on pull
+    requests and pushes.</st> <st c="10975">By default, no role, including administrators,
+    has these permissions assigned (see</st> *<st c="11058">Figure 7</st>**<st c="11066">.6</st>*<st
+    c="11068">).</st> <st c="11072">To review permissions in Azure DevOps, navigate
+    to</st> **<st c="11123">Project Settings</st>** <st c="11139">|</st> **<st c="11142">Repos</st>**
+    <st c="11147">|</st> **<st c="11150">Repositories</st>**<st c="11162">, select
+    a</st> **<st c="11173">repository</st>**<st c="11183">, then</st> **<st c="11190">Security</st>**<st
+    c="11198">, and check</st> **<st c="11210">Bypass policies when completing pull
+    requests</st>** <st c="11255">and</st> **<st c="11260">Bypass policies when pushing</st>**
+    <st c="11288">(</st>*<st c="11290">Figure 7</st>**<st c="11298">.6</st>*<st c="11300">).</st>
+    <st c="11304">The permission can also be configured at the branch level, rather
+    than the</st> <st c="11379">repository level.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.6 – Reviewing permissions to bypass branch protection policies in
+    Azure DevOps](img/B19710_07_06.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="12078">Figure 7.6 – Reviewing permissions to bypass branch protection
+    policies in Azure DevOps</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="12165">In case</st> <st c="12174">of a compromise of an administrator
+    account, branch protection settings could be disabled to allow an attacker to
+    fast-track malicious code changes to production by bypassing the required checks.</st>
+    <st c="12370">For this reason, it is important to also track and audit branch
+    protection and sensitive permission changes to spot unusual bypass attempts.</st>
+    *<st c="12511">Figure 7</st>**<st c="12519">.7</st>* <st c="12521">shows an example
+    audit log entry for a modification to a sensitive branch protection setting in</st>
+    <st c="12618">GitHub Enterprise.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.7 – Sample log entry for a modification to a sensitive branch protection
+    setting](img/B19710_07_07.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="13012">Figure 7.7 – Sample log entry for a modification to a sensitive
+    branch protection setting</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="13101">For information on enabling auditing, please refer to the</st>
+    *<st c="13160">Ensuring the build environment is logged</st>* <st c="13200">section
+    in</st> [*<st c="13212">Chapter 6</st>*](B19710_06.xhtml#_idTextAnchor122)<st
+    c="13221">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="13222">Implementing a code review process</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="13257">Another good security measure is to require human-led reviews
+    for both the release branches</st> <st c="13350">and the deployment workflow/pipeline
+    configuration files.</st> <st c="13408">This should be in addition to automated
+    security scans that are enforced for code to be merged with the release branches.</st>
+    <st c="13530">Automated scans are useful but can be bypassed, hence the need for
+    human checks.</st> <st c="13611">Even with necessary controls in place, new bypass
+    methods may be discovered.</st> <st c="13688">Including experienced human reviewers
+    provides an additional layer of defense against potential</st> <st c="13784">malicious
+    attacks.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="13802">Both the GitHub Enterprise and Azure DevOps platforms support
+    granular implementation of code reviewers where we can assign different reviewers
+    for different paths of the code base.</st> <st c="13985">In Azure DevOps, this
+    can be implemented with a branch protection control while in GitHub Enterprise,
+    this can be implemented with a branch protection control</st> <st c="14144">combined
+    with a capability</st> <st c="14171">called</st> `<st c="14178">CODEOWNERS</st>`<st
+    c="14188">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="14189">To enable granular code review in Azure DevOps, navigate to</st>
+    **<st c="14250">Project Settings</st>**<st c="14266">, then</st> **<st c="14273">Repos</st>**<st
+    c="14278">, and select</st> **<st c="14291">Repositories</st>**<st c="14303">.
+    Choose a repository, click on</st> **<st c="14335">Policies</st>**<st c="14343">,
+    and then scroll down to the</st> **<st c="14373">Branch Policies</st>** <st c="14388">section
+    to find your release branch.</st> <st c="14426">Under</st> **<st c="14432">Branch
+    Policies</st>**<st c="14447">, activate</st> **<st c="14458">Require a minimum
+    number of reviewers</st>** <st c="14495">by setting it to</st> **<st c="14513">On</st>**<st
+    c="14515">. Enter the number of required reviewers and choose from the available
+    options (</st>*<st c="14595">Figure 7</st>**<st c="14604">.8</st>*<st c="14606">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.8 – Enabling human-led code reviews in Azure DevOps](img/B19710_07_08.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="15304">Figure 7.8 – Enabling human-led code reviews in Azure DevOps</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="15364">We can</st> <st c="15372">also automatically add reviewers to
+    pull requests that change files in specific directories and files.</st> <st c="15475">For
+    example, we may want to add members of the security team to review any change
+    to the pipeline file or security champions in the development team to review code
+    changes to the release branch.</st> <st c="15670">We can do this by configuring
+    the option to</st> **<st c="15714">Automatically include reviewers</st>** <st
+    c="15745">(</st>*<st c="15747">Figure 7</st>**<st c="15755">.9</st>*<st c="15757">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.9 – Adding required reviewers in an Azure repository branch policy](img/B19710_07_09.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="16089">Figure 7.9 – Adding required reviewers in an Azure repository
+    branch policy</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="16164">If the setting is marked as</st> **<st c="16193">Required</st>**<st
+    c="16201">, every individual listed as a reviewer must approve the changes.</st>
+    <st c="16267">If group names are added as reviewers, at least one member from
+    each group</st> <st c="16342">must approve the changes.</st> <st c="16368">If
+    approval is required from only one group, then the number of approvals needed
+    is the minimum number specified for that group.</st> <st c="16497">For example,
+    a group could be formed for each development team that includes the security champions
+    from the team, and this group would be required as a reviewer.</st> <st c="16660">This
+    ensures that at least one person with security experience and training reviews
+    the code changes before they</st> <st c="16773">are approved.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="16786">For GitHub Enterprise, we can enable a branch protection rule
+    to require a pull request before merging by selecting the</st> `<st c="17031">CODEOWNERS</st>`
+    <st c="17041">file (</st>*<st c="17048">Figure 7</st>**<st c="17057">.10</st>*<st
+    c="17060">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.10 – Enabling a Code Owners review in a GitHub Enterprise branch
+    protection policy](img/B19710_07_10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="18171">Figure 7.10 – Enabling a Code Owners review in a GitHub Enterprise
+    branch protection policy</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="18262">CODEOWNERS</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`<st c="18273">CODEOWNERS</st>` <st c="18284">is a feature</st> <st c="18298">of
+    GitHub that we can use to specify individuals or teams that are responsible for
+    maintaining specific parts of a project.</st> <st c="18422">When changes are made
+    to those parts, the designated code owners are automatically required to review
+    and approve the changes before they can be merged.</st> <st c="18575">We can use
+    this feature to implement code reviews for release branches and deployment</st>
+    <st c="18661">workflow files.</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="18676">To use</st> `<st c="18684">CODEOWNERS</st>`<st c="18694">, we
+    need to create a file called</st> `<st c="18728">CODEOWNERS</st>` <st c="18738">in
+    the</st> `<st c="18746">.github/</st>`<st c="18754">,</st> `<st c="18756">root</st>`<st
+    c="18760">, or</st> `<st c="18765">docs/</st>` <st c="18770">directory of the
+    repository.</st> <st c="18800">The file uses a pattern that follows most (not
+    all) of the same rules used in</st> `<st c="18878">gitignore</st>` <st c="18887">files.</st>
+    <st c="18895">For example, a line entry of</st> `<st c="18924">/workflows/ @dev
+    @security</st>` <st c="18950">means that any changes inside the</st> `<st c="18985">/workflows</st>`
+    <st c="18995">directory will require approval from members of the</st> `<st c="19048">@dev
+    or @security</st>` <st c="19065">teams, but approvals from both are</st> <st c="19101">not
+    required.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="19114">A line entry of</st> `<st c="19131">**/releases @securitychampions
+    @teamleaders</st>` <st c="19174">means the</st> `<st c="19185">@securitychampions</st>`
+    <st c="19203">and</st> `<st c="19208">@teamleaders</st>` <st c="19220">teams own
+    any file in any</st> `<st c="19247">/releases</st>` <st c="19256">directory.</st>
+    <st c="19268">To</st> <st c="19271">learn more about the</st> `<st c="19292">CODEOWNERS</st>`
+    <st c="19302">file, please refer to this</st> <st c="19330">document:</st> [<st
+    c="19340">https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-syntax</st>](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-syntax)<st
+    c="19491">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="19492">Now that</st> <st c="19502">we understand one of some of the controls
+    that we can implement to ensure release artifacts only come from validated code,
+    let us move on to examine the secure storage of</st> <st c="19673">these artifacts.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="19689">Selecting secure artifact sources</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="19723">Another key security best practice in the test and release phases
+    of DevOps is to secure the artifacts</st> <st c="19827">that will be deployed.</st>
+    <st c="19850">These artifacts should be stored in trusted locations that maintain
+    their integrity</st> <st c="19934">and prevent tampering.</st> <st c="19957">Both
+    GitHub Actions and Azure Pipelines support deploying artifacts from various sources,
+    such as build environments, package repositories, container repositories, file
+    shares, and source control repositories.</st> *<st c="20167">Figure 7</st>**<st
+    c="20175">.11</st>* <st c="20178">shows a screenshot of supported artifact sources
+    for a classic Azure</st> <st c="20248">release pipeline.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="20265">DevSecOps</st> <st c="20276">requires us to only use artifact
+    sources that support</st> **<st c="20330">immutability</st>**<st c="20342">,</st>
+    **<st c="20344">traceability</st>**<st c="20356">, and</st> **<st c="20362">access
+    control</st>**<st c="20376">. Immutability guarantees integrity by ensuring</st>
+    <st c="20424">that an artifact’s contents will not change from when it is published,
+    tested for security, and eventually released to production.</st> <st c="20555">This
+    can be implemented</st> <st c="20579">at the artifact source level or the package
+    level.</st> <st c="20630">Implementing at the source level means that our artifact
+    sources should not allow any modifications to packages once published.</st> <st
+    c="20758">To correct any issues, a new version should be published instead of
+    modifying an existing one.</st> <st c="20853">This ensures that the content of
+    the artifact that</st> <st c="20904">has been security tested is the same as the
+    one deployed.</st> <st c="20962">Sources such as file shares,</st> **<st c="20991">Azure
+    Container Registry</st>** <st c="21015">(</st>**<st c="21017">ACR</st>**<st c="21020">),
+    and GitHub Packages should be used carefully as they are mutable by default.</st>
+    <st c="21101">Anyone with the right set of permissions can update the content
+    of published artifacts that are stored in them.</st> <st c="21213">This can be
+    exploited by attackers to replace the original version with a compromised one</st>
+    <st c="21303">before deployment.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.11 – Supported artifact sources for a classic Azure release pipeline](img/B19710_07_11.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="21464">Figure 7.11 – Supported artifact sources for a classic Azure release
+    pipeline</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="21541">For ACR, we can</st> <st c="21558">enforce immutability at the
+    artifact store level by configuring image locking.</st> <st c="21637">This is
+    achieved using the</st> `<st c="21664">az acr repository update</st>` <st c="21688">command.</st>
+    *<st c="21698">Figure 7</st>**<st c="21706">.12</st>* <st c="21709">shows a sample
+    GitHub workflow that uses this command to lock a new container image in the build
+    and</st> <st c="21811">publish phase.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.12 – Sample GitHub workflow with ACR image locking](img/B19710_07_12.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="22553">Figure 7.12 – Sample GitHub workflow with ACR image locking</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="22612">Immutability is one of several factors to consider when selecting
+    artifact sources.</st> <st c="22697">Other important factors to consider are traceability
+    and versioning.</st> <st c="22766">Traceability gives visibility into a package’s
+    origin and links it to code changes, test cases, and work items.</st> <st c="22878">This
+    makes it easier to perform forensic auditing in case of a breach.</st> <st c="22949">Versioning
+    allows us to track security outcomes between different versions of our artifacts
+    and allows quick rollbacks to secure versions when facing major</st> <st c="23105">zero-day
+    vulnerabilities.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="23130">Support for</st> <st c="23143">traceability and versioning varies
+    by artifact source.</st> <st c="23198">For example, file shares are basic storage
+    solutions that typically lack built-in versioning and traceability to source control.</st>
+    <st c="23327">Implementing these features in file shares usually requires additional
+    tools or</st> <st c="23407">custom configurations.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="23429">File shares are generally not recommended as artifact sources
+    in DevOps workflows.</st> <st c="23513">Workflow/pipeline artifacts naturally
+    include these features, while ACR, GitHub Packages, and Azure Artifacts might
+    also need</st> <st c="23639">extra configuration.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="23659">Understanding workflow/pipeline artifacts</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: <st c="23701">Both GitHub</st> <st c="23714">Actions and Azure Pipelines support
+    options to publish artifacts internally within the build platform.</st> <st c="23817">For
+    GitHub Actions, the</st> `<st c="23841">upload-artifact</st>` <st c="23856">action
+    can be used to upload an artifact into an</st> **<st c="23906">Actions artifacts</st>**
+    <st c="23923">store (</st>*<st c="23931">Figure 7</st>**<st c="23940">.13</st>*<st
+    c="23943">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.13 – GitHub Actions upload-artifact action](img/B19710_07_13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="24500">Figure 7.13 – GitHub Actions upload-artifact action</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="24551">For Azure</st> <st c="24562">Pipelines, the</st> `<st c="24577">PublishPipelineArtifact</st>`
+    <st c="24600">or</st> `<st c="24604">PublishBuildArtifact</st>` <st c="24624">tasks
+    can be used for the same purpose (</st>*<st c="24665">Figure 7</st>**<st c="24674">.14</st>*<st
+    c="24677">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.14 – Azure Pipelines PublishPipelineArtifact task](img/B19710_07_14.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="25294">Figure 7.14 – Azure Pipelines PublishPipelineArtifact task</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="25352">These options are popular because they are easy to use, yet they
+    impact immutability and traceability.</st> <st c="25456">Because the artifacts
+    are stored within the build platform and they have a link to the workflow/pipeline
+    run or job that created them, so, in this case, they offer built-in traceability.</st>
+    <st c="25643">However, retention policies and behavior should also be considered
+    to understand the overall impact.</st> <st c="25744">For example, GitHub Enterprise
+    stores action</st> <st c="25789">artifacts for 90 days, but this can be extended
+    up to 400 days.</st> <st c="25853">The customization can be done at the Enterprise,
+    Organization, or Repository levels (</st>*<st c="25938">Figure 7</st>**<st c="25947">.15</st>*<st
+    c="25950">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.15 – Configuring the retention period for GitHub workflow artifacts](img/B19710_07_15.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="26239">Figure 7.15 – Configuring the retention period for GitHub workflow
+    artifacts</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="26315">Configuring artifact retention period in GitHub Enterprise</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="26374">The</st> <st c="26379">artifacts retention settings can be customized
+    at different levels in</st> <st c="26449">GitHub Enterprise:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="26467">Enterprise</st>**<st c="26478">: Go to</st> **<st c="26487">Settings</st>**
+    <st c="26495">|</st> **<st c="26498">Policies</st>** <st c="26506">|</st> **<st
+    c="26509">Actions</st>** <st c="26516">|</st> **<st c="26519">Policies</st>**
+    <st c="26527">|</st> **<st c="26530">Artifact and</st>** **<st c="26543">log retention</st>**<st
+    c="26556">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="26557">Organization</st>**<st c="26570">: Go to</st> **<st c="26579">Settings</st>**
+    <st c="26587">|</st> **<st c="26590">Code, planning, and automation</st>** <st
+    c="26620">|</st> **<st c="26623">Actions</st>** <st c="26630">|</st> **<st c="26633">General</st>**
+    <st c="26640">|</st> **<st c="26643">Artifact and</st>** **<st c="26656">log retention</st>**<st
+    c="26669">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="26670">Repository</st>**<st c="26681">: Go to</st> **<st c="26690">Settings</st>**
+    <st c="26698">|</st> **<st c="26701">Code and automation</st>** <st c="26720">|</st>
+    **<st c="26723">Actions</st>** <st c="26730">|</st> **<st c="26733">General</st>**
+    <st c="26740">|</st> **<st c="26743">Artifact and</st>** **<st c="26756">log retention</st>**<st
+    c="26769">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="26770">The chosen retention period affects traceability.</st> <st c="26821">If
+    we set a retention period of 100 days and we need to download a previous artifact
+    from 120 days ago to investigate a recently discovered breach, we won’t be able
+    to do so, unless we have transferred the artifact to another storage location.</st>
+    <st c="27065">In Azure Pipelines, deleting a pipeline run also deletes all associated
+    artifacts.</st> <st c="27148">This can also compromise traceability if a deleted
+    artifact needs to be</st> <st c="27220">investigated later.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="27239">From an immutabilit</st><st c="27259">y standpoint, the GitHub</st>
+    `<st c="27285">upload-artifact</st>` <st c="27300">action can overwrite artifacts
+    if the</st> `<st c="27339">overwrite</st>` <st c="27348">option is enabled (</st>*<st
+    c="27368">Figure 7</st>**<st c="27377">.16</st>*<st c="27380">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.16 – Implementing an artifact overwrite](img/B19710_07_16.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="27576">Figure 7.16 – Implementing an artifact overwrite</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="27624">If developers</st> <st c="27639">do not pin release artifacts
+    by IDs and use names instead, this could be exploited in an artifact swap attack.</st>
+    <st c="27750">The Azure Pipelines</st> `<st c="27770">PublishPipelineArtifact@1</st>`
+    <st c="27795">task behaves differently from this.</st> <st c="27832">It is designed
+    to ensure immutable artifacts for a given build.</st> <st c="27896">Once published,
+    another artifact with the same name cannot</st> <st c="27955">be published.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="27968">Note</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="27973">For more information on the action and task behavior, refer to
+    the</st> <st c="28041">following documents:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`<st c="28061">upload-artifact</st>`<st c="28077">:</st> [<st c="28080">https://github.com/actions/upload-artifact</st>](https://github.com/actions/upload-artifact)<st
+    c="28122">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`<st c="28123">PublishPipelineArtifact@1</st>`<st c="28149">:</st> [<st c="28152">https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/publish-pipeline-artifact-v1</st>](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/publish-pipeline-artifact-v1)<st
+    c="28253">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="28254">Now that we have discussed security considerations for using workflow/pipeline
+    artifacts as release sources, let us explore similar considerations for</st> <st
+    c="28406">standalone services.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="28426">Understanding Azure Artifacts and GitHub Packages</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: <st c="28476">Both GitHub Enterprise and Azure DevOps provide standalone services
+    for storing and managing</st> <st c="28570">release artifacts.</st> <st c="28589">GitHub
+    Enterprise offers GitHub Packages, while Azure DevOps provides Azure Artifacts.</st>
+    <st c="28676">Both services</st> <st c="28690">support feeds that can handle various
+    package types such as NPM, NuGet, Maven, Python, and Universal packages.</st>
+    <st c="28801">GitHub Packages also supports</st> <st c="28831">containers while
+    Azure Artifacts does</st> <st c="28869">not.</st> <st c="28874">Azure offers ACR
+    for storing containers.</st> <st c="28915">From a security consideration, both
+    services are similar (</st>*<st c="28973">Figure 7</st>**<st c="28982">.17</st>*<st
+    c="28985">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.17 – Security considerations in GitHub Packages and Azure Artifacts](img/B19710_07_17.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="29156">Figure 7.17 – Security considerations in GitHub Packages and Azure
+    Artifacts</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="29232">Packages in both GitHub Packages and Azure Artifacts are immutable
+    by default.</st> <st c="29312">Once a package version is published, it cannot
+    be modified.</st> <st c="29372">Any updates or fixes must be published as new
+    versions, ensuring that deployed artifacts are consistent with those that have
+    been verified.</st> <st c="29512">Traceability in Azure Artifacts is primarily
+    managed through integration with Azure DevOps services.</st> <st c="29613">Each
+    artifact is linked to a specific pipeline run, including details such as build
+    number and associated commits.</st> <st c="29728">This data is crucial for reconstructing
+    the artifact’s development history.</st> <st c="29804">Each package in GitHub
+    Packages stores detailed provenance information including the commit SHA, branch,
+    or tag from which it was built.</st> <st c="29941">This level of detail is particularly
+    valuable for compliance and</st> <st c="30006">security auditing.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="30024">Implementing artifact signing for integrity checks</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="30075">Securing</st> <st c="30085">the DevOps</st> <st c="30096">workflow
+    involves ensuring the integrity of every step in the software supply chain.</st>
+    <st c="30181">If an attacker breaches the artifact store, they could tamper with
+    packages meant for production and upload unauthorized artifacts.</st> <st c="30313">For
+    example, in the CodeCov incident, an attacker used leaked credentials to upload
+    a harmful artifact, leading to direct downloads by users.</st> <st c="30455">One
+    mitigation strategy is to enforce an integrity validation process for all release
+    artifacts.</st> <st c="30552">This includes signing packages and verifying digital
+    signatures before deployment.</st> <st c="30635">Various tools</st> <st c="30649">and
+    approaches could be used for this, but two common</st> <st c="30703">ones are</st>
+    **<st c="30712">Sigstore’s Cosign</st>** <st c="30729">and</st> **<st c="30734">Notation</st>**<st
+    c="30742">. Let us</st> <st c="30751">review these.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="30764">Implementing artifact signing using Sigstore’s Cosign</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**<st c="30818">Sigstore</st>** <st c="30827">is a set</st> <st c="30837">of
+    open-source tools designed to automate the digital signing</st> <st c="30899">and
+    verification of software</st> <st c="30928">artifacts.</st> <st c="30939">It is
+    primarily aimed at software artifacts such as container images and binaries, but
+    it can be used for any file type, including ZIP archives.</st> <st c="31084">It
+    combines several tools and technologies, including</st> <st c="31138">the following:</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="31152">Cosign</st>**<st c="31159">: This</st> <st c="31167">signs
+    and verifies containers</st> <st c="31197">and artifacts</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="31210">Fulcio</st>**<st c="31217">: A free</st> <st c="31227">root
+    certification authority that issues</st> <st c="31268">temporary certificates</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="31290">Rekor</st>**<st c="31296">: This records</st> <st c="31312">signed
+    metadata to a</st> <st c="31333">tamper-resistant ledger</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="31356">OpenID Connect</st>**<st c="31371">: This</st> <st c="31379">provides</st>
+    <st c="31388">identity verification</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="31409">Sigstore</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="31418">To learn</st> <st c="31428">more about the Sigstore project, you
+    can visit their website at</st> [<st c="31492">https://www.sigstore.dev/</st>](https://www.sigstore.dev/)
+    <st c="31517">and explore their GitHub repository</st> <st c="31554">at</st> [<st
+    c="31557">https://github.com/sigstore</st>](https://github.com/sigstore)<st c="31584">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="31585">Cosign</st>** <st c="31592">(one of the tools included in the
+    Sigstore project) simplifies signing and verifying</st> <st c="31678">software
+    artifacts such as container images by making the process of managing signatures
+    invisible.</st> <st c="31778">It automatically signs artifacts, stores the signatures
+    in an OCI registry, and performs verifications without user intervention regarding
+    signature handling.</st> <st c="31937">When signing a Docker image, Cosign creates
+    a special tag in the OCI registry that incorporates the image’s unique digest
+    (its immutable identifier) into the tag name.</st> <st c="32105">This allows for
+    easy retrieval and verification of the image’s signature based on</st> <st c="32187">its
+    digest.</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="32198">To use</st> <st c="32206">Cosign, we</st> *<st c="32217">first</st>*
+    <st c="32222">must ensure</st> <st c="32235">that it is installed on the runner/agent
+    used for our workflow/pipeline.</st> <st c="32308">For GitHub, this can be done
+    using the</st> `<st c="32347">cosign-installer</st>` <st c="32363">GitHub</st>
+    <st c="32371">marketplace task (</st>*<st c="32389">Figure 7</st>**<st c="32398">.18</st>*<st
+    c="32401">).</st> <st c="32405">For Azure DevOps, we use a command line step with
+    our preferred OS package manager, as detailed</st> <st c="32501">at</st> [<st
+    c="32504">https://docs.sigstore.dev/system_config/installation/</st>](https://docs.sigstore.dev/system_config/installation/)<st
+    c="32557">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.18 – The cosign-installer GitHub marketplace task](img/B19710_07_18.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="33001">Figure 7.18 – The cosign-installer GitHub marketplace task</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="33059">The</st> *<st c="33064">second</st>* <st c="33070">step is optional.</st>
+    <st c="33089">We could generate the key pairs that will be used for the digital
+    signature using the</st> `<st c="33175">cosign generate-key-pair</st>` <st c="33199">command.</st>
+    <st c="33209">This allows for more control but introduces the complexity of key
+    management.</st> <st c="33287">Cosign also supports keyless signing, which uses
+    ephemeral keys and logs the signing process transparently.</st> <st c="33395">This
+    approach improves security and simplifies operations by eliminating the direct
+    management of keys.</st> <st c="33499">The</st> *<st c="33503">third</st>* <st
+    c="33508">step is to sign our artifact using the</st> `<st c="33548">cosign sign</st>`
+    <st c="33559">command.</st> <st c="33569">The</st> *<st c="33573">final</st>*
+    <st c="33578">step is to verify the signature with the</st> `<st c="33620">cosign
+    verify</st>` <st c="33633">command, as part of our</st> <st c="33658">pre-deployment
+    check.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="33679">Implementing artifact signing using Notation</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: <st c="33724">Notation</st> <st c="33734">is another tool that can be used to</st>
+    <st c="33770">sign and verify the integrity and the publisher of digital artifacts.</st>
+    <st c="33840">It is part of the Notary project, an incubating</st> <st c="33888">project
+    of the</st> **<st c="33903">Cloud Native Computing</st>** **<st c="33926">Foundation</st>**
+    <st c="33936">(</st>**<st c="33938">CNCF</st>**<st c="33942">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="33945">Notary project</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="33960">To learn</st> <st c="33970">more about the Notary project, you
+    can visit their website at</st> [<st c="34032">https://notaryproject.dev/</st>](https://notaryproject.dev/)
+    <st c="34058">and explore their GitHub repository</st> <st c="34095">at</st> [<st
+    c="34098">https://github.com/notaryproject</st>](https://github.com/notaryproject)<st
+    c="34130">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="34131">Similar to Sigstore, it is also primarily aimed at software artifacts
+    such as container images and binaries, but it can be used for any file type, including
+    ZIP files.</st> <st c="34300">Digital artifacts can be signed during the build
+    process and their integrity and origin verified at deployment.</st> *<st c="34412">Figure
+    7</st>**<st c="34420">.19</st>* <st c="34423">provides a high-level overview of
+    how Notation is integrated into a</st> <st c="34492">DevOps workflow.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.19 – How Notation is integrated into a DevOps workflow](img/B19710_07_19.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="34704">Figure 7.19 – How Notation is integrated into a DevOps workflow</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="34767">To use</st> <st c="34775">Notation, we</st> *<st c="34788">first</st>*
+    <st c="34793">must ensure</st> <st c="34806">that it is installed on the runner/agent
+    used for our workflow/pipeline.</st> <st c="34879">For GitHub, this can be done
+    using the</st> `<st c="34918">notation-action</st>` <st c="34933">GitHub marketplace
+    action.</st> <st c="34961">Azure DevOps also has a</st> `<st c="34985">Notation</st>`
+    <st c="34993">marketplace task that we can use for this (</st>*<st c="35037">Figure
+    7</st>**<st c="35046">.20</st>*<st c="35049">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.20 – Azure DevOps Notation marketplace task](img/B19710_07_20.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="35131">Figure 7.20 – Azure DevOps Notation marketplace task</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="35183">The</st> *<st c="35188">second</st>* <st c="35194">step is to
+    sign our artifact.</st> <st c="35225">The Notation task in Azure Pipelines natively
+    supports the Azure Key Vault plugin, which enables the Notation CLI to generate
+    signatures using Azure-Key-Vault-managed certificates and keys (</st>*<st c="35415">Figure
+    7</st>**<st c="35424">.21</st>*<st c="35427">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.21 – Implementing Notation in Azure Pipelines](img/B19710_07_21.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="35668">Figure 7.21 – Implementing Notation in Azure Pipelines</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="35722">It supports</st> <st c="35735">signing with self-signed</st> <st
+    c="35760">certificates and</st> `<st c="35858">notation sign</st>` <st c="35871">command.</st>
+    <st c="35881">The</st> <st c="35885">third and final step is to verify the signature
+    as part of our pre-deployment checks.</st> <st c="35971">Notation supports specifying
+    a Trust Policy file that defines the signature verification levels that we want
+    to enforce.</st> <st c="36092">There are four</st> <st c="36107">verification
+    levels:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="36127">Strict</st>**<st c="36134">: This</st> <st c="36142">enforces
+    all validations.</st> <st c="36168">If any validation fails, the verification
+    fails.</st> <st c="36217">Best for build environments or</st> <st c="36248">high-assurance
+    deployment.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="36274">Permissive</st>**<st c="36285">: This</st> <st c="36293">conducts
+    most validations but logs issues such as revocation and expiry.</st> <st c="36366">Suitable
+    for deployment or runtime when integrity and authenticity</st> <st c="36433">are
+    key.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="36441">Audit</st>**<st c="36447">: Only</st> <st c="36455">ensures
+    signature integrity if present; logs other</st> <st c="36506">validation failures.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="36526">Skip</st>**<st c="36531">: This does</st> <st c="36544">not
+    perform signature verification.</st> <st c="36580">It is used when mixing signed
+    and unsigned artifacts but requires specifying exact registry URLs</st> <st c="36677">in
+    registryScopes.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*<st c="36695">Figure 7</st>**<st c="36704">.22</st>* <st c="36707">displays</st>
+    <st c="36717">the four levels (strict, permissive, audit, and skip) and</st> <st
+    c="36775">their</st> <st c="36781">respective validations.</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.22 – Notation’s verification levels](img/B19710_07_22.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="37310">Figure 7.22 – Notation’s verification levels</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="37354">To learn</st> <st c="37364">more about Notation’s Trust Policy
+    file, please refer to this</st> <st c="37426">document:</st> [<st c="37436">https://github.com/notaryproject/specifications/blob/v1.0.0/specs/trust-store-trust-policy.md</st>](https://github.com/notaryproject/specifications/blob/v1.0.0/specs/trust-store-trust-policy.md)<st
+    c="37529">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="37530">Managing secrets securely in the release phase</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="37577">In automated build and deployment pipelines, developers may need
+    to supply credentials</st> <st c="37665">needed to access internal</st> <st c="37691">or
+    external services.</st> <st c="37713">For example, a build pipeline task that
+    downloads code from a private repository may require the credentials to be provided.</st>
+    <st c="37838">Another task may be to download a package from a private registry
+    and the necessary credentials must be supplied.</st> <st c="37952">In a deployment
+    pipeline, a task may</st> *<st c="37989">need</st>* <st c="37993">the credentials
+    to connect to a hosted Kubernetes cluster to deploy the latest version of</st>
+    <st c="38084">an application.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="38099">Note</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="38104">A good security best practice is to prioritize the use of workload
+    identities for access instead of secrets.</st> <st c="38214">For example, implementing
+    managed identities to access Azure services.</st> <st c="38285">Secrets should
+    only be used for scenarios where workload identities are not</st> <st c="38361">yet
+    supported.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="38375">These sensitive credentials should never be stored in plaintext
+    within build or deployment pipeline workflow files.</st> <st c="38492">One possible
+    option is to store the credentials as encrypted environment</st> <st c="38565">variables.</st>
+    <st c="38576">These are referred to as</st> **<st c="38601">secrets</st>** <st
+    c="38608">in GitHub</st> <st c="38619">Enterprise and</st> **<st c="38634">secret
+    variables</st>** <st c="38650">in Azure Pipelines.</st> <st c="38671">For our
+    discussion, we will just refer to them</st> <st c="38718">as</st> *<st c="38721">secrets</st>*<st
+    c="38728">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="38729">In GitHub, secrets can be set at the organization, repository,
+    or repository environment levels.</st> <st c="38827">In Azure DevOps, they can
+    be set at the project (using variable groups), pipeline, stage, or job levels.</st>
+    <st c="38932">Organization/project-level secrets allow teams to share secrets
+    across multiple workflows or pipelines.</st> <st c="39036">This reduces the need
+    to create duplicate secrets across multiple repositories/pipelines.</st> <st c="39126">Secrets
+    are encrypted at rest using a 2048-bit RSA key and are accessible on the agent
+    for tasks and scripts</st> <st c="39235">to use.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="39242">On both platforms, users with read permissions cannot read secrets,
+    but those with write permissions to a repository/project can read all secrets.</st>
+    <st c="39390">To reduce the risk of a secret leak, we need to be careful about
+    who is granted write access to</st> <st c="39486">our repositories/projects.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="39512">In following zero-trust principles, we need to assume that breaches
+    can happen and only grant the minimum necessary privileges for the secrets in
+    use in workflows/pipelines.</st> <st c="39687">This approach reduces the potential
+    impact in case a user with write access is compromised.</st> <st c="39779">For
+    example, a secret that is used for deploying applications to a Kubernetes cluster
+    should only have that specific permission.</st> <st c="39908">It should not have
+    permission to modify other configurations in</st> <st c="39972">the cluster.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="39984">Both GitHub Actions and Azure Pipelines try to mask secrets in
+    log outputs (</st>*<st c="40061">Figure 7</st>**<st c="40070">.23</st>*<st c="40073">).</st>
+    <st c="40077">They look for secrets that are printed in plain text on the command
+    line, as well as exact</st> <st c="40168">matches of secret values in</st> <st
+    c="40196">the logged outputs.</st> <st c="40216">However, this process is not
+    perfect.</st> <st c="40254">Developers must still exercise caution to prevent</st>
+    <st c="40304">accidental exposure.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.23 – A masked secret in an Azure Pipeline log](img/B19710_07_23.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="40819">Figure 7.23 – A masked secret in an Azure Pipeline log</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '<st c="40873">For example, it is not recommended to define a secret value using
+    a structured data format such as JSON, XML, or YAML.</st> <st c="40993">This could
+    lead to redaction failures.</st> <st c="41032">An example of this is if a secret
+    value is defined as</st> `<st c="41086">{"apikey": "secretpass"}</st>`<st c="41110">;
+    if the exact value is printed to the console in plain text, it may not be masked
+    (</st>*<st c="41195">Figure 7</st>**<st c="41204">.24</st>*<st c="41207">).</st>
+    <st c="41211">Instead, developers should create individual plain secrets for each
+    sensitive value instead of mapping them in a structured data format, to ensure
+    they are properly masked</st> <st c="41383">in logs.</st>'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.24 – An example of an unmasked secret due to the structured data
+    format](img/B19710_07_24.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="42036">Figure 7.24 – An example of an unmasked secret due to the structured
+    data format</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="42116">Also, if a secret is used to generate a sensitive value within
+    a workflow/pipeline, that generated</st> <st c="42216">value should be registered
+    as a secret to</st> <st c="42258">ensure it is masked if it appears in the logs.</st>
+    <st c="42305">For example, a private key may be used to generate a signed</st>
+    **<st c="42365">JSON Web Token</st>** <st c="42379">(</st>**<st c="42381">JWT</st>**<st
+    c="42384">) to access</st> <st c="42397">a web API.</st> <st c="42408">That JWT
+    should be registered as a secret, or it will not be masked if it is recorded in
+    the workflow/pipeline log output.</st> <st c="42531">Similarly, if a secret is
+    transformed in any way, such as being Base64 or URL-encoded, it should also be
+    registered as a secret to ensure it will be masked if it appears in</st> <st c="42704">log
+    outputs.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="42716">Integrating a secret vault in your DevOps pipelines</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: <st c="42768">Apart from implementing secrets in our workflows/pipelines, we
+    could also implement processes to</st> <st c="42866">centrally manage secrets</st>
+    <st c="42891">using a secret management service such as Azure Key Vault or HashiCorp
+    Vault.</st> <st c="42969">This is the preferred option as it has the added advantage
+    of scalability, and it allows for the decoupling of secret management from the
+    DevOps platform.</st> <st c="43124">As we mentioned previously, a better approach
+    is to transition to using workload identities if supported for</st> <st c="43233">your
+    scenario.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="43247">Azure Key Vault is a secrets management service, a key management
+    service, and a certificate management service.</st> <st c="43361">A</st> **<st
+    c="43363">secret</st>** <st c="43369">is data under 25 KB (for standard vaults)
+    that can be stored and retrieved in plain text.</st> <st c="43460">Examples include
+    passwords, database connection strings, and storage account connection strings.</st>
+    **<st c="43557">Keys</st>** <st c="43561">are cryptographic keys (i.e., secrets
+    generated using an algorithm) that can be imported or generated in the vault.</st>
+    <st c="43678">Key Vault currently supports RSA and elliptic curve keys.</st> **<st
+    c="43736">Certificates</st>** <st c="43748">are self-signed</st> <st c="43765">SSL/TLS
+    certificates generated</st> <st c="43796">in Key Vault or third-party SSL/TLS
+    certificates that have been imported into the vault.</st> *<st c="43885">Figure
+    7</st>**<st c="43893">.25</st>* <st c="43896">shows example use cases of these
+    three</st> <st c="43936">object types.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.25 – Sample Azure Key Vault use cases](img/B19710_07_25.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="44434">Figure 7.25 – Sample Azure Key Vault use cases</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="44480">To integrate the Azure Key Vault into our GitHub Action workflows,
+    we can implement the</st> `<st c="44569">azure/get-keyvault-secrets</st>` <st
+    c="44595">action that is authenticated with a workload identity or a service principal.</st>
+    <st c="44674">In an Azure DevOps pipeline, this integration can be done with the</st>
+    `<st c="44741">AzureKeyVault</st>` <st c="44754">task that uses a service connection
+    that is backed by a managed identity or a service principal (</st>*<st c="44852">Figure
+    7</st>**<st c="44861">.26</st>*<st c="44864">).</st> <st c="44868">For both options,
+    we want to make sure that the access is scoped to the secret that is needed.</st>
+    <st c="44963">This requires a least privileged</st> <st c="44996">access design.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.26 – Sample Azure DevOps integration with Key Vault](img/B19710_07_26.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="45211">Figure 7.26 – Sample Azure DevOps integration with Key Vault</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="45271">Now, let us</st> <st c="45284">review another best practice</st>
+    <st c="45313">regarding securing our build/release environment –</st> <st c="45364">implementing
+    auditing.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="45386">Implementing auditing for the CI/CD environment</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="45434">The CIS framework also recommends enabling logging in the build/release
+    environment.</st> <st c="45520">This is</st> <st c="45528">critical for security</st>
+    <st c="45550">monitoring, threat detection, and forensic analysis in the case
+    of an incident.</st> <st c="45630">Ideally, logging should be enabled on both
+    the control plane, for management operations, and the</st> <st c="45727">data
+    plane.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="45738">Enabling and configuring control plane logging</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: <st c="45785">In</st> **<st c="45789">GitHub Enterprise Cloud</st>** <st c="45812">(</st>**<st
+    c="45814">GHEC</st>**<st c="45818">), we</st> <st c="45825">don’t need</st> <st
+    c="45836">to do anything to enable control plane audit</st> <st c="45881">logs.</st>
+    <st c="45887">They are enabled by default.</st> <st c="45916">The logs can be</st>
+    <st c="45932">viewed at the enterprise level</st> <st c="45963">via</st> **<st
+    c="45967">Settings</st>** <st c="45975">|</st> **<st c="45978">Audit Log</st>**
+    <st c="45987">|</st> **<st c="45990">Events</st>**<st c="45996">, or at the organization
+    level through</st> **<st c="46035">Organization</st>** <st c="46047">|</st> **<st
+    c="46050">Settings</st>** <st c="46058">|</st> **<st c="46061">Archive</st>**
+    <st c="46068">|</st> **<st c="46071">Logs</st>** <st c="46075">|</st> **<st c="46078">Audit
+    Log</st>** <st c="46087">|</st> **<st c="46090">Events</st>**<st c="46096">. By
+    default, only events from the last three months are visible, but events are stored
+    for up to seven months after which they</st> <st c="46224">are deleted.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="46236">The logs</st> <st c="46246">capture a range of events</st> <st
+    c="46272">including workflow control plane activities categorized under</st> **<st
+    c="46334">org</st>** <st c="46337">and</st> **<st c="46342">workflow</st>**<st
+    c="46350">. This includes actions</st> <st c="46374">such as creation, update,
+    deletion, and execution</st> <st c="46424">of workflows.</st> <st c="46438">A
+    comprehensive list of the audited events is available</st> <st c="46494">here:</st>
+    [<st c="46500">https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/audit-log-events-for-your-organization</st>](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/audit-log-events-for-your-organization)<st
+    c="46661">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="46662">For privacy, the audit logs omit the source IP address of events.</st>
+    <st c="46729">To add source IP addresses to the audit logs, the adjustment can
+    be made at either the enterprise or</st> <st c="46830">organization level:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="46849">Enterprise level</st>**<st c="46866">: Navigate through</st>
+    **<st c="46886">Enterprise</st>** <st c="46896">|</st> **<st c="46899">Settings</st>**
+    <st c="46907">|</st> **<st c="46910">Audit Log</st>** <st c="46919">|</st> **<st
+    c="46922">Settings</st>**<st c="46930">. Activate and save the</st> **<st c="46954">Enable
+    source IP</st>** **<st c="46971">disclosure</st>** <st c="46981">option.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="46989">Organization level</st>**<st c="47008">: Go to</st> **<st c="47017">Organization</st>**
+    <st c="47029">|</st> **<st c="47032">Settings</st>** <st c="47040">|</st> **<st
+    c="47043">Archive</st>** <st c="47050">|</st> **<st c="47053">Logs</st>** <st
+    c="47057">|</st> **<st c="47060">Audit Log</st>** <st c="47069">|</st> **<st c="47072">Settings</st>**<st
+    c="47080">. Activate and save the</st> **<st c="47104">Enable source IP</st>**
+    **<st c="47121">disclosure</st>** <st c="47131">option.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Figure 7.27 – Enabling source IP recording for audit logs](img/B19710_07_27.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="47556">Figure 7.27 – Enabling source IP recording for audit logs</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="47613">To stream the logs externally, maybe to keep them for longer than
+    the maximum retention period, we have the option to stream directly to Amazon
+    S3, Azure Blob Storage, Google</st> <st c="47789">Cloud Storage, Splunk, and Datadog.</st>
+    <st c="47825">We can</st> <st c="47832">also stream to other third-party services
+    via Azure Event</st> <st c="47890">Hub.</st> <st c="47895">This can</st> <st c="47904">be
+    configured at the enterprise level via</st> **<st c="47946">Settings</st>** <st
+    c="47954">|</st> **<st c="47957">Audit log</st>** <st c="47966">|</st> **<st c="47969">Log
+    streaming</st>** <st c="47982">|</st> **<st c="47985">Configure stream</st>**<st
+    c="48001">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.28 – Configuring audit log streaming at the enterprise level](img/B19710_07_28.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="48291">Figure 7.28 – Configuring audit log streaming at the enterprise
+    level</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="48360">For Azure Pipelines, control plane logging can be enabled in the
+    organization settings in</st> **<st c="48451">Security</st>** <st c="48459">|</st>
+    **<st c="48462">Policies</st>** <st c="48470">|</st> **<st c="48473">Security
+    policies</st>** <st c="48490">|</st> **<st c="48493">Log</st>** **<st c="48497">Audit
+    Events</st>**<st c="48509">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.29 – Enabling audit logging](img/B19710_07_29.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="48854">Figure 7.29 – Enabling audit logging</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="48890">Once</st> <st c="48896">this setting is enabled, it records multiple
+    events, including</st> <st c="48959">Azure Pipeline</st> <st c="48974">control
+    plane events</st> <st c="48995">such as pipeline creation, modification, deletion,
+    and</st> <st c="49050">execution.</st> <st c="49061">The full list of pipeline
+    events that are audited can be found</st> <st c="49124">here:</st> [<st c="49130">https://learn.microsoft.com/en-us/azure/devops/organizations/audit/auditing-events?view=azure-devops#pipelines</st>](https://learn.microsoft.com/en-us/azure/devops/organizations/audit/auditing-events?view=azure-devops#pipelines)<st
+    c="49240">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="49241">Once enabled, the events can be viewed in</st> **<st c="49284">Organization
+    Settings</st>** <st c="49305">|</st> **<st c="49308">General</st>** <st c="49315">|</st>
+    **<st c="49318">Auditing</st>** <st c="49326">|</st> **<st c="49329">Logs</st>**<st
+    c="49333">. The events are stored for 90 days, after which they</st> <st c="49387">are
+    deleted.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="49399">They collect the logs in a centralized log store where we can
+    keep them for longer, and we can configure audit streams in</st> **<st c="49522">Organization
+    Settings</st>** <st c="49543">|</st> **<st c="49546">General</st>** <st c="49553">|</st>
+    **<st c="49556">Auditing</st>** <st c="49564">|</st> **<st c="49567">Streams</st>**
+    <st c="49574">|</st> **<st c="49577">New stream</st>**<st c="49587">, where we
+    have the option to export the logs to Azure Monitor, Splunk, or other third-party
+    solutions via Azure</st> <st c="49700">Event Grid.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.30 – Azure DevOps audit stream options](img/B19710_07_30.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="49913">Figure 7.30 – Azure DevOps audit stream options</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="49960">Enabling and configuring data plane logging</st>
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: <st c="50004">GHEC</st> <st c="50010">workflow run logs (build environment data
+    plane logs) are also</st> <st c="50073">enabled by default and retained for 90
+    days</st> <st c="50117">by default.</st> <st c="50129">The retention</st> <st
+    c="50143">settings can be adjusted to a maximum of 400 days at the enterprise,
+    organization, or</st> <st c="50229">repository levels:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="50247">Enterprise level</st>**<st c="50264">: Navigate through</st>
+    **<st c="50284">Enterprise</st>** <st c="50294">|</st> **<st c="50297">Settings</st>**
+    <st c="50305">|</st> **<st c="50308">Policies</st>** <st c="50316">|</st> **<st
+    c="50319">Actions</st>** <st c="50326">|</st> **<st c="50329">Artifact and log
+    retention</st>**<st c="50355">. Set the retention days and</st> <st c="50384">click</st>
+    **<st c="50390">Save</st>**<st c="50394">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="50395">Organization level</st>**<st c="50414">: Go to</st> **<st c="50423">Organization</st>**
+    <st c="50435">|</st> **<st c="50438">Settings</st>** <st c="50446">|</st> **<st
+    c="50449">Code, planning, and automation</st>** <st c="50479">|</st> **<st c="50482">Artifact
+    and log retention</st>**<st c="50508">. Set the retention days and</st> <st c="50537">click</st>
+    **<st c="50543">Save</st>**<st c="50547">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="50548">Repository level</st>**<st c="50565">: Go to</st> **<st c="50574">Repository</st>**
+    <st c="50584">|</st> **<st c="50587">Settings</st>** <st c="50595">|</st> **<st
+    c="50598">Code and automation</st>** <st c="50617">|</st> **<st c="50620">Actions</st>**
+    <st c="50627">|</st> **<st c="50630">General</st>** <st c="50637">|</st> **<st
+    c="50640">Artifact and log retention</st>**<st c="50666">. Set the retention days
+    and</st> <st c="50695">click</st> **<st c="50701">Save</st>**<st c="50705">.</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![Figure 7.31 – Configuring workflow log retention policy in GitHub](img/B19710_07_31.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="50980">Figure 7.31 – Configuring workflow log retention policy in GitHub</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="51045">Azure</st> <st c="51052">Pipelines build logs are also enabled
+    by default and retained</st> <st c="51114">for 30 days by default.</st> <st c="51138">The</st>
+    <st c="51142">retention settings</st> <st c="51161">can be adjusted via</st> **<st
+    c="51181">Project Settings</st>** <st c="51197">|</st> **<st c="51200">Pipelines</st>**
+    <st c="51209">|</st> **<st c="51212">Settings</st>** <st c="51220">|</st> **<st
+    c="51223">Retention policy</st>** <st c="51239">|</st> **<st c="51242">Days to</st>**
+    **<st c="51250">keep runs</st>**<st c="51259">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.32 – Configuring retention policy in Azure DevOps project settings](img/B19710_07_32.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="51593">Figure 7.32 – Configuring retention policy in Azure DevOps project
+    settings</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="51668">Let’s now learn about</st> <st c="51691">security gates.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="51706">Implementing security gates in release pipelines</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="51755">Gates are</st> <st c="51766">important components</st> <st c="51787">of
+    software release pipelines.</st> <st c="51818">They act as quality checkpoints
+    that software must pass before moving to the next stage of deployment.</st> <st
+    c="51921">Their main objective use case is to reduce the likelihood of deploying
+    poor quality software that fails to meet agreed performance and</st> <st c="52056">quality
+    standards.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="52074">For example, a development team might deploy software or updates
+    to a test environment, run automated load and functional tests using tools such
+    as Azure Load Testing</st> <st c="52242">and Selenium, and review</st> <st c="52267">the
+    results in</st> <st c="52282">Azure Monitor.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="52296">If the</st> <st c="52304">software meets the agreed</st> **<st
+    c="52330">service-level agreements</st>** <st c="52354">(</st>**<st c="52356">SLAs</st>**<st
+    c="52360">), it is deployed to the next stage.</st> <st c="52398">If it does not
+    meet the SLAs, the deployment stops, and the telemetry data is collected for the
+    team to investigate and resolve the issues (</st>*<st c="52538">Figure 7</st>**<st
+    c="52547">.33</st>*<st c="52550">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.33 – Sample quality gate testing in a release pipeline](img/B19710_07_33.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="52807">Figure 7.33 – Sample quality gate testing in a release pipeline</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="52870">DevSecOps extends the use of gates to include the validation of
+    security (security gates) – see</st> *<st c="52967">Figure 7</st>**<st c="52975">.34</st>*<st
+    c="52978">. The goal of a security gate is to prevent the most critical software
+    risks from being deployed to production or other environments with higher</st>
+    <st c="53123">exploitation risks.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.34 – Sample security gate testing in a release pipeline](img/B19710_07_34.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="53432">Figure 7.34 – Sample security gate testing in a release pipeline</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="53496">Security gates</st> <st c="53512">in release pipelines vary based
+    on project needs.</st> **<st c="53562">Dynamic application security testing</st>**
+    <st c="53598">(</st>**<st c="53600">DAST</st>**<st c="53604">) gates use tools
+    such as OWASP ZAP, Burp Suite, and Acunetix to test running applications in a
+    pre-production environment.</st> <st c="53729">These tools check for issues such
+    as API security, SSL/TLS configuration, and</st> <st c="53807">authentication.</st>
+    **<st c="53823">Compliance gates</st>** <st c="53839">ensure regulatory</st> <st
+    c="53858">standards are met, while</st> **<st c="53883">penetration testing gates</st>**
+    <st c="53908">simulate cyberattacks to</st> <st c="53934">find vulnerabilities.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="53955">Effective security gates require balancing thorough security checks
+    while maintaining development speed.</st> <st c="54061">Start with the most critical
+    checks that offer the most value and expand gradually.</st> <st c="54145">To determine
+    the most critical checks, begin with the major issues currently seen in production
+    and implement checks to prevent these from reaching production.</st> <st c="54305">Continuously
+    refine your process based on feedback and evolving</st> <st c="54369">security
+    threats.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="54386">Regarding maintaining development speed, security gates should
+    be automated as much as possible to avoid slowing down the software release process.</st>
+    <st c="54535">If security gates are used to stop non-compliant software from being
+    deployed to production, it is recommended to implement a well-governed manual
+    override process.</st> <st c="54700">This should require a minimum of two manual
+    approvers to prevent it from being abused as a security bypass and to ensure that
+    only business-accepted risks are</st> <st c="54859">allowed through.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="54875">Implementing DAST as security gates</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="54911">Unlike the</st> <st c="54923">security assessments covered in
+    previous chapters, DAST identifies security issues while an application is running.</st>
+    <st c="55039">It is a great</st> <st c="55053">complement to</st> **<st c="55067">static
+    application security testing</st>** <st c="55102">(</st>**<st c="55104">SAST</st>**<st
+    c="55108">) and SCA assessments as it can detect runtime issues that may not be
+    apparent in the code alone.</st> <st c="55207">It does this by simulating attacks
+    against a running application.</st> <st c="55273">For example, a DAST tool may
+    crawl a running web application</st> <st c="55334">and send malformed inputs to
+    identify issues such as SQL injection,</st> **<st c="55402">cross-site scripting</st>**
+    <st c="55422">(</st>**<st c="55424">XSS</st>**<st c="55427">), and insecure direct</st>
+    <st c="55451">object references.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="55469">Integrating DAST into a project that follows a DevOps process
+    in a way that does not impact users requires an understanding of the deployment
+    strategy and collaborating with the pipeline development teams.</st> <st c="55676">The
+    deployment strategy influences the types of tests and the approach to implementing
+    them.</st> <st c="55769">For example, the traditional application deployment strategy
+    involves releasing it into a</st> *<st c="55859">test</st>* <st c="55863">environment,
+    and then into a</st> *<st c="55893">staging</st>* <st c="55900">environment before
+    going to</st> *<st c="55929">production</st>*<st c="55939">. Test and staging
+    deployments are ideal points for integrating a continuous</st> <st c="56016">DAST
+    process.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="56029">There are</st> <st c="56040">modern deployment strategies embraced
+    by DevOps teams that allow for more frequent deployments to production and sometimes
+    even testing in production.</st> <st c="56191">Strategies such as deployment rings,
+    Canary releases,</st> **<st c="56245">dark launching</st>**<st c="56259">, and
+    A/B</st> <st c="56269">testing fall into this category.</st> <st c="56302">The
+    main thing to keep in mind when integrating DAST with these strategies is that
+    tests should be conducted in a production-like but non-production environment
+    to ensure accurate results while protecting the data in the</st> <st c="56523">production
+    environment.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="56546">Challenges of implementing DAST in a DevOps process</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="56598">The effectiveness of a DAST tool is tied to the types of tests
+    it can perform automatically.</st> <st c="56692">This may sound simple, but there
+    are many nuances.</st> <st c="56743">For example, the tests for</st> <st c="56770">a
+    web application differ</st> <st c="56795">from those for an API application, which
+    in turn differ from those for a generative AI app implementing a</st> **<st c="56901">retrieval-augmented
+    generation</st>** <st c="56931">(</st>**<st c="56933">RAG</st>**<st c="56936">)
+    workflow.</st> <st c="56949">If a DAST tool only supports attacks</st> <st c="56986">against
+    web and API applications, it may not add much value for other types of applications.</st>
+    <st c="57079">Don’t integrate DAST just for the sake of integration.</st> <st
+    c="57134">The value must be clearly defined, as there is a velocity cost.</st>
+    <st c="57198">Ensure that the benefits of DAST outweigh the impact on development
+    speed and efficiency.</st> <st c="57288">Properly assess the specific security
+    needs and potential vulnerabilities of the application to determine whether DAST
+    integration</st> <st c="57419">is worthwhile.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="57433">The majority of existing DAST tools focus on testing web applications.</st>
+    <st c="57505">While many organizations have web-based apps, other types of applications
+    may not be covered.</st> <st c="57599">Most DAST solutions test only the exposed
+    HTTP and HTML interfaces of web-enabled applications.</st> <st c="57695">However,
+    some</st> <st c="57709">solutions are designed specifically for non-web protocols
+    and data malformation, such as</st> **<st c="57798">remote procedure</st>** **<st
+    c="57815">calls</st>** <st c="57820">(</st>**<st c="57822">RPC</st>**<st c="57825">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="57828">Another challenge is that while DAST has existed for a while,
+    most tools were created for use by security teams within legacy processes.</st>
+    <st c="57966">Modern DAST solutions, however, are built from the ground up for
+    developers, QA, and DevOps professionals, making the tooling and its outputs more
+    relatable and accessible to them.</st> <st c="58147">One of the key features of
+    modern DAST solutions is the flexibility of deployment, including containerized
+    or agent-based scanners and options for both cloud and</st> <st c="58309">self-hosted
+    reporting.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="58331">Remediation is another area of challenge.</st> <st c="58374">Remediation
+    guidance from DAST tools may not be contextual.</st> <st c="58434">For example,
+    a DAST tool may identify a SQL injection vulnerability in a running application,
+    but it may not be able to identify the line of code that developers need to</st>
+    <st c="58604">change to fix the issue.</st> <st c="58629">This is where another
+    tooling category,</st> **<st c="58669">interactive application security testing</st>**
+    <st c="58709">(</st>**<st c="58711">IAST</st>**<st c="58715">), can help.</st>
+    <st c="58729">IAST combines the security functions of SAST and DAST into one tool
+    and provides more actionable insights</st> <st c="58835">for developers.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="58850">Even</st> <st c="58856">though both IAST and DAST</st> <st c="58882">focus
+    on application behavior during runtime, IAST offers a more comprehensive analysis
+    by combining internal application flow analysis, scanning, and black-box testing.</st>
+    <st c="59052">This enables IAST to link findings similar to those in DAST directly
+    to the source code.</st> <st c="59141">It achieves this by analyzing the code
+    executed in tests and pinpointing the exact location of vulnerabilities in the
+    code.</st> <st c="59265">However, as a relatively new approach to application
+    security, IAST has its drawbacks.</st> <st c="59352">It is dependent on the programming
+    language and can slow down the</st> <st c="59418">CI pipeline.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="59430">Implementing security gates in Azure Pipelines and GitHub Actions</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="59496">In Azure Pipelines, release strategies are set up as</st> **<st
+    c="59550">stages</st>** <st c="59556">in a release pipeline.</st> <st c="59580">For
+    classic</st> <st c="59592">pipelines, quality gates are defined</st> <st c="59629">using
+    pre-deployment</st> <st c="59650">and post-deployment</st> <st c="59670">conditions
+    for each</st> <st c="59690">stage.</st> **<st c="59697">Pre-deployment conditions</st>**
+    <st c="59722">are checks and validations that must be satisfied before a deployment
+    stage can start.</st> <st c="59810">They serve as</st> <st c="59824">gatekeepers
+    to ensure that quality criteria are met before the deployment begins.</st> **<st
+    c="59906">Post-deployment conditions</st>** <st c="59932">are checks that happen
+    after a deployment has completed and before it proceeds to the next stage.</st>
+    <st c="60031">They are used to verify that the deployment did not introduce any
+    new issues and that the application is functioning correctly.</st> <st c="60159">To
+    implement them, follow</st> <st c="60185">these steps:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="60197">In Azure Pipelines, navigate to</st> **<st c="60230">Pipelines</st>**
+    <st c="60239">|</st> **<st c="60242">Releases</st>**<st c="60250">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="60251">Select the relevant</st> <st c="60272">release pipeline.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="60289">Choose either pre-deployment or post-deployment conditions for
+    the release stage (</st>*<st c="60372">Figure 7</st>**<st c="60381">.35</st>*<st
+    c="60384">).</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="60387">Under</st> **<st c="60394">Gates</st>**<st c="60399">, click</st>
+    **<st c="60407">Add</st>** <st c="60410">to configure your release</st> <st c="60437">gate
+    settings.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.35 – Configuring pre-deployment or post-deployment conditions](img/B19710_07_35.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="61390">Figure 7.35 – Configuring pre-deployment or post-deployment conditions</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="61460">GitHub</st> <st c="61468">Actions offers a similar functionality</st>
+    <st c="61507">with environments, which</st> <st c="61532">can have protection
+    rules</st> <st c="61558">that serve as release gates.</st> <st c="61587">For instance,
+    a workflow in GitHub can include a job that must be manually approved by designated
+    reviewers before the deployment can proceed to the next environment.</st> <st
+    c="61754">This is particularly useful for workflows that deploy to multiple stages,
+    such as staging and production.</st> <st c="61860">Each stage can have its own
+    set of rules that are enforced by these gates.</st> <st c="61935">To read more
+    about environments and protection rules, please refer to this</st> <st c="62010">document:</st>
+    [<st c="62020">https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#custom-deployment-protection-rules</st>](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#custom-deployment-protection-rules)<st
+    c="62167">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="62168">Hands-on exercise – Integrating security within the build and
+    test phases</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="62242">In this</st> <st c="62251">exercise, we will be integrating security</st>
+    <st c="62293">within the build and test phases of our pipeline.</st> <st c="62343">We
+    will practically implement artifact signing for integrity and implement DAST</st>
+    <st c="62423">using ZAP.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="62433">The following are the tasks for</st> <st c="62466">this exercise:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**<st c="62480">Task</st>** **<st c="62486">1 –</st>** <st c="62489">Implementing
+    artifact signing for</st> <st c="62524">integrity checks</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="62540">Task</st>** **<st c="62546">2 –</st>** <st c="62549">Integrating
+    DAST tools to find and fix security vulnerabilities in the</st> <st c="62621">test</st>
+    <st c="62625">phase</st>'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="62631">Prerequisites</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="62645">Before diving</st> <st c="62660">into the first task, let’s first
+    create a key vault in Azure Key Vault then generate a self-signed key and certificate.</st>
+    <st c="62780">This is what we will use later to sign the image</st> <st c="62829">with
+    Notation.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="62843">Navigate to your Azure portal</st> <st c="62874">at</st> [<st
+    c="62877">https://portal.azure.com</st>](https://portal.azure.com)<st c="62901">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="62902">Search for</st> `<st c="62914">key vaults</st>` <st c="62924">in
+    the search bar and select</st> **<st c="62954">Key vaults</st>**<st c="62964">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.36 – Search and select Key vaults](img/B19710_07_36.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="63210">Figure 7.36 – Search and select Key vaults</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="63252">Click on</st> **<st c="63262">Create</st>** <st c="63268">and
+    fill in the required details, click</st> **<st c="63309">Review + create</st>**<st
+    c="63324">, and then</st> <st c="63335">click</st> **<st c="63341">Create</st>**<st
+    c="63347">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.37 – Create a key vault](img/B19710_07_37.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="65266">Figure 7.37 – Create a key vault</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="65298">Now that we’ve created the key vault, let’s now create a self-signed
+    certificate using Azure CLI.</st> <st c="65397">First, create a certificate policy
+    file which, when executed, creates a</st> <st c="65469">valid certificate compatible
+    with Notation.</st> <st c="65513">Copy the following code into Azure CLI bash
+    terminal to create the policy file.</st> <st c="65593">Copy this</st> <st c="65603">from</st>
+    [<st c="65608">https://github.com/PacktPublishing/eShopOnWeb/blob/main/policy.txt</st>](https://github.com/PacktPublishing/eShopOnWeb/blob/main/policy.txt)<st
+    c="65674">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.38 – Content of certificate policy file](img/B19710_07_38.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="66078">Figure 7.38 – Content of certificate policy file</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="66126">Create the certificate by pasting the following command to your</st>
+    <st c="66191">Bash terminal</st><st c="66204">:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="66302">Remember to</st> <st c="66315">change the key vault name to the
+    one created in</st> *<st c="66363">step 3</st>*<st c="66369">.</st> *<st c="66371">Figure
+    7</st>**<st c="66379">.39</st>* <st c="66382">shows the successful creation of
+    a</st> <st c="66418">self-signed certificate.</st>
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 7.39 – Create a self-signed certificate](img/B19710_07_39.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="67677">Figure 7.39 – Create a self-signed certificate</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="67723">Let’s confirm the certificate was created by going to your key
+    vault then navigate to</st> **<st c="67810">Objects</st>** <st c="67817">and then
+    click on</st> **<st c="67836">Certificates</st>**<st c="67848">. You will find
+    the just created</st> <st c="67881">certificate here.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.40 – Self-signed certificate (test-io) created](img/B19710_07_40.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="68347">Figure 7.40 – Self-signed certificate (test-io) created</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="68402">In</st> [*<st c="68406">Chapter 6</st>*](B19710_06.xhtml#_idTextAnchor122)<st
+    c="68415">, hands on</st> *<st c="68426">Exercise 1 – Integrating SAST, SCA, and
+    secret scanning into the build process</st>* <st c="68504">section, we ran</st>
+    `<st c="68521">azure-pipelines.yml</st>` <st c="68540">which built and deployed
+    the docker image.</st> <st c="68584">Several resources were created including
+    a</st> <st c="68627">container registry.</st> <st c="68647">Several access permissions
+    need to be set before configuring the notation task to sign the</st> <st c="68738">image
+    created.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="68752">Let’s first</st> <st c="68765">authorize access to the</st> `<st
+    c="68907">AcrPull</st>` <st c="68914">and</st> `<st c="68919">AcrPush</st>`<st
+    c="68926">. Let’s configure ACR and AKV environment variables on Azure CLI</st>
+    <st c="68991">Bash terminal.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="69154">Authorize access to ACR by first setting the subscription that
+    contains the</st> <st c="69231">ACR resource.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="69413">and</st>
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="69616">Let’s now authorize access to AKV where the following roles are
+    required for signing using</st> <st c="69708">self-signed certificates:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**<st c="69733">Key Vault Certificates Officer</st>** <st c="69764">for creating
+    and</st> <st c="69782">reading certificates</st>'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="69802">Key Vault Certificates User</st>** <st c="69830">for reading</st>
+    <st c="69843">existing certificates</st>'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**<st c="69864">Key Vault Crypto User</st>** <st c="69886">for</st> <st c="69891">signing
+    operations</st>'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: <st c="69909">First set the subscription that contains the AKV resource using</st>
+    <st c="69974">the command:</st>
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="70134">and</st>
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="70361">Now let’s</st> <st c="70372">create the Docker Registry service
+    connection.</st> <st c="70419">To sign the images using notation, we will use
+    the Docker task in Azure Pipelines to log into the ACR.</st> <st c="70522">This
+    task allows you to build, push and pull</st> <st c="70567">Docker images.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="70581">Navigate to</st> **<st c="70594">Project Settings</st>** <st c="70610">and
+    then</st> **<st c="70620">Service connections</st>**<st c="70639">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.41 – Setting service connections](img/B19710_07_41.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="70975">Figure 7.41 – Setting service connections</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="71016">Choose</st> **<st c="71024">New service connection</st>** <st
+    c="71046">and select</st> **<st c="71058">Docker Registry</st>**<st c="71073">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="71074">Next choose</st> **<st c="71087">Azure</st>** **<st c="71093">Container
+    Registry</st>**<st c="71111">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="71112">Select</st> **<st c="71120">Service Principal</st>** <st c="71137">in
+    the</st> **<st c="71145">Authentication Type</st>** <st c="71164">field and enter
+    the service</st> <st c="71193">principal details including your Azure Subscription
+    and</st> <st c="71249">ACR registry.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="71262">Enter the</st> **<st c="71273">Service connection name</st>**
+    <st c="71296">to use when referring to this service connection as shown in the</st>
+    <st c="71362">following figure:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.42 – Setting Docker Registry service connection](img/B19710_07_42.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="71743">Figure 7.42 – Setting Docker Registry service connection</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="71799">The last</st> <st c="71809">bit of access needed is to grant Azure
+    Key Vault access policy to your</st> <st c="71880">service principal.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="71898">Open the Azure Resource Manager service connection you created
+    and click on</st> **<st c="71975">Manage Service Principal</st>** <st c="71999">to
+    access the Azure service</st> <st c="72028">principal portal.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="72045">Copy the</st> **<st c="72055">Application (client) ID</st>**<st
+    c="72078">. This ID will be used to grant permissions to the</st> <st c="72129">service
+    principal.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="72147">Navigate to the</st> **<st c="72164">Azure Key Vault</st>** <st
+    c="72179">portal and go to the</st> **<st c="72201">Access</st>** **<st c="72208">Policies</st>**
+    <st c="72216">page.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '<st c="72222">Create a new access policy with the following permissions: key
+    sign, secret get, and</st> <st c="72308">certificate get.</st>'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="72324">Assign this</st> <st c="72337">new access policy to a service
+    principal using the</st> **<st c="72388">Application (client) ID</st>** <st c="72412">you</st>
+    <st c="72416">copied earlier.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="72431">Save the changes to complete</st> <st c="72461">the setup.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="72471">Now that we've met the prerequisites, we can begin with</st> <st
+    c="72528">the tasks.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="72538">Task 1 – Implementing artifact signing for integrity checks</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="72598">In this task, we will be signing our artifacts using Notation
+    to enforce authenticity and integrity</st> <st c="72699">validation for all release
+    artifacts, including container images, by adding a digital signature</st> <st
+    c="72795">that will be validated during</st> <st c="72825">deployment.</st> <st
+    c="72837">The signature is used to verify that the artifact is from a trusted
+    publisher and no modification has been made.</st> <st c="72950">This prevents
+    tampering of packages and artifacts meant for production like in the CodeCov incident
+    we</st> <st c="73053">covered earlier.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="73069">Let’s implement artifact signing</st> <st c="73103">using Notation:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="73118">Navigate to your DevOps instance at</st> [<st c="73155">https://dev.azure.com</st>](https://dev.azure.com)
+    <st c="73176">and choose the organization you used in the</st> <st c="73221">previous
+    chapter.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="73238">Select the</st> **<st c="73250">eShopOnWeb</st>** <st c="73260">private
+    project we were using in the</st> <st c="73298">previous chapter.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="73315">Azure DevOps has a</st> `<st c="73496">azure-pipelines.yml</st>`<st
+    c="73516">).</st> <st c="73520">Click on the pipeline editing panel and search</st>
+    <st c="73567">for</st> `<st c="73571">notation</st>`<st c="73579">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.43 – Notation marketplace task on Azure DevOps pipeline](img/B19710_07_43.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="73652">Figure 7.43 – Notation marketplace task on Azure DevOps pipeline</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="73716">Click on</st> <st c="73726">the</st> **<st c="73730">Notation</st>**
+    <st c="73738">task and select</st> **<st c="73755">Install</st>** <st c="73762">under</st>
+    **<st c="73769">Command to run</st>**<st c="73783">. Then, click</st> <st c="73797">the</st>
+    **<st c="73801">Add</st>** <st c="73804">button.</st> <st c="73813">This will</st>
+    <st c="73823">add the task for installing Notation to your pipeline as shown in
+    the</st> <st c="73893">following figure:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.44 – Notation Install task on Azure DevOps pipeline](img/B19710_07_44.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="74016">Figure 7.44 – Notation Install task on Azure DevOps pipeline</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="74076">Next, let’s add the Notation task for signing our artifacts.</st>
+    <st c="74138">Navigate back to the pipeline editing panel and search for notation
+    again.</st> <st c="74213">This time, we will select</st> **<st c="74239">Sign</st>**
+    <st c="74243">under</st> **<st c="74250">Command</st>** **<st c="74258">to run</st>**<st
+    c="74264">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="74265">On the</st> `<st c="74400">crx6xa5yuubr2hm.azurecr.io/eshoponweb/web:latest</st>`<st
+    c="74448">).</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="74451">The Notation task in Azure Pipelines natively supports the Azure
+    Key Vault plugin, which enables the Notation CLI to generate signatures using
+    Azure-Key-Vault-managed certificates and keys.</st> <st c="74642">Select</st>
+    **<st c="74649">Azure Key Vault Plugin</st>** <st c="74671">under</st> **<st c="74678">Plugin</st>**
+    <st c="74684">and then select the service connection earlier created in the</st>
+    [*<st c="74747">Chapter 6</st>*](B19710_06.xhtml#_idTextAnchor122) <st c="74756">hands-on
+    exercise.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="74775">For the</st> **<st c="74784">Key ID</st>** <st c="74790">section,
+    add the result you get from running the following command</st> <st c="74858">on
+    Azure</st> <st c="74867">Cloud Shell.</st> <st c="74880">Add the</st> <st c="74888">correct
+    certificate and key</st> <st c="74916">vault names.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '![Figure 7.45 – Key ID value](img/B19710_07_45.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="75229">Figure 7.45 – Key ID value</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="75255">In this case, the Key ID</st> <st c="75281">is</st> `<st c="75284">https://devsecopskeyvaulttest.vault.azure.net/keys/test-io/0daaced86b764e37855e02740e4f2d7c</st>`<st
+    c="75375">.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="75376">Notation supports signing using self-signed certificates and CA-issued
+    certificates.</st> <st c="75462">For this task, we will use self-signed certificates.</st>
+    <st c="75515">Scroll down and check</st> **<st c="75537">Self-signed Certificate</st>**<st
+    c="75560">. Then, click</st> **<st c="75574">Add</st>** <st c="75577">to add the
+    sign task to</st> <st c="75602">your pipeline.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.46 – Sign Notation marketplace task on Azure DevOps pipeline](img/B19710_07_46.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="75690">Figure 7.46 – Sign Notation marketplace task on Azure DevOps pipeline</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="75759">Run</st> <st c="75764">the pipeline</st> <st c="75777">and check</st>
+    <st c="75787">on the two tasks added.</st> <st c="75811">Upon successful execution,
+    the image will be signed as shown in</st> *<st c="75875">Figure 7</st>**<st c="75883">.47</st>*<st
+    c="75886">:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.47 – Notation tasks completed, and image signed.](img/B19710_07_47.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="77070">Figure 7.47 – Notation tasks completed, and image signed.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="77127">Let’s</st> <st c="77134">now look</st> <st c="77143">at how we
+    can perform DAST</st> <st c="77170">on the application running in the</st> <st
+    c="77204">test environment.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="77221">Task 2 – Integrating DAST tools to find and fix security vulnerabilities
+    in the test phase</st>
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: <st c="77312">This</st> <st c="77318">task aims to</st> <st c="77331">integrate
+    ZAP</st> <st c="77345">to perform</st> <st c="77356">DAST.</st> <st c="77362">There
+    are several other commercial and open-source DAST tools such as Acunetix, Checkmarx
+    DAST, Fortify WebInspect, Insight by Rapid7, PortSwigger Burp Suite, and Veracode,
+    just to mention a few.</st> <st c="77558">Many of these tools are available on
+    the Azure DevOps Marketplace (</st>[<st c="77625">https://marketplace.visualstudio.com/azuredevops</st>](https://marketplace.visualstudio.com/azuredevops)<st
+    c="77674">).</st> <st c="77678">It is important</st> <st c="77694">to perform
+    a DAST scan because it looks at a broad range of vulnerabilities, including input
+    validation that could make an application vulnerable to XSS or SQL injection.</st>
+    <st c="77865">DAST is performed on an application that is running.</st> <st c="77918">It
+    runs automated penetration tests on your web applications</st> <st c="77979">and
+    APIs</st> <st c="77988">that are</st> <st c="77997">already</st> <st c="78005">running.</st>
+    <st c="78014">It simulates real-world attacks covering the</st> *<st c="78059">OWASP
+    Top</st>* *<st c="78069">10</st>* <st c="78071">(</st>[<st c="78073">https://owasp.org/www-project-top-ten/</st>](https://owasp.org/www-project-top-ten/)<st
+    c="78111">).</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="78114">In the previous task, we ran a pipeline that built and deployed
+    the</st> <st c="78183">eShopOnWeb application.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.48 – The eShopOnWeb application deployed](img/B19710_07_48.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="78571">Figure 7.48 – The eShopOnWeb application deployed</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="78620">Let’s see how we can perform DAST scans on our running application</st>
+    <st c="78688">using ZAP:</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="78698">OWASP ZAP is available on the Azure Marketplace.</st> <st c="78748">Navigate
+    to the Azure Marketplace at</st> [<st c="78785">https://marketplace.visualstudio.com/azuredevops</st>](https://marketplace.visualstudio.com/azuredevops)<st
+    c="78833">, and search for</st> `<st c="78850">OWASP ZAP Scanner</st>`<st c="78867">.
+    Click on</st> **<st c="78878">Get it free</st>**<st c="78889">, select the correct
+    organization to install the extension, and then go back to your project</st> <st
+    c="78982">after installation.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.49 – OWASP ZAP Scanner in Azure Marketplace](img/B19710_07_49.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="79187">Figure 7.49 – OWASP ZAP Scanner in Azure Marketplace</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="79239">We will</st> <st c="79248">add the OWASP ZAP Scanner task in a
+    pipeline YAML file.</st> <st c="79304">For this</st> <st c="79313">instance, we
+    will create a new pipeline for OWASP ZAP, however, you can still add the same
+    tasks in the</st> <st c="79417">existing pipeline.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="79435">Navigate</st> <st c="79445">to</st> **<st c="79448">Pipelines</st>**
+    <st c="79457">on</st> <st c="79461">the left, select</st> **<st c="79478">Pipelines</st>**<st
+    c="79487">, and then select</st> **<st c="79505">New pipeline</st>**<st c="79517">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="79518">Select</st> **<st c="79526">Azure Repos Git</st>** <st c="79541">and
+    then</st> **<st c="79551">eShopOnWeb</st>**<st c="79561">. We will use</st> **<st
+    c="79575">Starter pipeline</st>**<st c="79591">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="79592">Delete the starter scripts, and then add the</st> **<st c="79638">OWASP
+    Zap Scanner</st>** <st c="79655">task from the</st> **<st c="79670">Tasks</st>**
+    <st c="79675">assistant.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.50 – OWASP ZAP Scanner in Azure Marketplace](img/B19710_07_50.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="79962">Figure 7.50 – OWASP ZAP Scanner in Azure Marketplace</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="80014">Set</st> `<st c="80040">1500</st>` <st c="80044">and select</st>
+    **<st c="80056">Targeted Scan</st>** <st c="80069">as your scan type.</st> <st
+    c="80089">Input</st> <st c="80095">the URL</st> <st c="80103">for the</st> <st
+    c="80111">app deployed</st> <st c="80124">on the test environment and then</st>
+    <st c="80157">click</st> **<st c="80163">Add</st>**<st c="80166">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.51 – Set the OWASP Zap Scanner configurations](img/B19710_07_51.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="80352">Figure 7.51 – Set the OWASP Zap Scanner configurations</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="80406">The YAML file should now look like this after adding a</st> <st
+    c="80462">display name.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.52 – The OWASP Zap Scanner task](img/B19710_07_52.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="80721">Figure 7.52 – The OWASP Zap Scanner task</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="80761">We</st> <st c="80765">need to publish the report generated by
+    the OWASP ZAP Scanner</st> <st c="80827">task.</st> <st c="80833">From the</st>
+    <st c="80842">assistant</st> `<st c="80878">publish build artifacts</st>`<st c="80901">.
+    Leave the</st> <st c="80913">Path to publish as</st> `<st c="80932">$(Build.ArtifactStagingDirectory)</st>`
+    <st c="80965">and the artifact name as</st> **<st c="80991">ZAP Reports</st>**<st
+    c="81002">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.53 – Publish build artifacts task](img/B19710_07_53.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="81447">Figure 7.53 – Publish build artifacts task</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="81489">Our</st> <st c="81494">YAML file</st> <st c="81504">now looks</st>
+    <st c="81514">like</st> <st c="81519">the</st> <st c="81523">following:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.54 – OWASP ZAP and Publish tasks](img/B19710_07_54.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="81864">Figure 7.54 – OWASP ZAP and Publish tasks</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="81905">The report is generated in JSON and HTML formats, which are machine
+    readable, so the output can be used for further processing.</st> <st c="82034">We
+    can also have the scan results published to the</st> **<st c="82085">Tests results</st>**
+    <st c="82098">tab by adding the code snippets of the</st> **<st c="82138">Install
+    handlebars</st>**<st c="82156">,</st> **<st c="82158">Report Generation</st>**<st
+    c="82175">, and</st> **<st c="82181">Publish Report (Nunit Style)</st>** <st c="82209">code
+    sections</st> <st c="82224">from</st> [<st c="82229">https://marketplace.visualstudio.com/items?itemName=CSE-DevOps.zap-scanner</st>](https://marketplace.visualstudio.com/items?itemName=CSE-DevOps.zap-scanner)<st
+    c="82303">.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="82304">Once you’ve added the preceding three code snippets, update the
+    file path parameter from the</st> **<st c="82398">Install handlebars</st>** <st
+    c="82416">code snippet to</st> <st c="82433">the following:</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: <st c="82515">Save</st> <st c="82521">and commit</st> <st c="82532">the new
+    pipeline and then</st> <st c="82558">run it.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: <st c="82565">After a</st> <st c="82574">few minutes, the</st> <st c="82591">tasks
+    are completed, and the scan results</st> <st c="82633">are published.</st>
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.55 – OWASP ZAP and Publish tasks successful](img/B19710_07_55.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="83026">Figure 7.55 – OWASP ZAP and Publish tasks successful</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="83078">Let’s see</st> <st c="83089">the scan</st> <st c="83098">results
+    from</st> <st c="83111">the</st> **<st c="83115">Test results</st>** <st c="83127">tab.</st>
+    <st c="83133">Navigate</st> <st c="83142">to the successful pipeline run and click
+    on the</st> **<st c="83190">Tests</st>** <st c="83195">tab.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.56 – The Tests results tab](img/B19710_07_56.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: <st c="83527">Figure 7.56 – The Tests results tab</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="83562">Go through the scan results and familiarize yourself with the
+    findings from</st> <st c="83639">OWASP ZAP.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="83649">Summary</st>
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: <st c="83657">In this chapter, we covered several checks that should be performed
+    before releasing an application to production.</st> <st c="83773">This includes
+    ensuring that release artifacts are built from protected branches, implementing
+    a code review process, selecting a secure artifact source, implementing a process
+    to validate artifact integrity, managing secrets securely in the release phase,
+    implementing IaC security scans, and validating and enforcing runtime security
+    with release gates.</st> <st c="84128">We also covered runtime verification tools
+    in place</st> <st c="84180">including DAST.</st>
+  prefs: []
+  type: TYPE_NORMAL
+- en: <st c="84195">In the next chapter, we will look at continuous security monitoring
+    on Azure.</st> <st c="84274">Now that we have deployed the resources, we need
+    to make sure they remain secure.</st> <st c="84356">Let’s</st> <st c="84362">dive
+    in.</st>
+  prefs: []
+  type: TYPE_NORMAL

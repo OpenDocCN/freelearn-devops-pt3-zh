@@ -1,0 +1,1716 @@
+- en: 'Chapter 6: Interacting with Remote Data Sources'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the last chapter, we talked about dealing with common data formats and showed
+    how we can read and write data in those formats. But in that chapter, we were
+    simply dealing with data that was accessible through a filesystem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the filesystem may actually have files that exist on remote devices through
+    services such as the **Network File System** (**NFS**) or the **Server Message
+    Block** (**SMB**), other remote data sources exist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will look at some common ways to send and receive data in
+    remote data sources. This will focus on accessing data on remote systems using
+    the **Structured Query Language** (**SQL**), **REpresentational State Transfer**
+    (**REST**), and **Google Remote Procedure Call** (**gRPC**). You will learn how
+    to access common SQL data stores, with a focus on PostgreSQL. We will also explore
+    how **Remote Procedure Call** (**RPC**) services are created and queried using
+    REST- and gRPC-style RPC methodologies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the skills you gain here, you will be able to connect and query data in
+    a SQL database, add new entries to the database, request a remote action from
+    a service, and gather information from a remote service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing SQL databases
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Developing REST services and clients
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Developing gRPC services and clients
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the next section, we will dive into utilizing data in one of the oldest formats,
+    **Comma-Separated Values** (**CSV**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's get started!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The code files for this chapter can be downloaded from [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/6/grpc](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/6/grpc)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing SQL databases
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: DevOps engineers commonly have a need to access data stored in database systems.
+    **SQL** is a standard for communicating with database systems that a DevOps engineer
+    will encounter in their day-to-day lives.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go provides a standard library for interacting with SQL-based systems called
+    `database/sql`. The interfaces provided by that package, with the addition of
+    a database driver, allow a user to work with several different SQL databases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will look at how we can access a Postgres database to perform
+    basic SQL operations using Go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Examples in this section will require you to set up a Postgres database. This
+    is beyond the scope of this book. This will not be a guide to SQL. Some basic
+    SQL knowledge is required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find information regarding how to install Postgres for your OS at [https://www.postgresql.org/download/](https://www.postgresql.org/download/).
+    If you prefer to run Postgres in a local Docker container, you can find that information
+    at [https://hub.docker.com/_/postgres](https://hub.docker.com/_/postgres).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting to a Postgres database
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To connect to a Postgres database will require using a database driver for Postgres.
+    The currently recommended third-party package is `github.com/jackc/pgx`. This
+    package implements a SQL driver for `database/sql` and provides its own methods/types
+    for Postgres-specific features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The choice to use `database/sql` or Postgres-specific types will depend on whether
+    you need to ensure compatibility between different databases. Using `database/sql`
+    allows you to write functions that work on any SQL database, while using Postgres-specific
+    features removes compatibility and makes migration to another database more difficult.
+    We will discuss how to perform our examples using both methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is how to connect using a standard SQL package without extra Postgres
+    features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we open a connection to Postgres using the `pgx` driver that will be
+    registered when you import the following package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is an anonymous import, meaning we are not using `stdlib` directly. This
+    is done when we want a *side effect*, such as when registering a driver with the
+    `database/sql` package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Open()` call doesn't test our connection. You will see `conn.PingContext()`
+    to test that we will be able to make calls to the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When you want to use `pgx-specific` types for Postgres, the setup is slightly
+    different, starting with a different package import:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To create that connection, type the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: This uses a connection pool to connect to the database for performance. You
+    will notice that we don't have a `PingContext()` call, as the native connection
+    tests the connection as part of `Connect()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you know how to connect to Postgres, let's look at how we can make
+    queries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Querying a Postgres database
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Let's consider making a call to your SQL database to fetch some information
+    about a user that is held in a table.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using the standard library, type the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This example does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates `UserRec` to store SQL data for a user
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a query statement called `query`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Queries our database for a user with the requested ID
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Returns `UserRec` and an error if we had one
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can increase the efficiency of this example by using a prepared statement
+    in an object instead of just a function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This example does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates a reusable object
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stores `*sql.Stmt`, which increases the efficiency when doing repeated queries
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines a `NewStorage` constructor that creates our object
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Because of the generic nature of using the standard library, in these examples,
+    any implementation of `*sql.DB` could be used. Switching Postgres for MariaDB
+    would work as long as MariaDB had the same table names and format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we use the Postgres-specific library, the same code is written like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This implementation looks and works in a similar way to the standard library.
+    But the `conn` object here is a different, non-interface `pgxpool.Conn` type and
+    not `sql.Conn`. And while the functionality looks similar, the `pgxpool.Conn`
+    object supports queries with Postgres-specific types and syntax, such as `jsonb`,
+    that `sql.Conn` does not.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no need to use a prepared statement for non-transactions when using
+    Postgres-specific calls. The call information is automatically cached.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding example was simplistic in that we were pulling a specific entry.
+    What if we wanted to also have a method to retrieve all users with IDs between
+    two numbers? We could define this using the standard library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Postgres-specific syntax is the same; it just switches `s.usersBetweenStmt()`
+    for `conn.QueryRow()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Null values
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SQL has a concept of null values for basic types such as Booleans, strings,
+    and int32\. Go doesn't have the convention; instead, it provides zero values for
+    those types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When SQL allows a column to have a null value, the standard library provides
+    special null types in `database/sql`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`sql.NullBool`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullByte`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullFloat64`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullInt16`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullInt32`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullInt64`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullString`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sql.NullTime`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When you design your schema, it is better to use zero values instead of null
+    values. But sometimes, you need to tell the difference between a value being set
+    and the zero value. In those cases, you can use these special types in place of
+    the standard type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if our `UserRec` could have a null `DisplayName`, we can change
+    the `string` type to `sql.NullString`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can see an example of how the server sets these values depending on the
+    value that the column holds for `DisplayName` here: [https://go.dev/play/p/KOkYdhcjhdf](https://go.dev/play/p/KOkYdhcjhdf).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing data to Postgres
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Writing data into a database is simple but requires some consideration of the
+    syntax. The two major operations that a user wants when writing data are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Updating an existing entry
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inserting a new entry
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In standard SQL, you cannot do an *update entry if it exists; insert if not*.
+    As this is a common operation, each database offers some way to do this with its
+    own special syntax. When using the standard library, you must choose between doing
+    an update or an insert. If you do not know whether the entry exists, you will
+    need to use a transaction, which we will detail in a bit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Doing an update or insert is simply using a different SQL syntax and the `ExecContext()`
+    call:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this example, we have added two methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`AddUser()` adds a new user into the system.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`UpdateDisplayName()` updates the display name of a user with a specific ID.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Both use the `sql.Stmt` type, which would be a field in the object, similar
+    to `getUserStmt`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The major difference when implementing using the Postgres-native package is
+    the method name that is called and the lack of a prepared statement. Implementing
+    `AddUser()` would look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sometimes, it is not enough to just do a read or a write to the database. Sometimes,
+    we need to do multiple actions atomically and treat them as a single action. So,
+    in the next section, we will talk about how to do this with transactions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transactions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Transactions provide a sequence of SQL operations that are executed on the server
+    as one piece of work. This is commonly used to provide some type of atomic operation
+    where a read and a write are required or to extract data on a read before doing
+    a write.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Transactions are easy to create in Go. Let''s create an `AddOrUpdateUser()`
+    call that will look to see whether a user exists before adding or updating our
+    data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates a transaction with an isolation level of `LevelSerializable`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Uses a `defer` statement to determine whether we had an error:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If we did, we roll back the entire transaction.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If not, we attempt to commit the transaction.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Queries to find whether the user exists:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It determines this by checking the error type.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the error is `sql.ErrNoRows`, we did not find the user.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the error is anything else, it was a system error.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes an insert statement if we didn't find the user
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes an update statement if we did find the user
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The keys to a transaction are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`conn.BeginTx`, which starts the transaction'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tx.Commit()`, which commits our changes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tx.Rollback()`, which reverts our changes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `defer` statement is an excellent way to handle either `Commit()` or `Rollback()`
+    once the transaction has been created. It ensures that when the function ends,
+    either one or the other is executed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The isolation level is important for a transaction as it affects the performance
+    and reliability of your system. Go provides multiple levels of isolation; however,
+    not all database systems will support all levels of isolation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can read more about isolation levels here: [https://en.wikipedia.org/wiki/Isolation_(database_systems)#Isolation_levels](https://en.wikipedia.org/wiki/Isolation_(database_systems)#Isolation_levels).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Postgres-specific types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: So far in our examples, we have shown you how to use both the standard library
+    and Postgres-specific objects to interact with Postgres. But we haven't really
+    shown a compelling reason to use Postgres objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Postgres objects shine when you need to use types or capabilities that aren''t
+    a part of the SQL standard. Let''s rewrite our transaction example, but instead
+    of storing data across standard columns, let''s have our Postgres database only
+    have two columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An ID of the `int` type
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Data of the `jsonb` type
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jsonb` is not part of the SQL standard and cannot be implemented with the
+    standard SQL library. `jsonb` can greatly simplify your life, as it allows you
+    to store JSON data while querying using JSON fields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This example is different in a few ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It has additional `AccessMode` and `DeferableMode` parameters.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We can pass our object, `UserRec`, as our `Data` `jsonb` column.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The access and deferable modes add extra constraints that are not available
+    directly with the standard library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `jsonb` is a boon. Now, we can do searches on our tables with `WHERE`
+    clauses that can filter on the `jsonb` field values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will also notice that `pgx` is smart enough to know our column type and
+    automatically convert our `UserRec` into JSON.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you'd like to know more about Postgres value types, you can visit [https://www.postgresql.org/docs/9.5/datatype.html](https://www.postgresql.org/docs/9.5/datatype.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you'd like to know more about `jsonb` and functions to access its values,
+    visit [https://www.postgresql.org/docs/9.5/functions-json.html](https://www.postgresql.org/docs/9.5/functions-json.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other options
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Besides the standard library and database-specific packages are **Object-Relational
+    Mappings** (**ORMs**). ORMs are a popular model for managing data between your
+    services and data storage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Go''s most popular ORM is called **GORM**, which can be found here: [https://gorm.io/index.html](https://gorm.io/index.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another popular framework that also includes support for REST and web services
+    is Beego, which you can find here: [https://github.com/beego/beego](https://github.com/beego/beego).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Storage abstractions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Many developers are tempted to use storage systems directly in their code,
+    passing around a connection to a database. This is not optimal in that it can
+    cause problems when you need to do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Add caching layers before storage access.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Migrate to a new storage system for your service.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Abstracting storage behind an internal **Application Programming Interface**
+    (**API**) of interfaces will allow you to change storage layers later by simply
+    implementing the interfaces with the new backend. You can then plug in the new
+    backend at any time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple example of this might be adding an interface for getting user data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: This interface allows you to implement your storage backend using Postgres,
+    local files, SQLite, Azure Cosmos DB, in-memory data structures, or any other
+    storage medium.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This has the benefit of allowing migration from one storage medium to another
+    by plugging in a new implementation. As a side benefit, you can decouple tests
+    from using a database. Instead, most tests can use an in-memory data structure.
+    This allows you to test your functionality without bringing up and tearing down
+    infrastructure, which would be necessary with a real database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding a cache layer becomes a simple exercise of writing a `UserStorage` implementation
+    that calls the cache on reads and when not found calls your data store implementation.
+    You can replace the original and everything keeps working.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that everything described here for abstraction behind an interface applies
+    to access to service data. A SQL API should only be used for your application
+    to store and read data. Other services should use a stable RPC interface. This
+    provides the same type of abstraction, allowing you to move data backends without
+    migrating users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Case study – data migration of an orchestration system – Google
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: One of the systems I was involved with during my tenure at Google was an orchestration
+    system for automating network changes. The system received automation instructions
+    and executed them against various targets. These operations might involve pushing
+    files via **Secure File Transfer Protocol** (**SFTP**), interacting with network
+    routers, updating authoritative data stores, or running state verifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With operations, it is critical that data representing the state of a workflow
+    is always up to date. This includes not only the currently running workflows but
+    also the states of previous workflows, which are used to create new workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To ease our operational burden, we wanted to move the storage system for workflows
+    from Bigtable to Spanner. Bigtable required a more complicated setup to handle
+    failover to a backup cell when problems occurred, while Spanner was designed to
+    handle this as part of the system design. This removed the need for us to intervene
+    when cells had problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The storage layer was hidden behind a storage interface. Storage was initialized
+    in our `main()` and passed around to other modules that required it. This meant
+    that we could replace the storage layer with a new implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We implemented a new storage interface that wrote data to both Bigtable and
+    Spanner while reading from them both, using the latest data stamp and updating
+    the records if needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This allowed us to operate using both data stores while our historical data
+    was being transferred. Once synchronization was complete, we moved our binaries
+    to a version that only had a Spanner implementation. Our migration was complete
+    with no service downtime while thousands of critical operations were running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far in this chapter, we have learned about how to use `database/sql` to access
+    generic data stores and Postgres specifically. We learned how to read and write
+    to Postgres and implement transactions. The benefits of using `database/sql` versus
+    a database-specific library such as `pgx` were discussed. And finally, we showed
+    how hiding your implementations behind interface abstractions can allow you to
+    change storage backends more easily and test code relying on storage hermetically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will look into accessing RPC services using REST or gRPC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Developing REST services and clients
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Before the web and distributed systems that now permeate the cloud space, standards
+    for communicating between systems were not in widespread use. This communication
+    is often called an RPC. This simply means that a program on one machine has a
+    method to call a function running on a different machine and receive any output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monolithic applications were the norm and servers tended to either be silo'd
+    per application and vertically scaled or were run as jobs on larger, more specialized
+    hardware from companies such as IBM, Sun, SGI, or Cray. When systems did need
+    to communicate with each other, they tended to use their own custom wire formats,
+    such as what you would see with Microsoft SQL Server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the web defining the internet of the 2000s, large monolithic systems could
+    not provide the compute power behind services such as Google Search or Facebook
+    at any reasonable cost point. To power these services, companies needed to treat
+    large collections of standard PCs as a single system. Where a single system could
+    communicate between processes using Unix sockets or shared memory calls, companies
+    needed common and secure ways to communicate between processes running on different
+    machines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As HTTP became the de facto standard for communication between systems, RPC
+    mechanisms of today use some form of HTTP for data transport. This allows the
+    RPC to transit systems more easily, such as load balancers, and easily utilize
+    security standards, such as **Transport Layer Security** (**TLS**). It also means
+    that as the HTTP transport is upgraded, these RPC frameworks can leverage the
+    hard work of hundreds if not thousands of engineers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we are going to talk about one of the most popular RPC mechanisms,
+    REST. REST uses HTTP calls and whatever messaging format you want, although the
+    majority of cases use JSON for messaging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: REST for RPCs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Writing REST clients in Go is fairly simple. Chances are that if you have been
+    developing applications in the last 10 years, you have either used a REST client
+    or written one. Cloud APIs for services such as Google Cloud Platform's Cloud
+    Spanner, Microsoft's Azure Data Explorer, or Amazon DynamoDB use REST to communicate
+    with the services via their client libraries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'REST clients can do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use `GET`, `POST`, `PATCH`, or any other type of HTTP method.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support any serialization format (although this is normally JSON).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Allow for data streaming.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support query variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support multiple versions of an API using URL standards.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: REST in Go also has the luxury of not requiring any framework to implement on
+    the server side. Everything that is required lives in the standard library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a REST client
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Let's write a simple REST client that accesses a server and receives a `POST`
+    – `/v1/qotd`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let''s define the message we need to send to the server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s talk about what each of these does:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`getReq` details the arguments to the server''s `/v1/qotd` function call.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`getResp` is what we expect as a return from the server''s function call.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We are using field tags to allow conversion from lowercase keys into our public
+    variables that are capitalized. For the `encoding/json` package to see these values
+    for serialization, they must be public. Private fields will not be serializable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This defines a custom error type. This way, we can store error codes to return
+    to the user. This code is defined next to our response object, but it isn't used
+    until much later in the code we are defining.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s now define a QOTD client and a constructor that does some basic checks
+    on the address and creates an HTTP client to allow us to send data to the server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step is to make a generic function for making REST calls. Because
+    REST is so open-ended, it is hard to make one that can handle any type of REST
+    call. A best practice to use when writing REST servers is to only support the
+    `POST` method; never use query variables and simple URLs. However, in practice,
+    you will deal with a wide variety of REST call types if you don''t control the
+    service:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Checks our context for a deadline:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it has one, it is honored
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If not, a default one is set
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`cancel()` is called after the call is done'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Marshals a request into JSON.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Creates a new `*http.Request` that does the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses the `POST` method
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Talks to an endpoint
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has `io.Reader` storing the JSON request
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses the client to send a request and get a response.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Retrieves the response from the body of `http.Response`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unmarshals JSON into the response object.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You will notice that `req` and `resp` are both `interface{}`. This allows us
+    to use this routine with any struct that will represent a JSON request or response.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we will use that in a method that gets a QOTD by an author:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines an endpoint for our `get` function on the server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Calls our `restCall()` method, which does the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses `path.Join()` to unite our server address and URL endpoint.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a `getReq` object as the `req` argument of `restCall()`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reads the response into our `resp` response object.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If `*http.Client` returns an error, we return that error.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If `resp.Error` is set, we return it.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Returns the response's quote.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To see this running now, you can go here: [https://play.golang.org/p/Th0PxpglnXw](https://play.golang.org/p/Th0PxpglnXw).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have shown how to make a base REST client here using HTTP `POST` calls and
+    JSON. However, we have only scratched the surface of making a REST client. You
+    may need to add authentication to the header in the form of a **JSON Web Token**
+    (**JWT**). This used HTTP and not HTTPS, so there was no transport security. We
+    did not try to use compression such as Deflate or Gzip.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While using `http.Client` is easy to do, you may want a more intelligent wrapper
+    that handles many of these features for you. One that is worth looking at would
+    be `resty`, which can be found here: [https://github.com/go-resty/resty](https://github.com/go-resty/resty).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a REST service
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Now that we have a client written, let''s write a REST service endpoint that
+    can receive the request and send the user the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates the server `struct`, `which` will act as our server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses `*http.Server` to server HTTP content
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has `quotes`, which stores authors as keys and values that are a slice of quotes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, we need a constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Creates a `newServer` constructor:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This has an argument of `port`, which is the port to run the server on.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Creates a `server` instance:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Makes an instance of `*http.Server` running at `:[port]`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Populates our `quotes map`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adds `*http.ServeMux` to map URLs to methods.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: We will create the `qotdGet` method in a moment.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Creates a method called `start()` that will start our HTTP server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`*http.ServeMux` implements the `http.Handler` interface that is used by `*http.Server`.
+    `ServeMux` uses pattern matching to determine which method is called for which
+    URL. You can read about pattern-matching syntax here: [https://pkg.go.dev/net/http#ServeMux](https://pkg.go.dev/net/http#ServeMux).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s create the method to answer our REST endpoint:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implements the `http.Handler` interface.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Reads the HTTP request body and marshals it to our `getReq`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This uses HTTP error codes with `http.Error()` if the request was bad
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the request did not contain an "author," randomly chooses an author's quotes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Otherwise, finds the author and retrieves their quotes:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If that author did not exist, responds with `getResp` containing an error
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Randomly chooses a quote and returns it to the client.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, we have a REST endpoint that can answer our client''s RPCs. You can see
+    this code running here: [https://play.golang.org/p/Th0PxpglnXw](https://play.golang.org/p/Th0PxpglnXw).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This just scratches the surface of building a REST service. You can build authentication
+    and compression on top of this, performance tracing, and so on
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To help with bootstrapping features and removing some boilerplate, here are
+    a few third-party packages that might be helpful:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Gin: [https://github.com/gin-gonic/gin](https://github.com/gin-gonic/gin):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A REST example: [https://golang.org/doc/tutorial/web-service-gin](https://golang.org/doc/tutorial/web-service-gin)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Revel: [https://revel.github.io](https://revel.github.io)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that we have talked about using REST for RPCs, let's take a look at the
+    faster alternative that is being adopted by large companies everywhere, gRPC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Developing gRPC services and clients
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: gRPC provides an entire framework for RPCs based on HTTP and utilizing Google's
+    protocol buffer format, a binary format that can convert into JSON but provides
+    both a schema and, in many cases, a 10x performance improvement over JSON.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are other formats in this space, such as Apache's Thrift, Cap'n Proto,
+    and Google's FlatBuffers. However, these are not as popular and well supported,
+    or satisfy a particular niche, while also being hard to use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: gRPC, like REST, is a client/server framework for making RPC calls. Where gRPC
+    differs is that it prefers a binary message format called **protocol buffers**
+    (**proto** for short).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This format has a schema stored in a `.proto` file that is used to generate
+    the client, server, and messages in a native library for the language of your
+    choice using a compiler. When a proto message is marshaled for transport on the
+    wire, the binary representation will be the same for all languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's talk more about protocol buffers, gRPC's message format of choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Protocol buffers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Protocol buffers define RPC messages and services in one location and can generate
+    a library for every language with the proto compiler. Protocol buffers have the
+    following advantages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They write once and generate for every language.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Messages can be converted to JSON as well as binary.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: gRPC can use a reverse proxy to provide REST endpoints, which is great for web
+    apps.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Binary protocol buffers are smaller and can encode/decode at 10x the rate of
+    JSON.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'However, protocol buffers do have some negatives:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You must regenerate the messages on any change to the `.proto` file to get the
+    changes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Google's standard proto compiler is painful and confusing to use.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: JavaScript does not have native support for gRPC, even though it supports protocol
+    buffers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tooling can help with some of the negatives, and we will be using the new **Buf**
+    tools, [https://buf.build](https://buf.build), to help with proto generation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s take a look at what a protocol buffer `.proto` file looks like for a
+    QOTD service:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `syntax` keyword defines which version of the proto language we are using.
+    The most common version is `proto3`, the third iteration of the language. All
+    three have the same wire format but have different feature sets and generate different
+    language packages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`package` defines the proto package name, which allows this protocol buffer
+    to be imported by another package. We have put `[repo]` as a placeholder to represent
+    the GitHub repository.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`go_package` defines the package name specifically when generating Go files.
+    While this is marked as `option`, it is not optional when compiling for Go.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`message` defines a new message type, which in Go is generated as `struct`.
+    Entries inside `message` detail the fields. `string author = 1` creates a field
+    in `struct` `GetReq` called `Author` of the `string` type. `1` is the field position
+    in the proto. You cannot have repeated field numbers in a message, a field number
+    should never change, and a field should not be removed (although it can be deprecated).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`service` defines a gRPC service with one RPC endpoint, `GetQOTD`. This call
+    receives `GetReq` and returns `GetResp`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have defined this protocol buffer file, we can use a proto compiler
+    to generate packages for languages we are interested in. This will include all
+    of our messages and the code needed to use the gRPC client and server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at generating the Go packages from the protocol buffer file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Stating the prerequisites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To use protocol buffers in this tutorial, you will need to install the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The protocol buffer compiler: [https://grpc.io/docs/protoc-installation/](https://grpc.io/docs/protoc-installation/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The Go plugins for the compiler: [https://grpc.io/docs/languages/go/quickstart/](https://grpc.io/docs/languages/go/quickstart/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The Buf tooling: [https://docs.buf.build/installation](https://docs.buf.build/installation)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With these installed, you will be able to generate code for C++ and Go. Other
+    languages require additional plugins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating your packages
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The first file we need to create is the `buf.yaml` file. We can generate the
+    `buf.yaml` file inside the `proto` directory by entering it and issuing the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This should generate a file that has the following content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we need a file that tells us what output to generate. Create a file called
+    `buf.gen.yaml` and give it the following contents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: This indicates that we should generate our `go` and `go-grpc` files in the same
+    directory as our `.proto` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we should test that our proto will build. We can do this by issuing the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: If there is no output, then our proto file should compile. Otherwise, we will
+    get a list of errors that we need to fix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, let''s generate our proto files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you named the proto file `qotd.proto`, this should generate the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`qotd.pb.go`, which will contain all your messages'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`qotd_grpc.pb.go`, which will contain all the gRPC stubs'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that we have our proto package, let's build a client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a gRPC client
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the root folder of your repository, let''s create two directories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`client/`, which will hold our client code'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`internal/server/`, which will hold our server code'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let''s create a `client/client.go` file with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is a simple wrapper around the generated client with our connection to
+    the server established in our `New()` constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`grpc.Dial()` connects to the server''s address:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`grpc.WithInsecure()` allows us to not use TLS. (In real services, you need
+    to use TLS!)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pb.NewQOTDClient()` takes a gRPC connection and returns our generated client.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`QOTD()` uses the client to make a call defined in our `GetQOTD()` proto:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This defines a timeout if one was not defined. The server receives this timeout.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This uses the generated client to call the server.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creating a wrapper to use as a client isn't strictly required. Many developers
+    prefer to have the user directly interact with the service using the generated
+    client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our opinion, this is fine for simple clients. More complicated clients generally
+    should ease the burden by either moving logic to the server or having custom client
+    wrappers that are more language-friendly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have defined a client, let's create our server package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a gRPC server
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Let's create a server file at `internal/server/server.go`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s add the following content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Defines our API server:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pb.UnimplementedQOTDServer` is a generated interface that contains all the
+    methods that our server must implement. This is required.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`addr` is the address our server will run on.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`quotes` contains quotes the server is storing.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Defines a `New()` constructor:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This creates an instance of our `API` server.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This registers the instance with our `grpcServer`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let''s add methods to start and stop our `API` server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Defines `Start()` to start our server, which does the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses `Mutex` to prevent stops and starts concurrently
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a TCP listener on the address passed in `New()`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Starts the gRPC server using our listener
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Defines `Stop()` to stop our server, which does the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses `Mutex` to prevent stops and starts concurrently
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tells the gRPC server to stop gracefully
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let''s implement the `GetQOTD()` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines the `GetQOTD()` method that the client will call
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Includes similar logic to our REST server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses gRPC's error type defined in the `google.golang.org/grpc/status` package
+    to return gRPC error codes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that we have our client and server packages, let's create a server binary
+    to run our service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a server binary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Create a file called `qotd.go` that will hold our server''s `main()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates a flag, `addr`, that the caller passes to set the address that the server
+    runs on.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates an instance of our server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Writes that we are starting the server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Starts the server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If the server exists, the error is printed to the screen:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This might be something saying the port is already in use.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can run this binary by using this command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you do not pass the `--addr` flag, this will default to `127.0.0.1:80`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should see the following on your screen:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let's create a binary that uses the client to fetch a QOTD.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a client binary
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Create a file called `client/bin/qotd.go`. Then, add the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sets up a flag for the address of the server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sets up a flag for the author of the quote you want
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a new instance of `client.QOTD`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calls the server using the `QOTD()`client method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Prints the results or an error to the terminal
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can run this binary by using this command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will contact the server running at this address. If you are running the
+    server at a different address, you will need to change this to match.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you do not pass the `--author` flag, this randomly chooses an author.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should see the following on your screen:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we've seen how to use gRPC to make a simple client and server application.
+    But this is just the beginning of the features available to you in gRPC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are just scratching the surface
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'gRPC is a key piece of infrastructure for cloud technology such as Kubernetes.
+    It was built after years of experience with Stubby, Google''s internal predecessor.
+    We have only scratched the surface of what gRPC can do. Here are some additional
+    features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running a gRPC gateway to export REST endpoints
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Providing interceptors that can deal with security and other needs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Providing streaming data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TLS support
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Metadata and trailers for extra information
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Client-side server load balancing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here are just a few of the big companies that have made the switch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Square
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Netflix
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: IBM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CoreOS
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Docker
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: CockroachDB
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cisco
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Juniper Networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Spotify
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Zalando
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dropbox
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let's talk a little about how best to provide REST or gRPC services inside your
+    company.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Company-standard RPC clients and servers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: One of the keys to Google's tech stack success has been a consolidation around
+    technologies. While there is certainly a lot of duplication in technology, Google
+    standardizes on certain software and infrastructure components. Inside Google,
+    it is rare to see a client/server not using Stubby (Google's internal gRPC).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The libraries that engineers use for RPC are written to work the same in every
+    language. In recent years, there have been pushes by **Site Reliability Engineering**
+    (**SRE**) organizations to have wrappers around Stubby that offer a breadth of
+    features and best practices to prevent every team from reinventing the wheel.
+    This includes features such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Authentication
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Compression handling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Distributed service rate limiting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Retries with backoff (or circuit breaking)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This removes a lot of threats to infrastructure by having clients retrying without
+    any backoffs, removing the cost of teams figuring out a security model, and allowing
+    fixes to these items to be done by experts. Changes to these libraries benefit
+    everyone and lower the cost of discovering already-made services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a DevOps engineer or SRE who likely carries a pager, pushing for standardization
+    in your RPC layer can provide innumerable benefits, such as not being paged!
+  prefs: []
+  type: TYPE_NORMAL
+- en: While choice is often seen as a good thing, having limited choices can allow
+    development teams and operators to continue to focus on their product and not
+    infrastructure, which is key in having robust products.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you decide on providing a REST framework, here are a few recommended practices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only use `POST`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Do not use query variables.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use JSON only.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Have all arguments inside your request.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This will greatly reduce the needed code within your framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we learned what RPC services are and how to write clients using
+    two popular methods, REST and gRPC. You also learned how REST has a looser set
+    of guidelines while gRPC prefers schema types and generates the components required
+    to use the system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This ends our chapter on interacting with remote data sources. We looked at
+    how to connect to SQL databases with examples using Postgres. We looked at what
+    RPCs are and talked about the two most popular types of RPC services, REST and
+    gRPC. Finally, we have written servers and clients for both frameworks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter has given you the ability to connect to the most popular databases
+    and cloud services to get and retrieve data. Now you can write your own RPC services
+    to develop cloud applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will utilize this knowledge to build tooling that controls
+    jobs on remote machines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, without further ado, let's jump into how to write command-line tools.
+  prefs: []
+  type: TYPE_NORMAL

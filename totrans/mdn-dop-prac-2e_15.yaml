@@ -1,0 +1,2635 @@
+- en: '15'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Implementing Traffic Management, Security, and Observability with Istio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we covered **site reliability engineering** (**SRE**)
+    and how it has helped manage production environments using DevOps practices. In
+    this chapter, we’ll dive deep into a service mesh technology called Istio, which
+    will help us implement SRE practices and manage our application better in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Revisiting the Blog App
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to service mesh
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to Istio
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding the Istio architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installing Istio
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Istio Ingress to allow traffic
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Securing your microservices using Istio
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing traffic with Istio
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Observing traffic and alerting with Istio
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: For this chapter, we will spin up a cloud-based Kubernetes cluster, **Google
+    Kubernetes Engine** (**GKE**), for the exercises. At the time of writing, **Google
+    Cloud Platform** (**GCP**) provides a free $300 trial for 90 days, so you can
+    go ahead and sign up for one at [https://console.cloud.google.com/](https://console.cloud.google.com/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will also need to clone the following GitHub repository for some of the
+    exercises: [https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can use the Cloud Shell offering available from GCP to follow this chapter.
+    Go to Cloud Shell and start a new session. Run the following command to clone
+    the repository into your home directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also need to set the project ID and enable a few GCP APIs we will use in
+    this chapter. To do so, run the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you haven't followed the previous chapters and want to start quickly with
+    this, you can follow the next part, *Setting up the baseline*, though I highly
+    recommend that you go through the last few chapters to get a flow. If you have
+    been following the hands-on exercises in the previous chapters, feel free to skip
+    this part.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up the baseline
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To ensure continuity with the previous chapters, let’s start by creating a
+    service account for Terraform so that we can interact with our GCP project:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: You will see that a file called `key-file` has been created within your working
+    directory. Now, create a new repository called `mdo-environments` with a `README.md`
+    file on GitHub, rename the `main` branch to `prod`, and create a new branch called
+    `dev` using GitHub. Navigate to `https://github.com/<your_github_user>/mdo-environments/settings/secrets/actions/new`
+    and create a secret named `GCP_CREDENTIALS`. For the value, print the `key-file`
+    file, copy its contents, and paste it into the **values** field of the GitHub
+    secret.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, create another secret, `PROJECT_ID`, and specify your GCP project ID within
+    the **values** field.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we need to create a **GCS bucket** for Terraform to use as a remote backend.
+    To do this, run the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next thing we need to do is set up our Secrets Manager. Let’s create a
+    secret called `external-secrets`, where we will pass the MongoDB credentials in
+    the JSON format. To do so, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We need to create the `Secret` resource, which will interact with GCP to fetch
+    the stored secret. First, we need to create a GCP service account to interact
+    with Secrets Manager using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we’re following the principle of least privilege, we will add the following
+    role binding to provide access only to the `external-secrets` secret, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s generate the service account key file using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, copy the contents of the `key.json` file into a new GitHub Actions secret
+    called `GCP_SM_CREDENTIALS`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also need to create the following GitHub Actions secrets for binary authorization
+    to work:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the workflow automatically raises pull requests at the end, we need to define
+    a GitHub token. This token allows the workflow to act on behalf of the current
+    user when creating the pull request. Here are the steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go to [https://github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Create a new token with “Repository” access for the `mdo-environments` repository,
+    granting it `read-write` pull request permissions. This approach aligns with the
+    principle of least privilege, offering more granular control.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once the token is created, copy it.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now, create a GitHub Actions secret named `GH_TOKEN` and paste the copied token
+    as the value.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Now that all the prerequisites have been met, we can clone our repository and
+    copy the baseline code. Run the following commands to do this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we’re now on the baseline, let’s proceed further and understand the sample
+    Blog App that we will deploy and manage in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Revisiting the Blog App
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Since we discussed the Blog App previously, let’s look at the services and
+    their interactions again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.1 – The Blog App and its services and interactions](img/B19877_15__1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.1 – The Blog App and its services and interactions
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, we’ve created CI and CD pipelines for building, testing, and pushing
+    our Blog App microservices containers using GitHub Actions, deploying them using
+    Argo CD in a GKE cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you may recall, we created the following resources for the application to
+    run seamlessly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**MongoDB**: We deployed an auth-enabled MongoDB database with root credentials.
+    The credentials were injected via environment variables sourced from a Kubernetes
+    **Secret** resource. To persist our database data, we created a **PersistentVolume**
+    mounted to the container, which we provisioned dynamically using a **PersistentVolumeClaim**.
+    As the container is stateful, we used a **StatefulSet** to manage it and, therefore,
+    a headless **Service** to expose the database.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Posts, reviews, ratings, and users**: The *posts*, *reviews*, *ratings*,
+    and *users* microservices interacted with MongoDB through the root credentials
+    that were injected via environment variables sourced from the same **Secret**
+    as MongoDB. We deployed them using their respective **Deployment** resources and
+    exposed all of them via individual **ClusterIP Services**.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Frontend**: The *frontend* microservice does not need to interact with MongoDB,
+    so there was no interaction with the Secret resource. We also deployed this service
+    using a **Deployment** resource. As we wanted to expose the service on the internet,
+    we created a **LoadBalancer Service** for it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can summarize them with the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.2 – Blog App – Kubernetes resources and interactions](img/B19877_15_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.2 – Blog App – Kubernetes resources and interactions
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand the application, let’s understand what a service mesh
+    is and how it is beneficial in this use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to service mesh
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Imagine being in a bustling city with a complex network of roads and highways.
+    You’re driving your car from one side of the city to the other. In this scenario,
+    you deal with the following entities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Your car**: Your car represents an individual service or application in a
+    computer system. It has a specific purpose, just like a microservice or application
+    in a software architecture.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Roads and highways**: The roads and highways are like the network connections
+    and communication pathways between different services in your application. Services
+    need to interact and communicate with each other to perform various functions,
+    just as vehicles need roads to get from one place to another.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Traffic lights and signs**: Traffic lights, signs, and road rules help manage
+    traffic flow, ensuring that vehicles (services) can safely and efficiently navigate
+    the city. These are like the rules, protocols, and tools in a service mesh regulating
+    communication and data exchange between services.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Traffic control center**: Think of the traffic control center as the service
+    mesh. It’s a centralized system that monitors and manages traffic flow across
+    the city. Similarly, a service mesh is a centralized infrastructure that oversees
+    and facilitates communication between services, ensuring they can communicate
+    reliably and securely.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Traffic monitoring and optimization**: The traffic control center ensures
+    safe travel and can optimize traffic flow. It can reroute vehicles to avoid congestion
+    or accidents. In the context of a service mesh, it can optimize the flow of data
+    and requests between services, ensuring efficient and resilient communication.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Safety and reliability**: In the city, the traffic control center helps prevent
+    accidents and ensures everyone reaches their destinations safely. Similarly, a
+    service mesh enhances the safety and reliability of your computer system by providing
+    features such as load balancing, security, and fault tolerance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So, just as the traffic control center makes your journey in a complex city
+    more manageable and secure, a service mesh in a computer system simplifies and
+    secures the communication between different services, ensuring that data and requests
+    can flow smoothly, reliably, and safely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Containers and the orchestration platforms that manage them, such as Kubernetes,
+    have streamlined how we handle microservices. The introduction of container technology
+    played a pivotal role in popularizing this concept by allowing for the execution
+    and scalability of individual application components as self-contained entities,
+    each with an isolated runtime environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While adopting a microservices architecture offers advantages such as accelerated
+    development, enhanced system robustness, simplified testing, and the ability to
+    scale different aspects of an application independently, it isn’t without its
+    challenges. Managing microservices can be a complex endeavor. Instead of dealing
+    with a single, monolithic application, you now have multiple dynamic components,
+    each catering to specific functionalities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the context of extensive applications, it’s not uncommon to see hundreds
+    of microservices interacting with each other, which can quickly become overwhelming.
+    The primary concerns that may be raised by your security and operations teams
+    are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring secure communication between microservices. You need to secure numerous
+    smaller services rather than securing a single monolithic application.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Isolating a problematic microservice in case of an issue.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Testing deployments with a limited percentage of traffic before a full release
+    to establish trust.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Consolidating application logs that are now distributed across multiple sources.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Monitoring the health of the services becomes more intricate, with many components
+    constituting the application.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: While Kubernetes effectively addresses some management issues, it primarily
+    serves as a container orchestration platform and excels in that role. However,
+    it doesn’t inherently solve all the complexities of a microservices architecture
+    as they require specific solutions. Kubernetes does not inherently provide robust
+    service management capabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, communication between Kubernetes containers lacks security measures,
+    and enforcing TLS between pods involves managing an extensive number of TLS certificates.
+    Identity and access management between pods is also not applied out of the box.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While tools such as Kubernetes Network Policy can be employed to implement a
+    firewall between pods, they function at a Layer 3 level rather than Layer 7, which
+    is what modern firewalls operate at. This means you can identify the source of
+    traffic but cannot inspect the data packets to make metadata-driven decisions,
+    such as routing based on an HTTP header.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although Kubernetes offers methods for deploying pods and conducting A/B testing
+    and canary deployments, these processes often involve scaling container replicas.
+    For example, deploying a new microservice version with just 10% of traffic directed
+    to it requires at least 10 containers: 9 for the old version and 1 for the new
+    version. Kubernetes distributes traffic evenly among pods without intelligent
+    traffic splitting.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each Kubernetes container within a pod maintains separate logging, necessitating
+    a custom solution for capturing and consolidating logs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the Kubernetes dashboard provides features such as monitoring pods and
+    checking their health, it does not offer insights into how components interact,
+    the traffic distribution among pods, or the container chains that constitute the
+    application. The inability to trace traffic flow through Kubernetes pods means
+    you cannot pinpoint where in the chain a request encountered a failure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To address these challenges comprehensively, a service mesh technology such
+    as Istio can be of extreme help. This can effectively tackle the intricacies of
+    managing microservices in Kubernetes and offer solutions for secure communication,
+    intelligent traffic management, monitoring, and more. Let’s understand what the
+    Istio service mesh is through a brief introduction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to Istio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Istio is a service mesh technology designed to streamline service connectivity,
+    security, governance, and monitoring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the context of a microservices application, each microservice operates independently
+    using containers, resulting in a complex web of interactions. This is where a
+    service mesh comes into play, simplifying the discovery, management, and control
+    of these interactions, often accomplished through a sidecar proxy. Allow me to
+    break it down for you step by step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine a standard Kubernetes application comprising a frontend and a backend
+    pod. Kubernetes offers built-in service discovery between pods using Kubernetes
+    services and CoreDNS. Consequently, you can direct traffic using the service name
+    from one pod to another. However, you won’t have significant control over these
+    interactions and runtime traffic management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Istio steps in by injecting a sidecar container into your pod, which acts as
+    a proxy. Your containers communicate with other containers via this proxy. This
+    architecture allows all requests to flow through the proxy, enabling you to exert
+    control over the traffic and collect data for further analysis. Moreover, Istio
+    provides the means to encrypt communication between pods and enforce identity
+    and access management through a unified control plane.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Due to this architecture, Istio boasts a range of core functionalities that
+    enhance the traffic management, security, and observability of your microservices
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traffic management
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Istio effectively manages traffic by harnessing the power of the sidecar proxy,
+    often referred to as the envoy proxy, alongside **ingress** and **egress gateways**.
+    With these components, Istio empowers you to shape traffic and define service
+    interaction rules. This includes implementing features such as **timeouts**, **retries**,
+    **circuit breakers**, and much more, all through configurations within the control
+    plane.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These capabilities open the door to intelligent practices such as **A/B testing**,
+    **canary deployments**, and **staged rollouts** with **traffic division based
+    on percentages**. You can seamlessly execute gradual releases, transitioning from
+    an existing version (**Blue**) to a new one (**Green**), all with user-friendly
+    controls.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, Istio allows you to conduct operational tests in a live production
+    environment, offering **live traffic mirroring** to test instances. This enables
+    you to gather real-time insights and identify potential production issues before
+    they impact your application. Additionally, you can route requests to different
+    language-specific microservices versions based on **geolocation or user profiles**,
+    among other possibilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Security
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Istio takes security seriously by securing your microservices through the envoy
+    proxy and establishing identity access management between pods via mutual TLS.
+    It is a robust defense against man-in-the-middle attacks through out-of-the-box
+    **traffic encryption** between pods. This mutual authentication ensures that only
+    trusted frontends can connect to backends, creating a strong trust relationship.
+    Consequently, even if one of the pods is compromised, it cannot compromise the
+    rest of your application. Istio further enhances security with **fine-grained
+    access control policies** and introduces auditing tools currently lacking in Kubernetes,
+    enhancing your cluster’s overall security posture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observability
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Thanks to the envoy sidecar, Istio maintains a keen awareness of the traffic
+    flowing through the pods, enabling you to gather crucial telemetry data from the
+    services. This wealth of data aids in gaining insights into service behavior and
+    offers a window into future optimization possibilities for your applications.
+    Additionally, Istio consolidates application logs and facilitates **traffic tracing**
+    through multiple microservices. These features empower you to identify and resolve
+    issues more swiftly, helping you isolate problematic services and expedite debugging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Developer-friendly
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Istio’s most remarkable feature is its ability to relieve developers from the
+    burdens of managing security and operational intricacies within their implementations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Istio’s Kubernetes-aware nature permits developers to continue building their
+    applications as standard Kubernetes deployments. Istio seamlessly and automatically
+    injects sidecar containers into the pods, sparing developers the need to worry
+    about these technical intricacies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once these sidecar containers have been integrated, operations and security
+    teams can then step in to enforce policies related to traffic management, security,
+    and the overall operation of the application. This results in a mutually beneficial
+    scenario for all involved parties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Istio empowers security and operations teams to efficiently oversee microservices
+    applications without hampering the development team’s productivity. This collaborative
+    approach ensures that each team within the organization can maintain its specialized
+    focus and effectively contribute to the app’s success. Now that we understand
+    Istio, let’s look at its architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the Istio architecture
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Istio simplifies microservices management through two fundamental components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Data plane**: This comprises the sidecar envoy proxies that Istio injects
+    into your microservices. These proxies take on the essential role of routing traffic
+    between various services, and they also collect crucial telemetry data to facilitate
+    monitoring and insights.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Control plane**: The control plane serves as the command center, instructing
+    the data plane on how to route traffic effectively. It also handles the storage
+    and management of configuration details, making it easier for administrators to
+    interact with the sidecar proxy and take control of the Istio service mesh. In
+    essence, the control plane functions as the intelligence and decision-making hub
+    of Istio.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Similarly, Istio manages two types of traffic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Data plane traffic**: This type of traffic consists of the core business-related
+    data exchanged between your microservices. It encompasses the actual interactions
+    and transactions that your application handles.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Control plane traffic**: In contrast, the control plane traffic consists
+    of messages and communications between Istio components, and it is chiefly responsible
+    for governing the behavior of the service mesh. It acts as the control mechanism
+    that orchestrates the routing, security, and overall functioning of the microservices
+    architecture.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following diagram describes the Istio architecture in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.3 – Istio architecture](img/B19877_15_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.3 – Istio architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see two distinct parts in the preceding diagram, the control plane
+    and the data plane, let’s go ahead and understand them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The control plane architecture
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Istio ships the control plane as a single **istiod** component. The Istio control
+    plane, or istiod, comprises several critical components, each playing a distinct
+    role in managing your service mesh.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pilot
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Pilot** serves as the central control hub of the service mesh. It communicates
+    with the envoy sidecars using the Envoy API and translates the high-level rules
+    specified in Istio manifests into envoy configurations. Pilot enables service
+    discovery, intelligent traffic management, and routing capabilities. It empowers
+    you to implement practices such as A/B testing, Blue/Green deployments, canary
+    rollouts, and more. Additionally, Pilot enhances the resiliency of your service
+    mesh by configuring sidecars to handle tasks such as timeouts, retries, and circuit
+    breaking. One of its notable features is providing a bridge between Istio configuration
+    and the underlying infrastructure, allowing Istio to run on diverse platforms
+    such as Kubernetes, **Nomad**, and **Consul**. Regardless of the platform, Pilot
+    ensures consistent traffic management.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Citadel
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Citadel** focuses on identity and access management within your service mesh,
+    fostering secure communication between Kubernetes pods. It safeguards your pods
+    by ensuring encrypted communication, even if your developers have designed components
+    with insecure TCP connections. Citadel simplifies the implementation of mutual
+    TLS by managing the complexities of certificates. It offers user authentication,
+    credential management, certificate handling, and traffic encryption, ensuring
+    pods can securely validate one another when necessary.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Galley
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Galley** is responsible for essential configuration tasks within your service
+    mesh. It validates, processes, and distributes configuration changes throughout
+    the Istio control plane. For example, when you apply a new policy, Galley ingests
+    the configuration, validates its accuracy, processes it for the intended components,
+    and seamlessly disseminates it within the service mesh. In essence, Galley serves
+    as the interface through which the Istio control plane interacts with the underlying
+    APIs, facilitating the smooth management of your service mesh.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s dive deep into understanding the data plane architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The data plane architecture
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The data plane component of Istio is composed of **envoy proxies**, **ingress
+    gateways**, and **egress gateways**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Envoy proxies
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Envoy proxies play a pivotal role in enabling various aspects of your service
+    mesh. These **Layer 7** proxies are uniquely capable of making crucial decisions
+    based on the content of the messages they handle, and they are the sole components
+    that directly interact with your business traffic. Here’s how these envoy proxies
+    contribute to the functionality of Istio:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Traffic control**: They provide fine-grained control over how traffic flows
+    within your service mesh, allowing you to define routing rules for various types
+    of traffic, including **HTTP**, **TCP**, **WebSockets**, and **gRPC**.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Security and authentication**: Envoy proxies enforce **identity and access
+    management**, ensuring that only authorized pods can interact with one another.
+    They implement **mutual TLS** and **traffic encryption** to prevent **man-in-the-middle
+    attacks** and offer features such as rate limiting to safeguard against runaway
+    costs and **denial-of-service attacks**.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Network resiliency**: They enhance network resiliency by supporting features
+    such as **retries**, **failover**, **circuit breaking**, and **fault injection**
+    to maintain the reliability and robustness of your services.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Next, let’s look at Ingress and egress gateways.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ingress and egress gateways
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In Istio, ingress is a collection of one or more envoy proxies, which Pilot
+    dynamically configures upon their deployment. These envoy proxies are crucial
+    in controlling and routing incoming external traffic into your service mesh, ensuring
+    that it is appropriately directed to the relevant services based on defined routing
+    rules and policies. This dynamic configuration allows Istio to effectively manage
+    and secure external traffic flows without requiring extensive manual intervention,
+    ensuring that your applications can operate efficiently and securely within the
+    service mesh.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Egress gateways are similar to ingress gateways but they work on outgoing traffic
+    instead. To understand this better, let’s use *Figure 15**.3* as a reference and
+    understand the traffic flow through **Service A** and **Service B**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this architecture, traffic within the service mesh follows a structured path
+    through **Ingress**, microservices (**Service A** and **Service B**), and **Egress**,
+    ensuring efficient routing and security measures. Let’s break down the flow of
+    a traffic packet through your service mesh.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ingress
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Traffic enters the service mesh through an ingress resource, which is essentially
+    a cluster of envoy proxies. Pilot configures these envoy proxies upon deployment.
+    Ingress proxies are aware of their backends due to configurations based on Kubernetes
+    service endpoints. Ingress proxies conduct health checks, perform load balancing,
+    and make intelligent routing decisions based on metrics such as load, packets,
+    quotas, and traffic balancing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Service A
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Once Ingress routes the traffic to a pod, it encounters the sidecar proxy container
+    of the Service A pod, not the actual microservice container. The envoy proxy and
+    the microservice container share the same network namespace within the pod and
+    have identical IP addresses and IP Table rules. The envoy proxy takes control
+    of the pod, handling all traffic passing through it. The proxy interacts with
+    Citadel to enforce policies, checks whether traffic needs encryption, and establishes
+    TLS connections with the backend pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Service B
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Service A’s encrypted packet is sent to Service B, where similar steps are followed.
+    Service B’s proxy verifies the sender’s identity through a TLS handshake with
+    the source proxy. Upon establishing trust, the packet is forwarded to the Service
+    B container, continuing the flow toward the egress layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Egress
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The egress resource manages outbound traffic from the mesh. Egress defines which
+    traffic can exit the mesh and employs Pilot for configuration, similar to the
+    ingress layer. Egress resources enable the implementation of policies restricting
+    outbound traffic to only necessary services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Telemetry data collection
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: Throughout these steps, proxies collect telemetry data from the traffic. This
+    telemetry data is sent to **Prometheus** for storage and analysis. This data can
+    be visualized in **Grafana**, offering insights into the service mesh’s behavior.
+    The telemetry data can also be sent to external tools such as **ELK** for more
+    in-depth analysis and machine learning applications on metrics collected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This structured flow ensures traffic moves securely and efficiently through
+    the service mesh while providing valuable insights for monitoring, analysis, and
+    decision-making processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we’ve understood the Istio architecture and its features, let’s go
+    ahead and see how we can install it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Istio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The general way of installing Istio is to download Istio using the provided
+    link and run a shell, which will install Istio on our system, including the **istioctl**
+    component. Then, we need to use **istioctl** to install Istio within a Kubernetes
+    cluster. However, since we’re using GitOps, we will use the GitOps principles
+    to install it. Istio offers another method to install Istio – that is, using Helm.
+    Since we know that Argo CD supports Helm, we will use that instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, we will create new Argo CD applications to deploy it. We will create
+    an Argo CD application for `istio-base`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, it will deploy `v1.19.1` of the `istio-base` helm chart from
+    [https://istio-release.storage.googleapis.com/charts](https://istio-release.storage.googleapis.com/charts)
+    to the `istio-system` namespace of the Kubernetes cluster. Similarly, we will
+    deploy `istiod` to the `istio-system` namespace using the following config:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we will install the `istio-ingress` component on the `istio-ingress`
+    namespace using the following config:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will also define the configuration on Terraform so that we can use push-based
+    GitOps to create our application automatically. So, we will append the following
+    to the `app.tf` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can commit and push these files to our remote repository and wait for
+    Argo CD to reconcile the changes using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: As soon as we push the code, we’ll see that the GitHub Actions workflow has
+    been triggered. To access the workflow, go to `https://github.com/<your_github_user>/mdo-environments/actions`.
+    Soon, the workflow will apply the configuration and create the Kubernetes cluster,
+    deploy Argo CD, external secrets, our Blog App, and Istio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the workflow succeeds, we must access the Argo Web UI. To do that, we
+    need to authenticate with the GKE cluster. To do so, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To utilize the Argo CD Web UI, you will require the external IP address of
+    the `argo-server` service. To get that, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we know that Argo CD can be accessed at `https://34.122.51.25/`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will run the following commands to reset the admin password:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, allow 2 minutes for the new credentials to be generated. After that, execute
+    the following command to retrieve the password:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have the credentials, we can log in. We will see the following
+    page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.4 – Argo CD Web UI – home page](img/B19877_15_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.4 – Argo CD Web UI – home page
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see, the Istio applications are up and running. Though Istio is installed
+    and running, the sidecars won’t be injected unless we ask Istio to do so. We’ll
+    look at this next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling automatic sidecar injection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Since envoy sidecars are the key technology behind Istio’s capabilities, they
+    must be added to your existing pods to enable Istio to manage them. Updating each
+    pod’s configuration to include these sidecars can be challenging. To address this
+    challenge, Istio offers a solution by enabling the automatic injection of these
+    sidecars. To allow automatic sidecar injection on a namespace, we must add a label
+    – that is, `istio-injection: enabled`. To do so, we will modify the `blog-app.yaml`
+    file and add the label to the namespace resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can commit this resource to Git and push the changes remotely using
+    the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the next Argo CD sync, we will soon find the label attached to the namespace.
+    As soon as the label is applied, we need to restart our deployments and stateful
+    sets, at which point new pods will come up with the injected sidecars. Use the
+    following commands to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s list the pods in the `blog-app` namespace using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the pods now show two containers instead of one. The extra container
+    is the envoy sidecar. Istio’s installation and setup are complete.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that our application has the Istio sidecar injected, we can use Istio ingress
+    to allow traffic to our application, which is currently exposed via a load balancer
+    service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Istio ingress to allow traffic
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We need to create a Blog App ingress gateway to associate our application with
+    the Istio ingress gateway. It is necessary for configuring our application to
+    route traffic through the Istio ingress gateway as we want to leverage Istio’s
+    traffic management and security features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Istio deploys the Istio ingress gateway as a part of the installation process,
+    and it’s exposed on a load balancer by default. To determine the load balancer’s
+    IP address and ports, you can run the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, Istio exposes various ports on your load balancer, and as our
+    application needs to run on port 80, we can access it using `http://<IngressLoadBalancerExternalIP>:80`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next step would be to use this ingress gateway and expose our application.
+    For that, we need to create **Gateway** and **VirtualService** resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Istio gateway is a **custom resource definition** (**CRD**) that helps you define
+    how incoming external traffic can access services in your mesh. It acts as an
+    entry point to your service and a load balancer for incoming traffic. When external
+    traffic arrives at a gateway, it determines how to route it to the appropriate
+    services based on the specified routing rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we define an Istio gateway, we also need to define a `VirtualService` resource
+    that uses the gateway and describes the routing rules for the traffic. Without
+    a `VirtualService` resource, the Istio gateway will not know where and how to
+    route the traffic it receives. A `VirtualService` resource is not only used for
+    routing traffic from gateways but also for routing traffic within different services
+    of the mesh. It allows you to define sophisticated routing rules, including traffic
+    splitting, retries, timeouts, and more. Virtual services are often associated
+    with specific services or workloads and determine how traffic should be routed
+    to them. You can use virtual services to control how traffic is distributed among
+    different versions of a service, enabling practices such as A/B testing, canary
+    deployments, and Blue/Green deployments. Virtual services can also route traffic
+    based on HTTP headers, paths, or other request attributes. In the current context,
+    we will use the `VirtualService` resource to filter traffic based on paths and
+    route them all to the **frontend** microservice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at the definition of the `Gateway` resource first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, we define a `Gateway` resource that uses the Istio ingress gateway
+    (defined by the `istio: ingress` selector) and listens on HTTP port `80`. It allows
+    connection to all hosts as we’ve set that to `"*"`. For gateways to work correctly,
+    we need to define a `VirtualService` resource. Let’s look at that next:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `VirtualService` resource listens on all hosts and applies to `blog-app-gateway`
+    as specified. It allows `/static`, and `/posts` as a `prefix` match. This means
+    all requests with a URI that begins with them would be routed. The `/login`, `/logout`,
+    `/register`, `/updateprofile`, and `/` paths have an `exact` match, which means
+    that the exact URI is matched and allowed. These are routed to the `frontend`
+    service on port `80`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We must also modify the `frontend` service within the `blog-app.yaml` file to
+    change the service type to `ClusterIP`. This will remove the attached load balancer
+    from the service, and all requests will be routed via the ingress gateway.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s go ahead and apply these changes using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will wait 5 minutes for the sync to work, after which we can go to `http://<Ingress`
+    **LoadBalancerExternalIP>** to access our Blog App. You should see the following
+    page. This shows that the application is working correctly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.5 – Blog App – home page](img/B19877_15_5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.5 – Blog App – home page
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can play around with the application by registering, logging in, creating
+    a post, and writing a review. Try updating the post and reviews to see whether
+    all aspects of the application are working. Now, let’s look at the security aspects
+    of our microservices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Securing your microservices using Istio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Running microservices in production offers numerous advantages, such as independent
+    scalability, enhanced agility, reduced scope of change, frequent deployments,
+    and reusability. However, they also introduce unique challenges, particularly
+    in terms of security.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a monolithic architecture, the security focus revolves around safeguarding
+    a single application. However, in a typical enterprise-grade microservices application,
+    hundreds of microservices may need to interact securely with each other. Kubernetes
+    serves as an excellent platform for hosting and orchestrating microservices. Nevertheless,
+    the default communication between microservices is insecure, as they typically
+    use plaintext HTTP. This may not meet your security requirements. To apply the
+    same security principles to microservices as you would to a traditional enterprise
+    monolith, you must ensure the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Encrypted communications**: All interactions between microservices must be
+    encrypted to prevent potential man-in-the-middle attacks'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Access control**: Access control mechanisms need to be in place to ensure
+    that only authorized microservices can interface with each other'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Telemetry and audit logging**: Capturing, logging, and auditing telemetry
+    data is crucial to understanding traffic behavior and proactively detecting intrusions'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Istio simplifies addressing these security concerns and provides these essential
+    security features out of the box. With Istio, you can enforce strong **identity
+    and access management**, mutual **TLS** and **encryption**, **authentication**
+    and **authorization**, and comprehensive **audit logging** – all within a unified
+    control plane. This means you can establish robust security practices for your
+    microservices, promoting the safety and reliability of your applications in a
+    dynamic and distributed environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the context of Istio, you should be aware that it automatically injects sidecar
+    proxies into your pods and modifies the IP tables of your Kubernetes cluster to
+    ensure that all connections occur through these proxies. This setup is designed
+    to enforce TLS encryption by default, enhancing the security of your microservices
+    without requiring specific configurations. The communication between these envoy
+    proxies within the service mesh is automatically secured through TLS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While the default setup offers a foundational level of security and effectively
+    prevents man-in-the-middle attacks, it’s advisable to further bolster the security
+    of your microservices by applying specific policies. Before delving into the detailed
+    features, having a high-level understanding of how security functions in Istio
+    is beneficial.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Istio incorporates the following key components for enforcing security:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Certificate authority** (**CA**): This component manages keys and certificates,
+    ensuring secure and authenticated communication within the service mesh.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Configuration API Server**: The Configuration API Server distributes authentication
+    policies, authorization policies, and secure naming information to the envoy proxies.
+    These policies define how services can authenticate and authorize each other and
+    manage secure communication.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Sidecar proxies**: Sidecar proxies, deployed alongside your microservices,
+    are crucial in enforcing security policies. They act as policy enforcement points,
+    implementing the policies supplied to them.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Envoy proxy extensions**: These extensions enable the collection of telemetry
+    data and auditing, providing insights into traffic behavior and helping to identify
+    and mitigate security issues.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With these components working in concert, Istio ensures a robust security framework
+    for your microservices, which can be further fine-tuned by defining and enforcing
+    specific security policies tailored to your application’s needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As our application currently runs on HTTP, it would be a great idea to implement
+    TLS in our Blog App and expose it over HTTPS. Let’s start by creating a secure
+    ingress gateway for this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating secure ingress gateways
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Secure ingress gateways are nothing but **TLS-enabled ingress gateways**. To
+    enable TLS on an ingress gateway, we must provide it with a **private key** and
+    a **certificate** chain. We will use a self-signed certificate chain for this
+    exercise, but you must use a proper CA certificate chain in production. A CA certificate
+    is a digital certificate that’s granted by a reputable CA, such as Verisign or
+    Entrust, within a **public key infrastructure** (**PKI**). It plays a pivotal
+    role in guaranteeing the security and reliability of digital interactions and
+    transactions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by creating a **root certificate** and **private key** to sign
+    certificates for our application by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the generated root certificate, we can now generate the **server certificate**
+    and the key using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step is to generate a Kubernetes TLS secret within the `istio-ingress`
+    namespace for our ingress gateway to read it. However, as we don’t want to store
+    the TLS key and certificate in our Git repository, we will use **Google Secrets
+    Manager** instead. Therefore, let’s run the following command to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we must create an external secret manifest to fetch the keys and certificates
+    from Secrets Manager and generate a TLS secret. The following manifest will help
+    us achieve that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s create a directory within our Environment Repository and copy the
+    external secret manifest there. Use the following commands for that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we need to modify the ingress gateway resource to configure TLS. To do
+    so, we must modify the `Gateway` resource to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The gateway configuration is similar to the previous one, but instead of `port
+    80`, we’re using `port 443` for `HTTPS`. We also have a `tls` section with a `SIMPLE`
+    mode, which means it is a standard TLS connection. We’ve specified `credentialName`,
+    pointing to the secret we created using the TLS key and certificate. Since all
+    the setup is now ready, let’s commit and push the code using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Wait for `blog-app` to sync. Once we’ve done this, we can access our application
+    at `https:` **//<IngressLoadBalancerExternalIP>**. With that, the connection coming
+    into our application has been encrypted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Though we’ve secured connection coming into our mesh, securing all internal
+    service interactions with services using TLS within your service mesh would be
+    good as an additional security layer. We’ll implement that next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enforcing TLS within your service mesh
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we know by now, by default, Istio provides TLS encryption for communication
+    between workloads that have sidecar proxies injected. However, it’s important
+    to note that this default setting operates in compatibility mode. In this mode,
+    traffic between two services with sidecar proxies injected is encrypted. However,
+    workloads without sidecar proxies can still communicate with backend microservices
+    over plaintext HTTP. This design choice is made to simplify the adoption of Istio,
+    as teams newly introducing Istio don’t need to immediately address the issue of
+    making all source traffic TLS-enabled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create and get a shell to a pod in the `default` namespace. The backend
+    traffic will be plaintext because the namespace does not have automatic sidecar
+    injection. We will then `curl` the `frontend` microservice from there and see
+    whether we get a response. Run the following command to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, we get an `HTTP 200` response back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach balances security and compatibility, allowing a gradual transition
+    to a fully encrypted communication model. Over time, as more services have sidecar
+    proxies injected, the overall security posture of the microservices application
+    improves. However, as we are starting fresh, enforcing strict TLS for our Blog
+    App would make sense. So, let’s do that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable strict TLS on a workload, namespace, or the entire cluster, Istio
+    provides peer authentication policies using the `PeerAuthentication` resource.
+    As we only need to implement strict TLS on the Blog App, enabling it at the namespace
+    level would make sense. To do that, we will use the following `PeerAuthentication`
+    resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s apply this using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Argo CD should pick up the new configuration and apply the strict TLS policy
+    as soon as we push the changes. Wait for the Argo CD sync to be in a clean state,
+    and run the following commands to check whether strict TLS is working:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the request has now been rejected as it is a plaintext request,
+    and the backend will only allow TLS. This shows that strict TLS is working fine.
+    Now, let’s move on and secure our services even better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From our design, we know how services interact with each other:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `frontend` microservice can only connect to the `posts`, `reviews`, and
+    `users` microservices
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Only the `reviews` microservice can connect to the `ratings` microservice.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Only the `posts`, `reviews`, `users`, and `ratings` microservices can connect
+    to the `mongodb` database
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Therefore, we can define these interactions and only allow these connections
+    explicitly. Therefore, the `frontend` microservice will not be able to connect
+    with the `mongodb` database directly, even if it tries to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Istio provides the `AuthorizationPolicy` resource to manage this. Let’s implement
+    the preceding scenario using that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start with the `posts` microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `AuthorizationPolicy` has multiple sections. It starts with `name` and
+    `namespace`, which are `posts` and `blog-app`, respectively. The `spec` section
+    contains `selector`, where we specify that we need to apply this policy to all
+    pods with the `app: posts` label. We use an `ALLOW` action for this. Note that
+    Istio has an implicit `deny-all` policy for all pods that match the selector,
+    and any `ALLOW` rules will be applied on top of that. Any traffic that does not
+    match the `ALLOW` rules will be denied by default. We have rules to define what
+    traffic to allow; here, we’re using the `from` > `source` > `principals` and setting
+    the `frontend` service account on this. So, in summary, this rule will apply to
+    the `posts` microservice and only allow traffic from the `frontend` microservice.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, we will apply the same policy to the `reviews` microservice, as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `users` microservice also only needs to accept traffic from the `frontend`
+    microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `ratings` microservice should accept traffic only from the `reviews` microservice,
+    so we will make a slight change to the principals, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the `mongodb` service needs a connection from all microservices apart
+    from `frontend`, so we must specify multiple entries in the principal section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since we’ve used service accounts to understand where the requests are coming
+    from, we must also create and assign service accounts to respective services.
+    So, we will modify the `blog-app.yaml` file and add service accounts for each
+    service, something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'I’ve already replicated the same in the new `blog-app.yaml` file. Let’s commit
+    the changes and push them to GitHub so that we can apply them to our cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we must wait for the sync to complete and then verify the setup. First,
+    we’ll get a shell to the `frontend` pod and try to use `wget` to connect with
+    the backend microservices. We will try to connect with each microservice and see
+    what we get. If we get `HTTP 200` or `404`, this means the backend is allowing
+    connections, while if we get `HTTP 403` or `Error`, this signifies the backend
+    is blocking connections. Run the following commands to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, we get an `HTTP 404` response from the `posts`, `reviews`, and
+    `users` microservices. The `ratings` microservice returns a `403 Forbidden` response,
+    and the `mongodb` service reports that the resource is unavailable. This means
+    that our setup is working correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s try the same with the `posts` microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, the `posts` microservice can communicate successfully with `mongodb`,
+    but the rest of the microservices return `403 Forbidden`. This is what we were
+    expecting. Now, let’s do the same with the `reviews` microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, the `reviews` microservice can successfully connect with the
+    `ratings` microservice and `mongodb`, while getting a `403` response from other
+    microservices. This is what we expected. Now, let’s check the `ratings` microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the `ratings` microservice can only connect successfully with
+    the `mongdb` database and gets a `403` response for other services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we’ve tested all the services, the setup is working fine. We’ve secured
+    our microservices to a great extent! Now, let’s look at another aspect of managing
+    microservices with Istio – traffic management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing traffic with Istio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Istio offers robust traffic management capabilities that form a core part of
+    its functionality. When leveraging Istio for microservice management within your
+    Kubernetes environment, you gain precise control over how these services communicate
+    with each other. This empowers you to define the traffic path within your service
+    mesh meticulously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some of the traffic management features at your disposal are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Request routing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Fault injection
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Traffic shifting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: TCP traffic shifting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Request timeouts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Circuit breaking
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mirroring
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The previous section employed an ingress gateway to enable traffic entry into
+    our mesh and used a virtual service to distribute traffic to the services. With
+    virtual services, the traffic distribution happens in a round-robin fashion by
+    default. However, we can change that using destination rules. These rules provide
+    us with an intricate level of control over the behavior of our mesh, allowing
+    for a more granular management of traffic within the Istio ecosystem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we delve into that, we need to update our Blog App so that it includes
+    a new version of the `ratings` service deployed as `ratings-v2`, which will return
+    black stars instead of orange stars. I’ve already updated the manifest for that
+    in the repository. Therefore, we just need to copy that to the `mdo-environments`
+    repository, commit it, and push it remotely using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Wait for the application to sync. After this, we need to do a few things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go to the Blog App home page > **Sign In** > **Not a User? Create an account**
+    and create a new account.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click on the **Actions** tab > **Add a Post**, add a new post with a title and
+    content of your choice, and click **Submit**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use the **Add a Review** text field to add a review, provide a rating, and click
+    **Submit**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click on **Posts** again and access the post that we had created.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Now, keep refreshing the page. We will see that we get orange stars half the
+    time and black stars for the rest. Traffic is splitting equally across `v1` and
+    `v2` (that is, the orange and black stars):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.6 – Round robin routing](img/B19877_15_6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.6 – Round robin routing
+  prefs: []
+  type: TYPE_NORMAL
+- en: This occurs due to the absence of destination rules, which leaves Istio unaware
+    of the distinctions between `v1` and `v2`. Let’s define destination rules for
+    our microservices to rectify this, clearly informing Istio of these versions.
+    In our case, we have one version for each microservice, except for the `ratings`
+    microservice, so we’ll define the following destination rules accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by defining the destination rule of the `frontend` microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The provided YAML manifest introduces a `DestinationRule` resource named `frontend`
+    within the `blog-app` namespace. This resource is associated with the host named
+    `frontend`. Subsequently, we define subsets labeled as `v1`, targeting pods with
+    the `version: v1` label. Consequently, configuring our virtual service to direct
+    traffic to the `v1` destination will route requests to pods bearing the `version:`
+    `v1` label.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This same configuration approach can be replicated for the `posts`, `users`,
+    and `reviews` microservices. However, the `ratings` microservice requires a slightly
+    different configuration due to the deployment of two versions, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The YAML manifest for the `ratings` microservice closely resembles that of
+    the other microservices, with one notable distinction: it features a second subset
+    labeled as `v2`, corresponding to pods bearing the `version:` `v2` label.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consequently, requests routed to the `v1` destination target all pods with
+    the `version: v1` label, while requests routed to the `v2` destination are directed
+    to pods labeled `version: v2`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To illustrate this in a practical context, we will proceed to define virtual
+    services for each microservice. Our starting point will be defining the virtual
+    service for the `frontend` microservice, as illustrated in the following manifest:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: The provided YAML manifest outlines a `VirtualService` resource named `frontend`
+    within the `blog-app` namespace. This resource configures the host `frontend`
+    with an HTTP route destination, directing all traffic to the `frontend` host and
+    specifying the `v1` subset. Consequently, all requests targeting the `frontend`
+    host will be routed to the `v1` destination that we previously defined.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will replicate this configuration approach for the `posts`, `reviews`, and
+    `users` microservices, creating corresponding `VirtualService` resources. In the
+    case of the `ratings` microservice, the decision is made to route all traffic
+    to the `v1` (orange stars) version. Therefore, we apply a similar `VirtualService`
+    resource for the `ratings` microservice as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s copy the manifests to the `mdo-environments` repository and commit
+    and push the code to the remote repository using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Wait for Argo CD to sync the changes. Now, all requests will route to `v1`.
+    Therefore, you will only see orange stars in the reviews, as shown in the following
+    screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.7 – Route to v1](img/B19877_15_7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.7 – Route to v1
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s try to roll out `v2` using a canary rollout approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traffic shifting and canary rollouts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Consider a scenario where you’ve developed a new version of your microservice
+    and are eager to introduce it to your user base. However, you’re understandably
+    cautious about the potential impact on the entire service. In such cases, you
+    may opt for a deployment strategy known as **canary rollouts**, also known as
+    a **Blue/Green deployment**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The essence of a canary rollout lies in its incremental approach. Instead of
+    an abrupt transition, you methodically shift traffic from the previous version
+    (referred to as **Blue**) to the new version (**Green**). This gradual migration
+    allows you to thoroughly test the functionality and reliability of the new release
+    with a limited subset of users before implementing it across the entire user base.
+    This approach minimizes the risks associated with deploying new features or updates
+    and ensures a more controlled and secure release process. The following figure
+    illustrates this process beautifully:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.8 – Canary rollouts](img/B19877_15_8.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.8 – Canary rollouts
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s how a *canary rollout* strategy works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Initial release**: The existing version (referred to as the *baseline* or
+    *current version*) continues to serve the majority of users.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Early access**: A small group of users or systems, typically selected as
+    a representative sample, is identified as the *canary group*. They receive the
+    new version.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Monitoring and evaluation**: The software’s performance and behavior in the
+    canary group are closely monitored. Metrics, logs, and user feedback are collected
+    to identify issues or anomalies.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Gradual expansion**: If the new version proves stable and performs as expected
+    in the canary group, its exposure is incrementally expanded to a broader user
+    base. This expansion can occur in stages, with a small percentage of users being
+    “promoted” to the new version at each stage.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Continuous monitoring**: Throughout the rollout, continuous monitoring and
+    analysis are critical to identify and address any emerging issues promptly. If
+    problems are detected, the rollout can be halted or reversed to protect the majority
+    of users.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Full deployment**: Once the new version has been successfully validated through
+    the canary rollout stages, it is eventually made available to the entire user
+    base.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'So, let’s roll out the `ratings-v2` service to `20%` of our users. For that,
+    we’ll use the following `VirtualService` resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, we’ve modified the `ratings` virtual service to introduce a second
+    destination pointing to the `v2` subset. A noteworthy addition in this configuration
+    is the introduction of the `weight` attribute. For the `v1` destination, we have
+    assigned a weight of `80`, while the `v2` destination carries a weight of `20`.
+    This means that `20%` of the traffic will be directed to the `v2` version of the
+    `ratings` microservice, providing a controlled and adjustable distribution of
+    traffic between the two versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s copy the manifest and then commit and push the changes to the remote
+    repository using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Following the completion of the Argo CD sync, if you refresh the page 10 times,
+    you’ll observe that black stars appear twice out of those 10 times. This is a
+    prime example of a canary rollout in action. You can continue monitoring the application
+    and gradually adjust the weights to shift traffic toward `v2`. Canary rollouts
+    effectively mitigate risks during production rollouts, providing a method to address
+    the fear of the unknown, especially when implementing significant changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, another approach exists to test your code in a production environment
+    that involves using live traffic without exposing your application to end users.
+    This method is known as traffic mirroring. We’ll delve into it in the following
+    discussion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traffic mirroring
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Traffic mirroring**, also called shadowing, is a concept that has recently
+    gained traction. It is a powerful approach that allows you to assess your releases
+    in a production environment without posing any risk to your end users.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traditionally, many enterprises maintained a staging environment that closely
+    mimicked the production setup. The Ops team deployed new releases to the staging
+    environment in this setup while testers generated synthetic traffic to simulate
+    real-world usage. This approach provided a means for teams to evaluate how the
+    code would perform in the production environment, assessing its functional and
+    non-functional aspects before promoting it to production. The staging environment
+    served as the ground for performance, volumetric, and operational acceptance testing.
+    While this approach had its merits, it was not without its challenges. Maintaining
+    static test environments, which involved substantial costs and resources, was
+    one of them. Creating and sustaining a replica of the production environment required
+    a team of engineers, leading to high overhead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, synthetic traffic often deviated from real live traffic since the
+    former relied on historical data, while the latter reflected current user interactions.
+    This discrepancy occasionally led to overlooked scenarios.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, traffic mirroring offers a solution that similarly enables
+    operational acceptance testing while going a step further. It allows you to conduct
+    this testing using live, real-time traffic without any impact on end users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s how traffic mirroring operates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploy a new version of the application and activate traffic mirroring.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The old version continues to respond to requests as usual but concurrently sends
+    an asynchronous copy of the traffic to the new version.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The new version processes the mirrored traffic but refrains from responding
+    to end users.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The ops team monitors the behavior of the new version and reports any issues
+    to the development team.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This process is depicted in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.9 – Traffic mirroring](img/B19877_15_9.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.9 – Traffic mirroring
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traffic mirroring revolutionizes the testing process by enabling teams to uncover
+    issues that might remain hidden in a traditional staging environment. Additionally,
+    you can utilize monitoring tools such as Prometheus and Grafana to record and
+    monitor the outcomes of your testing efforts, enhancing the overall quality and
+    reliability of your releases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, without further ado, let’s configure traffic mirroring for our `ratings`
+    service. Traffic mirroring is managed through the `VirtualService` resource, so
+    let’s modify the `ratings` virtual service to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this configuration, we set up a single `destination` targeting `v1` with
+    a `weight` value of `100`. Additionally, we defined a `mirror` section that directs
+    traffic to `ratings:v2` with a `mirror_percent` value of 100\. This signifies
+    that all traffic initially routed to `ratings:v1` is mirrored and simultaneously
+    sent to `v2`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s commit the changes and push them to the remote repository using the following
+    commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following the completion of the Argo CD synchronization process, we’ll proceed
+    to refresh the page five times. Subsequently, we can inspect the logs of the `ratings:v1`
+    service using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With traffic mirroring active, it’s expected that the same set of logs observed
+    in the `ratings:v1` service will also be mirrored in the `ratings:v2` service.
+    To confirm this, we can list the logs for the `ratings:v2` service using the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Indeed, the logs and timestamps match precisely, providing clear evidence of
+    concurrent log entries in `ratings:v1` and `ratings:v2`. This observation effectively
+    demonstrates the mirroring functionality in operation, showcasing how traffic
+    is duplicated for real-time monitoring and analysis in both versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Traffic mirroring is a highly effective method for identifying issues that often
+    elude detection within traditional infrastructure setups. It is a potent approach
+    for conducting operational acceptance testing of your software releases. This
+    practice simplifies testing and safeguards against potential customer incidents
+    and operational challenges.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are other aspects of traffic management that Istio provides, but covering
+    all of them is beyond the scope of this chapter. Please feel free to explore other
+    aspects of it by visiting the Istio documentation: [https://istio.io/latest/docs/tasks/traffic-management/](https://istio.io/latest/docs/tasks/traffic-management/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we already know, Istio leverages envoy proxies as sidecar components alongside
+    your microservice containers. Given that these proxies play a central role in
+    directing and managing the traffic within your service mesh, they also collect
+    valuable telemetry data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This telemetry data is subsequently transmitted to Prometheus, a monitoring
+    and alerting tool, where it can be stored and effectively visualized. Tools such
+    as Grafana are often employed in conjunction with Prometheus to provide insightful
+    and accessible visualizations of this telemetry data, empowering you to monitor
+    and manage your service mesh effectively. Therefore, we’ll go ahead and explore
+    the observability portion of Istio in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observing traffic and alerting with Istio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Istio provides several tools to visualize traffic through our mesh through Istio
+    add-ons. While **Prometheus** is the central telemetry data collection, storage,
+    and query layer, **Grafana** and **Kiali** provide us with interactive graphical
+    tools to interact with that data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start this section by installing the observability add-ons using the
+    following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: As soon as we push the code, Argo CD should create a new `istio-system` namespace
+    and install the add-ons. Once they have been installed, we can start by accessing
+    the Kiali dashboard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing the Kiali dashboard
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Kiali** is a powerful observability and visualization tool for microservices
+    and service mesh management. It offers real-time insights into the behavior of
+    your service mesh, helping you monitor and troubleshoot issues efficiently.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the Kiali service is deployed on a cluster IP and hence not exposed externally,
+    let’s do a port forward to access the Kiali dashboard using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the port forward session has started, click on the web preview icon of
+    Google Cloud Shell, choose **Change port to 20001**, and click **preview**. You
+    will see the following dashboard. This dashboard provides valuable insights into
+    the applications running across the mesh:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.10 – Kiali dashboard](img/B19877_15_10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.10 – Kiali dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To visualize service interactions, we can switch to the graph view by clicking
+    on the `blog-app` namespace. We will see the following dashboard, which provides
+    an accurate view of how traffic flows, the percentage of successful traffic, and
+    other metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.11 – Kiali service interaction graph](img/B19877_15_11.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.11 – Kiali service interaction graph
+  prefs: []
+  type: TYPE_NORMAL
+- en: While Kiali dashboards provide valuable insights regarding our mesh and help
+    us observe service interactions in real time, they lack the capability of providing
+    us with advanced monitoring and alerting capabilities. For that, we can use Grafana.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring and alerting with Grafana
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Grafana** is a leading open source platform for observability and monitoring,
+    offering dynamic dashboards and robust alerting capabilities. It enables users
+    to visualize data from diverse sources while setting up alerts for proactive issue
+    detection.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we’ve already installed Grafana with the necessary add-ons, let’s access
+    it by opening a port forward session. Ensure you terminate the existing Kiali
+    port-forwarding session or use a different port. Run the following command to
+    do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the port forwarding session has started, access the Grafana page like
+    we did for Kiali, and go to **Home** > **Dashboards** > **Istio** > **Istio Service
+    Dashboard**. We should see a dashboard similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.12 – Istio service dashboard ](img/B19877_15_12.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.12 – Istio service dashboard
+  prefs: []
+  type: TYPE_NORMAL
+- en: This dashboard provides rich visualizations regarding some standard SLIs we
+    may want to monitor, such as the request’s *success rate*, *duration*, *size*,
+    *volume*, and *latency*. It helps you observe your mesh meticulously, and you
+    can also build additional visualizations based on your requirements by using the
+    **Prometheus Query Language** (**PromQL**), which is simple to learn and apply.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, monitoring and visualization must be complemented by alerting for complete
+    reliability. So, let’s delve into that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alerting with Grafana
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To initiate the alerting process, it’s crucial to establish clear criteria.
+    Given the limited volume at hand, simulating an accurate SLO breach can be challenging.
+    For simplicity, our alerting criteria will trigger when traffic volume surpasses
+    one transaction per second.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The initial phase of this process involves crafting the query to retrieve the
+    necessary metrics. We will employ the following query to achieve this objective:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: The provided query determines the traffic rate for all transactions passing
+    through the Istio ingress gateway to the `frontend` microservice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next step involves creating the alert rules with the query in place. To
+    do this, navigate to **Home** > **Alerting** > **Alert rules**. Then, fill in
+    the form, as illustrated in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.13 – Defining alert rules](img/B19877_15_13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.13 – Defining alert rules
+  prefs: []
+  type: TYPE_NORMAL
+- en: The alert rule is configured to monitor for violations at a 1-minute interval
+    for 2 consecutive minutes. Once the alert rule has been established, triggering
+    the alert is as simple as refreshing the Blog App home page about 15–20 times
+    rapidly every 1 to 2 minutes. This action should activate the alert. To observe
+    this process, navigate to **Home** > **Alerting** > **Alert rules**. You will
+    notice the alert in a **Pending** state in the first minute. This means it has
+    detected a violation in one of its checks and will wait for another violation
+    within the 2-minute duration before triggering the alert.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a production environment, setting longer check intervals, typically around
+    5 minutes, with alerting intervals of 15 minutes is typical. This approach helps
+    avoid excessive alerting for self-resolving transient issues, ensuring the SRE
+    team is not inundated with false alerts. The goal is to maintain a balance and
+    prevent the team from treating every alert as a potential false alarm. The following
+    screenshot shows a pending alert:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.14 – Alert pending](img/B19877_15_15.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.14 – Alert pending
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After the 2-minute monitoring period, you should observe the alert being triggered,
+    as depicted in the following screenshot. This indicates that the alert rule has
+    successfully identified a sustained violation of the defined criteria and is now
+    actively notifying relevant parties or systems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 15.15 – Alert firing](img/B19877_15_16.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 15.15 – Alert firing
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since no specific alert channels have been configured in this context, the fired
+    alerts will be visible within the Grafana dashboard only. It is highly advisable
+    to set up a designated alert destination for sending alerts to your designated
+    channels, using a tool such as **PagerDuty** to page on-call engineers or **Slack**
+    notifications to alert your on-call team. Proper alert channels ensure that the
+    right individuals or teams are promptly notified of critical issues, enabling
+    rapid response and issue resolution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As we conclude this chapter and wrap up this book, our journey has taken us
+    through an array of diverse concepts and functionalities. While we’ve covered
+    substantial ground in this chapter, it’s essential to recognize that Istio is
+    a rich and multifaceted technology, making it a challenge to encompass all its
+    intricacies within a single chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter marked our initiation into the world of service mesh, shedding
+    light on its particular advantages in the context of microservices. Our exploration
+    extended to various dimensions of Istio, beginning with installing Istio and extending
+    our sample Blog App to utilize it using automatic sidecar injection. We then moved
+    on to security, delving into the intricacies of securing ingress gateways with
+    mTLS, enforcing strict mTLS among microservices, and harnessing authorization
+    policies to manage traffic flows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our journey then led us to traffic management, where we introduced essential
+    concepts such as destination rules and virtual services. These enabled us to carry
+    out canary rollouts and traffic mirroring, demonstrating the power of controlled
+    deployments and real-time traffic analysis. Our voyage culminated in observability,
+    where we harnessed the Kiali dashboard to visualize service interactions and ventured
+    deep into advanced monitoring and alerting capabilities using Grafana.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we end this remarkable journey, I want to extend my heartfelt gratitude to
+    you for choosing this book and accompanying me through its pages. I trust you’ve
+    found every part of this book enjoyable and enlightening. I hope this book has
+    equipped you with the skills necessary to excel in the ever-evolving realm of
+    modern DevOps. I wish you the utmost success in all your present and future endeavors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Answer the following questions to test your knowledge of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which approach would you use to install Istio among the available options using
+    GitOps methodology?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Istioctl
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Helm charts
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Kustomize
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Manifest bundle
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: What configuration is necessary for Istio to inject sidecars into your workloads
+    automatically?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'A. Apply the `istio-injection-enabled: true` label to the namespace'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. No configuration is needed – Istio automatically injects sidecars into all
+    pods
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Modify the manifests so that they include the Istio sidecars and redeploy
+    them
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Istio sidecars automatically communicate with each other using mTLS. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which resource enforces policies that dictate which services are permitted to
+    communicate with each other?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. `AuthenticationPolicy`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. `AuthorizationPolicy`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. `PeerAuthentication`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following resources would you use for canary rollouts? (Choose
+    two)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. `VirtualService`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. `IngressGateway`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. `DestinationRule`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. `Egress Gateway`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Why would you use traffic mirroring in production? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Real-time monitoring for production performance and behavior analysis
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. To route traffic to a new version to duplicate traffic to test the performance
+    of your backend service
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Safe testing of changes or updates without risking production disruptions
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Streamlined troubleshooting and debugging for issue identification and resolution
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which observability tool would you use to visualize real-time service interactions?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Prometheus
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Grafana
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Kiali
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Loki
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Answers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Here are the answers to this chapter’s questions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A and C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, C, and D
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Appendix: The Role of AI in DevOps'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The recent developments in **artificial intelligence** (**AI**) with the launch
+    of generative AI using ChatGPT have taken the tech industry by storm. It has made
+    many existing AI players pivot, and most companies are now looking at the best
+    ways to use it in their products. Naturally, DevOps and the tooling surrounding
+    it are no exceptions, and slowly, AI is gaining firm ground in this discipline,
+    which historically relied upon more traditional automation methods. Before we
+    delve into how AI changes DevOps, let’s first understand what AI is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This appendix will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is AI?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The role of AI in the DevOps infinity loop
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What is AI?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: AI emulates human intelligence in computing. You know how our computers do fantastic
+    things, but they need to be told everything to do? Well, AI doesn’t work like
+    that. It learns a ton from looking at lots of information, like how we learn from
+    our experiences. That way, it can figure out patterns independently and make decisions
+    without needing someone to tell it what to do every time. This makes AI intelligent
+    because it can keep learning new things and get better at what it does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine if your computer could learn from everything it sees, just like you
+    remember from everything around you. That’s how AI works—it’s a computer’s way
+    of getting more intelligent. Instead of needing step-by-step instructions, AI
+    learns from vast amounts of information. This makes it great at spotting patterns
+    in data and deciding things on its own. And when it comes to DevOps, AI can be
+    of great help! Let’s look at that next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The role of AI in the DevOps infinity loop
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'As we are already aware, instead of following a linear path of software delivery,
+    DevOps practices generally follow an infinity loop, as shown in the following
+    figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B19877_Appendix_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure A.1 – DevOps infinity loop
+  prefs: []
+  type: TYPE_NORMAL
+- en: DevOps practices heavily emphasize automation to ensure that this infinity loop
+    operates smoothly, and we need tools. Most of these tools help build, deploy,
+    and operate your software. You will typically start writing code in an **integrated
+    development environment** (**IDE**) and then check code into a central source
+    code repository such as Git. There will be a continuous integration pipeline that
+    will build code from your Git repository and push it to an artifact repository.
+    Your QA team might write automated tests to ensure the artifact is tested before
+    it is deployed to higher environments using a continuous deployment pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before the advent of AI, setting up all of the toolchains and operating them
+    relied on traditional coding methods; that is, you would still write code to automate
+    the processes, and the automation would behave more predictably and do what it
+    was told to. However, with AI, things are changing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AI is transforming DevOps by automating tasks, predicting failures, and optimizing
+    performance. In other words, by leveraging AI’s capabilities, DevOps teams can
+    achieve greater efficiency, reduce errors, and deliver software faster and more
+    reliably.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some key roles of AI in DevOps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Automating Repetitive Tasks**: AI can automate repetitive and tedious tasks,
+    such as code testing, deployment, and infrastructure provisioning. This frees
+    up DevOps engineers to focus on more strategic and creative work, such as developing
+    new features and improving application performance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Predicting and Preventing Failures**: AI can analyze vast amounts of data,
+    including logs, performance metrics, and user feedback, to identify patterns and
+    predict potential failures. This proactive approach allows DevOps teams to address
+    issues before they impact users or cause major disruptions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Optimizing Resource Utilization**: AI can analyze resource usage data to
+    optimize infrastructure allocation and prevent resource bottlenecks. This ensures
+    that applications have the resources they need to perform optimally, minimizing
+    downtime and improving overall system efficiency.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Enhancing Security**: AI can be used to detect and prevent security threats
+    by analyzing network traffic, identifying anomalous behavior, and flagging suspicious
+    activity. This helps DevOps teams maintain a robust security posture and protect
+    sensitive data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Improving Collaboration and Communication**: AI can facilitate collaboration
+    and communication among DevOps teams by providing real-time insights, automating
+    workflows, and enabling seamless communication channels. This breaks down silos
+    and promotes a more cohesive DevOps culture.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s look at the areas of the DevOps infinity loop and see how AI impacts them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code development
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This area is where we see the most significant impact of generative AI and other
+    AI technologies. AI revolutionizes code development by automating tasks such as
+    code generation, bug detection, optimization, and testing. Through autocomplete
+    suggestions, bug detection algorithms, and predictive analytics, AI accelerates
+    coding, enhances code quality, and ensures better performance while aiding in
+    documentation and code security analysis. Its role spans from assisting in writing
+    code to predicting issues, ultimately streamlining the software development life
+    cycle, and empowering developers to create more efficient, reliable, and secure
+    applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many tools employ AI in code development, and one of the most popular tools
+    in this area is **GitHub Copilot**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitHub Copilot is a collaborative effort between **GitHub** and **OpenAI**,
+    introducing a code completion feature that utilizes OpenAI’s **Codex**. Codex,
+    trained on vast code repositories from GitHub, quickly generates code based on
+    the current file’s content and cursor location. Compatible with popular code editors
+    such as **Visual Studio Code**, **Visual Studio**, **Neovim**, and **JetBrains
+    IDEs**, Copilot supports languages such as **Python**, **JavaScript**, **TypeScript**,
+    **Ruby**, and **Go**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Praised by GitHub and users alike, Copilot generates entire code lines, functions,
+    tests, and documentation. Its functionality relied on the context provided and
+    the extensive code contributions by developers on GitHub, regardless of their
+    software license. Dubbed the world’s first AI pair programmer by **Microsoft**,
+    it is a paid tool and charges a subscription fee of $10 per month or $100 per
+    year per user after a 60-day trial period.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With Copilot, you can start by writing comments on what you intend to do, and
+    it will generate the required code for you. This speeds up development many times,
+    and most of the time, you just need to review and test your code to see whether
+    it does what you intend it to do. A great power indeed! It can optimize existing
+    code and provide feedback by generating code snippets. It can also scan your code
+    for security vulnerabilities and suggest alternative approaches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you don’t want to pay that $10, you can also look at free alternatives such
+    as **Tabnine**, **Captain Stack**, **GPT-Code Clippy**, **Second Mate**, and **Intellicode**.
+    Paid alternatives include Amazon’s **Code Whisperer** and Google’s **ML-enhanced**
+    **code completion**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AI tools not only help enhance the development workflow but also help in software
+    testing and quality assurance. Let’s look at that next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Software testing and quality assurance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Traditionally, software testing has taken more of a manual approach because
+    most developers don’t want software testing as a full-time profession. Though
+    automation testing has gained ground recently, the knowledge gap has hindered
+    this process in most organizations. Therefore, AI would most impact the testing
+    function as it bridges the human-machine gap.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'AI-integrated testing techniques revolutionize every stage of the **software
+    testing life cycle** (**STLC**); some of them are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Test script generation**: Traditionally, creating test scripts was time-consuming,
+    involving deep system understanding. AI and **machine learning** (**ML**) now
+    expedite this process by analyzing requirements, existing test cases, and application
+    behavior to craft more optimized test scripts, offering ready-to-use templates
+    with preconfigured code snippets and comprehensive comments, and translating plain
+    language instructions into complete test scripts using **natural language processing**
+    (**NLP**) techniques.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Test data generation**: AI-equipped testing tools provide detailed and ample
+    test data for comprehensive coverage. They achieve this by generating synthetic
+    data from existing sets for specific test objectives, transforming data to create
+    diverse testing scenarios, refining existing data for higher precision and relevance,
+    and scanning large code bases for context comprehension.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Intelligent test execution**: AI alleviates test execution challenges by
+    automatically categorizing and organizing test cases, efficiently selecting tests
+    for various devices, operating systems, and configurations, and smartly executing
+    regression tests for critical functionalities.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Intelligent test maintenance**: AI/ML minimizes test maintenance challenges
+    by implementing self-healing mechanisms to handle broken selectors and analyzing
+    UI and code change relationships to identify affected areas.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Root cause analysis**: AI aids in understanding and rectifying issues by
+    analyzing logs, performance metrics, and anomalies to pinpoint impact areas, tracing
+    issues back to affected user stories and feature requirements, and utilizing knowledge
+    repositories for comprehensive root cause analysis.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Multiple tools in the market help you achieve all of it; some of the most popular
+    ones are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Katalon platform**: A comprehensive quality management tool that simplifies
+    test creation, execution, and maintenance across various applications and environments.
+    It boasts AI features such as **TrueTest**, **StudioAssist**, **self-healing**,
+    **visual testing**, and **AI-powered test** **failure analysis**.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**TestCraft**: Built on **Selenium**, TestCraft offers both manual and automated
+    testing capabilities with a user-friendly interface and AI-driven element identification,
+    allowing tests to run across multiple browsers in parallel.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Applitools**: Known for its AI-based visual testing, Applitools efficiently
+    identifies visual bugs, monitors app visual aspects, and provides accurate visual
+    test analytics using AI and ML.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Function**: Utilizes AI/ML for functional, performance, and load testing
+    with simplicity, allowing test creation through plain English input, self-healing,
+    test analytics, and multi-browser support.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Mabl**: An AI-powered tool offering low-code testing, intuitive intelligence,
+    data-driven capabilities, end-to-end testing, and valuable insights generation,
+    promoting team collaboration.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**AccelQ**: Automates test designs, plans, and execution across the UI, mobile,
+    API, and PC software, featuring **automated test generation**, **predictive analysis**,
+    and comprehensive test management.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Testim**: Uses ML to expedite test creation and maintenance, allowing for
+    quick end-to-end test creation, smart locators for resilient tests, and a blend
+    of recording functions and coding for robust test creation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As we’ve already seen the benefits of AI in development and testing, let’s move
+    on to software delivery.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuous integration and delivery
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In **continuous integration** (**CI**) and **continuous delivery** (**CD**),
+    AI brings a transformative edge by optimizing and automating various stages of
+    the software development pipeline. AI augments CI by automating code analysis,
+    identifying patterns, and predicting potential integration issues. It streamlines
+    the process by analyzing code changes, suggesting appropriate test cases, and
+    facilitating faster integration cycles. Through ML, AI can understand historical
+    data from past builds, recognizing patterns that lead to failures, thereby aiding
+    in more efficient debugging and code quality improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In CD, AI optimizes deployment pipelines by automating release strategies, predicting
+    performance bottlenecks, and suggesting optimizations for smoother delivery. It
+    analyzes deployment patterns, user feedback, and system performance data to recommend
+    the most efficient delivery routes. Additionally, AI-driven CD tools enhance risk
+    prediction, allowing teams to foresee potential deployment failures and make informed
+    decisions to mitigate risks before they impact production environments. Ultimately,
+    AI’s role in CI/CD accelerates the development cycle, improves software quality,
+    and enhances the reliability of software releases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some AI-powered tools used in software release and delivery:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Harness**: Harness utilizes AI to automate software delivery processes, including
+    continuous integration, deployment, and verification. It employs ML to analyze
+    patterns from deployment pipelines, predict potential issues, and optimize release
+    strategies for better efficiency and reliability.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**GitClear**: GitClear employs AI algorithms to analyze code repositories and
+    provides insights into developer productivity, code contributions, and team performance.
+    It helps understand code base changes, identify bottlenecks, and optimize development
+    workflows.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Jenkins**: Thanks to its plugin-based architecture, Jenkins, a widely used
+    automation server, employs a lot of AI plugins and extensions to enhance its capabilities
+    in CI/CD. AI-powered plugins help automate tasks, optimize build times, and predict
+    build failures by analyzing historical data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**CircleCI**: CircleCI integrates AI and ML to optimize CI/CD workflows. It
+    analyzes build logs, identifies patterns leading to failures, and provides recommendations
+    to improve build performance and reliability.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These AI-powered tools improve software release and delivery processes’ speed,
+    quality, and reliability by automating tasks, optimizing workflows, predicting
+    issues, and providing valuable insights for better decision-making.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at the next stage in the process—software operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Software operations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: AI is pivotal in modern software operations, revolutionizing how systems are
+    monitored, managed, and optimized. By leveraging ML algorithms, AI helps automate
+    routine tasks such as monitoring system performance, analyzing logs, and identifying
+    anomalies in real time. It enables predictive maintenance by detecting patterns
+    that precede system failures, allowing for proactive intervention and preventing
+    potential downtime. Additionally, AI-powered tools streamline incident management
+    by correlating alerts, prioritizing critical issues, and providing actionable
+    insights, enhancing the overall resilience and reliability of software operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, AI augments decision-making processes by analyzing vast amounts of
+    data to identify trends, forecast resource requirements, and optimize infrastructure
+    utilization. AI adapts to changing environments through its continuous learning
+    capabilities, enabling software operations teams to stay ahead of evolving challenges
+    and complexities. Overall, AI’s role in software operations ensures greater efficiency,
+    improved system performance, and proactive problem resolution, contributing significantly
+    to the seamless functioning of IT infrastructures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some AI-powered tools used in software operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Dynatrace**: Dynatrace utilizes AI for application performance monitoring
+    and management. It employs AI algorithms to analyze vast amounts of data, providing
+    real-time insights into application performance, identifying bottlenecks, and
+    predicting potential issues before they impact end users.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**PagerDuty**: PagerDuty integrates AI-driven incident management, alerting,
+    and on-call scheduling. It uses ML to correlate events and alerts, reducing noise
+    and providing intelligent notifications for critical incidents.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Opsani**: Opsani leverages AI for autonomous optimization of cloud applications.
+    It analyzes application performance, dynamically adjusts configurations, and optimizes
+    resources to maximize performance and cost-efficiency.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Moogsoft**: Moogsoft offers AI-driven IT operations and AIOps platforms.
+    It uses ML to detect anomalies, correlate events, and automate incident resolution,
+    helping teams proactively manage and resolve issues in complex IT environments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Sumo Logic**: Sumo Logic employs AI for log management, monitoring, and analytics.
+    It uses ML to identify patterns, anomalies, and security threats within logs and
+    operational data, enabling proactive troubleshooting and security incident detection.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**New Relic**: New Relic utilizes AI for application and infrastructure monitoring.
+    Its AI-powered platform helps identify performance issues, predict system behavior,
+    and optimize resource utilization for better application performance.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**LogicMonitor**: LogicMonitor uses AI for infrastructure monitoring and observability.
+    It analyzes metrics and performance data to provide insights into system health,
+    predict potential issues, and optimize resource allocation in complex environments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**OpsRamp**: OpsRamp employs AI for IT operations management, offering capabilities
+    for monitoring, incident management, and automation. It uses ML to detect anomalies,
+    automate routine tasks, and optimize workflows for better operational efficiency.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These AI-powered tools assist in automating tasks, predicting and preventing
+    issues, optimizing resource allocation, and enhancing overall system reliability
+    in software operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The integration of AI into DevOps practices is still in its early stages, but
+    its potential impact is significant. By automating tasks, optimizing processes,
+    and enhancing collaboration, AI can revolutionize the way software is developed,
+    deployed, and managed. As AI technology continues to develop, we can expect to
+    see even more ways in which AI is used to improve the DevOps process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: AI revolutionizes DevOps practices by infusing intelligence into every development
+    and operations cycle stage. It streamlines processes, enhances efficiency, and
+    ensures smoother collaboration between development and operations teams. AI automates
+    routine tasks, predicts potential bottlenecks, and optimizes workflows, transforming
+    how software is built, tested, deployed, and monitored. From automating code analysis
+    to predicting system failures, AI empowers DevOps by enabling quicker decision-making,
+    reducing errors, and fostering a more agile and responsive software development
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In essence, AI acts as a silent partner, continuously learning from data, suggesting
+    improvements, and helping DevOps teams foresee and address issues before they
+    impact the software’s performance. It’s the catalyst that drives agility and innovation,
+    allowing DevOps to evolve from a mere collaboration between teams to a symbiotic
+    relationship where AI enhances the capabilities of both development and operations,
+    paving the way for more efficient and reliable software delivery.
+  prefs: []
+  type: TYPE_NORMAL

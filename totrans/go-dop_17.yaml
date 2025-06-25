@@ -1,0 +1,1159 @@
+- en: 'Chapter 14: Deploying and Building Applications in Kubernetes'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It's difficult to overstate the impact Kubernetes has had on the world of DevOps.
+    Over the years since it was open sourced by Google in 2014, Kubernetes has experienced
+    a meteoric rise in popularity. In that period, Kubernetes has become the preeminent
+    solution for orchestrating cloud-native container workloads, differentiating itself
+    from a field of orchestrators such as Apache Mesos and Docker Swarm. By providing
+    a common API over heterogeneous environments, Kubernetes has become the common
+    tool for deploying applications across cloud and hybrid environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, what is Kubernetes? According to its documentation, *"Kubernetes is a portable,
+    extensible, open source platform for managing containerized workloads and services,
+    that facilitates both declarative configuration and automation"* ([https://kubernetes.io/docs/concepts/overview/what-is-kubernetes/](https://kubernetes.io/docs/concepts/overview/what-is-kubernetes/)).
+    That is a lot to unpack. I'll sum up that statement a little differently. Kubernetes
+    is a set of APIs and abstractions that makes running containerize applications
+    easier. It provides services such as service discovery, load balancing, storage
+    abstraction and orchestration, automated rollouts and rollbacks, self-healing,
+    and secret, certificate, and configuration management. Furthermore, if Kubernetes
+    doesn't offer a specific bit of functionality you need directly, there is likely
+    a solution available in the vibrant open source ecosystem built around the core
+    of Kubernetes. The Kubernetes ecosystem is a vast set of tools for you to achieve
+    your operational objectives without needing to reinvent the wheel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of the aforementioned functionality is exposed through the Kubernetes API
+    and is infinitely programmable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter will not be a deep dive into all aspects of Kubernetes. To properly
+    explore Kubernetes in depth would require multiple books. The good news is there
+    are many great books on the topic: [https://www.packtpub.com/catalogsearch/result?q=kubernetes](https://www.packtpub.com/catalogsearch/result?q=kubernetes).
+    Also, the fantastic community-driven documentation ([https://kubernetes.io/docs/home/](https://kubernetes.io/docs/home/))
+    for Kubernetes is an invaluable resource for getting a deeper understanding of
+    it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of this chapter is to provide a starting point for your journey in
+    programming Kubernetes using Go. We will start by creating a simple Go program
+    to deploy a Kubernetes resource to a local Kubernetes cluster to run a load-balanced
+    HTTP service. We will then learn how to extend the Kubernetes API with custom
+    resources to show how Kubernetes can be used to orchestrate and manage any external
+    resource. We will build custom pet resources that will be stored in our pet store
+    service running within the cluster to illustrate the concept of managing external
+    resources. By the end of this chapter, you will be equipped with the knowledge
+    to work effectively with the Kubernetes API and understand some of the core design
+    principles of Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interacting with the Kubernetes API
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deploying a load-balanced HTTP application using Go
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending Kubernetes with custom resources and operators
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a pet store operator
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This chapter will require the following tools:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Docker: [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'KinD: [https://kind.sigs.k8s.io/#installation-and-usage](https://kind.sigs.k8s.io/#installation-and-usage)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'operator-sdk: [https://sdk.operatorframework.io/docs/installation/](https://sdk.operatorframework.io/docs/installation/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Tilt.dev: [https://docs.tilt.dev/install.html](https://docs.tilt.dev/install.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'ctlptl: [https://github.com/tilt-dev/ctlptl#how-do-i-install-it](https://github.com/tilt-dev/ctlptl#how-do-i-install-it)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The code files for this chapter can be downloaded from [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/14](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/14)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interacting with the Kubernetes API
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the introduction, we talked about the Kubernetes API as if it is just one
+    thing, although in a sense it can be thought of in that way. However, the Kubernetes
+    API we have been talking about is an aggregation of multiple APIs served by the
+    core of Kubernetes, the control plane API server. The API server exposes an HTTP
+    API that exposes the aggregated API and allows for the query and manipulation
+    of API objects such as Pods, Deployments, Services, and Namespaces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will learn how to use KinD to create a local cluster. We
+    will use the local cluster to manipulate a namespace resource using `kubectl`.
+    We will examine the basic structure of a Kubernetes resource and see how we can
+    address individual resources by their Group, Version, Kind, Name, and usually,
+    Namespace. Lastly, we'll discuss authentication and the `kubeconfig` file. This
+    section will prepare us for interacting with the Kubernetes API at a lower level
+    using Go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a KinD cluster
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Prior to getting started interacting with the Kubernetes API, let''s build
+    a local Kubernetes cluster using **KinD**. This is a tool that enables us to create
+    a Kubernetes cluster locally using Docker rather than running as services on the
+    host. To create the cluster, run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding command will create a cluster named `kind`. It will build a Kubernetes
+    control plane and set the current context of `kubectl` to point to the newly created
+    cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can list the clusters created by `kind` by running the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can see from the output of `get clusters` that there is a new cluster named
+    `kind` created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using kubectl to interact with the API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Kubernetes offers a command-line tool for interacting with the API, `kubectl`.
+    There are some nice developer experience features in `kubectl`, but its main use
+    is to perform `kubectl`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding command creates a namespace named `petstore`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding command creates the same namespace with an inline YAML document.
+    Next, let''s use `kubectl` to fetch the namespace as YAML:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding command fetched the `petstore` namespace and output the entire
+    resource in the `.yaml` format. Pay special attention to the top-level keys, `apiVersion`,
+    `kind`, `metadata`, `spec`, and `status`. The values and structures in these keys
+    will be common to all resources in Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Group Version Kind (GVK) namespace name
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the Kubernetes API, you can identify any resource by the combination of
+    its group, kind, version, name, and usually, namespace. I say usually namespace
+    since not all resources belong to a namespace. A namespace is an example of a
+    resource that exists outside a namespace (as well as other low-level resources
+    such as Nodes and PersistentVolumes). However, most other resources such as Pods,
+    Services, and Deployments exist within a namespace. For the namespace example
+    from the previous section, the group is omitted, since it is in the Kubernetes
+    core API and is assumed by the API server. Effectively, the identifier for the
+    `petstore` namespace is `apiVersion: v1`, `kind: Namespace`, and `metadata.name:
+    petstore`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Internalize the idea of a group, version, kind, namespace, and name. It will
+    be critical to understand how to interact with the Kubernetes API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The spec and status sections
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Each resource in Kubernetes has a `spec` and a `status` section. The `spec`
+    section of the resource is a structure that describes the desired state of the
+    resource. It is Kubernetes' job to reconcile the state of the system to achieve
+    that desired state. In some cases, `spec` will describe the desired state of an
+    external system. For example, `spec` can be a description of a load balancer,
+    including the desired external IP. The reconciler for that resource would be responsible
+    for creating a network interface and setting up routing to ensure that the IP
+    routes to that specific network interface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `status` section of the resource is a structure that describes the current
+    state of the resource. It is intended to be mutated by Kubernetes, not the user.
+    For example, `status` for a Deployment includes the number of ready replicas of
+    a given Deployment. `spec` for the Deployment will contain the desired number
+    of replicas. It is Kubernetes' job to drive toward that desired state and update
+    the `status` with the current state of the resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will learn more about `spec` and `status` as we progress in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Authentication
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'So far, we have just assumed access to the Kubernetes cluster, but that was
+    actually handled for us by `kind` and its ability to set the default context for
+    `kubectl`. The default context for `kubectl` is stored in your home directory.
+    You can see what was set by running the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding output, I've omitted the certificate data to provide a more
+    concise view of the config. It contains all the information we need to create
+    a secure connection to the local cluster instance. Note the address of the service
+    and the names of the cluster and the user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By running the following command, we can get the `kubeconfig` for the `kind`
+    cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you `cat` the contents of the file, you will see a very similar structure
+    in `~/.kube/config`. The `kubeconfig` file is a convenient way to encapsulate
+    the information needed to authenticate to the API server and is used with many
+    of the tools in the Kubernetes ecosystem. For example, you can override the context
+    of `kubectl` to use a different `kubeconfig` with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding command will list all the namespaces in the `kind` cluster, but
+    it will use the local `kubeconfig` file we just created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a variety of tools for managing whichever cluster you are using. One
+    great example is `kubectx` ([https://ahmet.im/blog/kubectx/](https://ahmet.im/blog/kubectx/))
+    from Ahmet Alp Balkan, which can be used to work fluently with multiple clusters.
+    As I mentioned previously, the vibrant open source ecosystem provides a wide variety
+    of tools to make your experience using Kubernetes delightful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, let''s clean up the `petstore` namespace and delete our `kind` cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this section, we learned the basics of interacting with the Kubernetes API
+    and the basic structure of Kubernetes resources. We are able to create a local
+    Kubernetes experience, and we are ready to approach building an application to
+    interact with Kubernetes using Go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we are going to leverage what we have learned about the
+    Kubernetes API and use that to build a Go application to deploy a load-balanced
+    HTTP application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying a load-balanced HTTP application using Go
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we understand a bit more about the Kubernetes API and the resources
+    exposed by the API, we can move away from `kubectl` toward using Go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will use Go to do many of the same things we did in the
+    previous section using `kubectl`. We will authenticate using our default context
+    and create a namespace. However, we will not stop there. We will deploy a load-balanced
+    HTTP application to our cluster and watch the logs stream to STDOUT as we make
+    requests to the service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for this section can be found at [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/14/workloads](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/14/workloads).
+    The demo we are about to walk through can be executed with the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding command will create a KinD cluster named `workloads` and use
+    a config file that will enable host network ingress for the cluster. We will use
+    ingress to expose the service running in the cluster on `localhost:port`. The
+    command then deploys the NGINX ingress controller and waits for it to be ready.
+    Finally, we run our Go program to deploy our application. After the service has
+    been deployed and is running, open a browser at `http://localhost:8080/hello`.
+    You should see the following when you browse there:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 14.1 – The deployed NGINX hello world'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_14_001.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 14.1 – The deployed NGINX hello world
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should see the request logs stream to STDOUT. They should look like the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you refresh the page, you should see the server name change, indicating that
+    the requests are load balancing across the two pod replicas in the deployment.
+    Press *Ctrl* + *C* to terminate the Go program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To tear down the cluster, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding command will delete the `kind` cluster named `workloads`. Next,
+    let's explore this Go application to understand what just happened.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It all starts with main
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let''s dive right into the code and see what is happening in this Go program:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we establish a context derived from the background context.
+    This is largely ineffectual in this scenario but would be a powerful tool in the
+    future if you needed to cancel a request that is taking too long. Next, we create
+    `clientSet`, which is a strongly typed client for interacting with the Kubernetes
+    API. We then use `clientSet` in `createNamespace`, `deployNginx`, and `listenToPodLogs`.
+    Finally, we wait for a signal to terminate the program. That's it!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let's delve into each function, starting with `getClientSet`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a ClientSet
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let''s take a look at `getClientSet`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, you can see that we build flag bindings to either use
+    the existing `~/.kube/config` context or accept a `kubeconfig` file via an absolute
+    file path. We then build a config using this flag or default. The config is then
+    used to create `*kubernetes.ClientSet`. As we learned in the `kubectl` section,
+    `kubeconfig` contains all the information we need to connect and authenticate
+    to the server. We now have a client ready to interact with the Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let's see the `ClientSet` in action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a namespace
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that we have a `ClientSet`, we can use it to create the resource we need
+    to deploy our load-balanced HTTP application. Let''s take a look at `createNamespace`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we build a `corev1.Namespace` structure, supplying the
+    name in the `ObjectMeta` field. If you recall from our YAML example that created
+    a namespace using `kubectl`, this field maps to `metadata.name`. The Go structures
+    of the Kubernetes resource map closely to their YAML representations. Finally,
+    we use `clientSet` to create the namespace via the Kubernetes API server and return
+    the namespace. The `metav1.CreateOptions` contains some options for changing the
+    behavior of the `create` operation, but we will not explore this structure in
+    this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now created the namespace where we will deploy our application. Let's
+    see how we will deploy the application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deploying the application into the namespace
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that we have `clientSet` and namespace created, we are ready to deploy
+    the resources that will represent our application. Let''s have a look at the `deployNginx`
+    func:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we create the NGINX deployment resource and wait for
+    the replicas of the deployment to be ready. After the deployment is ready, the
+    code creates the service resource to load-balance across the pods in the deployment.
+    Finally, we create the ingress resource to expose the service on a local host
+    port.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let's review each of these functions to understand what they are doing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating the NGINX deployment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The first function in deploying our application is `createNginxDeployment`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code initializes `matchLabel` with a key/value pair that will
+    be used to connect the Deployment with the Service. We also initialize `ObjectMeta`
+    for the Deployment resource using the namespace and `matchLabel`. Next, we build
+    a Deployment structure containing a spec with two desired replicas, a `LabelSelector`
+    using the `matchLabel` we built earlier, and a pod template that will run a single
+    container with the `nginxdemos/hello:latest` image exposing port `80` on the container.
+    Finally, we create the deployment specifying the namespace and the Deployment
+    structure we've built.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have created our Deployment, let's see how we wait for the pods
+    in the Deployment to become ready.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Waiting for ready replicas to match desired replicas
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When a Deployment is created, pods for each replica need to be created and
+    start running before they will be able to service requests. There is nothing about
+    Kubernetes or the API requests we are authoring that requires us to wait for these
+    pods. This is here just to provide some user feedback and illustrate a use for
+    the status portion of the resource. Let''s take a look at how we wait for the
+    Deployment state to match the desired state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we loop to check for the desired number of replicas to
+    match the number of ready replicas and return if they do. If they do not match,
+    then we sleep for a second and try again. This code is not very resilient, but
+    it illustrates the goal-seeking nature of Kubernetes operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have a running deployment, we can build the Service to load-balance
+    across the pods in the deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a Service to load-balance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The two pod replicas in the deployment are now running the NGINX demo on port
+    `80`, but each has its own interface. We can address traffic to each one individually,
+    but it would be more convenient to address a single address and load-balance the
+    requests. Let''s create a Service resource to do that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we initialize the same `matchLabel` and `ObjectMeta`
+    as we did in the deployment. However, instead of creating a Deployment resource,
+    we create a Service resource structure, specifying the Selector to match on and
+    the port to expose over **Transmission Control Protocol** (**TCP**). The Selector
+    label is the key to ensuring that the correct pods are in the backend pool for
+    the load balancer. Finally, we create the Service as we have with the other Kubernetes
+    resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We only have one step left. We need to expose our service via an ingress so
+    that we can send traffic into the cluster via a port on the local machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating an ingress to expose our application on a local host port
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'At this point, we are unable to reach our service via `localhost:port`. We
+    can forward traffic into the cluster via `kubectl`, but I''ll leave that for you
+    to explore. We are going to create an ingress and open a port on our local host
+    network. Let''s see how we create the ingress resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we initialize a prefix, the same `objMeta` as previously,
+    and `ingressPath`, which will map the path prefix of `/hello` to the service name
+    and port name we created. Yes, Kubernetes does the magic of tying the networking
+    together for us! Next, we build the Ingress structure as we saw with the previous
+    structures and create the ingress using `clientSet`. With this last bit, we deploy
+    our entire application stack using Go and the Kubernetes API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, let's return to `main.go` and look at how we can use Kubernetes to stream
+    the logs of the pods to show the incoming HTTP requests while the program is running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Streaming pod logs for the NGINX application
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The Kubernetes API exposes a bunch of great features for running workloads.
+    One of the most basic and useful is the ability to access logs for running pods.
+    Let''s see how we can stream logs from multiple running pods to STDOUT:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, `listenToPodLogs` lists the pods in the given namespace
+    and then starts `go func` for each one. In `go func`, we use the Kubernetes API
+    to request a stream of `podLogs`, which returns `io.ReadCloser` to deliver logs
+    from the pod as they are created. We then tell STDOUT to read from that pipe,
+    and the logs land in our STDOUT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you thought that getting logs from your running workloads was going to be
+    a lot tougher than this, I don't think you would be alone. Kubernetes is quite
+    complex, but the concept that everything is exposed as an API makes the platform
+    incredibly flexible and programmable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have explored every function except `waitForExitSignal`, which is relatively
+    trivial and doesn't add anything to the Kubernetes story told here. If you'd like
+    to take a look at it, refer to the source repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having explored this example of using the Kubernetes API to programmatically
+    deploy an application using Go, I hope you will take away from the experience
+    a feeling of empowerment to go and learn, build, and feel relatively comfortable
+    interacting with the Kubernetes API. There is so much more to the Kubernetes API,
+    and it's ever-growing. In fact, in the next section, we are going to start talking
+    about how we can extend the Kubernetes API with our own custom resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extending Kubernetes with custom resources and operators
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous sections, we've learned that the Kubernetes API is not just
+    a single API but also an aggregation of APIs backed by cooperative services called
+    **operators** and **controllers**. Operators are extensions to Kubernetes that
+    make use of custom resources to manage systems and applications via controllers.
+    Controllers are components of operators that execute control loops for a kind
+    of resource. A control loop for a custom resource is an iterative process that
+    observes a desired state of the resource and works, possibly over several loops,
+    to drive the state of a system to that desired state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Those previous sentences are rather abstract. I like to sum it up differently.
+    Kubernetes is a platform for automation. An automation is a series of steps and
+    decision trees that drives to reach an end goal. I like to think of operators
+    in a similar way. I think of writing operators as taking a runbook, the human
+    steps for completing an operational activity, and making the computer execute
+    the automation. Operators and controllers are like crystallizing operational knowledge
+    into code to be run in Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Custom resources can represent anything. They can be things related to Kubernetes
+    resources, or they can be something completely external to Kubernetes. For an
+    example of a custom resource related to cluster workloads, in [*Chapter 9*](B17626_09.xhtml#_idTextAnchor461),
+    *Observability with OpenTelemetry*, we discussed the OTel collector and deployed
+    it via its container image in `docker-compose`, but we could have used the Kubernetes
+    operator for OTel to do the same thing in a Kubernetes cluster. The OTel operator
+    exposes a custom resource, like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code block, we see a custom resource describing the OTel collector
+    from [https://github.com/open-telemetry/opentelemetry-operator](https://github.com/open-telemetry/opentelemetry-operator).
+    This custom resource describes in a domain-specific language how the OpenTelemetry
+    operator should configure and run an OpenTelemetry collector. However, a custom
+    resource can as easily be a custom `Pet` resource that represents a pet in a pet
+    store, as we will see in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Do you remember how to identify the group, version, kind, namespace, and name
+    for the preceding resource? The answer is `group: opentelemetry.io`, `version:
+    v1alpha1`, `kind: OpenTelemetryCollector`, `namespace: default`, and `name: simplest`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, I want to impress upon you that if someone were to strip away
+    pods, nodes, storage, networks, and much of the rest of the Kubernetes container
+    workload scheduling and all that was left was the Kubernetes API server, it would
+    still be an incredibly useful piece of software. In this section, we are going
+    to cover a bit of background about operators, **custom resource definitions**
+    (**CRDs**), controllers, and powerful features of the Kubernetes API server. We
+    will not be able to cover all of it in depth, but this survey will help to implement
+    our first operator and hopefully encourage you to learn more about extending the
+    Kubernetes API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom Resource Definitions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'CRDs are resources that can be applied to a Kubernetes cluster to create a
+    new RESTful resource path for a custom resource. Let''s take a look at the example
+    of a CronJob from the Kubernetes docs: [https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#create-a-customresourcedefinition](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#create-a-customresourcedefinition).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see from the preceding YAML, a CRD is specified as any other resource
+    in Kubernetes. The CRD resource has `group`, `version`, `kind`, and `name`, but
+    within the `spec`, you can see metadata describing a new resource type with a
+    strongly typed schema, using OpenAPI V3 to describe the schema. Also, note that
+    the spec contains the group, version, and kind of the custom resource. As implied
+    by the YAML structure, there can be multiple versions of the custom resource served
+    at any given time, but only one version can be marked as the storage version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we'll discuss how Kubernetes is able to store only one
+    version but serve multiple versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom resource versioning and conversion
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As mentioned in the previous section, Kubernetes will store only one version
+    of a resource. A new version of a resource is usually introduced when there is
+    a change to the schema of that resource – for example, a new field was added or
+    some other mutation of the schema. In this case, Kubernetes would need some way
+    to translate between resource versions. The Kubernetes approach to this is to
+    use conversion Webhooks. That means that you can register a Webhook to convert
+    from the storage version of a resource to the requested version. This forms a
+    hub and spoke model for versioning where the hub is the storage version and the
+    spokes are the other supported versions. You can see an example of this in the
+    Kubernetes docs here: [https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#configure-customresourcedefinition-to-use-conversion-webhooks](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#configure-customresourcedefinition-to-use-conversion-webhooks).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take that in for a moment. This is a powerful feature for any API platform to
+    offer. Having a standardized way of translating one API version to another allows
+    for a more graceful adoption of components in a microservice environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Structured schema, validation, and defaulting
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As we saw in the previous example of the CronJob CRD spec, we are able to use
+    OpenAPI to describe a strongly typed schema for resources. This is highly beneficial
+    for generating API clients for programming languages that may need to interact
+    with the API. Furthermore, we have the ability to describe a variety of validations
+    to ensure different aspects of structure and values for resources. For example,
+    we are able to describe what fields are required, valid ranges of values, valid
+    patterns of strings, and many other aspects of the structures and values. Additionally,
+    we can provide default values for fields and specify them in the schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond just the schema, the API server exposes validating and mutating Webhooks
+    that can fill the void where the schema fails – for example, if you want to validate
+    or mutate a resource based on some logic that is beyond the scope of schema. These
+    Webhooks can be employed to make the developer experience when using your customer
+    resources much better than accepting a possibly invalid resource, or defaulting
+    some difficult-to-calculate value so that the user doesn't need to provide it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Controllers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The heart of reconciliation is a controller, which executes a control loop for
+    a specific resource kind. The controller watches a resource kind in the Kubernetes
+    API and observes that there has been a change. The controller receives the new
+    version of the resource, observes the desired state, observes the state of the
+    system it controls, and attempts to make progress toward changing the state of
+    the system into the desired state expressed in the resource. A controller does
+    not act on the difference between the version of a resource but rather on the
+    current desired state. I've noticed there is an initial drive for people who are
+    new to controller development to try to think about acting only on things that
+    have changed between two resource versions, but that is not recommended.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Usually, a controller has the ability to reconcile many resources concurrently
+    but will never reconcile the same resource concurrently. This simplifies the model
+    for reconciliation quite a bit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Furthermore, most controllers will run with only one leader at a time. For example,
+    if there are two instances of your operator running, only one will be a leader
+    at a time. The other will be idle, waiting to become the leader if the other process
+    crashes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standing on the shoulders of giants
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: I'm sure this sounds quite complex, and it truly is. However, we can thankfully
+    rely on some projects that have paved the way to make building operators, controllers,
+    and CRDs so much easier. There is a vibrant, growing ecosystem for Kubernetes
+    operators.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The projects that most come to mind and which we will depend on in the next
+    section are `controller-runtime` ([https://github.com/kubernetes-sigs/controller-runtime](https://github.com/kubernetes-sigs/controller-runtime)),
+    `kubebuilder` ([https://github.com/kubernetes-sigs/kubebuilder](https://github.com/kubernetes-sigs/kubebuilder)),
+    and `operator-sdk` ([https://github.com/operator-framework/operator-sdk](https://github.com/operator-framework/operator-sdk)).
+    `controller-runtime` provides a set of Go libraries that makes it easier to build
+    controllers and is used in both `kubebuilder` and `operator-sdk`. `kubebuilder`
+    is a framework for building Kubernetes APIs and offers a set of tools that makes
+    it easy to generate API structure, controllers, and related manifests for Kubernetes
+    APIs. `operator-sdk` is a component in the Operator Framework ([https://github.com/operator-framework](https://github.com/operator-framework)),
+    which extends from `kubebuilder` and attempts to solve life cycle, publication,
+    and other higher-level problems faced by operator developers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are interested in a highly ambitious project that extends the Kubernetes
+    API to create declarative cluster infrastructure and enables Kubernetes to build
+    new Kubernetes clusters, I encourage you to check out the Cluster API ([https://github.com/kubernetes-sigs/cluster-api](https://github.com/kubernetes-sigs/cluster-api)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: I hope this section has left you in awe of how powerful the Kubernetes API is
+    and spurred you on to want to learn more. I believe we have covered enough of
+    the basics of extending the Kubernetes API that we can approach building our own
+    reconciler without too much trouble. In the upcoming section, we will use `operator-sdk`
+    to build a `Pet` resource and operator to reconcile pets in a pet store service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a pet store operator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will build on the background information we learned in the
+    previous section about CRDs, operators, and controllers to implement our own operator.
+    This operator will have only one CRD, `Pet`, and only one controller to reconcile
+    those `Pet` resources. The desired state of `Pet` will be reconciled to our pet
+    store service, which we used in previous chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we discussed in the previous section, this will be an example of using Kubernetes
+    control loops to reconcile the state of a resource that has no dependency on other
+    resources within Kubernetes. Remember, you can model anything in CRDs and use
+    Kubernetes as a tool for building robust APIs for any type of resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you will learn to build an operator from scratch. You will
+    define a new CRD and controller. You will examine the build tools and the different
+    code generation tools used to eliminate the majority of boilerplate code. You
+    will deploy your controller and the pet store service to a local `kind` cluster
+    and learn how to use `Tilt.dev` for faster inner-loop development cycles. The
+    code for this repository is located at [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/14/petstore-operator](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/14/petstore-operator).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initializing the new operator
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we will initialize the new operator using the `operator-sdk`
+    command-line tool. This will be used to scaffold out a project structure for our
+    operator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'By executing the preceding command, `operator-sdk` will scaffold a new operator
+    project using an example domain, which will form the suffix of the group name
+    for our future CRDs. The `–repo` flag is based on the repo for the book''s code,
+    but you would want that to reflect the repo path for your project or omit it and
+    allow it to default. Let''s see what is in the repo after scaffolding:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding listing shows the top-level structure of the project. The Dockerfile
+    contains commands to build the controller image. The Makefile contains a variety
+    of helpful tasks; however, we will not use it much in this walk-through. The `PROJECT`
+    file contains metadata about the operator. The `config` directory contains the
+    manifests needed to describe and deploy the operator and CRDs to Kubernetes. The
+    `hack` directory contains a boilerplate license header that will be added to generated
+    files and is a good place to put helpful development or build scripts. The rest
+    of the files are just regular Go application code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have a general idea of what was scaffolded for us, we can move
+    on to generating our `Pet` resources and controller:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: By executing the preceding commands, I've instructed `operator-sdk` to create
+    a new API in the `petstore` group with the `v1alpha1` version of the `Pet` kind
+    and generate both the CRD and the controller for the type. Note that the command
+    created `api/v1alpha1/pet_types.go` and `controllers/pet_controller.go`, and then
+    ran `make generate` and `make manifests`. Shortly, we will see that `code` comments
+    in both of the Go files cause `make generate` and `make manifests` to generate
+    CRD manifests as well as Kubernetes' **Role-Based Authorization Controls** (**RBAC**)
+    for the controller. The RBAC entries for the operator will give rights to the
+    controller to perform CRUD operations on the newly generated resource. The CRD
+    manifest will contain the schema for our newly created resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s take a quick look at the files that have changed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, there are quite a few changes to files. I will not go into depth
+    on each of the changes. The most notable is the generation of `config/crd/bases/petstore.example.com_pets.yaml`,
+    which contains the CRD for our `Pet` resource. In operator projects, it is common
+    to describe the resources in the API in the `api/` directory, the Kubernetes manifests
+    under `config/`, and the controllers under `controllers/`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s see what has been generated in `api/v1alpha1/pet_types.go`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code shows a snippet from the `pet_types.go` file. The `create
+    api` command has generated a `Pet` resource with `spec` and `status`. The `PetSpec`
+    contains one field named `Foo`, which will serialize with the key `foo` and is
+    optional to provide when creating or updating the resource. `status` contains
+    nothing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note the comments in the file. They instruct us that this is the place to add
+    new fields to the type and to run `make` after we do to ensure that the CRD manifests
+    are updated in the `config/` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s look at the rest of the file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see the definition of `Pet` and `PetList`, which both get registered
+    in the following schema builder. Note the `//+kubebuilder build` comments. These
+    build comments instruct `kubebuilder` on how to generate the CRD manifests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that `Pet` has the spec and status defined with the `json` tags that we
+    have seen in the other Kubernetes resources we have worked with. `Pet` also includes
+    both `TypeMeta`, which informs Kubernetes of the group version kind information,
+    and `ObjectMeta`, which contains the name, namespace, and other metadata about
+    the resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With these structures, we already have a fully functional custom resource. However,
+    the resource doesn't represent the fields we want to represent our pet resource
+    and will need to be updated to better represent our pet structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s look at what was generated for `PetReconciler` in `controllers/pet_controller.go`,
+    the controller that will run the control loop for reconciling pets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we can see a `PetReconciler` type that embeds a `client.Client`,
+    which is a generic Kubernetes API client, and `*runtime.Scheme`, which contains
+    the known types and the schemas registered. If we continue downward, we can see
+    a collection of `//+kubebuilder:rbac build` comments that instruct the code generator
+    to create RBAC rights for the controller to be able to manipulate the `Pet` resource.
+    Next, we can see the `Reconcile func`, which will be called each time a resource
+    has been changed and needs to be reconciled with the pet store. Finally, we can
+    see the `SetupWithManager` function, which is called from `main.go` to start the
+    controller and inform it and the manager what kind of resource the controller
+    will reconcile.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have covered the impactful changes from the scaffolding process. We can
+    proceed to implement our `Pet` resource to reflect the domain model we have in
+    the pet store. The `pet` entity in our pet store has three mutable, required properties,
+    `Name`, `Type`, and `Birthday`, and one read-only property, `ID`. We need to add
+    these to our `Pet` resource to expose them to the API:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding are the code changes I've made to `Pet` to reflect the domain
+    model of the pet store service. Note `// +kubebuilder:validation:Enum` preceding
+    the `PetType` type. That indicates to the CRD manifest generator that the schema
+    should add validation to ensure only those strings can be supplied for the `Type`
+    field of `PetSpec`. Also, note that each of the fields in `spec` does not have
+    the `omitempty` JSON tag. That will inform the CRD manifest generator that those
+    fields are required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The status of `Pet` has only an `ID` field, which is allowed to be empty. This
+    will store the unique identifier returned from the pet store service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have defined our `Pet`, let''s reconcile `pet` with the pet store
+    in the controller loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code has been added to reconcile the `pet` resource. When we receive
+    a change from the API server, we are not given much information. We are only provided
+    with `NamespacedName` of the pet. `NamespacedName` contains both the namespace
+    and the name of the pet that has changed. Remember that `PetReconciler` has a
+    `client.Client` embedded on it. It provides us with access to the Kubernetes API
+    server. We use the `Get` method to request the pet we need to reconcile. If the
+    pet is not found, we return an empty reconcile result and a nil error. This informs
+    the controller to wait for another change to occur. If there is an error making
+    the request, we return an empty reconcile result and an error. If the error is
+    not nil, the reconciler will try again and back off exponentially.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we are able to fetch the pet, we then create a patch helper, which will allow
+    us to track changes to the `Pet` resource during the reconciliation loop and patch
+    the resource change back to the Kubernetes API server at the end of the reconcile
+    loop. The defer ensures that we patch at the end of the `Reconcile` func.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the pet has no deletion timestamp set, then we know that Kubernetes has not
+    marked the resource for deletion, so we call `ReconcileNormal`, where we will
+    attempt to persist the desired state to the pet store. Otherwise, we call `ReconcileDelete`
+    to delete the pet from the pet store.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s next look at `ReconcileNormal` and understand what we do when we have
+    a state change to a non-deleted pet resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `ReconcileNormal`, we always make sure that `PetFinalizer` has been added
+    to the resource. Finalizers are the way that Kubernetes knows when it can garbage-collect
+    a resource. If a resource still has a finalizer on it, then Kubernetes will not
+    delete the resource. Finalizers are useful in controllers when a resource has
+    some external resource that needs to be cleaned up prior to deletion. In this
+    case, we need to remove `Pet` from the pet store prior to the Kubernetes `Pet`
+    resource being deleted. If we didn't, we may have pets in the pet store that don't
+    ever get deleted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After we set the finalizer, we build a pet store client. We won't go into more
+    detail here, but suffice it to say that it builds a gRPC client for the pet store
+    service. With the pet store client, we query for the pet in the store. If we can't
+    find the pet, then we create one in the store; otherwise, we update the pet in
+    the store to reflect the desired state specified in the Kubernetes `Pet` resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s take a quick look at the `createPetInStore` func:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: When we create the pet in the pet store, we call `AddPets` on the gRPC client
+    with the Kubernetes `Pet` resource desired state and record `ID` in the Kubernetes
+    `Pet` resource status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s move on to the `updatePetInStore` func:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: When we update the pet in store, we use the fetched store pet and update the
+    fields with the desired state from the Kubernetes `Pet` resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If at any point in the flow we run into an error, we bubble up the error to
+    `Reconcile`, where it will trigger a re-queue of the reconciliation loop, backing
+    off exponentially. The actions in `ReconcileNormal` are idempotent. They can run
+    repeatedly to achieve the same state and in the face of errors will retry. Reconciliation
+    loops can be pretty resilient to failures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'That''s about it for `ReconcileNormal`. Let''s look at what happens in `ReconcileDelete`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: In `ReconcileDelete` in the preceding code block, we get a pet store client
+    to interact with the pet store. If `pet.Status.ID` is not empty, we attempt to
+    delete the pet from the pet store. If that operation is successful, we will remove
+    the finalizer, informing Kubernetes that it can then delete the resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have extended Kubernetes and created your first CRD and controller! Let's
+    give it a run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To start the project and see your Kubernetes operator in action, run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding commands will create a `kind` cluster and a local `Tilt.dev`.
+    Once you do, you should see something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 14.2 – Tilt''s All Resources web view'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17626_14_002.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 14.2 – Tilt's All Resources web view
+  prefs: []
+  type: TYPE_NORMAL
+- en: Wait for each of the services on the left panel to turn green. Once they are,
+    it means that the pet store operator and Service have deployed successfully. If
+    you click on one of the Services listed on the left, it will show you the log
+    output for that component. `petstore-operator-controller-manager` is your Kubernetes
+    controller. Next, we are going to apply some pets to our Kubernetes cluster and
+    see what happens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s first look at the pet samples we are going to apply. The samples are
+    in `config/samples/petstore_v1alpha1_pet.yaml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We have two pets, `Thor` and `Tron`. We can apply them with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That should have replied that they were created, and you should then be able
+    to fetch them by running the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can see that we have two pets defined. Let''s make sure they have IDs. Run
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: I've omitted some noisy content from the preceding code, but this is roughly
+    what you should see. Tron has an ID generated from the pet store service; it was
+    applied to the Kubernetes `Pet` resource status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s test our reconciliation loop by changing the name of `Thor` to
+    `Thorbert`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will open your default editor. You can go and change the value of `Thor`
+    to `Thorbert` to cause a new reconcile loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should see something similar to this output in your browser, with Tilt
+    in the pet store operator logs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see from the preceding code, `Thor` is now changed to `Thorbert`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, let''s delete these pets by running the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: After deleting the resources, you should be able to check back in Tilt and see
+    the log output reflecting that the `delete` operations succeeded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you learned to build an operator from scratch, extended the
+    Kubernetes API with a custom resource that reconciled state to an external Service,
+    and used some really useful tools along the way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we learned how to use Go to deploy and manipulate resources
+    in Kubernetes. We built upon that knowledge to extend Kubernetes with our custom
+    `Pet` resources and learned how to continuously reconcile the desired state of
+    our pets with the state of the pet store. We learned that we can extend Kubernetes
+    to represent any external resources and that it provides a robust platform to
+    describe nearly any domain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You should be able to take what you learned in this chapter and apply it to
+    automate interactions with Kubernetes resources and extend Kubernetes to natively
+    expose your own resources through the Kubernetes API. I bet you can think of some
+    services and resources at your company that you would like to be able to manage
+    by simply applying some YAML to your Kubernetes cluster. You are now empowered
+    with the knowledge to solve those problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will learn about using Go to program the cloud. We'll
+    learn how to mutate cloud resources using Go client libraries to interact with
+    cloud service provider APIs, and how to use those cloud services and infrastructure
+    after we've provisioned them.
+  prefs: []
+  type: TYPE_NORMAL

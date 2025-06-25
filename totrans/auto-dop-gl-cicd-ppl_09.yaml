@@ -1,0 +1,956 @@
+- en: '9'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Enhancing the Speed and Maintainability of CI/CD Pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we’re going to cover the different tools and methods you can
+    leverage to enhance the speed and maintainability of your CI/CD pipelines. Our
+    goal in this chapter is to cover three main methods for how to speed up your pipelines.
+    We don’t plan on covering every method to speed up a CI pipeline in GitLab, but
+    rather the most impactful methods on pipeline speed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accelerating pipelines with directed acyclic graphs and parent-child architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building code for multiple architectures
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When and how to leverage caching or artifacts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reducing repeated configuration code with anchors and extensions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Improving maintainability by combining multiple pipelines and leveraging parent-child
+    pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Securing and accelerating jobs with purpose-built containers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Accelerating pipelines with directed acyclic graphs and parent-child architecture
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GitLab supports the usage of the **directed acyclic graph** (**DAG**) pattern
+    for building CI pipelines. Under normal usage with GitLab, each stage represents
+    a series of jobs that need to be completed. Each stage is comprised of multiple
+    jobs that are executed in parallel. Once a stage completes, then the next stage
+    begins, until the pipeline completes. This is the typical processing loop that
+    GitLab utilizes to complete a CI pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, it is possible to create an internal loop of CI jobs that are directed
+    to execute in a specific order that does not loop. This pattern is called a **DAG**
+    or directed acyclic graph. *Directed* refers to the ordering of operations, *acyclic*
+    refers to the fact it only happens once, and *graph* indicates the ordering of
+    steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When leveraged properly, the DAG pattern can dramatically decrease the time
+    it takes a pipeline to complete. This occurs because you are creating processing
+    loops inside of the CI pipeline and are explicitly defining the order of operations
+    for CI jobs outside of stages. A good example of this is if one job’s execution
+    is dependent on another job’s execution, you can leverage the `needs:` keyword
+    to ensure they’re run one after another outside of a Stage ordering. This creates
+    a simple DAG process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to create a DAG in GitLab CI
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The following is an example of a normal GitLab CI pipeline. The following is
+    a YAML implementation of the example we described in the introduction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In a traditional pipeline, as shown here, jobs defined in `stage: B` will only
+    begin execution after all jobs in `stage: A` have finished. The following is an
+    example of this same pipeline set up to leverage DAG:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'By adding the `needs` keyword to `Job3`, we have created a relationship between
+    `Job1` and `Job3`. So, as soon as `Job1` is completed, `Job3` will begin execution.
+    This occurs outside of regular stage ordering. In the event `needs` is not defined,
+    stage ordering will be respected. As we can see with `Job4`, for `Job4` to begin
+    execution, `stage: A` has to complete properly. However, if `needs: []` is defined
+    but blank, then GitLab will execute that job the moment a pipeline starts and
+    not assign it to any stage for execution.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building code for multiple architectures
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GitLab CI enables you to build artifacts for multiple architectures at once.
+    This can easily speed up software builds by two or three times since, with multiple
+    architectures, you typically have to build the software multiple times for each
+    architecture. Here, we’re going to use CI jobs and pipelines to execute a software
+    build for multiple architectures at the same time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When building software for multiple architectures, there are some special requirements.
+    The first requirement is that you must have GitLab Runners installed and configured
+    on a machine running each architecture. For this section, we’re going to use three
+    platforms as an example: `x86_64`, `arch64`, and `powerpc`. In this case, the
+    expectation would be that you have a machine for each of the three architectures,
+    with a GitLab Runner installed on it. That GitLab Runner also needs to have a
+    tag assigned to it for which architecture it is running on.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second requirement is that the toolchain you use to build your software
+    must be able to support a multi-architecture build. For this demo, we’re going
+    to use GCC and a multi-architecture Docker image. We’re also going to be using
+    the `parallel:` and `matrix:` keywords for GitLab CI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `parallel:` keyword is designed to allow a CI job to run multiple times
+    in parallel. So, for example, if you set `parallel: 5` in a CI job, that CI job
+    will run 5 times inside of that pipeline, in parallel.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `matrix:` keyword is designed to work with the `parallel:` keyword to spin
+    up multiple CI jobs at a time, with different variables assigned to them. The
+    following is an example of what this looks like when used in a pipeline for multi-architecture
+    builds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding example is going to do three key operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, with the use of `parallel:` and `matrix:`, GitLab is going to spin up
+    three separate jobs – one for each of the variable pairs I’ve defined with `ARCH`
+    and `CROSS_TRIPLE`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Second, each of those jobs will have a tag assigned to them, reflecting whatever
+    value is defined in `ARCH:`. This will cause that job to be assigned to the appropriate
+    runner for that tag.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Third, GitLab will expose the `CROSS_TRIPLE:` environment variable to the `multiarch/crossbuild`
+    container. This environment variable is used by the container to properly configure
+    the GCC toolchain so that it’s ready to build for that architecture.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When the container spins up, and the CI job executes, the `make helloworld`
+    command will be run. This command will invoke the preconfigured GCC toolchain
+    and cause it to begin building our application binaries. The resulting binaries
+    will be built to support the specified architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By building multi-architecture binaries this way, we take the complexity out
+    of a multi-architecture build. We make those multi-architecture builds repeatable
+    and easily understandable. We also run those builds in parallel so that they’re
+    not waiting on each other, and we can see the results built from each architecture
+    quickly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `parallel:` and `matrix:` keywords can be used in any circumstance where
+    you need multiple CI jobs with the same configurations, but with different injected
+    variables. The `matrix:` keyword can also accept an array as the environment variable
+    value. The environment variable key, however, *cannot* be an array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When and how to leverage caching or artifacts
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: With GitLab, there is often confusion about the usage of caching or artifacts.
+    Many users are curious as to which functionality to leverage and when. We aim
+    to demystify both in this chapter and give you the tools to implement either approach
+    while explaining the benefits and pitfalls of each pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Caching should be thought of as a method to save items that are commonly used
+    in CI jobs or stages. It shouldn’t be thought of as a means to pass items between
+    stages or jobs – that’s what artifacts are for. The difference is important because
+    of the implementation and configuration of each. A cache is not built or designed
+    to be a method to move items between CI jobs. Because of this, in the future,
+    any features or changes that are made to it will be tailored toward that functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Artifacts are the main way to support storing items created by your CI job indefinitely,
+    as well as passing them as a dependency to other CI jobs. With artifacts, you
+    get insight into what was stored, and you can link CI jobs with hard dependencies
+    on each other to ensure that the artifacts are shared. With caching, there is
+    only a soft link. A job using a cache will still work if a cache doesn’t exist;
+    however, a job with an artifact will not.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next consideration between caching and artifacts is how they’re stored,
+    and the networking calls involved. Cache bundles are processed by the GitLab Runner,
+    and the GitLab Runner’s configuration determines where it is stored. Under default
+    configuration parameters, the cache is stored on the machine where the runner
+    is operating. In terms of containers, the cache is destroyed. By adding an S3
+    configuration to the GitLab Runner, the Runner will push all cache bundles to
+    S3 storage. Any further CI jobs that use that cache will pull it from S3 storage
+    before the CI job begins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case of artifacts, the Runner doesn’t play a role in its processing.
+    Every artifact bundle is uploaded to the GitLab instance directly. GitLab’s configuration
+    then determines when and where that artifact is stored. The most common configuration
+    is also an S3 storage provider. Any future CI jobs that require this artifact
+    also download it before the start of the CI job. Like cache bundles, the artifact
+    bundle is then uncompressed into the working directory for usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will talk about two types of dependencies. The first is
+    CI job dependencies, which should be handled with artifacts. CI job dependencies
+    essentially link the result from one CI job to another. The second dependency
+    type is toolchain dependencies, which are the dependencies of your application
+    – usually, third-party libraries. These are used by multiple CI jobs or multiple
+    CI pipelines, so they should leverage caching.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Caching characteristics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'These are the things that separate caching from artifacts:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can define a cache per job by using the `cache` keyword. Otherwise, it is
+    disabled.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subsequent pipelines can use the cache.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subsequent jobs in the same pipeline can use the cache if the dependencies are
+    identical.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Different projects cannot share the cache.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By default, protected and non-protected branches do not share the cache. However,
+    you can change this behavior.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Artifact characteristics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'These are the things that separate artifacts from caching:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can define artifacts per job.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subsequent jobs in later stages of the same pipeline can use artifacts.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Different projects cannot share artifacts.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Artifacts expire after 30 days by default. You can define a custom expiration
+    time.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The latest artifacts do not expire if **Keep latest artifacts** is enabled.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can use dependencies to control which jobs fetch the artifacts.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using caching
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The first step in leveraging the usage of caching is adding the configuration
+    to your GitLab CI file. The following is a code sample of how this is done. If
+    you look at this sample, you’ll see we’ve defined a CI job labeled `MyCIJob`.
+    From there, we’ve defined a `cache` block and added a `path` parameter with a
+    list of the directories and files we want to cache. This is the minimum viable
+    code necessary to cache items as part of your CI job:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, every time this CI job spins up, it will use the same cache bundle every
+    single time. This is very useful when you have dependencies that are downloaded
+    every time a CI job runs. By placing these dependencies inside a cache, they won’t
+    need to be downloaded every time. Instead, GitLab will insert these dependencies
+    at the beginning of the job. This cuts down time on CI jobs significantly, ultimately
+    reducing the CI pipeline time to completion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we’re going to take this a step further. Let’s assume you have four separate
+    CI jobs, and two of each of the CI jobs want to share a cache. In the previous
+    example, we created a generic cache that could be used for all jobs. But in this
+    example, we want to link a cache between two CI jobs. This can be done with the
+    addition of the `key` value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the addition of the `key` value, GitLab will have an identifier with which
+    to determine when and which cache bundle to download. This key value can obtain
+    a string, a variable, or any combination of both. Many users will end up using
+    a GitLab predefined variable as a key so that GitLab can manage the cache more
+    effectively. For example, if you use the `$CI_PIPELINE_ID` variable, then that
+    cache bundle will only be leveraged inside of a pipeline with an ID matching `$CI_PIPELINE_ID`.
+    This means that every pipeline will have its own brand-new cache bundle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A final configuration you can leverage with caching is the ability to change
+    when and how the cached bundle gets uploaded and downloaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the cache GitLab CI object has a value called `policy`. By default,
+    this is set to a value of `push-pull`, which means the cached bundle is pulled
+    down when the job starts and pushed up when the job ends. However, you can also
+    configure this to push or pull. By setting it to push, it will push the cache
+    object but never pull it, while by setting it to pull, it will pull a cache but
+    not push updates to the bundle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using artifacts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the previous section, we discussed caching. Much of the same concepts of
+    caching are going to apply to artifacts, but artifacts have a richer feature set.
+    Because artifacts are used for things such as reporting, passing artifacts between
+    jobs, and job dependency management, they require a deeper feature set. Let’s
+    start with a basic artifact object and build a more intricate one from that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: From the preceding example, you can see it’s very similar to caching at its
+    core. We’ve added an artifact job, assigned an `artifacts:` object to it, added
+    a `paths:` object to that, and listed the files we want to be artifacted. From
+    here, when `MyArtifactJob` executes, at the end of the pipeline run, it will send
+    everything listed in `paths:` to GitLab and store it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similar to the cache’s `policy` option, which defines what to do with the cache,
+    artifacts have a `when` object that allows you to specify what happens to the
+    artifact when an artifact is created. Its options are `on_success`, `on_failure`,
+    and `always`. The first option, `on_success`, will upload an artifact only on
+    a job’s successful execution. The second, `on_failure`, will only upload when
+    the job fails. Finally, `always` will always upload an artifact no matter the
+    outcome. When applied to our job, the resulting job will look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: In conclusion, the preceding job will only execute when other CI jobs are successful.
+    It will then store the objects in the `theDirectoryToSave/` folder, in the `myFileToSave.js`
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Leveraging artifacts as job dependencies
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that we’ve covered the basics of artifacts, let’s use them in a real-world
+    scenario by chaining jobs together with artifacts. By leveraging the `dependencies`
+    keyword in a CI job block, we can pull artifacts from another job and make an
+    intrinsic connection between two separate CI jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our application will be built by the `MyBuildJob` job, which will be defined
+    shortly. You may recognize much of the syntax from earlier chapters. This first
+    job is an example of how to build a Node.js-based application. First, we leverage
+    the `npm install` command to pull down any dependencies used to build this application.
+    To keep this example simple, we’re not leveraging a cache for dependencies, but
+    we should be in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Secondly, we’re running the `npm build` command to build the Node.js application.
+    The common standard of all Node.js projects is that their built files are produced
+    in a folder named `dist`. The Node.js dependencies are commonly stored in `node_modules`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lastly, we have an artifact definition that lists both the folders of `node_modules`
+    and `dist` as needing to be archived. Now, when this job is executed and completed,
+    GitLab will store all of the items in the two folders listed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following CI job, defined as `MyDependentJob`, has been built to pull the
+    artifacts from our previous job. Then, it leverages those artifacts in the build
+    of a Dockerfile. The `dependencies` keyword is the glue that connects these two
+    jobs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, by using the `dependencies` keyword, we are instructing GitLab
+    to make sure that `MyDependentJob` has everything it needs to run. Without this
+    functionality, `MyDependentJob` would be required to pull down these artifacts
+    itself, which will take additional time and configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reducing repeated configuration code with anchors and extensions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All GitLab CI pipeline files must be valid YAML. This also means they support
+    various templates and repeatable code patterns that the YAML language supports.
+    Writing multiple CI job definitions for each CI job in a pipeline can be time-consuming
+    and lead to serious maintainability concerns. If you leverage the same variable
+    in multiple places in a pipeline, it’s better to have it defined once, and then
+    referenced multiple times. This way, when you need to change the variable, you
+    do it in one place as opposed to many. Not only is this easier to do, but it’s
+    also safer as with large pipelines, multiple variable replacements can lead to
+    errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The three methods GitLab and YAML offer for creating reusable CI pipelines are
+    `extends:`) keyword, and a `!reference`) tag. In the following sections, we’re
+    going to explain the benefits and usage of each of these three methods. Each method
+    comes with pros and cons in terms of functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Anchors
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first method we’re going to review is **anchors**. YAML anchors allow you
+    to duplicate or inherit properties of one CI job to another. With anchors, you
+    can define an entire GitLab CI job or a few attributes and then repeat them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we’re going to utilize a basic YAML anchor. As you can see, `&job_definition`
+    is the anchor we’re going to set. Then, we’re going to use it in `jobOne` and
+    `jobTwo` to pull in the content from `&job_definition`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once GitLab has processed the CI file, the result will look something like
+    this. Here, the contents of `&job_definition` has been merged into our two CI
+    jobs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding example, we defined a job with a dot (`.`) at the beginning
+    of it. This dot means the CI job will not be executed as a CI job and merely exists
+    as a reference. This was defined as `.job_definition:`. After this definition,
+    we added a YAML anchor. This is the `&job_definition` statement that you can see.
+    Everything after the `&` symbol defines the name of the anchor. Then, we define
+    what a normal job should look like.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After, we define two CI jobs, each with different `script:` blocks. However,
+    we use the `<<:` keyword to tell the YAML processor that we want to merge the
+    `.job_definition:` attributes and keywords with this job. The `*` character followed
+    by the name of the anchor references the anchor we defined with the `&` symbol.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The result is the two jobs inside of the merged result code block.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: YAML anchors can only be used in the same GitLab CI file in which they were
+    defined. This means that if you are leveraging the `includes:` keyword to break
+    your CI files into multiple files, you must use `extends:` or `!reference` instead
+    of YAML anchors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The extends: keyword'
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The second way of reusing CI jobs and configuration inside GitLab CI files is
+    via the `extends:` keyword. The `extends:` keyword and YAML anchors are very similar
+    in the way they operate. One major difference is that YAML anchors are mostly
+    used for duplicating a single value or attribute across your CI pipeline file,
+    whereas `extends:` is more often used to reuse entire configuration blocks inside
+    your CI pipeline file. In the preceding anchor example, `extends:` is a better
+    fit for usage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following example, we’re defining a `.rules_definition` block. Then,
+    we’re including it in the `.job_definition` block and using the `.job_definition`
+    block in `jobOne` and `jobTwo`. Any job definitions that begin with a dot (`.`)
+    are not processed by GitLab as an actual job. Instead, they are treated like templates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After GitLab processes the preceding CI file, the final merged result will
+    look as follows. Here, the contents of `.rule_definition` and `.job_definition`,
+    which were defined once, are now included in both `jobOne` and `jobTwo`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, this example is slightly different than the one we used for
+    anchors. That’s because another key difference between anchors and `extends:`
+    is that `extends:` can inherit configuration from multiple CI job definitions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Because of this, you can see the resulting merged job definitions have an added
+    `rules:` attribute assigned to them. This is inherited through the `.job_definition`
+    CI job, from the `.rules_definition` CI job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reference tags
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The third method of reusing configuration inside CI files is by using `!reference`
+    tags. `!reference` tags are custom YAML tags that are used to select keyword configurations
+    from other CI job sections and reuse them in the current section. They’re very
+    similar in usage to YAML anchors, but you can use reference tags in multiple CI
+    files. On the other hand, YAML anchors can only be used in the same file in which
+    they were defined. Let’s look at an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a `Build.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Create a `.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The result after GitLab processes these two files should look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding example, a job definition was created in `Build.gitlab-ci.yml`.
+    Then, we included that `Build` CI file in our main `.gitlab-ci.yml` file. After,
+    we used the `!reference` keyword to pull the script block straight from the `.build-node`
+    job definition. By leveraging `!reference` instead of `extends:`, we can only
+    pull the configuration we want from that job definition, as opposed to the whole
+    job definition. If we had used `extends:`, we would have brought over the `stage:`
+    and `before_script:` attributes of that CI job definition as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Improving maintainability by combining multiple pipelines and leveraging parent-child
+    pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Most GitLab users simply utilize a single `.gitlab-ci.yml` file for their pipelines.
+    This approach is perfectly acceptable, but in many cases, the amount of code inside
+    this file can become very large and difficult to maintain. GitLab has introduced
+    the ability to include multiple `gitlab-ci` files together as one. In this section,
+    we’re going to cover how to break up a `.gitlab-ci.yml` file into multiple sections.
+    Later, we’re going to cover how to take a second `.gitlab-ci.yml` file and execute
+    a second child pipeline, and then discuss the reasons why you may want to do this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Leveraging includes for maintainability
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Create a `.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This preceding code shows an example of what a traditional `.gitlab-ci.yml`
+    file looks like. For this example, we’ve included four jobs – two build jobs and
+    two deploy jobs. In a normal `.gitlab-ci.yml` file, this would be tens of jobs
+    with tons of logic between them, likely spanning hundreds of lines of code. This
+    is a perfectly acceptable practice, but it is difficult to maintain and manage.
+    As with all forms of source code, we want to ensure that the code we write is
+    legible and understandable at a glance to ensure maintainability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To break this code up, and make it more maintainable, we can leverage the `include:`
+    keyword in the GitLab CI’s syntax. This keyword is used to tell GitLab’s YAML
+    processor when to combine multiple YAML files into a single context. Let’s use
+    this tool to break up our CI file into separate CI files for reusability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a `Build.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Create a `Deploy.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Create a `.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we split the individual jobs into files based on stages. Then, we included
+    those files in our `.gitlab-ci.yml` file. When GitLab’s CI processor goes through
+    our `.gitlab-ci.yml` file, it will merge each YAML file into a single context
+    from top to bottom. This means that if I write the same job in `Build.gitlab-ci.yml`
+    and `Deploy.gitlab-ci.yml` because `Deploy.gitlab-ci.yml` is included last, it
+    will overwrite whatever was in the Build CI file. This is a simple example and
+    method of separating your CI files for more maintainability. Next, we’re going
+    to focus on combining an example from earlier with this method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Leveraging includes for reusability
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Earlier, you learned how to use includes to help with maintainability. In this
+    section, we will combine the usage of `include:` and the knowledge we learned
+    earlier in this chapter around anchors and extensions to show you how to create
+    reusable pipelines. We’ll start with an example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a `Templates.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding GitLab CI file, we’ve created a very simple CI job definition.
+    Because this CI job’s name begins with a `.`, this job will not run on its own.
+    We’ve included a `variables:` block and inserted an empty `NPM_CLI_OPTS` variable
+    as a placeholder. Then, we used that variable in our `script:` block when we executed
+    the `rebuild` command. The reason for this default variable is that we want to
+    have a sane default when this job is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve named this CI file `Templates.gitlab-ci.yml` to indicate that it houses
+    our CI job templates and not actual CI job definitions. However, we want to leverage
+    this in a CI pipeline. The following example shows how to achieve this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a `.gitlab-ci.yml` file that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we’re including all job definitions from the `Templates.gitlab-ci.yml`
+    file, and we’re starting our own job based on those definitions. However, in the
+    `variables:` block, we’re adding our own variables to control how the template
+    CI job definition will run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method of templating a CI job and then using variables to expose configuration
+    options for it is similar to how componentization occurs in traditional software
+    development. It follows the same purpose, rules, and goals, even though the syntax
+    is different.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Includes from remote areas
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `include:` keyword is not delegated to a single project or repository.
+    You can include GitLab CI files from the open internet as well. Some examples
+    of remote includes are listed here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Including from a separate project and branch:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Including from a remote location:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Include from a template on the GitLab instance (`lib/gitlab/ci/templates`):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can include a CI file from anywhere the starter of a CI pipeline has access.
+    Provided that the person who starts the CI pipeline has read access to the included
+    file, the pipeline will succeed. However, if the person does not have access,
+    the pipeline will fail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Leveraging parent-child pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that we’ve spoken about including multiple YAML files and how you can templatize
+    them for reusability, let’s talk about how we can leverage them with the `trigger:`
+    keyword to create child pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A **child pipeline** is a pipeline that is triggered by another pipeline. The
+    triggering pipeline is referred to as the **parent pipeline**. Once a parent pipeline
+    triggers a child pipeline, the parent’s pipeline execution waits for the new child
+    pipeline to complete before it resumes. This is a powerful tool for building multiple
+    pipelines to support a monorepo, or for breaking one large complex pipeline into
+    smaller, more manageable pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To invoke a child pipeline, simply add the `trigger:` keyword as the parent
+    to an `include:` statement. The following example will execute the `build.gitlab-ci.yml`
+    file as a child pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the preceding example, in a CI pipeline view, you will see a CI job that
+    states `My-Child-CI-Job`. This CI job will have another pipeline attached to it
+    labeled `Downstream Pipeline`. In that view, you will be able to see all of the
+    jobs from the child pipeline and their execution status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: An invoked child pipeline accepts all normal CI job attributes and keywords.
+    Keywords such as `rules:` can determine when a child pipeline is invoked. The
+    `environment:` keyword can also tie the invocation of a child pipeline to approval
+    rules or environment tracking.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Securing and accelerating jobs with purpose-built containers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GitLab, when set up properly, runs all the CI jobs of a pipeline in a container.
+    This means that the entire build operation happens in a container. Because of
+    this, container stewardship is exceptionally important. If a CI job happens in
+    an insecure container, then that means the entire CI job and pipeline are insecure.
+    If a CI job uses a non-performant container, that CI job and pipeline will take
+    much longer to complete, resulting in a much slower time to show results. In every
+    measurable way, the container used for your CI jobs is the most important part
+    of your pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important note
+  prefs: []
+  type: TYPE_NORMAL
+- en: To quickly set or identify which container a specific CI job is using, look
+    for the `image:` attribute in a CI job. This attribute will define the source
+    of the container image, and the exact container image being used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A second area to look for this container image is at the top of the CI job log.
+    There will be a message indicating which container image is being used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We aim to resolve these concerns with a practice we call *purpose-built containers*.
+    These are containers whose entire design is to be used in a CI pipeline. Here,
+    we will outline some attributes of these containers and explain how to build them.
+    When building containers for a CI pipeline, try to follow as much of this guidance
+    as possible. Even if you’re not able to achieve every item mentioned here, following
+    them as much as possible will result in a much more secure, performant, and maintainable
+    container for your CI pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first item to consider is the file size of the container. A container for
+    use in GitLab CI should contain only the minimum number of components necessary
+    to run and perform its tasks. This container should also only perform one set
+    of tasks. This means you would have a separate container for each toolchain –
+    that is, one for Java and one for Node.js. You do not want to mix multiple toolchains
+    because it will explode your container’s file size. There is rarely a scenario
+    where you would need multiple toolchains in the same container as they are usually
+    executed in separate CI jobs. A good rule to follow is that if a CI job does not
+    need something, that something should not be included in the container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second item to consider is ensuring your containers are multi-use. You still
+    want to keep your toolchains in separate containers; however, you should avoid
+    embedding configuration inside of a container that will prevent it from being
+    used in multiple CI jobs or multiple pipelines. A good example of what to include
+    would be encryption certificates so that the container can communicate with any
+    resources it needs. An example of what not to include would be any configuration
+    or settings that are related only to a single CI job or pipeline. The difference
+    between these two items is that the first example (certificate) is used to enable
+    the container to work properly, whereas the second example (configuration or setting)
+    will restrict which CI jobs and pipelines the container can run in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third item to consider is preventing the container from being run under
+    normal use. A purpose-built container for GitLab CI should effectively be a zombie
+    or a shell. There should be no circumstance where the container executes anything
+    other than what the CI job instructs it to. This can be performed by ensuring
+    the container’s entry point is empty. If a Docker container executes anything
+    as it starts in a GitLab CI, it can cause conflicts and will also take more time
+    to start.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The fourth item to consider is to avoid adding needless layers inside of a Docker
+    container. With every `RUN` or `ADD` command in a Dockerfile, Docker will create
+    a new layer. Needless layers can balloon the size of the Docker container significantly
+    and thus violate the first concern. When you run commands in a Dockerfile, you
+    should use the `&` operator liberally to chain together run commands. We have
+    provided an example of this usage in our Dockerfile example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The final item to consider is privilege. A Docker container running in GitLab
+    CI does not typically need elevated permissions to run and perform operations.
+    On OpenShift and some Kubernetes platforms, any Docker container with elevated
+    privileges may not be allowed to run and execute. Setting a random user ID when
+    creating the container will help prevent these platforms from giving the container
+    any form of privilege. If you need to provide permissions to a file or folder,
+    they should be granted to a group as opposed to individual users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A purpose-built container example
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here, we have provided an example of a purpose-built container. This example
+    follows all the considerations we listed previously. This is a Docker image that
+    has been built upon the `alpine:3.12.0` base container. From there, we have a
+    `RUN` command that combines multiple commands in one line. It makes use of the
+    `&` operator to chain together multiple APK package manager commands. This reduces
+    the number of layers in the Docker file. At the end of that command line, we assign
+    a folder to the group of the running user. In doing so, we reserve the ability
+    to manipulate that folder, but we prevent it from gaining any privilege from a
+    bad group assignment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the first consideration, you can see it is being met with `apk add –no-cache
+    nodejs npm`. Node.js is the only toolchain that is installed in this container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the second consideration, you can see no configuration is embedded in the
+    Dockerfile. This means the container will pull all of its configurations from
+    the CI job’s configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the third consideration, you can look at the line starting with `CMD ["echo"`.
+    This line prevents the container from running outside of a CI job. It presents
+    an error message and kills the container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the fourth consideration, look at the line starting with `RUN apk`. This
+    line has multiple commands strung together with `&`. Each `RUN` command in a container
+    creates a second layer. Here, we are using as few `RUN` commands as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the fifth consideration, we close the container with `USER 1001`. This line
+    forces all commands in the container to be run as a random user ID. This means
+    no commands will run with any form of escalated privilege.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we learned about many tools we can use with GitLab CI to create
+    fast and reusable pipelines. We started with DAGs, which allow us to make pipelines
+    execute faster. Then, we learned how to build code for multiple architectures.
+    With the introduction of mainstream ARM platforms, this is going to gain importance
+    over time. Later, we learned when to leverage caching or artifacts in pipelines
+    for dependency management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The last two topics we covered are likely the most important. We learned three
+    different methods to build reusable pipeline definitions so that you don’t have
+    to write the same logic in multiple places. Finally, we learned about a concept
+    called *purpose-built pipelines*, which enables you to build fast, secure, and
+    stable containers to execute your CI workloads in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you’re going to learn how to expand the reach of your CI/CD
+    pipelines.
+  prefs: []
+  type: TYPE_NORMAL

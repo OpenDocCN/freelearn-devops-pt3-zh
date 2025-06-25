@@ -1,0 +1,1804 @@
+- en: '9'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Configuration Management with Ansible
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the last chapter, we looked at **Infrastructure as Code** (**IaC**) with
+    Terraform, its core concepts, IaC workflow, state, and debugging techniques. We
+    will now delve into **configuration management** (**CM**) and **Configuration
+    as Code** (**CaC**) with Ansible. Ansible is a CM tool that helps you to define
+    configuration as idempotent chunks of code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to configuration management
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Setting up Ansible
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to Ansible playbooks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ansible playbooks in action
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing for reusability
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: You will need an active Azure subscription to follow the exercises for this
+    chapter. Currently, Azure is offering a free trial for 30 days with $200 worth
+    of free credits, and you can sign up at [https://azure.microsoft.com/en-in/free](https://azure.microsoft.com/en-in/free).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will also need to clone the following GitHub repository for some of the
+    exercises:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to clone the repository into your home directory,
+    and `cd` into the `ch9` directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: You also need to install Terraform on your system. Refer to [*Chapter 8*](B19877_08.xhtml#_idTextAnchor1010),
+    *Infrastructure as Code (IaC) with Terraform*, for more details on installing
+    and setting up Terraform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to configuration management
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: CM, in the realm of technology and systems administration, can be compared to
+    the role of a conductor leading an orchestra. Imagine yourself guiding a group
+    of musicians, each playing a unique instrument. Your responsibility is to ensure
+    that everyone is harmoniously in sync, adhering to the correct musical score,
+    and executing their parts at precisely the right moments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the context of technology and systems administration, CM is the practice
+    of skilfully orchestrating and overseeing the creation, updates, and maintenance
+    of computer systems and software, much akin to how a conductor directs musicians
+    to produce splendid music.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a breakdown of how it functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Standardization**: As with musicians employing the same musical notes and
+    scales, CM guarantees that all computers and software within an organization adhere
+    to standardized configurations. This uniformity mitigates errors and bolsters
+    system reliability.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Automation**: In an orchestra, musicians don’t manually fine-tune their instruments
+    during a performance. Likewise, CM tools automate the configuration and upkeep
+    of computer systems, consistently applying configurations without the need for
+    manual intervention.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Version control**: Musicians follow specific sheet music, and if alterations
+    occur, everyone receives updated sheet music. CM maintains a version history of
+    system configurations, simplifying the tracking of changes, reverting to previous
+    versions, and ensuring alignment across the board.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Efficiency**: Just as a conductor synchronizes the timing of each instrument,
+    CM optimizes system performance and resource allocation. It guarantees that software
+    and systems operate efficiently and can scale as required.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Compliance and security**: Analogous to a conductor enforcing performance
+    guidelines, CM enforces adherence to security policies and best practices. It
+    plays a crucial role in upholding a secure and compliant IT environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Troubleshooting**: When issues arise during a performance, the conductor
+    swiftly identifies and addresses them. CM tools assist in troubleshooting and
+    rectifying configuration-related problems in IT systems.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To understand CM better, let’s first look at the traditional way of hosting
+    and managing applications. We first create a **virtual machine** (**VM**) from
+    physical infrastructure and then log in manually to VMs. We can then run a set
+    of scripts or do the setup manually. At least, that’s what we’ve been doing till
+    now, even in this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several problems with this approach. Let’s look at some of them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we set up the server manually, the process is not repeatable. For example,
+    if we need to build another server with a similar configuration, we must repeat
+    the entire process to build another server.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Even if we use scripts, the scripts themselves are not idempotent. This means
+    they cannot identify and apply only the delta configuration if needed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Typical production environments consist of many servers; therefore, setting
+    everything up manually is a labor-intensive task and adds to the toil. Software
+    engineers should focus on novel ways of automating processes that cause toil.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: While you can store scripts within source control, they are *imperative*. We
+    always encourage a *declarative* way of managing things.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Modern CM tools such as Ansible solve all these problems by providing the following
+    benefits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They manage configuration through a set of declarative code pieces
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can store code in version control
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can apply code to multiple servers from a single control node
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As they are idempotent, they only apply the delta configuration
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is a repeatable process; you can use variables and templates to apply the
+    same configuration to multiple environments
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: They provide deployment orchestration and are mostly used within CI/CD pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Although many tools available on the market provide CM, such as **Ansible**,
+    **Puppet**, **Chef**, and **SaltStack**, Ansible is the most popular and straightforward
+    tool used for this. It is more efficient, and its simplicity makes it less time-consuming
+    than others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is an open source CM tool built using Python and is owned by **Red Hat**.
+    It provides the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It helps you to automate routine tasks such as OS upgrades, patches, and backups
+    while also creating all OS-level configurations, such as users, groups, permissions,
+    and others
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The configuration is written using simple YAML syntax
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It uses **Secure Shell** (**SSH**) to communicate with managed nodes and sends
+    commands
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The commands are executed sequentially within each node in an idempotent manner
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It connects to nodes parallelly to save time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s delve into the reasons why using Ansible is a great choice for CM and
+    automation. Here are some compelling factors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Simplicity and user-friendliness**: Ansible boasts an uncomplicated, human-readable
+    YAML syntax that’s easy to grasp and employ, even for those with limited coding
+    experience.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Agentless approach**: Ansible communicates through SSH or WinRM, eliminating
+    the need to install agents on managed nodes. This reduces overhead and security
+    concerns, a topic we’ll explore further when we discuss Ansible architecture.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Idempotent operations**: Ansible ensures the desired system state is achieved,
+    even if configurations are applied repeatedly. This minimizes the risk of unintended
+    changes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Broad adoption**: With a thriving and active user community, Ansible offers
+    extensive documentation, modules, and playbooks for various use cases.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Cross-platform compatibility**: Ansible can handle diverse environments,
+    managing various operating systems, cloud providers, network devices, and infrastructure
+    components with a single tool.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Seamless integration**: Ansible seamlessly integrates with other tools, including
+    **version control systems** (**VCSs**), monitoring solutions, and CI/CD pipelines.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scalability**: Ansible scales effortlessly to handle both small and large
+    environments, catering to both enterprises and start-ups.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Version control**: Infrastructure configurations are stored in plain text
+    files, simplifying change management, history tracking, and collaboration through
+    Git or similar VCSs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Automation of routine tasks**: Ansible automates repetitive chores such as
+    software installations, configuration updates, and patch management, freeing up
+    time for strategic tasks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Security and compliance**: Implement security policies and compliance standards
+    consistently across your infrastructure using Ansible’s **Role-Based Access Control**
+    (**RBAC**) and integrated security modules.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rollback and recovery**: Ansible enables easy rollback to prior configurations
+    in the case of issues, reducing downtime and minimizing the impact of changes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Modularity and reusability**: Ansible encourages the creation of modular,
+    reusable playbooks and roles, fostering an organized and efficient automation
+    approach.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Supportive community**: Benefit from a robust Ansible community that offers
+    support, documentation, and a repository of contributed roles and modules.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Cost-effective**: Ansible is open source and free to use, cutting down on
+    licensing expenses compared to other automation tools.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Orchestration and workflow automation**: Beyond CM, Ansible can orchestrate
+    intricate workflows, including application deployment and infrastructure provisioning.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Immutable infrastructure**: Ansible supports the concept of immutable infrastructure,
+    where changes involve recreating components rather than modifying them in place.
+    This leads to more predictable and dependable deployments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Real-time feedback**: Ansible provides real-time feedback and reporting,
+    simplifying the monitoring and troubleshooting of automation tasks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These advantages establish Ansible as a popular choice for CM, automation, and
+    orchestration across a wide spectrum of IT environments and industries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Ansible has a simple architecture. It has a **control node** that takes care
+    of managing multiple **managed nodes**. All you need is a control node server
+    to install Ansible and the nodes to manage using the control node (also known
+    as managed nodes). The managed nodes should allow an SSH connection from the Ansible
+    control node—something like the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.1 – Ansible architecture](img/B19877_09_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.1 – Ansible architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s go ahead and see how we can install and set up the required configuration
+    using Ansible. Let’s look at how to install Ansible in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up Ansible
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We need to set up and install Ansible in the control node, but before we do
+    that, we will have to spin three servers to start the activity—an Ansible control
+    node and two managed nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up inventory
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The idea is to set up a two-tier architecture with **Apache** and **MySQL**.
+    So, let’s use Terraform to spin up the three servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s first `cd` into the directory where the Terraform templates are located
+    and then edit the `terraform.tfvars` file to fill in the required details. (Please
+    refer to [*Chapter 8*](B19877_08.xhtml#_idTextAnchor1010), *Infrastructure as
+    Code (IaC) with Terraform*, for more details about how to get the attributes):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, use the following commands to spin up the servers using Terraform:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once the `terraform apply` command is completed successfully, we will see three
+    servers—`ansible-control-node`, `web`, and `db`, and the associated resources
+    created within the `ansible-exercise` resource group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `terraform apply` output also provides the public IP addresses of the Ansible
+    control node and the `web` VM. You should see the public IP address we got in
+    the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It might take a while for Azure to report the output, and if you did not get
+    the IP addresses during `terraform apply`, you could subsequently run `terraform
+    output` to get the details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible requires the control node to connect with managed nodes via SSH. Now,
+    let’s move on and look at how we can communicate with our managed nodes (also
+    known as inventory servers).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting the Ansible control node with inventory servers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We’ve already set up **passwordless SSH** between the control node and managed
+    nodes when we provisioned the infrastructure using Terraform. Let’s look at how
+    we did that to understand it better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We created an `control-node`, `web`, and `db` within that subnet. If we look
+    at the VM resource configuration, we also have a `custom_data` field that can
+    be used to pass an initialization script to the VM, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, the `control_node` VM refers to a `data.template_file.control_node_init`
+    resource, and the `web` and `db` nodes refer to a `data.template_file.managed_nodes_init`
+    resource. These are `template_file` resources that can be used for template files.
+    Let’s look at the resources as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, the `managed_nodes_init` resource points to the `managed-nodes-user-data.sh`
+    file and passes an `admin_password` variable to that file. Similarly, the `control_node_init`
+    resource points to the `control-node-user-data.sh` file. Let’s look at the `managed-nodes-user-data.sh`
+    file first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, it is a shell script that does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates an `ansible` user.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Adds the user to the `sudoers` list.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Generates an `ssh` key pair for passwordless authentication.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Sets the password for the `ansible` user.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'As we’ve generated the `ssh` key pair, we would need to do the same within
+    the control node with some additional configuration. Let’s look at the `control-node-user-data.sh`
+    script, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The script does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates an `ansible` user
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Adds the user to the `sudoers` list
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Generates an `ssh` key pair for passwordless authentication
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Adds the `web` and `db` VMs to the `known_hosts` file to ensure we trust both
+    hosts
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Installs the `sshpass` utility to allow for sending the `ssh` public key to
+    the `web` and `db` VMs
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Copies the `ssh` public key to the `web` and `db` VMs for passwordless connectivity
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'These files get executed automatically when the VMs are created; therefore,
+    passwordless SSH should already be working. So, let’s use an `ansible-control-node`
+    using the IP address we got in the last step. We will use the username and password
+    we configured in the `terraform.tfvars` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once you are in the control node server, switch the user to `ansible` and try
+    doing an SSH to the `web` server using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: And if you land on the `web` server, passwordless authentication is working
+    correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Repeat the same steps to check whether you can connect with the `db` server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exit the prompts until you are in the control node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, as we’re in the control node, let’s install Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Ansible in the control node
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Ansible requires a Linux/Unix machine (preferably), and you should have Python
+    `2.x` or `3.x` installed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the Ansible control node runs on Ubuntu, Ansible provides a `apt` commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Use the following commands to install Ansible on the server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To check whether Ansible has been installed successfully, run the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: And, as we see, `ansible 2.9.27` is successfully installed on your control node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible uses an inventory file to manage nodes. Therefore, the next step is
+    to set up an inventory file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up an inventory file
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: An inventory file within Ansible is a file that allows you to group your managed
+    nodes according to roles. For example, you can define roles such as `webserver`
+    and `dbserver` and group related servers together. You can use IP addresses, hostnames,
+    or aliases for that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always use aliases because they provide room for IP address and hostname changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can run Ansible commands on hosts or a group of hosts using the role tagged
+    to them. There is no limit to servers that can have a particular role. If your
+    server uses a non-standard SSH port, you can also use that port within the inventory
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The default location of the Ansible inventory file is `/etc/ansible/hosts`.
+    If you look at the `/etc/ansible` directory ownership, it is owned by the `root`
+    user. We want to use the `ansible` user that we created for security purposes.
+    Therefore, we must change the `/etc/ansible` directory ownership and its subdirectories
+    and files to `ansible`. Use the following command to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can then switch the user to `ansible` and clone the Git repository that
+    contains the required files into the control server using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In our scenario, we have a web server called `web` and a database server called
+    `db`. Therefore, if you check the host file called `hosts` within the repository,
+    you will see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `[all:vars]` section contains variables applicable to all groups. Here,
+    we’re explicitly defining `ansible_python_interpreter` to `python3` so that Ansible
+    uses `python3` instead of `python2`. As we’re using Ubuntu, `python3` comes installed
+    as default, and `python2` is deprecated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also see that instead of using `web` directly, we’ve specified an `ansible_host`
+    section. That defines `web` as an alias, pointing to a host with the hostname
+    `web`. You can also use the IP address instead of the hostname if required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always group the inventory according to the function performed. That helps us
+    to apply a similar configuration to a large number of machines with a similar
+    role.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we want to keep the configuration with code, we would wish to stay within
+    the Git repository itself. So, we must tell Ansible that the inventory file is
+    in a non-standard location. To do so, we will create an Ansible configuration
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up the Ansible configuration file
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The Ansible configuration file defines global properties that are specific
+    to our setup. The following are ways in which you can specify the Ansible configuration
+    file, and the first method overrides the next – the settings are not merged, so
+    keep that in mind:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By setting an environment variable, `ANSIBLE_CONFIG`, pointing to the Ansible
+    configuration file
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By creating an `ansible.cfg` file in the current directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By creating an `ansible.cfg` file in the home directory of the current user
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By creating an `ansible.cfg` file in the `/``etc/ansible` directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you manage multiple applications, with each application in its Git repositories,
+    having a local `ansible.cfg` file in every repository will help keep the applications
+    decentralized. It will also enable GitOps and make Git the **single source** **of
+    truth**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, if you check the `ansible.cfg` file in the current directory, you will
+    see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, to check whether our inventory file is correct, let’s list our inventory
+    by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: We see that there are two groups—`dbservers` containing `db` and `webservers`
+    containing `web`, each using `python3` as the `ansible_python_interpreter`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we want to see all the hosts, we can use the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we want to list all hosts that have the `webservers` role, we can use the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s check whether Ansible can connect to these servers by using the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: And, as we can observe, we get a successful response for both servers. So, we’re
+    all set up and can start defining the configuration. Ansible offers **tasks**
+    and **modules** to provide CM. Let’s look at these in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible tasks and modules
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Ansible tasks form the basic building block of running Ansible commands. Ansible
+    tasks are structured in the following format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Ansible modules are reusable code for a particular function, such as running
+    a `shell` command or creating and managing users. You can use Ansible modules
+    with Ansible tasks to manage configuration within managed nodes. For example,
+    the following command will run the `uname` command on each managed server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So, we get a reply from the `db` server and the `web` server, each providing
+    a return code, `0`, and an output, `Linux`. If you look at the command, you will
+    see that we have provided the following flags:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`-m`: The name of the module (`shell` module here)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`-a`: The parameters to the module (`uname` in this case)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The command finally ends with where we want to run this task. Since we’ve specified
+    `all`, it runs the task on all servers. We can run this on a single server, a
+    set of servers, a role, or multiple roles, or use a wildcard to select the combination
+    we want.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The tasks have three possible statuses—`SUCCESS`, `CHANGED`, and `FAILURE`.
+    The `SUCCESS` status denotes that the task was successful, and Ansible took no
+    action. The `CHANGED` status denotes that Ansible had to change the existing configuration
+    to apply the expected configuration, and `FAILURE` denotes an error while executing
+    the task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible modules are reusable scripts that we can use to define configuration
+    within servers. Each module targets a particular aspect of CM. Modules are used
+    in both Ansible tasks and playbooks. There are many modules available for consumption,
+    and they are available at [https://docs.ansible.com/ansible/latest/collections/index_module.html](https://docs.ansible.com/ansible/latest/collections/index_module.html).
+    You can pick and choose modules according to your requirements and use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: As Ansible is idempotent, always use modules specific to your task and avoid
+    using `command` and `shell` modules. For example, use the `apt` module to install
+    a package instead of the `command` module to run `apt install <package> -y`. If
+    your playbook starts to look like code, then you’re doing something fundamentally
+    wrong.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tasks do not make sense when we have a series of steps to follow while setting
+    up a server. Therefore, Ansible provides *playbooks* for this activity. Let’s
+    have a look at this in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to Ansible playbooks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Imagine you’re a conductor leading an orchestra. In this scenario, Ansible playbooks
+    are akin to your musical score, guiding every musician to create a harmonious
+    symphony of automation in the tech world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the realm of tech and automation, Ansible playbooks provide the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Musical score for automation**: Just as a conductor uses a musical score
+    with notations to guide each instrument, an Ansible playbook contains a set of
+    instructions and actions for orchestrating specific IT tasks and configurations,
+    spanning from software deployments to system configurations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Harmonious guidance**: Ansible playbooks take a similar approach. You declare
+    the desired IT state, and Ansible plays the role of the conductor, ensuring that
+    all the necessary steps are followed, much like specifying, “*I want a flawless
+    musical performance*,” and Ansible orchestrates the entire process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Tasks and reusability**: Ansible playbooks are organized into tasks and roles,
+    as with musical sheets and instruments. These tasks can be reused across various
+    playbooks, promoting consistency and saving time.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Instrument selection and direction**: Just as a conductor selects which instruments
+    play at which times, playbooks specify which servers or machines (the inventory)
+    should execute tasks. You can direct specific server groups or individual machines.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Harmonious execution**: Ansible can skilfully coordinate tasks on multiple
+    machines simultaneously, much as a conductor harmonizes the efforts of different
+    musicians to create a beautiful composition.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Fine-tuned performance**: If unexpected challenges arise during the performance,
+    a conductor adjusts and guides the musicians to ensure a flawless outcome. Similarly,
+    Ansible playbooks incorporate error-handling strategies to handle unexpected issues
+    during automation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Ansible playbooks** are a collection of tasks that produce the desired configuration
+    within the managed nodes. They have the following features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They help in managing configuration within multiple remote servers using declarative
+    steps
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: They use a sequential list of idempotent steps, and steps that match the expected
+    configuration are not applied again
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tasks within the playbook can be synchronous and asynchronous
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: They enable GitOps by allowing the steps to be stored using a simple YAML file
+    to keep in source control, providing CaC
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Ansible playbooks consist of multiple **plays**, and each play is mapped to
+    a group of **hosts** using a **role** and consists of a series of **tasks** required
+    to achieve them—something like the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.2 – Playbooks](img/B19877_09_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.2 – Playbooks
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following `ping.yaml` file is an example of a simple playbook that pings
+    all servers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The YAML file contains a list of plays, as the list directive shows. Each play
+    consists of a `hosts` attribute that defines the role to which we want to apply
+    the play. The `tasks` section consists of a list of tasks, each with `name` and
+    `action` attributes. In the preceding example, we have a single play with a single
+    task that pings all servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Checking playbook syntax
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'It is a best practice to check playbook syntax before applying it to your inventory.
+    To check your playbook’s syntax, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The syntax is correct, as we get a response with the playbook name. Now, let’s
+    go ahead and apply the playbook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Applying the first playbook
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To apply the playbook, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are three elements of play execution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Gathering facts**: Ansible checks for all hosts that are part of the role,
+    logs in to each instance, and gathers information from each host it uses while
+    executing the tasks from the plays.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Run tasks**: Then, it runs the tasks of each play, as defined in the playbook.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Play recap**: Ansible then provides a recap of the tasks it executed and
+    the hosts it ran them on. This includes a list of all successful and failed responses.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As we’ve investigated an elementary example of playbooks, we must understand
+    how to use Ansible playbooks effectively. In the next section, let’s look at Ansible
+    playbooks in action with a better example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible playbooks in action
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let’s set up an Apache server for a custom website that connects with a MySQL
+    backend—in short, a **Linux**, **Apache**, **MySQL**, and **PHP** (**LAMP**) stack
+    using Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following directory contains all resources for the exercises in this section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We have created the following custom `index.php` page that tests the connection
+    to the MySQL database and displays whether it can connect or not:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: We create several Ansible playbooks according to the logical steps we follow
+    with CM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is an excellent practice to update the packages and repositories at the start
+    of every configuration. Therefore, we need to start our playbook with this step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Updating packages and repositories
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As we’re using Ubuntu, we can use the `apt` module to update the packages.
+    We must update packages and repositories to ensure the latest package index is
+    available with all our `apt` repositories and avoid any untoward issues while
+    installing packages. The following playbook, `apt-update.yaml`, performs the update:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: The YAML file begins with a list of plays and contains a single play in this
+    case. The `hosts` attribute defines a colon-separated list of `roles`/`hosts`
+    inventory to apply the playbook. In this case, we’ve specified `webservers` and
+    `dbservers`. The `become` attribute specifies whether we want to execute the play
+    as a `root` user. So, as we’ve set `become` to `true`, Ansible will perform all
+    play tasks with `sudo` privileges. The play contains a single task—`Update apt
+    packages`. The task uses the `apt` module and consists of `update_cache=yes`.
+    It will run an `apt update` operation on all nodes with the `webservers` and `dbservers`
+    roles. The next step is to install packages and services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing application packages and services
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We will use the `apt` module to install the packages on Ubuntu, and the `service`
+    module to start and enable the service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by installing Apache on the web servers using the following `install-webserver.yaml`
+    playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: As this configuration is for `webservers`, we’ve specified that within the `hosts`
+    attribute. The `tasks` section defines two tasks—`Install packages` and `Start
+    and Enable Apache service`. The `Install packages` task uses the `apt` module
+    to install `apache2`, `php`, `libapache2-mod-php`, and `php-mysql`. The `Start
+    and Enable Apache service` task will start and enable the `apache2` service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, we will install and set up the MySQL service using the following
+    `install-dbserver.yaml` playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: This playbook will run two tasks—`Install packages` and `Start and enable MySQL
+    service`. The `Install packages` task will install the `python-mysql` and `mysql-server`
+    packages using the `apt` module. The `Start and enable MySQL service` task will
+    start and enable the MySQL service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring applications
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The next step in the chain is to configure the applications. There are two playbooks
+    for this. The first will configure Apache on `webservers`, and the second will
+    configure MySQL on `dbservers`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following `setup-webservers.yaml` playbook will configure `webservers`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: This playbook runs on all nodes with the `webservers` role, and there are three
+    tasks in this playbook. The `Delete index.html file` task uses the `file` module
+    to delete the `/var/www/html/index.html` file from the web server. That is because
+    we are using `index.php` as the index page and not `index.html`. The `Upload application
+    file` task then uses the `copy` module to copy the `index.php` file from the Ansible
+    control node to the web server at the `/var/www/html` destination, with a mode
+    of `0755`. The `Upload application file` task also has a `notify` action that
+    will call the `Restart Apache` handler if this task has a status of `CHANGED`.
+    A `handlers` section within the playbook defines handlers that listen to notify
+    events. In this scenario, if there is a change in the `Upload application file`
+    task, the `Restart Apache` handler will be triggered and will restart the `apache2`
+    service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use the following `setup-dbservers.yaml` playbook to configure MySQL
+    on `dbservers`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: This playbook is a bit more complicated, but let’s break it down into parts
+    to facilitate our understanding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is a `vars` section in this playbook that defines a `mysql_root_password`
+    variable. We need this password while executing MySQL tasks. The first task is
+    to set up the root password. The best way to set that up is by defining a `/root/.my.cnf`
+    file within MySQL that contains the root credentials. We are copying the following
+    `client.my.cnf` file to `/root/.my.cnf` using the `copy` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then, the `Create a test user` task uses the `mysql_user` module to create a
+    user called `testuser`. It requires values for the `login_user` and `login_password`
+    attributes, and we are supplying `root` and `{{ mysql_root_password }}`, respectively.
+    It then goes ahead and removes all anonymous users and also removes the test database.
+    It then changes the bind address to `0.0.0.0` using the `lineinfile` module. The
+    `lineinfile` module is a powerful module that helps manipulate files by first
+    grepping a file using a regex and then replacing those lines with the line attribute’s
+    value. All these tasks notify the `Restart MySQL` handler that restarts the MySQL
+    database service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining playbooks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we’ve written multiple playbooks, we need to execute them in order. We cannot
+    configure the services before installing packages and services, and there is no
+    point in running an `apt` update after installing the packages. Therefore, we
+    can create a playbook of playbooks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To do so, we’ve created a YAML file, `playbook.yaml`, that has the following
+    content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: This YAML file contains a list of plays, and every play contains an `import_playbook`
+    statement. The plays are executed in order as specified in the file. Now, let’s
+    go ahead and execute the playbook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing playbooks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Executing the playbook is simple. We will use the `ansible-playbook` command
+    followed by the playbook YAML file. As we’ve combined playbooks in a `playbook.yaml`
+    file, the following command will run the playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we can see, the configuration is applied on both `webservers` and `dbservers`,
+    so let’s run a `curl` command to the web server to see what we get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the database is connected successfully! That proves that the
+    setup was successful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are several reasons why the way we approached the problem was not the
+    best. First, there are several sections within the playbook where we’ve hardcoded
+    values. While we have used variables in a few playbooks, we’ve also assigned values
+    to variables within them. That does not make the playbooks a candidate for reuse.
+    The best way to design software is to keep reusability in mind. Therefore, there
+    are many ways in which we can redesign the playbooks to foster reusability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designing for reusability
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Ansible provides variables for turning Ansible playbooks into reusable templates.
+    You can substitute variables in the right places using **Jinja2** markup, which
+    we’ve already used in the last playbook. Let’s now look at Ansible variables,
+    their types, and how to use them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible variables
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Ansible variables**, as with any other variables, are used to manage differences
+    between managed nodes. You can use a similar playbook for multiple servers, but
+    sometimes, there are some differences in configuration. Ansible variables help
+    you template your playbooks so that you can reuse them for a variety of similar
+    systems. There are multiple places where you can define your variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within the Ansible playbook within the `vars` section
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In your inventory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In reusable files or roles
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passing variables through the command line
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Registering variables by assigning the return values of a task
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ansible variable names can include *letters*, *numbers*, and *underscores*.
+    You cannot have a Python *keyword* as a variable, as Ansible uses Python in the
+    background. Also, a variable name cannot begin with a number but can start with
+    an underscore.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can define variables using a simple key-value pair within the YAML files
+    and following the standard YAML syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Variables can broadly be of three types—*simple variables*, *list variables*,
+    and *dictionary variables*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simple variables
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`{{ var_name }}`. You should always quote Jinja expressions, as the YAML files
+    will fail to parse without that.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is an example of a simple variable declaration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And this is how you should reference it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s look at list variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: List variables
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**List variables** hold a list of values you can reference using an index.
+    You can also use list variables within loops. To define a list variable, you can
+    use the standard YAML syntax for a list, as in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To access the variable, we can use the index format, as in this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Ansible also supports more complex dictionary variables. Let’s have a look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dictionary variables
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Dictionary variables** hold a complex combination of *key-value pairs*, the
+    same as a Python dictionary. You can define dictionary variables using the standard
+    YAML syntax, as in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are two ways in which to refer to these variables’ values. For example,
+    in dot notation, we can write the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And in bracket notation, we can depict the same thing using the following expression:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can use either dot or bracket notation in the same way as in Python.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: While both dot and bracket notation signify the same thing, bracket notification
+    is better. With dot notation, some keys can collide with the methods and attributes
+    of Python dictionaries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at ways of sourcing variable values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sourcing variable values
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: While you can manually define variables and provide their values, sometimes
+    we need dynamically generated values; for example, if we need to know the server’s
+    hostname where Ansible is executing the playbook or want to use a specific value
+    returned from a task within a variable. Ansible provides a list of variables and
+    system metadata during the gathering facts phase for the former requirement. That
+    helps determine which variables are available and how to use them. Let’s understand
+    how we can gather that information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finding metadata using Ansible facts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Ansible facts are metadata information associated with the managed nodes. Ansible
+    gets the facts during the *gathering facts* stage, and we can use the `facts`
+    variable directly within the playbook. We can use the `setup` module as an Ansible
+    task to determine the facts. For example, you can run the following command to
+    get the Ansible facts for all nodes with the `webservers` role:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, as we can see, we get `ansible_facts` with multiple variables associated
+    with the inventory item. As we have a single server here, we get `web` server
+    details. Within the piece, we have an `ansible_hostname` attribute called `web`.
+    We can use that `ansible_hostname` attribute within our playbook if we need to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sometimes, we want to source a task’s output to a particular variable to use
+    the variable in any subsequent tasks of the playbook. Let’s look at how we can
+    do that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Registering variables
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: If a task within your playbook, for example, needs a value from the result of
+    a preceding task, we can use the `register` attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following directory contains all the resources for exercises in this section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s look at the following example `register.yaml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: The playbook contains two tasks. The first task uses the `command` module to
+    execute a command, `free -m`, and registers the result in the `free_space` variable.
+    The subsequent task uses the previous task’s output using the `debug` module to
+    print `free_space` as a message to the console.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s run the playbook to see for ourselves:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we’ve understood variables, let’s look at other aspects that will help
+    us improve the last playbook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Jinja2 templates
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Ansible allows for templating files using dynamic Jinja2 templates. You can
+    use the Python syntax within the file, starting with `{{` and ending with `}}`.
+    That will allow you to substitute variables during runtime and run complex computations
+    on variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To understand this further, let’s modify the `index.php` file to supply the
+    MySQL username and password dynamically during execution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, instead of hardcoding the username and password, we can use templates
+    to substitute the variable values during runtime. That will make the file more
+    reusable and will fit multiple environments. Ansible provides another important
+    aspect of coding reusability within your playbooks—Ansible **roles**. Let’s have
+    a look at this in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible roles
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Well, the last playbook looks a bit cluttered. You have a lot of files within
+    it, and none of them are reusable. The code we’ve written can only set up the
+    configuration in a particular way. This may work fine for smaller teams with limited
+    configurations to manage, but it is not as simple as it looks for most enterprises.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Ansible roles help to standardize an Ansible setup and promote reusability.
+    With roles, you can automatically load **var files**, **handlers**, **tasks**,
+    and other Ansible artifacts using a standard directory structure relative to your
+    playbooks. The directory structure is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `roles` directory contains multiple subdirectories for each role. Each
+    role directory contains multiple standard directories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tasks`: This directory contains a list of tasks’ YAML files. It should contain
+    a file called `main.yaml` (or `main.yml` or `main`), containing an entire list
+    of tasks or importing tasks from other files within the directory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`handlers`: This directory contains a list of handlers associated with the
+    role within a file called `main.yaml`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`library`: This directory contains Python modules that can be used with the
+    role.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`files`: This directory contains all files that we require for our configuration.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`templates`: This directory contains the Jinja2 templates that the role deploys.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`vars`: This directory contains a `main.yaml` file with a list of variables
+    associated with the role.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`defaults`: This directory contains a `main.yaml` file containing the default
+    variables associated with the role that can be easily overridden by any other
+    variable that includes inventory variables.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`meta`: This directory contains the metadata and dependencies associated with
+    the role within a `main.yaml` file.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some best practices revolve around managing your Ansible configuration through
+    the folder structure. Let’s look at some of these next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: While choosing between the `vars` and `defaults` directories, the rule of thumb
+    is to put variables that will not change within the `vars` directory. Put variables
+    that are likely to change within the `defaults` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, we’ll go and use the `defaults` directory as much as we can. There are some
+    best practices regarding roles that we should follow as well. Let’s look at some
+    of them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Think about the full life cycle of a specific service while designing roles
+    rather than building the entire stack—in other words, instead of using `lamp`
+    as a role, use `apache` and `mysql` roles instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will create three roles for our use—`common`, `apache`, and `mysql`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use specific roles, such as `apache` or `mysql`, instead of using `webserver`
+    or `dbserver`. Typical enterprises have a mix and match of multiple web servers
+    and database technologies. Therefore, giving a generic name to a role will confuse
+    things.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following directory contains all the resources for the exercises in this
+    section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following is the directory structure we will follow for our scenario:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are three roles that we’ll create—`apache`, `mysql`, and `common`. Let’s
+    look at the directory structure of the `apache` role first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is also a `common` role that will apply to all scenarios. The following
+    directory structure defines that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, let’s define the `mysql` role through the following directory structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `apache` directory consists of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve used the same `index.php` file we created in the last exercise, converted
+    it to a Jinja2 template called `index.php.j2`, and copied it to `roles/apache/templates`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `handlers` directory contains a `main.yaml` file that contains the `Restart`
+    `Apache` handler.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `tasks` directory contains an `install-apache.yaml` file that includes
+    all tasks required to install Apache. The `setup-apache.yaml` file consists of
+    a list of tasks that will set up Apache, similar to what we did in the previous
+    exercise. The `main.yaml` file contains tasks from both files, using `include`
+    directives such as the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `defaults` directory contains the `main.yaml` file, which contains the `mysql_username`
+    and `mysql_password` variables and their default values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use as few variables as possible and try to default them. Use defaults for variables
+    in such a way that minimal custom configuration is needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `mysql` directory consists of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ve modified `client.my.cnf` and converted that to a `j2` file. The `j2`
+    file is a Jinja2 template file we will use in the role through the `template`
+    module in the `Set the root password` task. The file exists within the `templates`
+    directory:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, we’re providing the password through a Jinja2 expression. When
+    we run the `mysql` role through the playbook, the value of `mysql_root_password`
+    will be substituted in the `password` section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `handlers` directory contains the `Restart` `MySQL` handler.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `tasks` directory consists of three files. The `install-mysql.yaml` file
+    contains tasks that install `mysql`, and the `setup-mysql.yaml` file contains
+    tasks that set up `mysql`. The `main.yaml` file combines both these files using
+    `include` task directives, as follows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `defaults` directory contains a `main.yaml` file with a list of variables
+    we will use within the role. In this case, it just contains the value of `mysql_root_password`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `common` directory contains a single directory called `tasks` that includes
+    a `main.yaml` file with a single task to run an `apt` `update` operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main directory contains `ansible.cfg`, `hosts`, and `playbook.yaml` files.
+    While the `hosts` and `ansible.cfg` files are the same as the last exercise, the
+    `playbook.yaml` file looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: The playbook is now a concise one with a lot of reusable elements. It consists
+    of two plays. The first play will run on all web servers with the `root` user
+    and apply `common` and `apache` roles to them. The second play will run on all
+    nodes with the `dbservers` role with the `root` user and use `common` and `mysql`
+    roles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always keep roles loosely coupled. In the preceding example, the `apache` role
+    has no dependency on `mysql` and vice versa. This will allow us to reuse configuration
+    with ease.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s go ahead and execute the playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: And, as we can see, there are no changes to the configuration. We’ve applied
+    the same configuration but in a better way. If we want to share our configuration
+    with people within the team, we can share the `roles` directory, and they can
+    apply the role within their playbook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There may be instances where we want to use a different value for the variable
+    defined in the `roles` section. You can override variables within the playbook
+    by supplying the variable values with the `extra-vars` flag, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we apply the playbook using the preceding command, we’ll see that the
+    user now changes to `foo` and that the password changes to `bar@123` in both the
+    Apache and MySQL configurations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So, if we run the `curl` command to the web host, we will get the same response
+    as before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our setup is working correctly with roles. We’ve set up the Ansible playbook
+    by following all the best practices and using reusable roles and templates. That
+    is the way to go forward in designing powerful Ansible playbooks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we’ve discussed Ansible and its core functionalities from a
+    hands-on perspective. We began by understanding CaC, looked at Ansible and Ansible
+    architecture, installed Ansible, understood Ansible modules, tasks, and playbooks,
+    and then applied our first Ansible configuration. We then looked at fostering
+    reusability with Ansible variables, Jinja2 templates, and roles and reorganized
+    our configuration with reusability in mind. We also looked at several best practices
+    along the way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will combine Terraform with Ansible to spin up something
+    useful and look at HashiCorp’s Packer to create immutable infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It is a best practice to avoid using `command` and `shell` modules as much as
+    possible. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Aliases help in keeping your inventory generic. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What does the `ansible-playbook` command do?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. It runs an ad hoc task on the inventory.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. It runs a series of tasks on the inventory.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. It applies the plays and tasks configured with the playbook.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. It destroys the configuration from managed nodes.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following techniques helps in building reusability within your
+    Ansible configuration? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Use variables.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Use Jinja2 templates.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Use roles.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Use tasks.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: While naming roles, what should we consider? (Choose two)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Name roles as precisely as possible.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. While thinking of roles, think of the service instead of the full stack.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Use generic names for roles.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In which directory should you define variables within roles if the variable’s
+    value is likely to change?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. `defaults`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. `vars`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Handlers are triggered when the output of the task associated with the handler
+    is …?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. `SUCCESS`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. `CHANGED`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. `FAILED`
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Does a `SUCCESS` status denote that the task did not detect any changed configuration?
+    (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What are the best practices for inventory management? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Use a separate inventory for each environment.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Group the inventory by functions.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Use aliases.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Keep the inventory file in a central location.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Answers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B, C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B, and C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

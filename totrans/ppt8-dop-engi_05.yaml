@@ -1,0 +1,1640 @@
+- en: '5'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Facts and Functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will cover facts. We will show you how the Facter tool gathers
+    them to show the profile of systems, how to interact with Facter, and how to use
+    them in Puppet code. We will also cover how custom and external facts can be added
+    to the provided core facts, to allow for more user-specific facts to be gathered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we will cover functions. We will explain what functions do and the three
+    types of functions – statement, prefix, and chained. We will examine a selection
+    of the core provided functions to show you their capabilities. A selection of
+    functions will also be shown from the `stdlib` module, where we will explain the
+    module’s approach and uses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deferred functions, which were introduced in Puppet 6, will also be covered.
+    Here, we will show you how deferred functions differ from normal functions, how
+    to make a function deferred, and pitfalls to avoid while using deferred functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a nutshell, the following topics will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Facts and Facter
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Custom facts and external facts
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Functions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The stdlib module functions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deferred functions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'For this chapter, you will need to provision a Puppet server standard architecture
+    with a Windows client and a Linux client by downloading the `params.json` file
+    from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/params.json)
+    and then using the following command from your `pecdm` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Facts and Facter
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Facter is Puppet’s system profiler, a set of Ruby libraries that work cross-platform
+    and gather information, known as **facts**, about clients. This tooling provides
+    the necessary information to evaluate the profile of the client and allows configuration
+    decisions to be made based on the pre-existing state of the host in Puppet code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet 5 and 6 use Facter 3, while Puppet 7 uses Facter 4\. Only a handful of
+    features are available in Facter 4, which will be highlighted, and a small number
+    of facts have changed, but most users will find no difference. These differences
+    can be viewed by running the `puppet facts diff` command. In [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212),
+    we will highlight how module testing can ensure code is compatible across different
+    versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The output of Facter can be seen by running the `facter -p` or `puppet facts`
+    command on the command line or VSCode terminal. Running either of these commands
+    without any further options will return all the core facts. The `-p` flag ensures
+    that Puppet-specific facts are gathered. Due to a circular dependency being created
+    between Facter and Puppet, it had been previously planned to depreciate the `-p`
+    flag and replace it with the `puppet facts` command. This approach was abandoned
+    with the release of Facter 4\. This book will use the `facter` command for its
+    examples, which follows the documentation and community practices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, the `facter` command outputs in a Puppet hash format, while `puppet
+    facts` outputs in JSON format. Both of these commands accept options for choosing
+    the appropriate format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will now look at some examples of Facter output. The simplest type of fact
+    is a simple key-value pair, such as the `Kernel` fact, which in this case tells
+    us that the kernel is Windows-based:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are also hashes, known as structured facts, which can be broken into
+    nested levels. The `os` fact is commonly used. The following example of a Windows
+    10 laptop shows the various levels that are available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The full list of core facts can be found at [https://puppet.com/docs/puppet/latest/core_facts.html](https://puppet.com/docs/puppet/latest/core_facts.html);
+    running `facter -p` on your client system and reviewing the output is recommended.
+    An individual fact can be accessed by running the `facter` command against the
+    fact’s name, such as `facter -p kernel`, to return the `kernel` fact. To access
+    a specific nested level value in a structured fact, dot notation is used, which
+    separates each key level name with dots (`.`). So, to access the `family` fact
+    within the `os` structured fact, the `facter -p os.family` command can be run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As Facter has gone through several iterations and structured facts were not
+    in earlier versions, Facter 3 hid several legacy facts such as architecture, which
+    was put into the `os` structured fact as `os.structured`. The `--show-legacy`
+    flag allows these facts to be made visible in the Facter output; they are documented
+    in the core fact documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When Puppet is run, either via the agent or by running `puppet apply` on the
+    command line, Facter will run, with legacy facts, and the output will be assigned
+    to global variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These variables can then be accessed in Puppet manifests in two ways – either
+    directly by the name of the fact on a global variable or via the facts array.
+    It is strongly recommended to access facts only via the facts array since this
+    makes it clear that facts are being accessed and not potentially other global
+    variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, in the following code, the `notify` resources would access the
+    `kernel` and `os family` variables and print logging messages containing the `kernel`
+    and `os` families of the host it was run on:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that not all facts will appear on all clients. Facts often have a context
+    on which to filter themselves, such as which operating system is running or if
+    a particular underlying hardware is being used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you’ll see in the next section, functions use dots for chained functions,
+    so the dot-separated access syntax of the `facter` command cannot be used to call
+    the `facts` variable directly. However, the `getvar` function can be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Facter can be customized and tuned on a host-by-host basis by configuring a
+    `facter.conf` file. This file is not created by default and should be created
+    at `/etc/puppetlabs/facter/facter.conf` on Nix-based systems and `C:\ProgramData\PuppetLabs\facter\etc\facter.conf`
+    on Windows. For testing purposes, the `facter` command can be run with the `-c`
+    flag to select a configuration file to be run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example `facter.conf` group looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first section, `facts`, includes a blocklist, which allows us to list facts
+    and fact groups that will not be run. This can be useful in situations where calculating
+    the fact can be computationally expensive. For example, in the preceding example,
+    we block the `disks` and `file system` groups since, in some legacy UNIX systems,
+    SAN storage can be configured with thousands of paths. It also disables `dmi.product.serial_number`,
+    which might be decided as something secure that should not be visible in Puppet.
+    To see a full list of blockable groups, you can run the `facter --list-block-groups`
+    command, which will list the group names and a list of the facts inside it. For
+    example, the `disks` group looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The other part of the facts section is `ttls`, which allows caching to be configured.
+    Cached facts are stored as JSON in `/opt/puppetlabs/facter/cache/cached_facts`
+    on UNIX-based systems and `C:\ProgramData\PuppetLabs\facter\cache\cached_facts`
+    on Windows. In the preceding example, the `processor` group will only be refreshed
+    every 30 days. To see a full list of cacheable groups, you can run the `facter
+    --list-cache-groups` command, which will display a similar format to the block
+    groups.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `global` section allows an array of directories to be passed to `external-dir`
+    so that you can define where `facter` should look for external facts. Similarly,
+    an array directory can be passed to `custom-dir` to define where `facter` should
+    look for custom facts. Custom and external facts will be covered in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `global` section has three Boolean values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`no-external-facts`: To disable external facts if set to `true`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`no-custom-facts`: To disable custom facts if set to `true`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`no-ruby`: To prevent Facter loading via Ruby. Any facts that use Ruby and
+    custom facts are set to `true`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: All these settings are more likely to be used for debugging and development
+    purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `cli` section sets a log level with a string of (`none`, `trace`, `debug`,
+    `info`, `warn`, `error`, `fatal`) and has three options: `verbose`, `trace`, and
+    `debug`. Each of these three options is enabled or disabled with a `true` or `false`
+    Boolean. The `trace` option will show a backtrace if an exception occurs in a
+    custom fact. This should not be confused with the trace log level; a better name
+    for this option might have been stacktrace. The `verbose` option enables `verbose`
+    information output from Facter, while the `debug` option enables debug-level output
+    from Facter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `fact-group` section is new to Facter 4 for Puppet and allows you to define
+    custom groups for caching and blocking. Core facts and custom facts can be specified
+    but not external facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the `facter.conf` file uses a HOCON format, it can be easier to manage it
+    via the HOCON module from Puppet Forge ([https://forge.puppet.com/modules/puppetlabs/hocon](https://forge.puppet.com/modules/puppetlabs/hocon)),
+    where it can be classified on an individual node or group of nodes basis as required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Facter 4 in Puppet 7 also reintroduced benchmarking of facts, which had previously
+    been in Facter 2\. To run benchmarks on a particular fact, you can run the `facter
+    -t <fact name>` command. For example, running `facter -t os` will produce an output
+    similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: If a structured fact is selected, it will time each part of the fact and will
+    return it to the normal output of the facter call after.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having covered what core facts are and how to run and configure Facter to test
+    and manage them, the next stage is adding customizations via custom and external
+    facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom facts and external facts
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, you will learn how to add to the facts provided by core via
+    custom facts. These are written in Ruby, similar to core facts or external facts,
+    which are either hard-rigged values or client-native executable scripts. While
+    it can be tempting to gather everything, the extra burden facts put on the Puppet
+    infrastructure, particularly with many agents, should be considered and balanced
+    with the need for data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: External facts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: External facts are executables that can set facts based on the logic within
+    the scripts or facts set statically by the structured data of the file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'External facts can be stored in the following directories for Unix-based operating
+    systems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`/``opt/puppetlabs/facter/facts.d/`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`/``etc/puppetlabs/facter/facts.d/`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`/``etc/facter/facts.d/`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For Windows systems, they can be stored in `C:\ProgramData\PuppetLabs\facter\facts.d\`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212), you will learn how external
+    facts can be distributed to clients from modules via the plugin sync process,
+    where facts are added from modules contained in a `facts.d` folder within the
+    module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet can be run as a non-root user on UNIX-based systems, while external facts
+    can be stored in `~/.facter/facts.d/`. However, this book will not cover running
+    as a non-root user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Static external facts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Static external facts must be in JSON, YAML, or TXT format. As an example,
+    let’s set an `Application` fact to `exampleapp`, a `Use` fact to `production`,
+    and an `Owner` fact to `exampleorg`. In a YAML file, this can be created like
+    so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In a JSON file, they would be set like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In a TXT file, the same facts would be set like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: For Windows, the line endings used in these files must be either LF (Line feed,
+    Unicode character 000A) or CRLF (Carriage return and line feed, Unicode characters
+    000D and 000A) and the file encoding used for the files must be either ANSI or
+    UTF8 without BOM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The examples we’ve looked at so far are all known as **flat facts**. However,
+    structured facts can be returned by creating an array format. For example, in
+    YAML, we could allow two owners by adding arrays and nested arrays to YAML. In
+    this example, let’s assume there are multiple applications, and each application
+    can have joint ownership:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would allow us to call `facter application.exampleapp.owner` to retrieve
+    an array of owners or to call `facter application.anotherapp` to receive the use
+    and owner key pairs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that static external facts will always return a string type in their output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executable external facts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Executable external facts differ on Windows and UNIX, but both are runnable
+    scripts that output key pairs or arrays to return facts or structured facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On Windows, the following file types can be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Binary executables (`.com` and `.``exe` files)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Batch scripts (`.bat` and `.``cmd` files)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PowerShell scripts (`.``ps1` files)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: On UNIX platforms, any executable file with a valid shebang (`#!`) statement
+    can be run. If the shebang statement is missing, the execution of the script will
+    fail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For both platforms, the scripts should return text. This will be read as key
+    pairs or as YAML or JSON, which can be parsed into a structured fact.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, a Unix bash script that returns the PID of the `exampleapp` process
+    as a fact, along with a fact for `exampleapp_cpu_use` and `example_memory_use`,
+    may look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For Windows, a PowerShell script to return the same facts would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: To find issues with external facts, you can run `facter –debug`. This will highlight
+    if the fact is visible to Facter and if any output is not being parsed and getting
+    ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom facts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Custom facts are sections of Ruby code that can be used to set facts and expand
+    on the core Facter facts. The main advantage of using custom facts over external
+    facts surrounds the built-in mechanisms that are available. In this section, you
+    will learn how the use of custom facts allows you to access the value of other
+    facts within custom facts, how you can have multiple weighted resolutions, and
+    how to use `confine` to ensure only certain nodes will attempt to run the fact.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main disadvantage of using custom facts is that they need to be written
+    in Ruby, which is a learning curve. It’s beyond the scope of this book to dive
+    deeper into the details of Ruby, but its basic structure and some of its core
+    libraries, which work well on Windows and UNIX-based systems, will be shown to
+    give enough you a head start so that you can research them further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like external facts, custom facts are normally distributed by Puppet modules.
+    However, when performing local testing, there are three ways to direct Facter
+    to locations where we store our facts locally while testing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Ruby library load path
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using the `–custom-dir` option on the Facter command (note that this can be
+    flagged multiple times)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Setting the `FACTERLIB` environment variable
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Ruby library load path can be checked by running `ruby -e 'puts $LOAD_PATH'`.
+    Remember to make sure that the Ruby binary being used is the Puppet-provided version
+    at `C:\Program Files\Puppet Labs\Puppet\puppet\bin\ruby.exe` on Windows or `/opt/puppetlabs/puppet/bin`
+    on UNIX-based systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Custom facts declare themselves using `Facter.add(''<fact_name>'')` and use
+    a `setcode` statement to run a code block to resolve the fact. This is the way
+    a fact’s value is determined. As a simple example, it is possible to run a UNIX
+    shell or Windows terminal command directly by surrounding the command with backticks
+    (`` ` ``):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since there is only one command, this could also be written with a single `setcode`
+    line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Both would set the `exampleapp_version` fact to the output of the `exampleapp
+    –``version` command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your facts were more complicated and you needed to run multiple commands
+    or manipulate the output, the command could be run using a Ruby class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following example, the `Facter::Core::Execution.execute` Ruby class
+    will run a command called `exampleapp`, with a flag of `version`, and then pipe
+    the output of the command to `awk` to print the second returned value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'PowerShell commands can be executed using the `powershell` command, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: It can be tempting to run everything as terminal commands for familiarity, but
+    care must be taken as not everything that can be used in a terminal will work.
+    For example, bash-style `if` statements will not work and should be written in
+    Ruby code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It can be useful to call the value of another fact into a variable. The following
+    code will put the `os arch` fact into the `arch` variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Confining custom facts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'One of the main advantages of custom facts is the ability to confine the nodes
+    they will run on. This can be achieved with the `confine` statement and by selecting
+    the facts and values to match for the fact to run. The `confine` functions syntax
+    follows this format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The fact defined after the `confine` function will only run if the conditions
+    are met. For example, you can confine a fact to only run on nodes with Windows-based
+    kernels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An array can also be used, where matching any of the values will allow the
+    fact to run. For example, we can check if the kernel is from Linux or Solaris:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For structured facts, the `Facter.value` method can be used to access it. For
+    example, to test that the `os.release.major` fact is equal to `10`, the following
+    code can be used, where `=>` is used instead of a colon (`:`) to match the fact
+    to its value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In addition to facts, Ruby commands and library commands can be used to confine
+    facts. For example, `confine` can be used with `Facter::Core::Execution.where`
+    or `Facter::Core::Execution.which` to confirm a command exists in the path for
+    Windows or Linux, respectively. Additionally, Ruby libraries such as File can
+    be used to check this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to confine a fact if the `git` command was found in the Windows
+    path, the following code can be run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following code would confine a fact to only run if `/opt/app/exampleapp`
+    existed as a file or as a directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To write a single fact that can cover multiple implementations and confine
+    with granularity, we can use both resolutions (`Facter.add` statements) and multiple
+    confine blocks. The following example shows a simple example of setting the Facter
+    value of `whoami` to either `I am windows 10` if the kernel fact is Windows and
+    `os.release.major` is `10` or to the `I am Sparc` string if the kernel is `sparc`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another method of confining facts is using features. A feature is a section
+    of Ruby code that’s added to `lib/puppet/feature` in a module. For example, the
+    `exampleapp` module could contain an `exampleapp.rb` feature that checks whether
+    `exampleapp` was installed on either Windows or Linux:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A custom fact could then use a `confine` statement so that only nodes with
+    the `exampleapp` command available would run the fact:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: This removes the need to create additional facts and gather and process information
+    not needed except for evaluating confinement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to perform all logical code inside the `setcode` and `confine`
+    blocks; otherwise, when the facts are loaded, it will run this code, rather than
+    when the fact is queried for resolution. The order in which facts will be loaded
+    is not predictable, so if code is required by the fact but it is outside of the
+    blocks, it can result in ordering errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Weighted resolutions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another approach to writing custom facts is to have multiple resolutions while
+    knowing that some may return null values, but we want to work through various
+    options. When reviewing resolutions, Facter eliminates any that are not confined.
+    Then, it looks at the weight of each resolution. By default, this is set to `0`
+    but it can be set using the `has_weight` function. If two resolutions have the
+    same weight, Facter will use whichever was listed in the code first.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to set the `exampleapp_version` fact with multiple resolution
+    options, in the first resolution, it will run the command with the `version` flag
+    weighted at `100` and then try to look for the version in the config file weighted
+    at `50`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: This allows the command to fail so that it can be backed up with a second source.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: External facts have a weight of `1000`. So, to prevent an external fact from
+    being able to overwrite your custom fact resolutions, you can set a value higher
+    than `1000` on the resolution weight.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rescue blocks
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: By default, Facter will error and fail to return any value if any resolution
+    fails with an error. Using rescue blocks can allow default values to be returned
+    as a result of failures and to opt to print warnings. This works in conjunction
+    with weighted resolutions, where it’s common to expect failures in resolutions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A simple rescue block that returns `nil` on the failure of resolution after
+    running the `exampleapp –version` command and logging a failure would look like
+    this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using `Facter.warn` ensures this message is printed to STDERR when used via
+    the `Facter` command. When used during the Puppet catalog application, it will
+    ensure it is printed in Puppet’s logs. Returning `nil` would ensure other resolutions
+    can be used if they return non-nil values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Timeouts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As part of Facter 4, which was made available in Puppet 7, it is now possible
+    to add a timeout to a resolution. This can be done by adding a comma after the
+    fact’s name as part of the `Facter.add` resolution statement and using the `{timeout:
+    <value in seconds>}` syntax, where the value in seconds can be an integer or a
+    float. For example, to ensure a 0.2-second timeout on the `exmpleapp_version`
+    fact, the code can be set like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Although this is only a feature in Facter 4 and Puppet 7, in Facter 3 and Puppet
+    5 and higher, it is possible to put timeouts on the execution command by directly
+    setting the `options` variable on the `execute` function. For example, the same
+    0.2-second timeout could be applied to the execution of the `exampleapp –version`
+    command rather than the whole resolution by modifying the `execute` command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Aggregate and structured facts
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Aggregate facts allow the resolutions of a fact to be broken up into chunks.
+    These chunks can then be merged. Merging arrays or hashes creates a structured
+    fact or performs other functions, such as adding the values of facts together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An aggregate fact still has a `Facter.add` declaration, but within `Facter.add`,
+    it sets the type variable to `aggregate`. Then, instead of using `setcode` sections,
+    it uses `chunk` sections for the resolutions. By default, each `chunk` will be
+    merged unless an aggregate block is declared to perform another function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following code would create a structured fact called `exampleapp`.
+    It would have `exampleapp.version` and `exampleapp.fullpath` containing the output
+    of the commands in the chunks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To use an aggregate block and sum facts together, you can use the following
+    code, which makes a fact called `exampleapp_memory_usage` that takes a chunk using
+    a fact containing the total memory used by `exampleapp` and adds it to the memory
+    used by `exampleapp2` to give us the total memory usage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A new method to return structured facts is available in Puppet 7 with Facter
+    4\. This follows the use of dot notation in the fact’s name, which allows a definition
+    to assign different levels of a structured fact. For example, to set the `exampleapp`
+    fact with a nested level of `exampleapp.version` and `exampleapp.pid`, you can
+    use the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: This has a core advantage over using an aggregate. Unlike an aggregate, a failure
+    of one part of the declaration will only affect that declaration; the rest will
+    be assigned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section has tried to give you enough information to get started with custom
+    facts. In Puppet’s documentation for custom facts and module code, you will find
+    alternative syntax for many of the features we’ve discussed. Since it is in Ruby
+    code, there is a greater variation of what can be declared. This book has chosen
+    what it considers the best style and practice to follow to keep things simple
+    and avoid listing too many options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some modules that can be useful to follow examples further are available on
+    GitHub:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/puppetlabs/puppetlabs-pe_status_check/blob/main/lib/facter/](https://github.com/puppetlabs/puppetlabs-pe_status_check/blob/main/lib/facter/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/puppetlabs/puppetlabs-stdlib/tree/main/lib/facter](https://github.com/puppetlabs/puppetlabs-stdlib/tree/main/lib/facter)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/puppetlabs/puppetlabs-lvm/tree/master/lib/facter](https://github.com/puppetlabs/puppetlabs-lvm/tree/master/lib/facter)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/puppetlabs/puppetlabs-java/tree/main/lib/facter](https://github.com/puppetlabs/puppetlabs-java/tree/main/lib/facter)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: For this lab, we will create a static external fact and a custom fact and distribute
+    them with `bolt upload` before running the facts and viewing them on the console
+    to see if they have become visible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the static external fact, create a structure that sets `packtlab.use` equal
+    to `lab` and `packlab.student` equal to your name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the custom fact, a `tmp_count` fact will be created, which will count the
+    number of files in the `/tmp` directory on Linux and `C:\Users\admin\AppData\Local\Temp`
+    on Windows. For Linux, the first resolution with a higher weighting should be
+    `'find /tmp` `-type f | wc -l'`, while the second with a lower weighting should
+    be `ls /tmp | wc -l`. For Windows, the first higher-weighted resolution should
+    be the `(ls $env:Temp | Measure-Object -line).Lines` PowerShell command and the
+    lower weighted resolution – that is, `(Get-ChildItem $env:Temp |` `Measure-Object).Count`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All resolutions should return `undef` in the result of an error and should time
+    out after 10 seconds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that it can be useful to look at your clients’ current facts on the web
+    console so that you know how to confine them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For each of the facts, use the `bolt` command as follows to upload them to
+    the correct locations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Go to the web console and view the facts in your nodes to confirm they are on
+    your clients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find the example solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/tmp_count.rb](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/tmp_count.rb)
+    and [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/packlab.yaml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/packlab.yaml).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: When testing custom or external facts, they can be set manually with environment
+    variables by setting `FACTER_<fact_name>` in UNIX environments using `export FACTER_exampleapp
+    ="test"` or in Windows environments by using `env FACTER_exampleapp="test"` –
+    this would hard-set the `exampleapp` fact. This method only works with custom
+    or external facts and not core facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Functions are sections of Ruby code that can be run during catalog compilation
+    and allow you to modify the catalog or calculate and return values. Puppet has
+    many built-in functions and more can be supplied via modules from Puppet Forge,
+    such as [https://forge.puppet.com/modules/puppetlabs/stdlib](https://forge.puppet.com/modules/puppetlabs/stdlib),
+    or custom-written functions added to modules. This book will not cover writing
+    functions, but a complete guide can be found at [https://puppet.com/docs/puppet/latest/writing_custom_functions.html](https://puppet.com/docs/puppet/latest/writing_custom_functions.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this section, we will cover the three different types of functions: statement,
+    prefix, and chained. A selection of the core Puppet functions will be shown, grouped
+    by purpose to demonstrate the most used and useful functions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A lot of functions were moved from sources such as the `stdlib` module into
+    the core Puppet function. The full list can be reviewed at [https://puppet.com/docs/puppet/6/release_notes_puppet.html#release_notes_puppet_x-0-0](https://puppet.com/docs/puppet/6/release_notes_puppet.html#release_notes_puppet_x-0-0).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Statement functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Statement functions are Puppet language-provided functions used only for their
+    side effects, which always return `undef` values. Statement functions can omit
+    brackets, unlike the other functions we will review in this section. You cannot
+    add custom or Forge-provided statement functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Catalog statements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Catalog statements affect the content of the catalog, allowing classes to be
+    included, dependencies and containment to affect the order of the catalog, and
+    tags to be applied. The following shows an example syntax of catalog statements:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: The use of `Include` and `tag` was discussed in [*Chapter 3*](B18492_03.xhtml#_idTextAnchor048),
+    but we didn’t look at the `tag` function in much detail. The `tag` function is
+    used within a class to mark that class, and all contained objects with the tag
+    or list of tags.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185), we will cover the full use
+    of `require` and `contain`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging statements
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Logging statements allow for string messages to be sent to log output on the
+    Puppet server. In [*Chapter 10*](B18492_10.xhtml#_idTextAnchor252), server and
+    agent logging will be reviewed in full as logging locations depend on the configuration
+    and whether Puppet enterprise or open source is used. The syntax for a logging
+    statement is simply `<logging` `level>(<string >)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following log levels can be applied:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`debug`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`info`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`notice`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`warning`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`err`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`fail`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To log a warning message of `''code unexpected''`, the Puppet code would be
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The string message can include variables if they are double-quoted for interpolation.
+    So, to produce an error message of `''pa-risc is unsupported''` on a pa-risc architecture
+    system, the Facter `os.arch` fact can be used within the error function string:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: This differs from the examples this book has used up till now, particularly
+    with the `notify` resource used in the previous chapter’s examples. The `notify`
+    resource returns to the client’s logging while the log-level functions will log
+    to the Puppet server. As `notify` is a resource and not a function, it will result
+    in the report showing that a resource is changed every time a `notify` resource
+    is called.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`fail` differs from the other levels as calling it as a function will terminate
+    the compilation and result in no catalog being sent to the agent.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prefix and chained functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Puppet functions can be called in two ways and for many functions, either can
+    be applicable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Prefix functions are called by writing the name of the function and then providing
+    a list of arguments in brackets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Chained functions are created from an argument, a full stop (`.`), then the
+    function name with brackets, and any further arguments in those brackets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: A selection of built-in functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There are many functions available in core Puppet, and this section will group
+    different functions to show examples of how they can be used or refer to where
+    in this book we will cover them in more detail. The intention of this chapter
+    is not to give the full syntax of every function but to expose a breadth of functions.
+    You can refer to the full functions list at [https://puppet.com/docs/puppet/latest/function.html](https://puppet.com/docs/puppet/latest/function.html).
+    Make sure you select the correct version of the documentation for the Puppet environment
+    you are working with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparison and sizing
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The following functions allow you to compare and measure the size of variables.
+    They provide additional capability beyond what can directly be done with data
+    types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `length` and `size` functions are effectively the same and can both be
+    used as prefixes or chained functions on arrays (number of elements), hashes (number
+    of key-value pairs), strings (characters), or binaries (bytes) to confirm the
+    relative size/length of the variable. For example, the following command would
+    return `4` as the length of the string four and `5` as the size of the array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`match` is used as a chained function on a string or an array of strings with
+    a regular expression to match patterns. It returns an array containing the string
+    that has been matched in index 0, followed by the pattern(s) that matched. If
+    there are no patterns in the following example, where there’s a string that must
+    start with a lowercase letter to start, then the numbers will be `6` to `8` in
+    length. The variable matches `a123456` and returns an array containing `[ ''a123456'',
+    ''a'' , ''``123456'' ]`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we tried this same regular expression on a non-matching string, `1a23456`,
+    `undef` will be returned:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using an array of strings (`''a123456''`, `''b1254678''`, and `''1a23456''`)
+    with the same regular expression results in the `multi_match` variable containing
+    an array of arrays. This is the output if `match` had been used on each string
+    individually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: This means `multi_match` will contain `[['a123456','a','123456'],['b1254678','b','1254678'],undef]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`max` and `min` are used as prefix functions. They take an array of strings
+    or numeric values and return the largest and smallest values in each case. Before
+    Puppet 6.0, there was guidance as to how it would convert and handle mixed types
+    used in these functions. However, now that it’s deprecated, it is strongly advised
+    that you ensure comparisons are like for like. In the following example, the variable
+    highest number would contain `88`, while the lowest letter would contain `''a''`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`empty` is used as a prefix or chained function to confirm if an array or hash
+    contains no elements or if a string or binary contains no length. In the following
+    examples, the `empty_array` and `empty` strings would contain `true`, while the
+    `non_empty_string` variable would contain `false`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`compare` is used as a prefix function that compares two values and returns
+    `-1`, `0`, or `1` if the first value is less than, equal to, or greater than the
+    second, respectively. The two values must be of the same type and can be numeric,
+    strings, timespans, timestamps, or semvars. For two strings, a third argument
+    (a Boolean) can be used to check whether the comparison should ignore casing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the `numeric_compare` variable would contain `-1`, while the `string_compare`
+    variable would contain `1` as capitals would be greater than lowercase letters
+    and `A` would come before `b`. If the Boolean were set to `true`, it would return
+    `1`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Change case
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The following functions change the case of strings or arrays/hashes of strings.
+    In the case of integers, they remain unchanged and will contain other incomputable
+    data type errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`capitalize`, `camelCase`, `downcase`, and `upcase` are all used as prefixes
+    or chained functions to change the capitalization of a string or a set of strings
+    on an iterable, such as an array. `downcase` and `upcase` can also be used on
+    an array. All can be used on a numeric but will simply return the numeric unaffected.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: CamelCase removes any underscores (`_`) that were used when applied. `camelCase`
+    and `capitalize` are not recursive on an array but `upcase` and `downcase` are.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If `downcase` or `upcase` changes keys in an array while being used recursively
+    and this creates duplicates, it will overwrite the key, using the last key-value
+    pair that was updated in its place. To show some examples, the `upper_case` variable
+    will contain a string called `UPANDDOWN` upon making the whole string upper case,
+    while `downcase` will contain a hash of `{''lower'' => ''case2''}` upon downcasing
+    both keys and overwriting the first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `capitals` variable will contain an array called `[''Up, Mix'']` after
+    capitalizing each string in the array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `downcase` variable will contain a hash of `{''lower'' => ''case2''}` after
+    downcasing both keys and overwriting the first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `camel` variable will contain `Word1Word2Word3` after removing the underscores
+    and setting the capitalization to `camelCase`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you’re using international characters, you need to review how to Ruby system
+    locale handles these characters as it is used to handle changes in casing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: String manipulation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `lstrip`, `rstrip`, and `strip` functions allow spacing to be removed from
+    strings. They are all prefixes or chained functions that are used to remove spaces
+    from a string. `lstrip` removes leading spacing, `rstrip` removes trailing spacing,
+    and `strip` removes both leading and trailing white spacing such as space, tab,
+    newline, and return but not hard space. They can be used on a string or an iterable
+    but not recursively. If used on numerics, they will return numeric unadjusted
+    types but will result in an error on any other unsupported type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example, which uses all three functions, will result in the `left`
+    variable containing `''first second''`, the `right` variable containing `''first
+    second''`, and the `all` variable containing `''firstsecond''`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Lambdas
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'These functions are not lambdas themselves but are most useful when used with
+    lambdas since they allow arrays or hashes variables to be iterated over or transformed
+    and passed to lambdas, which are sections of Puppet code. The following functions
+    are used on variables to define their behavior: `all`, `any`, `break`, `each`,
+    `filter`, `index`, `lest`, `map`, `next`, `return`, `reduce`, `reverse_each`,
+    `step`, `then`, `tree_each`, `unique`, and `with`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The syntax and behaviors of these functions will be covered in full in [*Chapter
+    6*](B18492_06.xhtml#_idTextAnchor185), but to show an example, here, we are using
+    the `each` function and a hash containing user name keys and numbers representing
+    their user ID. The `each` function can take each key pair as an array and allow
+    user resources to be created with the assigned IDs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many functions can use lambdas for error handling, which allows you to loop
+    through the error sections, messages, and issue codes and allows for more detailed
+    messages or actions to be taken. This will be covered in [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Templating
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Templates allow you to create complicated text with simple inputs for substitution.
+    In [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185), we will cover templates in
+    full, but the `template` and `epp` functions allow the ERB and EPP formats for
+    templates to be used via the `content` attribute of the `file` resource. An example
+    of using the ERB format and informing the `content` attribute can be found in
+    the `exampleapp` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: The structure of modules and how to store template files will be covered in
+    [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Alternatively, to use a string containing a template format and pass the value,
+    `inline_template` and `epp_inline` can be used. For example, to use an EPP style
+    template where it is presumed `$exampleapp_conf_template` contains a string in
+    EPP template format, `inline_epp` will substitute the port and debug the variable
+    values of `exampleapp_port` and `exampleapp_debugging_enabled`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hash/array
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The following functions are used to either access and manipulate hash and array
+    data beyond the normal operators available, which were discussed in [*Chapter
+    4*](B18492_04.xhtml#_idTextAnchor078), or to manipulate variables into hashes
+    and arrays.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `dig` function is used to search through a complex data structure by providing
+    various keys or indices. It is particularly useful in situations where the structure
+    is not well defined. For instance, suppose we have a data structure called `exampleapp_proc`,
+    and we want to access the state of the process with ID `124`. If we tried to access
+    it using a hash index such as `exampleapp_proc[''exampleapp_pids''][''124''][''state'']`,
+    but the `124` key was not present in the hash, we would get an error and the catalog
+    run would fail. However, by using the `dig` function instead, the notice will
+    be undefined:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `getvar` function is used to return parts of a structured variable using
+    dot notation. If the variable does not exist, it will return `undef` instead of
+    throwing an error, unlike direct access to structured variables. You can also
+    set a default value if the value is not found; otherwise, it will return `undef`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first command uses `getvar` to access the `os.release.full` fact, while
+    the second command sets the return value to `''not_found''` if the structured
+    fact is not found:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `join` function is used to convert an array into a string of elements using
+    a specified delimiter. For instance, if you have an array of data center locations
+    such as `dc_locations = [''london'', ''falkirk'', ''portland'', ''belfast'']`,
+    you can use the `join` function to print a colon-separated string of those locations;
+    for example, `notice(join(${dc_locations}, ":"))` This will produce the `"london:falkirk:portland:belfast"`
+    string in the notice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, if you use `join` on an array that contains a nested array, it will
+    flatten the array, but it won’t affect hashes or arrays within hashes. For example,
+    `join([{London => [''bromley'', ''brentford'']}, ''Berlin'', ''Falkirk'', ''Grangemouth''],
+    ''@@'')` would print `[ { London => [ ''bromley'', ''brentford'' ] }@@Berlin@@Falkirk@@Grangemouth
+    ]` because the first element of the array is a hash and it won’t be flattened
+    despite it containing a hash:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `keys` and `values` functions take a hash and return an array of the keys
+    in the hash it can be run as a prefix or chained function. For example, to print
+    the list of keys of the `offices` variable, the first two `notice` functions would
+    print an array of `[''Germany'',''Holland'']`, while the next two would print
+    an array of `[''Berlin'',Amsterdam'']`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: These keys or values will be in the same order as they were declared in the
+    hash. If the hash is empty, it will return an empty array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `split` function takes a string and, using a pattern to represent a field
+    separator, can break a string into an array of elements. This pattern can be a
+    string, regexp, or regexp. The following example shows how to split using each
+    pattern method and pick different separators or multiple separators:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `split_on_at` variable would contain an array of `['north','south.east','west']`,
+    `split_on_fullstop` would contain an array of `['north@south ', 'east@west']`
+    and `split_on_both` would contain an array of `['north','south,'east','west']`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `sort` function takes an array and sorts the array numerically or by lexicographical
+    order. It is not possible to mix these orderings and have numeric and lexigraphic
+    values as this will result in an error and no conversion. Comparing characters
+    is based on system locale and is case-sensitive unless `compare` and lambdas are
+    used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In its simplest form, `sort` will sort numbers and strings in ascending order
+    – for example, we can take an unordered array of numbers and an unordered array
+    of strings and use `sort` as a prefix or a chained function. In this example,
+    the code will result in ordered numbers containing `[0,1,2,3,4,5,7,8,9]` and ordered
+    strings containing `[''a'',''b'',''c'',''d'']`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To specify the order explicitly, you can use the `compare` function to order
+    the variables, highlighting if they should be ascending or descending. In the
+    following example, the integers will be ordered `[1950,1980,1984,1985]` in the
+    ascending variable and `[1985,1984,1980,1950]` in the descending variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we learned when we discussed `compare` in the *Comparison and sizing* section,
+    a Boolean can be used on `compare` to order by capitals or not.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of using the `compare` function, other functions from the *Comparison
+    and sizing* section such as `max` or `min` can be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data handling
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There are several data-related functions for Hiera and encrypted EYAML. These
+    will be covered in full in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233), but
+    for reference, they are `eyaml_look_up_key`, `lookup`, and `yaml_data`. The function
+    documentation states that a few `hiera_<type>` functions were depreciated for
+    the `lookup` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `unwrap` function was previously covered in [*Chapter 3*](B18492_03.xhtml#_idTextAnchor048),
+    whereby the function was used to make sensitive data types visible/accessible
+    in Puppet code, as necessary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: stdlib module functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Modules will be discussed in full in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212),
+    but the `stdlib` module ([https://forge.puppet.com/modules/puppetlabs/stdlib](https://forge.puppet.com/modules/puppetlabs/stdlib))
+    is so widely used that it is worth highlighting some of the functions that are
+    available from the module as virtually every install of Puppet will make them
+    available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to be aware that the functions in `stdlib` allow advanced behaviors
+    that are not always best practice approaches to Puppet code, such as being able
+    to read the contents of a YAML file into a string and using the `ensure_package`
+    function, which is used to allow for multiple declarations of a package resource.
+    They can provide useful workarounds in complex situations or when code is managed
+    in multiple teams’ political situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many functions have been made redundant by file type conversion, which was made
+    available in Puppet 5, as well as other new features, but those have been left
+    for compatibility purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Array and strings
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The following functions interact with strings and arrays by combining, manipulating,
+    and producing new arrays in several ways.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `intersection` function is a chained function that, when provided with
+    two arrays, will produce a single array of values contained in both. For example,
+    the following code will put the `[''both'']` array into the `chained_array` variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `union` function is a chained function that, when provided with two arrays,
+    will produce a single array of unique values. In the following example, the `union_array`
+    variable will contain the `[''``first'',''second'']` array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `range` function is a chained function that can be provided a start, end,
+    or step interval (if not provided, this defaults to `1`). The start and end can
+    be strings or numerics, while the optional step should be an integer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the `onetoten` variable would contain an array of `[1,2,3,4,5,6,7,8,9,10]`,
+    the `etog` variable would contain `[''E'',''F'',''G'']`, and `good_trek` would
+    contain `[''StarTrek2'',''startrek4'',startrek6'',''starttrek8'']`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `start_with` and `end_with` functions are chained functions that allow
+    you to check if a string starts or ends with a provided string or list of strings,
+    attempting to match any string in the list. It will return `true` or `false`,
+    depending on the match. In the following example, `truestart` will contain `true`
+    as `server` matches the start of `server1234`, `falseend` will contain `false`
+    as `wales` does not end in `land`, and `trueoptions` will contain `true` as `aws104`
+    starts with `aws` and could match other strings starting with `gcp` or `az`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: File information
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The `basename`, `dirname`, and `extname` functions can be used either as separate
+    functions or chained together to extract the filename, directory, or extension
+    from a file path. Here’s an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that `extname` only works with filenames in the format of `filename.extension`.
+    If the string does not contain a dot (`.`), or if the dot appears at the beginning
+    or end of the string, it will simply return an empty string.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Having covered a wide variety of functions, let’s practice using a handful
+    of them. Let’s create a class called `example_functions` that takes the parameters
+    of the user prefix as a string and several users as an integer. This class should
+    take two parameters: a user prefix as a string, and several users as an integer.
+    Ensure that the prefix is in lowercase. An array of usernames should be created
+    starting from `0` up to the number of users specified. This array should then
+    be passed to a user resource to create the users.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Define your class with the `user` string and the number `5`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code should also log a warning message containing text with the contents
+    of the `os.windows.product_name` fact or `linux` if you’re not using a Windows
+    machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, the code should take the `fact` path and ensure every directory is
+    audited. Hint: you will want to separate this path into an array and pass it to
+    a file resource. `windows` and `linux` use different separators for path objects
+    – that is, `;` and `:`. The following `if` statement should help:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You should use `bolt` to make `stdlib` available locally on our clients:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, apply the `puppet` class via `bolt` with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can find some example solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/example_functions.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch05/example_functions.pp).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deferred functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: A `Deferred` function (also known as an agent side function) is a function with
+    the `Deferred` type applied to it. This causes the function to run locally on
+    a client when the catalog is applied, rather than on a Puppet server during compilation.
+    The catalog for a deferred function contains what to run on the client rather
+    than the output of the function. The deferred type was introduced in Puppet 6.0
+    and is available in all later versions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is typically used when the compilation server can’t access a necessary
+    source in a function – for example, when retrieving a secret from a HashiCorp
+    Vault server, where security is set up to only allow the client to access a secret.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The syntax for applying `Deferred` is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following is an example of retrieving a secret from `vault`. This can be
+    used within a user resource for `exampleapp` to set the password from a Vault
+    path of `exampleapp/password`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function is from the `vault_lookup` module ([https://forge.puppet.com/modules/puppet/vault_lookup](https://forge.puppet.com/modules/puppet/vault_lookup))
+    and requires an underlying vault client setup to be available, as per the instructions
+    within the module and the guide from Hashicorp: [https://www.hashicorp.com/resources/agent-side-lookups-with-hashicorp-vault-puppet-6](https://www.hashicorp.com/resources/agent-side-lookups-with-hashicorp-vault-puppet-6).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is important to understand the difference in using functions with `Deferred`.
+    You cannot use a `Deferred` function to pass a variable to a string. This would
+    result in the catalog creating a stringified version of the object. In the following
+    example, which involves looking up a key value from `vault` called `exampleapp/message`,
+    the first `notify` will return a string containing a stringified translation of
+    the function name in the catalog, while the second `notify` will return the value
+    of the vault lookup itself:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: This reflects the catalog compilation calculating the string value at compilation
+    time. This mismatch can happen in other places, such as templates, but can be
+    overcome by ensuring any deferred values are only used in isolation or within
+    other deferred functions. In [*Chapter 7*](B18492_07.xhtml#_idTextAnchor194),
+    you will learn how to use a deferred template.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A function can only be deferred if it uses core data types because the client
+    only has core data types made available to it at runtime via plugin sync. In [*Chapter
+    10*](B18492_10.xhtml#_idTextAnchor252), you will learn how plugin sync works with
+    the client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also, note that it is down to the implementation of the function itself whether
+    it returns a sensitive value, and how it fails. In the case of the `vault_lookup`
+    function, there is no graceful failure; it will return an error, resulting in
+    an errored catalog run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: As of Puppet 7.17.0, deferred functions can now be called on demand instead
+    of being preprocessed. Using this method, the catalog can provide inputs to the
+    deferred function. If the deferred function fails, then only the affected resource
+    will fail, while all other resources will still be applied. To enable this behavior,
+    set `Puppet[:preprocess_deferred] = false` or use `--no-preprocess_deferred`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All these behaviors apply to a local `puppet apply run` since a `puppet apply
+    run` will generate a catalog and apply it locally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, you learned how the Facter tool provides system profiling information
+    with its facts and how this can be expanded using external facts and custom facts.
+    We warned you that there is an infrastructure cost to gathering facts and that
+    the scale it will work with should be balanced. We stated that external facts
+    can be simple flat files of static data or executable scripts, as allowed by the
+    operating system. Custom facts, although written in Ruby, were shown to have several
+    advantages over external facts. Being able to confine the custom fact to only
+    run on certain systems allows you to choose different resolutions with a weight
+    as to which should be selected and timeouts at the resolution level in Puppet
+    7 or the execution level in Puppet 6 and below.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we reviewed functions and highlighted the vast range of tasks functions
+    can do to manipulate the catalog or return calculated values in Puppet code. Here,
+    we discussed catalog statements, which are used to include classes in the catalog,
+    and logging statements, which are used to set logging messages. The other two
+    types of functions, prefix and chained, were highlighted, along with their syntax.
+    Then, a selection of core functions was shown, along with various categories that
+    expose the available functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we discussed a small selection of functions from the `stdlib` module to
+    highlight what can be provided. Note that some of the `stdlib` functions have
+    been deprecated and are only there for backward compatibility or to be used for
+    edge cases, which is not a best practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we discussed deferred functions, which allow functions to run during
+    the application of the catalog on a client. We highlighted the advantage of this
+    for services that may only be available to the client, such as making API calls
+    to secure services, or may be undesirable to be run on Puppet infrastructure shared
+    with other services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you will learn how relationships and dependencies work
+    between resources and classes. We will look at how scope and containment affect
+    resources, variables, and classes and how to structure code and necessary dependencies
+    without encountering common pitfalls and dependency hell.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Part 2 – Structuring, Ordering, and Managing Data in the Puppet Language
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This part will look at the more advanced Puppet language features. We will show
+    how to manage dependencies and flow within code using iteration and conditions.
+    We will then see how to use best practices to structure Puppet into modules using
+    roles and profile patterns. Puppet Forge will be shown to be a useful source of
+    pre-built modules and we will look at how to understand and review the source
+    and content of those modules. We will then look at how to manage data with Puppet
+    using Hiera and understand the best practices in terms of when to use separate
+    data sources and variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part has the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 6*](B18492_06.xhtml#_idTextAnchor185), *Relationships, Ordering,
+    and Scope*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 7*](B18492_07.xhtml#_idTextAnchor194), *Templating, Iterating**,
+    and Conditionals*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 8*](B18492_08.xhtml#_idTextAnchor212), *Developing and Managing Modules*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 9*](B18492_09.xhtml#_idTextAnchor233), *Handling Data with Puppet*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

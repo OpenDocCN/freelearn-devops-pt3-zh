@@ -1,0 +1,1796 @@
+- en: 'Chapter 16: Designing for Chaos'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Writing software that works in perfect conditions is easy. It would be nice
+    if you never had to worry about network latency, service timeouts, storage outages,
+    misbehaving applications, users sending bad arguments, security issues, or any
+    of the real-life scenarios we find ourselves in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In my experience, things tend to fail in the following three ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Immediately
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gradually
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Spectacularly
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Immediately** is usually the result of a change to application code that
+    causes a service to die on startup or when receiving traffic to an endpoint. Most
+    development test environments or canary rollouts catch these before any real problems
+    occur in production. This type is generally trivial to fix and prevent.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Gradually** is usually the result of some type of memory leak, thread/goroutine
+    leak, or ignoring design limitations. These problems build up over time and begin
+    causing problems that result in services crashing or growth in latency at unacceptable
+    levels. Many times, these are easy fixes caught during canary rollouts once the
+    problem is recognized. In the case of design issues, fixes can require months
+    of intense work to resolve. Some rare versions of this have what I call a cliff
+    failure: gradual growth hits a limitation that cannot be overcome by throwing
+    more resources at the problem. That type of problem belongs to our next category.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: That category is **spectacularly**. This is when you find a problem in production
+    that is causing mass failures when a few moments ago everything was working fine.
+    Cellphones everywhere start pinging alerts, dashboards go red, dogs and cats start
+    living together— mass hysteria! This could be the rollout of a bugged service
+    that overwhelms your network, the death of a caching service you depend on, or
+    a type of query that crashes your service. These outages cause mass panic, test
+    your ability to communicate across teams efficiently, and are the ones that show
+    up in news articles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will focus on designing infrastructure tooling to survive chaos.
+    The most spectacular failures of major cloud companies have often been the results
+    of infrastructure tooling, from **Google Site Reliability Engineering** (**Google
+    SRE**) erasing all the disks at their cluster satellites to **Amazon Web Services**
+    (**AWS**) overwhelming their network with infrastructure tool **remote procedure
+    calls** (**RPCs**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will look at safe ways for **first responders** (**FRs**)
+    to stop automation, how to write idempotent workflow tools, packages for incremental
+    backoffs of failed RPCs, providing pacing limiters for rollouts, and much more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To do this, we will be introducing concepts and packages that will be built
+    into a generic workflow system that you can use to further your education. The
+    system will be able to take requests to do some type of work, will validate the
+    parameters are correct, validate the request against a set of policies, and then
+    execute that work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this model, clients (which can be **command-line interface** (**CLI**) applications
+    or services) detail work to be done via a protocol buffer and send it to the server.
+    The workflow system does all the actual work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We are going to cover the following main topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using overload prevention mechanisms
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using rate limiters to prevent runaway workflows
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building workflows that are repeatable and never lost
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using policies to restrict tools
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building systems with an emergency stop
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This chapter has the same requirements as previous chapters, only adding the
+    need to access the following GitHub repository: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that said, let's jump into our first chapter on using overload prevention
+    mechanisms to keep our network and services healthy when problems occur.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using overload prevention mechanisms
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: When you have a small set of services, misbehaving applications generally cause
+    small problems. This is because there is usually an overabundance of network capacity
+    to absorb badly behaving applications within a data center, and with a small set
+    of services, it is usually intuitive to figure out what would cause the issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you have a large number of applications running, your network and your
+    machines are usually oversubscribed. **Oversubscribed** means that your network
+    and systems cannot handle all your applications running at 100%. Oversubscription
+    is common in networks or clusters to control costs. This works because, at any
+    given time, most applications ebb and flow with network traffic, **central processing
+    unit** (**CPU**), and memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An application that suddenly experiences some type of bug can go into **retry
+    loops** that quickly overwhelm a service. In addition, if some catastrophic event
+    occurs that takes a service offline, trying to bring the application back online
+    can cause the service to go down as it is overwhelmed by requests that are queuing
+    on all clients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Worse is what can happen to the network. If the network becomes overwhelmed
+    or when cloud devices have their **queries per second** (**QPS**) exceeded, other
+    applications can have their traffic adversely affected. This can mask the true
+    cause of your problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several ways of preventing these types of problems, with the two
+    most common being the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Circuit breakers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Backoff implementations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Each of these prevention mechanisms has the same idea: when failures occur,
+    prevent retries from overwhelming the service.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Infrastructure services are often an overlooked use case for these prevention
+    mechanisms. Many times, we concentrate on our public services, but infrastructure
+    services are just as important. If that service is critical and becomes overwhelmed,
+    it can be difficult to restore it without manually touching other services to
+    reduce load.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s have a look at one of the more popular methods: the **circuit breaker**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Case study – AWS client requests overwhelm the network
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: AWS had an outage that affected AWS customers across the world when a misbehaving
+    application began sending too much traffic across a network boundary between their
+    customer network and their core network where AWS critical services live. This
+    was restricted to their `us-east-1` region, but the effects were felt by their
+    customers in multiple locations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The problem was twofold, comprising the following factors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A misbehaving application sending too many requests.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Their clients didn't back off on failure.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is the second issue that caused the long failure. AWS had been doing the
+    right thing in having a standard client for RPCs that invoked incrementing backoffs
+    when requests failed. However, for some reason, the client library did not perform
+    as expected in this case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This means that instead of the load reducing itself as the endpoints became
+    overwhelmed, they went into some type of infinite loop that kept increasing the
+    load on the affected systems and overwhelmed their network cross-connects. This
+    overwhelming of cross-connects disabled their monitoring and prevented them from
+    seeing the problem. The result was they had to try reducing their network load
+    by scaling back application traffic while trying to not affect the customer services
+    that were still working—a feat I would not envy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This case points to how important it is to prevent application retries when
+    failures occur. To read more on this from Amazon, see the following web page:
+    [https://aws.amazon.com/message/12721/](https://aws.amazon.com/message/12721/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using circuit breakers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Circuit breakers work by wrapping RPC calls within a client that will automatically
+    fail any attempt once a threshold is reached. All calls then simply return a failure
+    without actually making any attempt for some amount of time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Circuit breakers have three modes, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Closed
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Open
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Half-open
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A circuit breaker is in a **closed** state when everything is working. This
+    is the normal state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A circuit breaker is in an **open** state after some amount of failures trip
+    the breaker. When in this state, all requests are automatically failed without
+    trying to send the message. This period lasts for some amount of time. It is suggested
+    that this time be some set period and some randomness to prevent spontaneous synchronization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A circuit breaker moves into a **half-open** state after some time in the open
+    state. Once in the half-open state, some number of requests that are requested
+    are actually tried. If some threshold of success is passed, the circuit breaker
+    moves back into the **closed** state. If not, the circuit breaker moves into the
+    **open** state again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can find several different circuit-breaker implementations for Go, but one
+    of the most popular was developed at Sony, called **gobreaker** ([https://github.com/sony/gobreaker](https://github.com/sony/gobreaker)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s look at how we might use it to limit retries for **HTTP** queries, as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code defines the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An HTTP type that holds both of these:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An `http.Client` for making HTTP requests
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A circuit breaker for HTTP requests
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A `New()` constructor for our `HTTP` type. It creates a circuit breaker with
+    settings that enforces the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Allows one request at a time when in the half-open state
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has a 30-second period where we are half-open after being in a closed state
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has a closed state that lasts 10 seconds
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Enters the closed state if we have five consecutive failures
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A `Get()` method on `HTTP` that does the following:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Checks that `*http.Request` has a timeout define
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calls the circuit breaker on our `client.Do()` method
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Converts the returned `interface{}` to the underlying `*http.Response`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This code gives us a robust HTTP client wrapped with a circuit breaker. A better
+    version of this might pass in the settings to the constructor, but I wanted it
+    to be packed neatly for the example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you''d like to see a demo of the circuit breaker in action, you can see
+    it here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://go.dev/play/p/qpG_l3OE-bu](https://go.dev/play/p/qpG_l3OE-bu)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using backoff implementations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A **backoff implementation** wraps RPCs with a client that will retry with a
+    pause between attempts. These pauses get longer and longer until they reach some
+    maximum value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backoff implementations can have a wide range of methods for calculating the
+    time period. We will concentrate on exponential backoff in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exponential backoff simply adds delays to each attempt that increases exponentially
+    as failures mount. As with circuit breakers, there are many packages offering
+    backoff implementations. For this example, we will use [https://pkg.go.dev/github.com/cenk/backoff](https://pkg.go.dev/github.com/cenk/backoff),
+    which is an implementation of Google's HTTP backoff library for Java.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This backoff implementation offers many important features that Google has found
+    useful over years of studying service failures. One of the most important features
+    in the library is adding random values to sleep times between retries. This prevents
+    multiple clients from syncing their retry attempts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other important features include the ability to honor context cancellations
+    and supply maximum retry attempts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s look at how we might use it to limit retries for HTTP queries, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code defines the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An HTTP type that holds both of these:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An `http.Client` for making HTTP requests
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An exponential backoff for HTTP requests
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `New()` constructor for our `HTTP` type
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `Get()` method on `HTTP`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'It also does the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a `func()` error that attempts our request called `op`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs `op` with retries and exponential delays
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates an exponential backoff with default values
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Wraps that backoff in `BackOffContext` to honor our context deadline
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For a list of the default values for `ExponentialBackoff`, see the following
+    web page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff](https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you''d like to see a demo of this backoff in action, you can see it here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://go.dev/play/p/30tetefu9t0](https://go.dev/play/p/30tetefu9t0)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining circuit breakers with backoff
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When choosing a prevention implementation, another option is to combine a circuit
+    breaker with backoff for a more robust implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A backoff implementation can be set to have a maximum time in which retries
+    are occurring. Wrapping that inside a circuit breaker to make any set of failed
+    attempts to trigger our circuit breaker not only potentially reduces our load
+    by slowing our requests, but we can also stop these attempts with our circuit
+    breaker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you would like to see an implementation combining both, you can go to the
+    following web page:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://go.dev/play/p/gERsR7fvDck](https://go.dev/play/p/gERsR7fvDck)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have discussed the need to have mechanisms to prevent overwhelming
+    your network and services. We have discussed an AWS outage that was partially
+    due to the failure of such mechanisms. You were introduced to the circuit-breaker
+    and backoff mechanisms to prevent these types of failures. Finally, we have shown
+    two popular packages for implementing these mechanisms with examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In our workflow engine, we will be implementing these prevention mechanisms
+    for our **Google RPC** (**gRPC**) client to prevent issues talking to our server.
+    You can see that here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our next section, we will be looking at preventing workflows from executing
+    too fast using rate limiters. It is important to enforce both pacing for workflows'
+    actions and to prevent too many workflows of a type from executing at the same
+    time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using rate limiters to prevent runaway workflows
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**DevOps engineers** can be responsible for a service that is made up of dozens
+    of microservices. These microservices can then number in the dozens to the tens
+    of thousands of instances running in data centers around the globe. Once a service
+    consists of more than a couple of instances, some form of rate control needs to
+    exist to prevent bad rollouts or configuration changes from causing mass destruction.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some type of a **rate limiter** for work with forced pause intervals is critical
+    to prevent runaway infrastructure changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rate limiting is easy to implement, but the scope of the rate limiter is going
+    to depend on what your workflows are doing. For services, you may only want one
+    type of change to happen at a time or only affect some number of instances at
+    a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first type of rate limiting would prevent multiple instances of a workflow
+    type from running at a time; for example, you might only want one satellite disk
+    erasure to occur at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second is to limit the number of devices, services, and so on that can be
+    affected concurrently; for example, you might only want to allow two routers in
+    a region to be taken out for a firmware upgrade.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For rate limiters to be effective, having a single system that executes actions
+    for a set of services can greatly streamline these efforts. This allows centralized
+    enforcement of policies such as rate limiting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at the simplest implementation of a rate limiter in Go using channels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Case study – Google satellite disk erase
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the early days, Google did not own all the data center space it does today—we
+    were in a lot of rented space with a large number of machines. In some places,
+    however, this was prohibitively expensive. To speed up connectivity in these places,
+    we would rent small spaces that could have cache machines, terminate HTTP connections
+    and backhaul the traffic to a data center. We called these **satellites**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Google has an automated process for the decommissioning of machines. One part
+    of this is called disk erase, whereby the machines have their disks wiped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The software was written to grab a list of machines for a satellite and filter
+    out other machines. Unfortunately, if you run it twice on a satellite, the filter
+    is not applied, and your list of machines is all machines in every satellite.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disk erase was very efficient, putting all machines in all satellites in disk
+    erase at once before anything could be done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a more detailed breakdown, you can read [https://sre.google/workbook/postmortem-culture/](https://sre.google/workbook/postmortem-culture/),
+    where several **Site Reliability Engineers** (**SREs**) have provided more detail
+    in the context of postmortems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can look at the filtering part of the code and discuss bad design, but there
+    will always be badly written tools with bad inputs. Even if you currently have
+    a good culture for code reviews, things slip by. During times of hypergrowth with
+    new engineers, these types of problems can rear their ugly heads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some tools that are known to be dangerous in the hands of a small group of experienced
+    engineers can be used quite safely, but new engineers without experience or ones
+    lacking proper fear can quickly devastate your infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this case and many other cases, centralized execution with rate limiting
+    and other mandatory safety mechanisms allow new people to write tools that may
+    be dangerous but limited in their blast radius.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Channel-based rate limiter
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A **channel-based rate limiter** is useful when a single program is handling
+    the automation. In that case, you can make a limiter that is based on the size
+    of a channel. Let''s make a limiter that allows only a fixed number of items to
+    be worked on at a time, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: We now have something that can limit the number of items that can be worked
+    on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s define a simple type that represents some action to be executed, as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This defines a `Job` that can do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Validate a `pb.Job` definition passed to us
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Run the job with that definition
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here is a very simplistic example of executing a set of jobs contained in something
+    called a block, which is just a holder of a slice of jobs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code snippet, the following happens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We loop through a slice of `Block` inside the `work.Blocks` variable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We loop through a slice of `Jobs` in the `block.Jobs` variable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If we already have `req.limit` items running, `limit <- struct{}{}` will block.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It executes our job concurrently.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When our goroutine ends, we remove an item from our `workLimit` queue.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We wait for all goroutines to end.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This code prevents more than `req.limit` items from happening at a time. If
+    this were a server, you could make `limit` a variable shared by all users and
+    prevent more than three items of work from occurring for all work that was happening
+    in your system. Alternatively, you could have different limiters for different
+    classes of work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A note about that `job := job` part. This is creating a shadowed variable of
+    `job`. This prevents the `job` variable from being changed inside our goroutine
+    when the loop and the goroutine are running in parallel by making a copy of the
+    variable in the same scope as the goroutine. This is a common concurrency bug
+    for new Go developers, sometimes called the **for loop gotcha**. Here is a playground
+    you can use to work through why this is necessary: [https://go.dev/play/p/O9DcUIKuGBv](https://go.dev/play/p/O9DcUIKuGBv).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have completed the following example in the playground that you can play
+    around with to explore these concepts:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://go.dev/play/p/aYoCTEFvRBI](https://go.dev/play/p/aYoCTEFvRBI)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see a channel-based rate limiter in action in the workflow service
+    inside `runJobs()` here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Token-bucket rate limiter
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Token buckets** are normally used to provide burstable traffic management
+    for services. There are several types of token buckets, the most popular being
+    the standard token bucket and the leaky token bucket.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: These are not normally deployed for an infrastructure tool, as clients tend
+    to be internal and more predictable than external-facing services, but a useful
+    type of a token bucket can be used to provide pacing. A standard token bucket
+    simply holds some fixed set of tokens, and those tokens are refilled at some interval.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here''s a sample one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This preceding code snippet does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines a `bucket` type that holds our tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Has `newBucket()`, which creates a new `bucket` instance with the following
+    attributes:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`size`, which is the total amount of tokens that can be stored'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`incr`, which is how many tokens are added at a time'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`interval`, which is how often to add to the bucket'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'It also does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Starts a goroutine that will fill the bucket at intervals
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Will only fill to the max `size` value
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Defines `token()`, which retrieves a token:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If no tokens are available, we wait for one.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a `Context` is canceled, we return an error.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is a fairly robust implementation of a standard token bucket. You may be
+    able to achieve a faster implementation using the `atomic` package, but it will
+    be more complex to do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An implementation with input checking and the ability to stop a goroutine created
+    with `newBucket()` can be found here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://go.dev/play/p/6Dihz2lUH-P](https://go.dev/play/p/6Dihz2lUH-P)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we want, we could use a token bucket to only allow execution at some rate
+    we define. This can be used inside a job to limit how fast an individual action
+    can happen or to only allow so many instances of a workflow to happen within some
+    time period. We will use it in our next section to limit when a particular workflow
+    is allowed to happen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our generic workflow system has a token bucket package here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at how rate limiters can be used to prevent runaway
+    workflows. We talked about Google's satellite disk erase as a case study on this
+    type of event. We showed how channel-based rate limiters can be implemented to
+    control concurrent operations. We talked about how a token bucket could be used
+    to rate-limit a number of executions within a certain time period.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section is also laying the foundation of how executing actions, defined
+    as a job, will work in the workflow system example we are building.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have some ideas on how we can rate-limit actions, let's look at
+    how we can develop repeatable workflows that cannot be lost by a client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building workflows that are repeatable and never lost
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As DevOps engineers, we write tooling all the time. In small shops, many times,
+    these are sets of scripts. In large shops, these are complicated systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you may have gleaned from the introduction, I believe that tool execution
+    should always occur in a centralized service, regardless of scale. A basic service
+    is easy to write, and you can expand and replace it as new needs arise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But to make a workflow service work, two key concepts must be true of the workflows
+    you create, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They must be repeatable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: They cannot be lost.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The first concept is that running a workflow more than once on the same infrastructure
+    should produce the same result. We called this **idempotency**, borrowing the
+    computer science term.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second is that a workflow cannot be lost. If a tool creates a workflow to
+    be executed by a system and the tool dies, the tool must be able to know that
+    the workflow is running and resume watching it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building idempotent workflows
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Idempotency** is a concept that if you make a call with the same parameters
+    multiple times, you receive the same result. This is an important concept for
+    writing certain types of software.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In infrastructure, we modify this definition slightly: an idempotent action
+    is one that, if repeated with the same parameters and without changes to the infrastructure
+    outside of this call, will return the same result.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Idempotency is key to making workflows that can be recovered when your workflow
+    system goes down. Simple workflow systems can just repeat the entire workflow.
+    More complicated systems can restart from where they left off.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Many times, developers don''t think deeply about idempotency. For example,
+    let''s look at a simple operation to copy some content to a file. Here is a naive
+    implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `content` argument that represents content for a file
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `p` argument, which is the path to the file
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'It also does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writes `content` to file at `p`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This initially appears to be idempotent. If our workflow was killed after `CopyToFile()`
+    was called but before `io.WriteFile()` was called, we could repeat this operation,
+    and it initially looks as though if we called this twice, we would still get the
+    same result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But what if the file didn't exist and we created it but did not have permissions
+    to edit an existing file? If our program died before recording the result of `io.WriteFile()`
+    but after the change has occurred, a repeat of this action would report an error,
+    and because the infrastructure did not change, the action is not idempotent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s modify this to make it idempotent, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code checks if the file exists and then does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If it exists and it already has the content, it doesn't do anything.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it doesn't, it writes the content.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This uses the standard library's `sha256` package to calculate checksum hashes
+    to validate if the content is the same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key to providing idempotency is often simply checking if the work is already
+    done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This leads us to a concept called three-way handshakes. This concept can be
+    used in actions to provide idempotency when you need to talk to other systems
+    via RPC. We will discuss how to use this concept in terms of executing workflows,
+    but this can also be used in idempotent actions that talk to other services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using three-way handshakes to prevent workflow loss
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When we write an application that talks to a workflow service, it is important
+    that the application never loses track of workflows that are running on our service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The three-way handshake is a name I borrowed from **Transmission Control Protocol**
+    (**TCP**). TCP has a handshake that establishes a socket between two machines.
+    It consists of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**SYNchonize** (**SYN**), a request to open a connection'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**ACKnowledge** (**ACK**), an acknowledgment of the request'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: SYN-ACK, an acknowledgment of the ACK
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When a client sends a request to execute a workflow, we never want the workflow
+    service to execute a workflow that the client doesn't know exists due to a crash
+    of the client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can happen because the client program crashes or the machine the client
+    is running on fails. If we sent a workflow and the service began executing after
+    a single RPC, the client could crash after sending the RPC but before receiving
+    an **identifier** (**ID**) for the workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This would lead to a scenario where when the client was restarted, it did not
+    know the workflow service was already running the workflow, and it might send
+    another workflow that did the same thing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To avoid that, instead of a single RPC to execute a workflow, a workflow should
+    have a three-way handshake to do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Send the workflow to the service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Receive the workflow ID
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Send a request to execute the workflow with its ID to the service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This allows the client to record the ID of the workflow before it executes.
+    If the client crashes before recording the ID, the service simply has a non-running
+    workflow record. If the client dies after the service begins execution, when the
+    client restarts, it can check the status of the workflow. If it is running, it
+    can simply monitor it. If it isn't running, it can request it to execute again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For our workflow service, let''s create a service definition that supports
+    our three-way handshake using gRPC, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This defines a service with the following calls:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Submit` submits a `WorkReq` message that describes the work to be done.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Exec` executes a `WorkReq` previously sent to the server with `Submit`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Status` retrieves the status of a `WorkReq`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The content of the messages for these service calls will be discussed in detail
+    in the next section, but the key to this is that on `Submit()`, `WorkResp` will
+    return an ID, but the workflow will not execute. When `Exec()` is called, we will
+    send the ID we received from our `Submit()` call, and our `Status()` call allows
+    us to check the status of any workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now have the basic definition of a workflow service that includes a three-way
+    handshake to prevent any loss of workflows by our clients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have covered the basics of repeatable workflows that cannot
+    be lost by our clients. We covered idempotency and how this leads to repeatable
+    workflows. We have also shown how a three-way handshake allows us to prevent a
+    running workflow from becoming *lost*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have also defined service calls that we will use in the workflow system we
+    are building.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we want to look at how tools can understand the **scope of work** (**SOW**)
+    being executed to provide protection against runaway tooling. To do this, let's
+    explore building a policy engine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using policies to restrict tools
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Rate limiting is great for preventing a bad tool run from wiping out a service
+    when all items of work are equal. But not all items of work are equal, as some
+    machine services are more important and fragile than others (such as your service's
+    database systems). Also, machines or services may need to be put into logical
+    groupings that can only happen in some limited amount. These could be broken up
+    by sites, geographical areas, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This logic is generally specific to some set of work items. This bundling, which
+    we will call a SOW, can be quite complex.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To safely do work, you must understand your scope. This might be how you can
+    safely update database schemas for a particular service or how many route reflectors
+    in a network region can be modified at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To implement safety around a SOW, we will introduce the idea of policies. Policies
+    will be used to check a set of work that is entering into the system for compliance.
+    If it is not compliant, it will be rejected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, we will look at handling disk erasures similar to Google''s
+    disk erase case study. Here are some protections we will add:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only allow a single satellite disk erasure to happen every hour
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Rate-limit so that we can only erase five machines at a time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Must pause for 1 minute after each five-machine erasure
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To be able to make a policy engine, we must have a common way to define what
+    kind of work will be executed, in what order, and with what concurrency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also want the tool engineers to only define the work to be done and submit
+    it to a separate service that executes it. This allows for the centralization
+    of control.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's define the service that could do that in gRPC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a gRPC workflow service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the previous section, we talked about a service definition that defines
+    our three-way handshake. Let''s look at the arguments to those calls to see what
+    our clients will send the workflow service, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These messages are used to define the work that a client wants the server to
+    execute and contain the following attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`WorkReq` message contains the name of the work and all `Block` messages that
+    make up a workflow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `Block` message describes a body of work in the workflow; each `Block`
+    executes one at a time and has the following attributes:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has a set of `Job` messages that describe the work to be done
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At what concurrency to execute the work described by the `Job` messages
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Job message describes the server's Job type on the server to call and with
+    which arguments.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `WorkResp` message returns the ID that refers to this `WorkReq`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses `UUIDv1` IDs that encapsulate time into the ID so we know when it was submitted
+    to the system
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses that time mechanic to prevent execution if the `Exec()` `RPC` is not called
+    in by some expiration time
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Exec` messages provide the ID you want to execute, as illustrated here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are more messages and `enums` to allow for a `Status` call. You can find
+    the complete protocol buffer definition here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have messages to describe the work to be done, let's look at creating
+    a policy engine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a policy engine
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A policy checks our work to make sure some parameter is allowed. In our case,
+    these parameters are inside a `pb.WorkReq` instance. We want policies to be generic
+    so that they can be reused against multiple types of work described by a `pb.WorkReq`.
+    Once defined, we will have a `policy.json` file that defines which policies are
+    applied against a specifically named `pb.WorkReq`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To make this work, each policy will need to receive the settings for the policy
+    that should be applied to a specific workflow. Let''s define two interfaces that
+    describe a policy and its settings, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Settings` will always be implemented as some struct. Its `Validate()` method
+    will be used to validate that the fields for that struct are set to valid values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Policy` runs our implementation against a `pb.WorkReq` with the settings provided.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Each `WorkReq` that is submitted will have a list of policies to apply. This
+    is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Name` is the name of the policy to invoke. `Settings` are the settings for
+    that invocation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The configuration file will detail a set of `PolicyArgs` arguments to run.
+    Each policy will need to be registered in the system. We are going to skip the
+    registration method for policies, but this is where the policies are registered:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When a `pb.WorkReq` enters the system, we want to invoke those policies concurrently
+    against that `pb.WorkReq`. Let''s have a look at how that would work here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This preceding code defines the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the configuration for a `pb.WorkReq` has no policies, return.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a `Context` object so that we can cancel policies being run on an error.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Clone our `pb.WorkReq` so that it cannot be changed by a `Policy`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Make sure each `Policy` that is named actually exists.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Run all our policies with the settings that we were given.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If there is an error in any of them, record it and cancel all running policies.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Make sure the copy of `pb.WorkReq` is the same as what was submitted.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We now have the main parts of a policy engine. The full engine can be found
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `Reader` type that is used to read our `policy.json` file where we define
+    policies is detailed here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at writing a policy to be used by our engine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a policy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: One of the most basic policies that you can define against a workflow is to
+    limit which job types are allowed in that workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This prevents some new type of work from being introduced into a workflow where
+    no one has thought about policies that need to be applied to that `Job`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For our first `Policy` implementation, let's write one that checks our `pb.WorkReq`
+    to allow only `Job` types we have defined in our policy configuration. If we receive
+    an unexpected `Job`, we reject the `pb.WorkReq`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s define the settings for our `Policy`, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This preceding code contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our specific `Settings` that implement `policy.Settings`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`AllowedJobs`, which are the names of the jobs we allow'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `Validate()` method that validates the listed `Jobs` exist
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An `allowed()` method that checks a given name against what we allow
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It also uses our `jobs` package to do these checks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With these settings, a user can define a policy for any workflow in our configuration
+    file that defines which `Job` types are allowed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s define a type that implements the `Policy` interface as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This preceding code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines our policy, which implements the `policy.Policy` interface
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines a `New()` constructor
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implements the `policy.Policy.Run()` method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validates the `policy.Settings` value passed are the `Settings` for this `Policy`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Loops through all our `req.Blocks` and gets our `Job` instances
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Checks each `Job` has an allowed name
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We now have a policy we can apply to restrict `Job` types in a `pb.WorkReq`.
+    This is how we could apply that in our configuration file to a workflow that does
+    satellite disk erasures:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This policy has the following attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Is applied only to workflows called `"SatelliteDiskErase"`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Has a single policy applied, `"restrictJobTypes"`, which we defined
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Allows only `Job` types called one of the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`"validateDecom"`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`"diskErase"`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`"sleep"`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`"getTokenFromBucket"`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can see the full `Policy` implementation here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can find other policies we have defined in directories here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see the policy configuration currently defined here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cautions on policy engines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we move on, I would like to provide a word of caution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Simplicity is the key to sustainable software. I define sustainable software
+    as having the following attributes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Easy to debug
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Users can understand how to use it in a few hours at most
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Policy engines can be amazingly effective in preventing major problems, acting
+    as a secondary check on sanity to some set of actions. As with security, it should
+    provide substantial benefits while only introducing a small burden.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy engines are easy to overdevelop, with the lofty goal of 100% protection
+    while introducing a large amount of complexity and burden. Often, I will see policy
+    engines that are not tightly coupled to a single workflow system. Instead, engineers
+    will design a generic system that tries to deal with multiple tooling systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your policy statements start to look like a programming language (`if` statements,
+    loops, functions), you are moving toward complexity. As policy engines become
+    generic, they become complex to deal with. If you need policy enforcement in multiple
+    places, this is another warning sign.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Not all workflows can achieve safety with generic policies. When you have a
+    complex workflow, feel free to design a policy that does deep checks for a single
+    workflow. Keep your `if` statements, loops, and functions in your code, not your
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I've seen engineers write lots of overcomplicated safety systems. Focus on providing
+    guard rails that are easy to write and update while covering 80% of cases, not
+    100% of cases. With the division between software that creates a set of actions
+    to run and a service that validates those actions against policies, you are unlikely
+    to have a *disk-erase* type of event in the future, and importantly, you will
+    be able to maintain velocity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have discussed what an SOW would be. To allow our workflow
+    service to understand an SOW, to enforce it, we have designed a policy engine
+    and created our first policy that can be applied to workflows submitted to our
+    system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even with policies, something is going to go wrong. This could simply be a confluence
+    of events that makes a normally safe operation unsafe. To be able to respond quickly
+    to these types of events, let's look at introducing emergency-stop capabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building systems with an emergency stop
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Systems are going to run amok. This is a simple truth that you need to come
+    to terms with early in infrastructure tooling development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you are a small company, there is usually a very small group of people
+    who understand the systems well and watch over any changes to handle problems.
+    If those people are good, they can quickly respond to a problem. Usually, these
+    people are the developers of the software.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As companies start to grow, jobs begin to become more specialized. The larger
+    the company, the more specialized the jobs. As that happens, the first responders
+    to major issues don't have the access or knowledge to deal with these problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This can create a critical gap between recognition of a major problem and stopping
+    the problem from getting worse.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is where the ability to allow first responders to stop changes comes into
+    play. We call this an emergency-stop ability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding emergency stops
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There are multiple ways to build an emergency-stop system, but the basics are
+    the same. The software will check some data store that contains the name of the
+    workflow you are executing and what the emergency-stop state is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most simplistic version of an emergency-stop system has two modes, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Go`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Stop`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The software that does any type of work would need to reference the system at
+    intervals. If it cannot find itself listed or the system indicates it is in a
+    `Stop` state, the software terminates, or if it is an execution system, it terminates
+    that workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More complicated versions of this might contain site information so that all
+    tooling running at a site is stopped, or it might include other states such as
+    `Pause`. These are more complicated to implement, so we will stick to this more
+    simplistic form here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at what an implementation of this might look like.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an emergency-stop package
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first thing we need to do is define what the data format will look like.
+    For this exercise, we will make it `etcd`. And while I'm using JSON here, this
+    could be a single table in a database or a protocol buffer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s define the status our workflows can have, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This defines a few statuses, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Unknown`, which means that the status was not set'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Go`, which indicates the workflow can be executed'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Stop`, which indicates the workflow should stop'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is key to know that any status that is not `Go` is considered `Stop`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s define an emergency stop entry that can be converted to and from
+    JSON, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This has the following fields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Name`, which is a unique name for a workflow'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Status`, which details the emergency-stop status for this workflow'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another key to an emergency-stop package is that every workflow must have an
+    entry. If a check is made for an entry that is not named, it is treated as being
+    set to `Stop`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we need to validate an entry. Here''s how to go about this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Removes any spaces around a workflow name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the `Name` value is empty, it is an error.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the `Status` value is not `Go` or `Stop`, it is an error.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We treat these errors as simply being that the rule doesn't exist. If a rule
+    doesn't exist, then a workflow is considered in a `Stop` state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now need something that reads this emergency-stop file at intervals or receives
+    notifications on changes. If a service cannot reach the datastore holding our
+    emergency-stop information after some small amount of time, it should report a
+    `Stop` state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s make a `Reader` type that accesses our emergency-stop data, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Provides a `Data` variable that is the single access point for our `Reader`
+    type
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provides an `init()` function that accesses our emergency-stop data on program
+    start
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provides a `Reader` type that allows us to read our emergency-stop states
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provides a `Subscribe()` function that returns status changes for a workflow
+    and a `Cancel()` function that is called when you no longer want to subscribe
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provides a `Status()` function that returns the status once
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Provides `newReader`, which is our `Reader` constructor
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The full code is not provided here but can be located at the following link:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We only allow emergency-stop information to be accessed through `Data`, which
+    is acting as a singleton. This prevents multiple instances from polling for the
+    same data. I prefer having the singleton accessed through a variable to make it
+    clear that a single instance exists.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now have a package that can tell us our emergency-stop states. Let's look
+    at how we can use this to cancel something.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the emergency-stop package
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that we have a package that can read our emergency-stop data, let''s show
+    how we can use it, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This preceding code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates a `Job` that executes some action we want to perform.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a `Work` type that executes some set of `Jobs`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines `Exec()`, which executes all `Jobs`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Subscribes to emergency stop with a given workflow name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If we don't start in the `Go` state, it returns an error.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes a goroutine that calls `cancel()` if we receive a `Stop Status` type.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes the Job instances held in work `.jobs`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is a simple example that uses a `context.Context` object to stop any `Job`
+    that is executing when `cancel()` is called on our `context.Context` object. If
+    we receive a state change with an emergency stop (which is always `Stop`), we
+    call `cancel()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A more complete example of using the `es` package can be found in these two
+    files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'An example `es.json` file that stores emergency-stop data can be found here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see this integrated into our workflow system as part of our `Work.Run()`
+    method at the following link:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Case study – Google's network backbone emergency stop
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: During an early postmortem for a network tooling problem, it was identified
+    that on-call engineers responding to some major event needed a way to stop automations.
+    At the time, we had a lot of small tools that could be executing against the network
+    at any given time. An on-call engineer, recognizing a problem, had no good way
+    of stopping other engineers from executing work or stopping a runaway program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first emergency-stop package was created from this postmortem and integrated
+    into existing tooling. This worked by taking the tool's subscriber name and matching
+    it against the **regular expressions** (**regexes**) contained in an emergency-stop
+    file. This check would occur anytime the file changed or at the start of the execution
+    of the tool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This was used to stop several automations that were causing problems from growing
+    out of control. However, the implementation was flawed for an organization growing
+    at our rate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, it required that every tool developer integrate the emergency-stop package.
+    As more teams outside the initial core team developed tools, they wouldn't know
+    this was a requirement. This led to rogue tooling. And as Google developed its
+    own network gear, tooling development spanned departments that didn't coordinate
+    in many respects. This meant that many tools never had an emergency stop integrated
+    or it was done in a separate system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even when an emergency stop was integrated into a tool, it was sometimes a flawed
+    implementation that didn't work. Every integration relied on an engineer doing
+    the right thing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, an emergency stop had an assumption of a `Go` state. So, if there was
+    no rule listed that matched your subscriber ID, it was assumed it was in a `Go`
+    state. This meant that many times, you had to just stop everything or had to dig
+    through code to figure out a subscriber ID so that you could re-enable everything
+    but the problem tool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve these problems in our backbone, we centralized executions of our backbone
+    work into a central system. This provided us with a single, well-tested emergency-stop
+    implementation, and after a long audit, we switched the emergency-stop package
+    to stop anything that didn't match a rule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This provided our first responders the ability to stop backbone automation and
+    tools during any major problem. If we found a problem tool, we could allow everything
+    else to run except that tool until proper fixes were made.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, you have learned what an emergency-stop system is, why it is
+    important, how to implement a basic one, and finally, how to integrate an emergency-stop
+    package into tooling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter has provided a basic understanding of how to write tooling that
+    provides safety in the face of chaos. We have shown you how circuit breakers or
+    exponential backoff can save your network and services from overload when unexpected
+    problems occur. We have shown how rate-limiting automation can prevent runaway
+    workflows before responders can react. You have learned about how tool scoping
+    via a centralized policy engine can provide a second layer of safety without overburdening
+    your developers. We have learned the importance of idempotent workflows to allow
+    workflow recovery. And finally, we have conveyed how an emergency-stop system
+    can be utilized by first responders by quickly limit damage to automation systems
+    while investigating a problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At this time, if you haven''t played with the workflow system that we have
+    been developing, you should explore the code and play with the examples. The `README.md`
+    file will help you get started. You can find this at the following link:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md)'
+  prefs: []
+  type: TYPE_NORMAL

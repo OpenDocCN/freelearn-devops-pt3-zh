@@ -1,0 +1,1867 @@
+- en: 'Chapter 8: Automating Command-Line Tasks'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Most jobs start out as some type of manual operation that an engineer performs.
+    Over time, these should become documented procedures that have the best practice
+    for doing some operation, and finally, that job should become the work of software
+    that takes those best practices and runs them with the efficiency that only a
+    machine can provide.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the core missions of a **development-operations** (**DevOps**) engineer
+    is automating these tasks. This can be from the mundane, such as running a few
+    commands, to changing the configuration on thousands of machines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automating systems often requires manipulating a system via its command line
+    and calling other tools native to the **operating system** (**OS**). This can
+    include using **RPM Package Manager** (**RPM**)/**Debian Package** (**dpkg**)
+    for installing packages, grabbing stats for a system using common utilities, or
+    configuring network routers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A DevOps engineer may want to do this locally to automate a series of steps
+    normally done manually (such as automating Kubernetes's `kubectl` tool) or remotely
+    execute commands on hundreds of machines at the same time. This chapter will cover
+    how these can be accomplished using Go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you will learn how to execute command-line tools on the local
+    machine to accomplish automation goals. To access a remote machine, we will learn
+    about how to use **Secure Shell** (**SSH**) and Expect packages. But knowing how
+    to call executables on machines is just one part of the skillset. We will also
+    talk about the anatomy of a change and how to do concurrent changes safely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `os/exec` to automate local changes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using SSH in Go to automate remote changes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing safe, concurrent change automations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Writing a system agent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter requires that you have the latest Go tooling installed and access
+    to a Linux system for running any service binaries we create. All tooling in this
+    chapter will be geared toward controlling a Linux system, as this is the most
+    popular cloud computing platform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the remote machine access requirements, the remote Linux system will need
+    to be running SSH to allow for remote connectivity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use the system agent in the final part of this chapter, you will also need
+    to use a Linux distribution that has `systemd` installed. Most modern distributions
+    use `systemd`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Code written in this chapter can be found here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using os/exec to automate local changes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Automating the execution of tools that are local to the machine can provide
+    a series of benefits to end users. The first of these is that it can reduce the
+    toil that your team experiences. One of the primary goals for DevOps and **Site
+    Reliability Engineers** (**SRE**) is to remove repetitive, manual processes. That
+    time can be put to better use by reading a good book (such as this one), organizing
+    a sock drawer, or working on the next problem. The second benefit is to remove
+    manual mistakes from a process. It is easy to type the wrong thing or copy and
+    paste something incorrectly. And finally, it is the core underpinning of operating
+    at scale. Automating locally can be combined with other techniques detailed in
+    the book to make changes at a large scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The automation life cycle generally comes in three stages, moving from manually
+    doing work to automation, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first stage revolves around the manual execution of commands by an experienced
+    engineer. While this is not automation itself, this starts a cycle that ends with
+    some type of automation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The second stage usually revolves around writing those stages down in order
+    to document the procedure, to allow more than one person to share the workload.
+    This might be a `git` repository.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The third stage is usually a script to make the task repeatable.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once a company gets larger, these stages are usually condensed into developing
+    a service to handle the task in a fully automated way when a need for it is identified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A good example of this might be deploying pods on a Kubernetes cluster or adding
+    a new pod configuration to your Kubernetes config. These are driven by calling
+    command-line applications such as `kubectl` and `git`. These types of jobs start
+    manually; eventually, they are documented and finally automated in some way. At
+    some point, this might move into a **continuous integration/continuous deployment**
+    (**CI/CD**) system that handles this for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key to automating tooling locally is the `os/exec` package. This package
+    allows for the execution of other tools and control of their `STDIN`/`STDOUT`/`STDERR`
+    streams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's take a closer look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Determining the availability of essential tools
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When writing an application that calls other applications on a system, it is
+    critical to determine if the tools needed are available on the system before you
+    start executing commands. Nothing is worse than being partway through a procedure
+    to find that a critical tool is missing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `exec` package provides the `LookPath()` function to help determine if a
+    binary exists. If only the name of the binary is provided, the `PATH` environmental
+    variable is consulted and those paths will be searched for the binary. If a `/`
+    is in the name, only that path will be consulted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s say we are writing a tool that needs both `kubectl` and `git` to be
+    installed in order to work. We can test if those tools are available in our `PATH`
+    variable by executing the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines constants for our binary names
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses `LookPath()` to determine if these binaries exist in our PATH variable
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this code, we simply return an error if we do not find the tool. There are
+    other options, such as attempting to install these tools with the local package
+    manager. Depending on the makeup of our fleet, we might want to test which version
+    is deployed and only proceed if we are at a compatible version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at using the `exec.CommandContext` type to call binaries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing binaries with the exec package
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The `exec` package allows us to execute a binary using the `exec.Cmd` type.
+    To create one of these, we can use the `exec.CommandContext()` constructor. This
+    takes in the name of the binary to execute and the arguments to the binary, as
+    illustrated in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This creates a command that will run the `kubectl` tool's `apply` function and
+    tell it to apply the configuration at the path stored in the `config` variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Does this command seem to have a familiar syntax? It should! `kubectl` is written
+    using Cobra from our last chapter!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We could execute this command using several different methods on `cmd`, as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`.CombinedOutput()`: Runs the command and returns the combined output of `STDOUT`/`STDERR`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`.Output()`: Runs the command and returns the output of `STDOUT`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`.Run()`: Runs the program and waits for it to exit. It returns an error on
+    any issues.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`.Start()`: Runs the command but doesn''t block. Used when you want to interact
+    with the command as it runs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`.CombinedOuput()` and `.Output()` are the most common ways to start a program.
+    The output that a user sees in the terminal can often be both from `STDOUT` and
+    `STDERR`. Choosing which one of these to use depends on how you want to respond
+    to the program''s output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`.Run()` is used when you only need to know the exit status and do not require
+    any of the output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two main reasons to use `.Start()`, as outlined here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is a need to respond on `STDIN` to output on `STDOUT`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The program execution takes a while, and you want to output its content to your
+    screen, instead of waiting for the program to complete.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you need to respond on `STDIN` to a program's output, using Google's `goexpect`
+    package ([https://github.com/google/goexpect](https://github.com/google/goexpect))
+    or Netflix's `go-expect` package ([https://github.com/Netflix/go-expect](https://github.com/Netflix/go-expect))
+    is probably a better choice. These packages continue the proud tradition of porting
+    the abilities of the **Tool Command Language** (**TCL**) Expect extension ([https://en.wikipedia.org/wiki/Expect](https://en.wikipedia.org/wiki/Expect))
+    to other languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s write a simple program that tests our ability to log in to hosts on
+    a subnet. We will use the `ping` utility and the `ssh` client programs to test
+    connectivity. We will be relying on your host to recognize your SSH key (we are
+    not using password authentication here, as that is more complicated). Finally,
+    we will use `uname` on the remote machine to determine the OS. The code is illustrated
+    in the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`uname` is a program found on Unix-like systems that will display information
+    about the current OS and the hardware it runs on. Only Linux and Darwin machines
+    are likely to have `uname`. As SSH is just a connection protocol, we may just
+    get an error. Also, a given Linux distribution might not have `uname` installed.
+    There can be subtle differences between versions of common utilities on similar
+    platforms. Linux `ping` and OS X `ping` utilities share some flags, but also have
+    different flags. Windows often has completely different utilities for accomplishing
+    the same tasks. If you are trying to support all platforms with a tool that uses
+    `exec`, you will need either build constraints ([https://pkg.go.dev/cmd/go#hdr-Build_constraints](https://pkg.go.dev/cmd/go#hdr-Build_constraints))
+    or to use the `runtime` package to run different utilities on different platforms.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates a `*Cmd` that pings a host
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`-c 1` sends a single `-t 2` causes a timeout after 2 seconds.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs the command
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If there is an error, the ping was unsuccessful.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Otherwise, the host responded to the ping.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let''s now use the `ssh` utility to send a command to be run on the remote
+    machine, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sets a timeout of 5 seconds, if `ctx` has none
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a `user@host` login line
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Creates a *`CMD` that issues the command: `ssh user@host` "`uname -a`"'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `StrictHostKeyChecking` option automatically adds host keys.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `BatchMode` option prevents asking for passwords.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs the command and captures the output from `STDOUT`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If successful, it runs `uname -a` and returns the output.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The host must have the user's SSH key for this to work.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Password authentication requires either the `sshpass` utility or an Expect package.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We need a type to store the data we gather. Let''s create that, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we need some code to take a channel containing **Internet Protocol** (**IP**)
+    addresses that need to be scanned. We want to do this in parallel, so we will
+    be using goroutines, as illustrated in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Takes in a channel of `net.IP`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a channel to put records on
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Spins off a goroutine to do all the scanning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defers closure of our output channel
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Loops through all IPs on the incoming channel
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses the `limit` channel to limit 100 pings concurrently
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Spins a goroutine for each ping
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Decrements the limiter when we finish
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Makes a timeout of 2 seconds for our ping
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calls our `hostAlive()` function
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Outputs the result on our `ch` output channel
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Waits for all pings to finish with `WaitGroup`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Returns the channel
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We now have a function that will asynchronously ping hosts in parallel and put
+    the result on a channel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our `ssh` function has a similar function signature to `scanPrefixes`, as we
+    can see here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: For brevity, we are not going to include the code here, but you can see it in
+    the repository linked at the end of the exercise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These are the big differences between `scanPrefixes()` and `unamePrefixes()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We receive a channel of `record`, the output of `scanPrefixes()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If `rec.Reachable` is `false`, we simply put `rec` on the output channel without
+    adding OS information to the fields.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Otherwise, we call `runUname()` instead of `hostAlive()`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let''s set up our `main()` function, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Checks that our binaries exist in the path
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Checks we have the correct number of arguments, which is `1`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We check that `len(os.Args) == 2` because the first argument is the binary name.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Retrieves a channel of IPs in the network passed in the argument
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The implementation of the `hosts()` function is not detailed here, but you will
+    find it in the repository.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gets the current user's login name
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, we need to scan our prefixes and concurrently process the results by doing
+    a login and retrieving the `uname` output, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sends `scanPrefixes()` a channel of IPs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Receives the results on `scanResults`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sends the channel of results to `unamePrefixes()`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Prints the `STDOUT`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The key to this code is the channel read in the `for range` loops in `scanPrefixes()`
+    and `unamePrefixes()`. When all IPs have been sent, `ipCh` will be closed. That
+    will stop our `for range` loop in `scanPrefixes()`, which will cause its output
+    channel to close. That causes `unamePrefixes` to see the closure and close its
+    output channel. This will in turn close our `for rec := range unameResults` loop
+    and stop printing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using this chaining concurrency model, we will be scanning up to 100 IPs while
+    SSHing into a maximum of 100 hosts and printing the results to the screen, all
+    at the same time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have stored the output of `uname -a` in our `record` variable but in an unparsed
+    format. We could use a lexer/parser or `struct`. If you need to use the output
+    of an executed binary, we recommend finding tools that can output in a structured
+    format such as JSON instead of parsing it yourself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see this code at the following link:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notes on using the exec package
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: There are some things you should look out for when using `exec`. One of the
+    big ones is if the binary being invoked takes control of the terminal. `ssh` does
+    this, for example, to get a password from the user. We suppressed this in our
+    example, but when this happens, it bypasses the normal STDOUT you are reading.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This happens when someone uses terminal mode. In those cases, you will want
+    to use `goexpect` or `go-expect` if you must deal with it. Generally, this is
+    something where you want to find alternatives. However, some software and various
+    routing equipment will implement menu-driven systems and use terminal modes that
+    cannot be avoided.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have talked about automating the command line with the `exec`
+    package. You now have the skills to check for binaries on the system and execute
+    those binaries. You can check the error condition and retrieve the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will talk about the basics of SSH in Go. While in this
+    section, we showed how you could use the `ssh` binary, in the next, we will talk
+    about using the `ssh` package to use SSH without the SSH library. This is faster
+    and also provides benefits over calling the binary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: In general, always use a package instead of a binary when available. This keeps
+    system dependencies low and makes code more portable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using SSH in Go to automate remote changes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: SSH is simply a network protocol that can be used to secure communication between
+    two hosts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While most people think that the `ssh` binary allows you to connect from a terminal
+    on one host to a terminal on another host, that is only one use. SSH can be used
+    to secure connections for services such as **Google Remote Procedure Call** (**gRPC**)
+    or to tunnel graphical interfaces such as the **X Window System** (**X11**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will talk about how you can use the SSH package ([https://pkg.go.dev/golang.org/x/crypto/ssh](https://pkg.go.dev/golang.org/x/crypto/ssh))
+    for creating clients and servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting to another system
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The most basic use of SSH is to connect to another system and either send a
+    single command or invoke a shell and issue commands. SSH is simply a transport
+    mechanism, so there are many other uses of SSH such as connection tunneling or
+    wrapping **remote procedure calls** (**RPCs**). We will not cover those here,
+    as they are outside the use cases for general DevOps work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As with most connection technologies, the hardest part of connecting to systems
+    with an SSH client is resolving authentication. The most common forms of SSH authentication
+    are outlined here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Username/password**: Username/password is the most popular implementation.
+    It''s the default and therefore the one that people tend to use. With network
+    equipment, sometimes this is the only way. With this method, the password database
+    may be on the local system, or the system may pass the password hash to another
+    system to validate.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Public key authentication**: Public key authentication is where a user creates
+    a public/private key on their machine with an optional passphrase. The server
+    has the public key installed for a user and your SSH client is set up to use the
+    private key.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Challenge-response authentication**: There are varying types of challenge-response
+    authentication for SSH. This is commonly used to allow **two-factor authentication**
+    (**2FA**) through devices such as Yubikeys.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will concentrate on using the first two methods and will assume that the
+    remote end will be using OpenSSH. While installations should move to using 2FA,
+    that setup is beyond what we can cover here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will be using Go''s excellent SSH package: [http://golang.org/x/crypto/ssh](http://golang.org/x/crypto/ssh).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first thing that will be required is to set up our authentication method.
+    The initial method I will show here is username/password, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: That was simple enough.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you are writing a command-line application, it is not safe to retrieve a
+    password using flags or arguments. You also do not want to echo a password to
+    the screen. The password needs to come from a file only the current user has access
+    to or by controlling the terminal. The SSH package has a terminal package ([http://golang.org/x/crypto/ssh/terminal](http://golang.org/x/crypto/ssh/terminal))
+    that can help:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`fmt.Printf("SSH Passsword: ")`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`password, err := terminal.ReadPassword(int(os.Stdin.Fd()))`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the public key, it is only slightly more complicated, as illustrated here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reads our private key file
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Parses our private key
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Returns a public key authorization implementation of `ssh.AuthMethod`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We can now authorize by simply providing our private key to our program. Many
+    times your key is not stored locally but in a cloud service, such as Microsoft
+    Azure's Key Vault. In that case, you simply need to change `os.ReadFile()` to
+    use the cloud service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have our authorization sorted out, let''s create an SSH config,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates a new `*ssh.ClientConfig` config
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses the username is stored in the `user` variable
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supplies one `AuthMethod`, but you can use multiple `AuthMethod`(s)
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ignores the host key
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sets a dial timeout of 5 seconds
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Important Note
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Ignoring a host key with `ssh.InsecureIgnoreHostKey()` is not secure. This can
+    lead to a typo where you are sending information to a system outside your control.
+    That system could be masquerading as one of your systems in the hope of getting
+    you to type something in the terminal, such as a password. When working in a production
+    environment, it is critical not to ignore the host key and store a valid list
+    of host keys that can be checked.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Let''s make a connection to a host, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have established an SSH connection, let''s build a function to
+    run a simple command, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates an SSH session
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: One session per command is required
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs the command in the session and returns the output
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This gets the STDOUT and STDERR in a single output
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This code will let you issue commands against systems that are using OpenSSH
+    or similar SSH implementations. It is best practice to hold the `conn` object
+    open until you have issued all of the commands for a device.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see this code here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is great for cases when you can simply issue a command to the far end and
+    let it run. But what if the program requires some level of interaction? When interfacing
+    with routing platforms over SSH, you often require more interaction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When that need arises, Expect libraries are there to help. So, let's have a
+    look at one of the more popular ones, up next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Expect for complicated interactions
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`expect` packages provide the ability to deal with output from a command, such
+    as the following: `would you like to continue[y/n]`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most popular package for using `expect` comes from Google. You can find
+    it here: [https://github.com/google/goexpect](https://github.com/google/goexpect).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here's an example of an `expect` script to install the original TCL `expect`
+    tools on an Ubuntu host using the **Advanced Packaging Tool** (**APT**) package
+    manager. Note that this is not the best way to do this, but simply gives an uncomplicated
+    example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start by configuring our `expect` client to use the SSH client, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Sets up an `*ssh.ClientConfig` config
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses it to make a connection
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Passes that connection to an `expect` client
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now we have an `expect` client logged in via SSH, let''s make sure we have
+    a prompt, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compiles a `$` regex to expect our prompt
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Calls `Expect()` to wait for the prompt for up to 10 seconds
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let''s send our command to install `expect` via the `apt-get` tool. We
+    will be using `sudo` to issue this command with root privileges. The code is illustrated
+    in the following snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`apt-get` will either prompt us if it is OK to install or tell us it is already
+    installed. Let''s handle those two cases, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Waits for either of these to be displayed:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Do you want to continue\? [Y/n]`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`is already the newest`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If neither happens, it gives an error
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ecase` will contain the `case` type detailing which condition occurred'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If we get the continue prompt, we need to send `Y` to the terminal by executing
+    the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we need to just make sure we received the prompt again by executing
+    the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can see this code with a debug mode here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section has shown how you can spawn an SSH session in pure Go, use it to
+    send commands, and then retrieve the output. Finally, we looked at how you can
+    interact with an application using `goexpect`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we will show how you can use this knowledge to write tooling that runs
+    commands on multiple systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designing safe, concurrent change automations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, we have shown how to execute commands locally or remotely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the modern day, we often need to run sets of commands across multiple systems
+    to achieve some end state. Depending on your scale, you may want to run a system
+    such as Ansible or Jenkins to attempt to automate these processes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For some work, it is simpler to use Go directly to execute changes across a
+    set of systems. This allows the DevOps group to simply understand the Go language
+    and a small bit of code versus understanding the complexities of a workflow system
+    such as Ansible, which requires its own skillset, system updates, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we are going to talk about the components of changing a set
+    of systems, a framework for achieving this, and an example application to apply
+    a set of changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Components of a change
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'When writing a system that makes a change, there are several types of actions
+    that must be dealt with. In broad terms, I define these as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Global preconditions**: Global preconditions are a set of conditions that
+    need to be true to move forward. When doing network automation, this would be
+    things such as the packet loss on the network being under a certain threshold.
+    For devices, this might be that your services are in a green state before proceeding.
+    No one wants to push changes during a problem.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Local preconditions**: Local preconditions are the state of the individual
+    work unit (say, a server) that needs to be in a certain state to proceed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Actions**: Actions are operations that will mutate the state of a work unit.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Action validations**: Checks that are done to validate an action was successful.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Local postconditions**: Local postconditions are checks that the work unit
+    is both in the configuration state you want and meets some state. This might be
+    that it is still reachable, possibly serving traffic or not serving traffic, whatever
+    the end state should be.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Global postconditions**: Global postconditions are the state of conditions
+    after execution, usually similar to global preconditions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Not every set of changes on multiple systems requires all these, but they will
+    at least need a subset of them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's take a look at doing a rollout of jobs on a set of **virtual machines**
+    (**VMs**) in a single data center. For small shops that have a limited number
+    of machines, a setup such as this can be sufficient when you aren't large enough
+    to use something such as Kubernetes but can't fit in the limitations of services
+    such as Azure Functions or Amazon's **Elastic Container Service** (**ECS**). Or,
+    it could be that you are running on your own machines and not in a cloud provider.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a concurrent job
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let''s tackle the actions we want to perform. We want to do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remove our job from a load balancer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kill the job on the VM or server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy our new software to the server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Start our service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Check the service is reachable
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Add the job back to the load balancer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In essence, this is what Kubernetes does for large-scale installations of microservices.
+    We will be talking about this in an upcoming chapter. But at a small scale, it
+    is seldom the best choice to take on the complexity of running a Kubernetes cluster,
+    even when the infrastructure is managed by a cloud provider.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s define the overall structure of the code that executes our actions,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Much of this is just a skeleton—we will implement these methods in a moment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines a `stateFn` type
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it returns an error, stop processing.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it doesn't and returns a non-nil `stateFn` type, execute it.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it returns a nil `stateFn` type and no error, we are done.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines an `actions` type
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is a state machine for actions on a server
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Calling `run()` does the following:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes one `stateFn` type at a time until an error or `stateFn == nil`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`rmBackend()`, `jobKill()`, `cp()`, and the rest are `stateFn` types we will
+    define.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`.failedState` is there to allow retrying a failed state when using `.run()`
+    more than once.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What we have is a simple state machine that will execute actions. This moves
+    us through all the states that are required to do this type of action on a system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s look at what a few of these `stateFn` types would look like when implemented,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Calls a client to our network load balancer to remove our server endpoint
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If successful, sends back `jobKill` as the next state to execute
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If not successful, returns our error
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`s.lb.RemoveBackend()` in the cloud might talk to a **REST** service that informs
+    it to remove our service endpoint. Or, in your own data center, it might be a
+    network load balancer that you log in to via an SSH client and issue commands.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once this completes, it tells `run()` to execute `jobKill()`. Let''s explore
+    what that would look like, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executes `findPIDs()`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This logs on to a machine via SSH and runs the `pidof` binary
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes `killPIDs()`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This uses SSH to execute `kill` against our process
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Uses signal 15 or `TERM` as a soft kill
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Executes `waitForDeath()`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This uses SSH to wait for the `cp`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If not, execute `killPIDs()`with signal 9 or `KILL` and execute `waitForDeath()`
+    again
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it fails, it returns an error
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If successful, we return our next state, `cp`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This code is simply killing our jobs on the server before we copy our new binary
+    and start it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The rest of the code will be in our repository (link provided further on in
+    this section). For now, assume we have written out the rest of these actions for
+    our state machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We now need something to run all our actions. We will create a `workflow` struct
+    with this basic structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Has `*config` that will detail the settings for our rollout
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a connection to our load balancer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tracks the number of failures we have had
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Outputs the final end state, which is an enumerator in the file
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a list of all our actions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are two phases to a typical rollout, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Canary**: The canary stage is where you test a few samples to make sure the
+    rollout is working. You want to do this one sample at a time and wait some amount
+    of time before continuing to the next canary. This allows administrators to have
+    some time to stop potential problems that the rollout hasn''t detected.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**General**: The general rollout occurs after the canary stage. This usually
+    sets some amount of concurrency and a maximum number of failures. Depending on
+    the size of your environment, failures may be common due to an ever-changing environment.
+    This may mean you tolerate a certain number of failures and continue to retry
+    those failures until you have success, but if the failures reach some maximum
+    level, you stop.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Depending on the environment, you can have more sophisticated staging, but for
+    smaller environments, this usually suffices. When doing concurrent rollouts, failures
+    can exceed your maximum failure setting by large amounts, depending on the setting.
+    If we have a maximum of failures and our concurrency is set to 5, it is possible
+    to have between 5 and 9 failures happen. Keep this in mind when you deal with
+    concurrent rollouts.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'The main method on the workflow that handles the rollouts is called `run()`.
+    Its job is to run our pre-checks, then run our canaries, and finally run the main
+    jobs at some concurrency level. We should exit if we have too many problems. Let''s
+    have a look, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This part of the code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runs our `checkLBState()` precondition code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it fails, records an `esPreconditionFailure` end state
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: You may notice a `cancel()` function that is created when we create a `Context`
+    object with a timeout. This can be used to cancel our `Context` object at any
+    time. It is best practice to cancel a `Context` object that has a timeout immediately
+    after use to exit a Go routine that is running in the background, counting down
+    to the timeout.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: This is run before we make any changes to the system. We don't want to make
+    changes when things are already unhealthy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we need to run our canaries, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runs some defined number of canaries
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs them one at a time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sleeps for 1 minute in between
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These settings would be configurable in the config file that will be defined.
+    The sleep time could be made configurable to what makes sense for the service,
+    to allow you to respond in case of problems that aren't detected in the workflow.
+    You could even define a sleep time between all canaries and general rollout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we need to roll out at some concurrency level while checking for some
+    maximum number of failures. Let''s check that out, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Spins off goroutines running our actions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Concurrency is limited by our `limit` channel.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Failures are limited by our `.failures` attribute check.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is the first time we have shown the `atomic` package. `atomic` is a sub-package
+    of `sync` that allows us to do thread-safe operations on numbers without using
+    `sync.Mutex`. This is great for counters as it is `sync.Mutex` for this particular
+    type of operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have now shown the basics of `.run()` for our `workflow` struct. You can
+    find the complete code for this rollout application at [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for the application simply needs your SSH key, a file describing the
+    rollout, and the binary to roll out to the server. That file would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: This describes everything the application needs to do a simple rollout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, we can make this application more general, have it record its running
+    state and final states to storage, add flags to ignore beginning states so that
+    we can do a rollback, put this behind a gRPC service, and so on…
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fewer than 1,000 lines of code, we have a simple alternative to systems such
+    as Kubernetes when they aren't available or your scale doesn't justify them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: This doesn't address the need for binary restarts if your program crashes, such
+    as restarts achieved through software such as `systemd`. In those cases, it may
+    be better to create an agent that runs on the device and provides RPCs to control
+    local services, such as `systemd`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Case study – Network rollouts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The principles laid out here have been the essence of rollouts of network device
+    configuration on Google's B2 backbone for a decade.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prior to this, we simply had scripts that took hand-crafted configuration or
+    generated configurations and applied them to the network while an operator watched
+    the progress and dealt with issues that might arise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At scale, this became an issue. SRE service teams had been moving away from
+    similar models as their complexity tended to grow faster than the networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Network engineering moved toward a more formalized system to centralize the
+    execution of work on the backbone, giving us a single place to monitor and a central
+    place to stop rollouts in case of emergencies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, there was a need to formalize any set of rollouts so that they
+    were always executed the same way with the same automated checks, instead of relying
+    on humans to do the right things.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The orchestration system I led the design and implementation on is simply a
+    more complex and pluggable version of what is presented here. Teams built their
+    actions into the system, and that system executed those actions based on arguments
+    sent to perform some set of jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the time of my departure from Google, using this methodology had led to zero
+    outages from automation (which is not the same as having zero rollout failures).
+    My understanding is that as I am writing this, your cat videos are still in safe
+    hands on this system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have learned about the components of change and what that
+    might look like using Go, and we have written an example rollout application that
+    uses these principles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will talk about writing a system agent that can be deployed on systems
+    to allow everything from system monitoring to controlling a local rollout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing a system agent
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, when we have automated operations on a device, we have either done it
+    from an application that executes locally or through a command we run remotely
+    with SSH.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But if we look toward managing a small fleet of machines, it can be more practical
+    to write a service that runs on the device that we connect to via RPCs. Using
+    knowledge of the gRPC services we discussed in previous chapters, we can combine
+    these concepts to allow control of our machines in a more uniform way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are a few things we can use system agents for:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing and running services
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gathering machine running stats
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gathering machine inventory information
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some of these are the kinds of things Kubernetes does with its system agents.
+    Others, such as inventory information, can be vital in running a healthy fleet
+    of machines, often overlooked in smaller settings. Even in a Kubernetes environment,
+    there may be advantages to running your own agent for certain tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A system agent can provide several advantages. If we define one **application
+    programming interface** (**API**) using gRPC, we can have multiple OSs with different
+    agents implementing the same RPCs, allowing us to control our fleet in the same
+    uniform way, regardless of the OS. And because Go will pretty much run on anything,
+    you can write different agents using the same language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designing a system agent
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'For our example system agent, we are going to target Linux specifically, but
+    we will make our API generic to allow implementation for other OSs to use the
+    same API. Let''s talk about a few things we might be interested in. We could consider
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing/removing binaries using `systemd`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exporting both system and installed binary performance data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Allowing the pulling of application logs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Containerizing our application
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For those of you not familiar with `systemd`, it is a Linux daemon that runs
+    software services in the background. Taking advantage of `systemd` allows us to
+    have automatic restarts of failed applications and automatic log rotation with
+    `journald`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Containerization, for those not familiar with the concept, executes an application
+    within its own self-contained space with access to only the parts of the OS you
+    want. This is a similar concept to what is called sandboxing. Containerization
+    has been made popular by software such as Docker and has led to container formats
+    that look like VMs with entire OS images within a container. However, these container
+    formats and tooling are not required to containerize an application on Linux.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we are going to use `systemd` to control our process execution, we will use
+    the `Service` directives of `systemd` to provide containerization. These details
+    can be seen in our repository in the file [https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go)
+  prefs: []
+  type: TYPE_NORMAL
+- en: For exporting stats, we will use the `expvar` Go standard library package. This
+    package allows us to publish stats on a `expvar` stats are a JSON object with
+    string keys that map to values representing our stats or information. There are
+    built-in stats automatically provided, along with ones we will define.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This allows you to quickly gather stat data using a collector or by simply querying
+    it with a web browser or command-line tool such as `wget`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example `expvar` page that is output might return the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: For the book portion of our example, we are going to concentrate on *installing
+    and removing binaries* and *exporting system performance data* to show how we
+    can use our RPC service for interactive calls and HTTP for read-only information.
+    The version in our repository will implement more features than we can cover in
+    the book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we''ve talked about what we want the system agent to do, let''s design
+    our proto for our service, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: We now have a general framework for our RPCs, so let's look at implementing
+    a method for our `Install` RPC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing Install
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Implementing installations on Linux will require a multi-step process. First,
+    we are going to install the package under `sa/packages/[InstallReq.Name]` in the
+    agent's user home directory. `InstallReq.Name` will need to be a single name,
+    containing only letters and numbers. If that name already exists, we will turn
+    down the existing job and install this in its place. `InstallReq.Package` on Linux
+    will be a ZIP file that will be unpacked in that directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`InstallReq.Binary` is the name of the binary in the root directory to execute.
+    `InstallReq.Args` is a list of arguments to pass to the binary.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will be using a third-party package to access `systemd`. You can find the
+    package here: [https://github.com/coreos/go-systemd/tree/main/dbus](https://github.com/coreos/go-systemd/tree/main/dbus).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s look at the implementation here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Validates our incoming request to ensure it is valid
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation is in the repository code
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Takes a lock for this specific install name
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This prevents multiple installs with the same name at the same time
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation is in the repository code
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unpacks our ZIP file into a temporary directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Returns the location of the temporary directory
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validates that our `req.Binary` binary exists
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation is in the repository code
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Migrates our temporary directory to our `req.Name` location
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a `systemd` unit already exists, it is turned down
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creates a `systemd` unit file under `/home/[user]/.config/systemd/user/`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the final path already exists, deletes it
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Moves the temporary directory to the final location
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation is in the repository code
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Starts our binary
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Makes sure it is up and running for 30 seconds
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is a simple example of the setup for our gRPC service to set up and run
+    a service with `systemd`. We are skipping various implementation details, but
+    you can find them inside the repository listed toward the end of the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have `Install` done, let's work on implementing `SystemPerf`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing SystemPerf
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To gather our system information, we will be using the `goprocinfo` package,
+    which you can find here: [https://github.com/c9s/goprocinfo/tree/master/linux](https://github.com/c9s/goprocinfo/tree/master/linux).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We want this to update us about every 10 seconds, so we will implement our gathering
+    in a loop where all callers read from the same data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start by collecting our **central processing unit** (**CPU**) data for
+    our system, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reads our CPU state data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Writes it to a protocol buffer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stores the data in `.cpuData`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`.cpuData` will be of the `atomic.Value` type. This type is useful when you
+    wish to synchronize an entire value, not mutate the value. Every time we update
+    `a.cpuData`, we put a new value into it. If you store a `struct`, `map`, or `slice`
+    in an `atomic.Value`, you cannot change a key/field—you *MUST* make a new copy
+    with all keys/indexes/fields and store it, instead of changing a single key/field.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is much faster for reading than using a mutex when values are small, which
+    is perfect when storing a small set of counters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `collectMem` memory collector is similar to `collectCPU` and is detailed
+    in the repository code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s have a look at the loop that will be started in our `New()` constructor
+    for gathering perf data, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collects our initial CPU stats
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Publishes an `expvar.Var` type for `system-cpu`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our variable type is `func() interface{}`, which implements `expvar.Func`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This simply reads our `atomic.Value` set by our `collectCPU()` function
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A read occurs when someone queries our web page at `/debug/vars`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Refreshes our collections every 10 seconds
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`expvar` defines other simpler types such as `String`, `Float`, `Map`, and
+    so on. However, I prefer using protocol buffers over `Map` for grouping content
+    in a single, sharable message type that can be used in any language. Because a
+    proto is JSON-serializable, it can be used as the return value for an `expvar.Func`
+    with a little help from the `protojson` package. In the repository, that helper
+    code is in `agent/proto/extra.go`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This code only shares the latest data collection. It is important to not directly
+    read from stat files on each call, as your system can be easily overloaded.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When you go to the `/debug/vars` web endpoint, you can now see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: There will be other stats there that are for the system agent itself, which
+    can be useful in debugging the agent. These are automatically exported by `expvar`.
+    By using a collector that connects and reads these stats, it is possible to see
+    trends for these stats over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now have an agent that is getting perf data every 10 seconds, giving us a
+    functioning system agent. It is worth noting that we have shied away from talking
+    about **authentication, authorization, and accounting** (**AAA**) when talking
+    about RPC systems. gRPC has support for **Transport Layer Security** (**TLS**)
+    to both secure the transport and allow for mutual TLS. You can also implement
+    a user/password, **Open Authorization** (**OAuth**), or any other AAA system you
+    are interested in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Web services can implement their own security for things such as `expvar`. `expvar`
+    publishes its stats on `/debug/vars`, and it is a good idea not to expose these
+    to the outside world. Either prevent the export on all load balancers or implement
+    some type of security on the endpoint.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can find the complete code for our system agent here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our completed code, we have decided to implement our system agent over SSH.
+    This allows us to use an authorization system we already have with strong transport
+    security. In addition, the gRPC service is exporting services over a private Unix
+    domain socket, so local services that are not `root` cannot access the service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will also find code that containerizes the applications we install via `systemd`
+    directives. This provides native isolation to help protect the system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have learned the possible uses of a system agent, a basic
+    design guide to building one, and finally walked through the implementation of
+    a basic agent on Linux. We also discussed how our gRPC interface is designed to
+    be generic, to allow for the implementation of the agent for other OSs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As part of building the agent, we have given a brief introduction to exporting
+    variables with `expvar`. In the next chapter, we will talk about the big brother
+    of `expvar`—the Prometheus package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter has been an introduction to automating the command line. We have
+    seen how to use the `exec` package to execute commands locally on a device. This
+    can be useful when needing to string together a set of already made tools. We
+    have shown how you can use the `ssh` package to run commands on remote systems
+    or interact with complicated programs using `ssh` and `goexpect` packages. We
+    tied this together with our Go knowledge from previous chapters to implement a
+    basic workflow application that upgraded binaries on multiple systems concurrently
+    and safely. Finally, in this chapter, we have learned how we can create a system
+    agent that runs on a device to allow us to gather vital data and export it. We
+    also have refined our ability to install programs by using the agent to control
+    `systemd` on Linux devices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter has now given you new skills that will allow you to control local
+    command-line applications, execute remote applications on any number of machines,
+    and deal with interactive applications. You have also gained a basic understanding
+    of building a workflow application, developing RPC services that can control a
+    local machine, and how to export stats using Go's `expvar` package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our next chapter, we will be talking about how we can observe running software
+    to detect issues before they become a problem and diagnose issues when an incident
+    occurs.
+  prefs: []
+  type: TYPE_NORMAL

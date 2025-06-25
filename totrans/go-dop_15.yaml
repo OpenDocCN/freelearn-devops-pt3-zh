@@ -1,0 +1,1820 @@
+- en: 'Chapter 12: Creating Immutable Infrastructure Using Packer'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Managing compute infrastructure, even in the era of the cloud, is still a challenge.
+    With the innovations in containerization, **virtual machines** (**VMs**), and
+    serverless computing, developers might believe that compute infrastructure is
+    a solved problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nothing could be farther from the truth. For cloud providers or others running
+    their own data centers, bare metal machines (the machine's OS not running in virtualization)
+    must be managed. This has become more complicated in the era of cloud computing.
+    Not only does your provider need to manage their OS rollouts and patches, but
+    so do cloud customers who want to run fleets of VMs and containers. Container
+    orchestration systems such as Kubernetes must still provide container images that
+    contain an OS image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the cloud, just like a physical data center, it is important to force OS
+    compliance for all containers and VMs. Allowing anyone to run whatever OS they
+    want is the gateway to a security breach. To provide a secure platform for developers,
+    you must provide a minimal OS standardized across all deployments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standardization of an OS across a fleet comes with nothing but upsides and very
+    few downsides. Standardizing on an OS image is easiest when your company is small.
+    Large companies, including cloud providers that have not done this in the early
+    days, have suffered through massive projects to standardize OS images at later
+    stages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we are going to talk about how we can use Packer, a software
+    package written in Go by HashiCorp, to manage the creation and patching of VM
+    and container images. HashiCorp is the leader in the trend of **Infrastructure
+    as Code** (**IaC**) that is moving through the industry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Packer lets us use YAML and Go to provide a consistent way to build images across
+    a multitude of platforms. Be it in VM images, Docker images, or bare metal images,
+    Packer can create consistent environments for your workloads to run on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we write Packer configuration files and use the Packer binary, you will begin
+    to see how Packer was written. Many of the interactions Packer defines were written
+    using libraries such as `os`/`exec` that we have talked about earlier. Maybe you
+    will be writing the next Packer that will sweep through the DevOps community!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an Amazon Machine Image
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validating images with Goss
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Customizing Packer with plugins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The prerequisites for this chapter are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An AWS account
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An AWS Linux VM running on the AMD64 platform
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An AWS user account with administrator access and access to its secret
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installation of Packer on the AWS Linux VM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installation of Goss on the AWS Linux VM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Access to the book's GitHub repository
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To do the exercises in this chapter requires an AWS account. This will use compute
+    time and storage on AWS, which will cost money, though you may be able to use
+    an AWS Free Tier account ([https://aws.amazon.com/free/](https://aws.amazon.com/free/)).
+    None of the authors at the time of writing are currently affiliated with Amazon.
+    There is no financial incentive for us. If anything, it costs us money to develop
+    this chapter on AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When running Packer, we recommend running on Linux, both for cloud images and
+    Docker images. Windows is a special niche for cloud computing and Microsoft provides
+    its own sets of tools for handling Windows images. We don't recommend using a
+    Mac for running these, as the move to Apple silicon and the interaction with multiple
+    tools with varying support can lead to a long debug time. While macOS is POSIX-compliant,
+    it still isn't Linux, the main target of these tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting an AWS account set up with a Linux VM and setting up user accounts is
+    beyond what we can cover in the book. See the AWS documentation for help with
+    that. For this exercise, please choose either an Amazon Linux or Ubuntu distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'User setup is done using AWS IAM tools, and the user name can be whatever you
+    choose. You will also need to obtain an access key and secret for this user. Do
+    not store these in a repository or any place that is publicly accessible, as they
+    are equivalent to username/password. The user will need to do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Belong to a group with `AdministratorAccess` permissions set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Attach the existing policy, `AmazonSSMAutomationRole`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We recommend a personal account for this exercise, as this access is quite
+    extensive. You can also set up a specific set of permissions or use another method
+    that isn''t as permissible. Instructions on those methods can be found here: [https://www.packer.io/docs/builders/amazon](https://www.packer.io/docs/builders/amazon).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you have logged into your VM, you need to install Packer. This is going
+    to depend on what Linux version you have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is for Amazon Linux:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following is for Ubuntu:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For other Linux versions, see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://learn.hashicorp.com/tutorials/packer/get-started-install-cli](https://learn.hashicorp.com/tutorials/packer/get-started-install-cli).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To test Packer is installed, run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should output the version of Packer you have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once Packer is installed, issue the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These commands do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Set up a directory called `packer` in your user's home directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create an `amazon.pkr.hcl` file to store our Packer configuration
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Create a `packer/files` directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generate an SSH key pair for a user, `agent`, which we will add to the image
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Move the `agent.pem` private key into our `.ssh` directory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy our system agent from the Git repository
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy a `systemd` service configuration for the system agent from the Git repository
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that we have the prerequisites out of the way, let's have a look at building
+    custom **Ubuntu** images for AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code files for this chapter can be downloaded from [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an Amazon Machine Image
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Packer supports a wide variety of plugins that are used by the program to target
+    a specific image format. For our example, we are going to target the **Amazon
+    Machine Image** (**AMI**) format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are other build targets for Docker, Azure, Google Cloud, and others.
+    You may find a list of other build targets here: [https://www.packer.io/docs/builders/](https://www.packer.io/docs/builders/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For images that are used in cloud environments, Packer plugins generally take
+    an existing image that lives on the cloud provider and lets you repackage and
+    upload the image to the service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And, if you need to build multiple images for multiple cloud providers, containers,
+    Packer can do simultaneous builds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For Amazon, there are currently four methods for building an AMI:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon **Elastic Block Store** (**EBS**) launches a source AMI, provisions it,
+    and then repackages it.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Amazon instance virtual server, which launches an instance VM, rebundles it,
+    and then uploads it to S3 (an Amazon object storage service).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The two other methods are for advanced use cases. As this is an introduction
+    to Packer using AWS, we are going to avoid these. However, you can read about
+    all these methods here: [https://www.packer.io/docs/builders/amazon](https://www.packer.io/docs/builders/amazon).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two configuration file formats used by Packer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**JavaScript Object Notation** (**JSON**)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**HashiCorp Configuration Language 2** (**HCL 2**)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As JSON is deprecated, we will be using `HCL2`. This format was created by
+    HashiCorp and you can find their Go parser here: [https://github.com/hashicorp/hcl2](https://github.com/hashicorp/hcl2).
+    The parser can be useful if you wish to write your own tools around Packer or
+    want to support your own configurations in `HCL2`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let's create a Packer configuration file that we can use to access the
+    Amazon plugin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Open the file called `amazon.pkr.hcl` in the `packer/` directory we created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Add the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This tells Packer the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We require the `amazon` plugin.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The version of the plugin we want, which is the latest plugin that must be newer
+    than version `0.0.1`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `source` location in which to retrieve the plugin.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As we are using a cloud provider, we need to set up the AWS source information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting up an AWS source
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We are going to use the **Amazon EBS** build method, as this is the easiest
+    method to deploy on AWS. Add the following to the file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is some key information here, so we are going to take it one step at
+    a time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This sets up the source for our base image. As we are using the `amazon` plugin,
+    the source will have fields related to that plugin. You can find a complete list
+    of fields here: [https://www.packer.io/docs/builders/amazon/ebs](https://www.packer.io/docs/builders/amazon/ebs).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This line names our source as having two parts, `amazon-ebs` and `ubuntu`. When
+    we refer to this source in our `build` stanza, it will be referred to as `source.amazon-ebs.ubuntu`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we have a few field values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`access_key` is the IAM user key to use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`secret_key` is the IAM user''s secret to use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ami_name` is the name of the resulting AMI in the AWS console.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`instance_type` is the AWS instance type to use to build the AMI.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`region` is the AWS region for the build instance to spawn in.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`source_ami_filter` filters the AMI image to find the image to apply.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`filters` contain a way to filter our base AMI image.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`name` gives the name of the AMI image. This can be any matching name returned
+    by this API: [https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`root-device-type` specifies we are using `ebs` as our source.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`virtualization-type` indicates which of two AMI virtualization technologies
+    to use, `hvm` or `pv`. Due to enhancements to `hvm`, is it now the choice to use.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`most_recent` indicates to use the most recent image found.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`owners` must list an ID of an owner of the base image AMI we are using. `"099720109477"`
+    is a reference to Canonical, the maker of Ubuntu.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ssh_username` is the user name to SSH into the image with. `ubuntu` is the
+    default user.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As alternates to the authentication method here, you can use IAM roles, shared
+    credentials, or other methods. However, each of the others is too complicated
+    for this book to cover. See the link in the *Technical requirements* section if
+    you wish to use another method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`secret_key` needs to be secured like any password. In production, you will
+    want to use IAM roles to avoid using `secret_key` or fetch this from a secure
+    password service (AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager)
+    and use the environmental variable method to allow Packer to use the key.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we need to define a `build` block to allow us to change the image from
+    the base to one customized for us.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a build block and adding some provisioners
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Packer defines a `build` block that references the source we defined in the
+    previous section and makes the changes we want to that image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To do this, Packer uses `provisioner` configurations inside `build`. Provisioners
+    let you make changes to an image by using the shell, Ansible, Chef, Puppet, files,
+    or other methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A full list of provisioners can be found here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.packer.io/docs/provisioners](https://www.packer.io/docs/provisioners).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For long-term maintenance of your running infrastructure, Chef or Puppet have
+    been the choice for many installations. This allows you to update the fleet without
+    having to wait for an instance to be rebooted with the latest image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By integrating it with Packer, you can make sure to apply the latest patches
+    to your image during the build process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While this is certainly helpful, we cannot explore these during this chapter.
+    Setting up Chef or Puppet is simply beyond what we can do here. But for long-term
+    maintenance, it is worth exploring these provisioners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For our example, we are going to do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Install the Go 1.17.5 environment.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Add a user, `agent`, to the system.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Copy SSH keys to the system for that user.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Add our system agent from a previous chapter.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Set systemd to run the agent from the `agent` user.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let's start by using the `shell` provisioner to install Go's 1.17.5 version
+    using `wget`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s add the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our `build` block contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name`, which names this block.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sources`, which is a list of source blocks to include. This includes the source
+    we just defined.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`provisioner "shell"` says we are going to use the `shell` provisioner, which
+    logs in via the shell to do work. You may have multiple provisioner blocks of
+    this type or of other types.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`inline` sets up commands to be run, one after another, in a shell script.
+    This set of shell commands downloads Go version 1.17.5, installs it, tests it,
+    and removes the install files.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It should be noted that you could also use `file provisioner`, which we will
+    show later, to take a local copy of the file instead of retrieving it with `wget`.
+    But, we wanted to show how you can also just use standard Linux tools to pull
+    from a trusted repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will add another provision *inside* the `build` that adds a user to
+    the system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code block is structured as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first `shell` block: Adds a user, `agent`, with a disabled password.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The second `file` block: Copies a local file, `./files/agent.pub`, to `/tmp`,
+    as we can''t copy directly to a user other than `ubuntu` using `file provisioner`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The third shell block:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Makes our new user's `.ssh` directory.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Moves the `agent.pub` file out of `/tmp` to `.ssh/authorized_keys`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Modifies all directories and files to have the right owners and permissions.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let''s add provisioners that install our system agent and sets up `systemd`
+    to manage it. The following section uses the shell provisioner to install `dbus`,
+    which is used to communicate with `systemd`. We set an environmental variable
+    that prevents some pesky Debian interactive questions when we install using `apt-get`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This uses the file provisioner to copy the agent we want to run from our source
+    files onto the image at the `/tmp/agent` location:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following section creates a directory in the user agent''s home directory
+    called `bin` and moves the agent we copied over in the previous section into it.
+    The rest is some necessary permissions and ownership changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This copies over the `systemd` file from our source directory to our image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This last section moves the `agent.service` file to its final location, tells
+    `systemd` to enable the service described in `agent.service`, and validates that
+    it is active. The `sleep` parameter is used to simply allow the daemon to start
+    before it is checked:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, let''s add the Goss tool, which we will be using in the next section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: This downloads the latest Goss tool, sets it to be executable, and tests that
+    it works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let's look at how we could execute a Packer build to create an image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Executing a Packer build
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are four stages to doing a Packer build:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initializing Packer to download the plugins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validating the build
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Formatting the Packer configuration file
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building the image
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The first thing to do is initialize our plugins. To do this, simply type the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you see a message such as `Error: Unsupported block type`, it is likely
+    you put the `provisioner` blocks outside the `build` block.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the plugins are installed, we need to validate our build:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should yield `The configuration is valid`. If it doesn't, you will need
+    to edit the file to fix the errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At this time, let''s format the Packer template files. This is a concept I''m
+    sure HashiCorp borrowed from Go''s `go fmt` command and works in the same way.
+    Let''s give it a try with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, it''s time to do our build:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There will be quite a bit of output here. But if everything is successful,
+    you will see something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you see errors about permissions, this will be related to your user account
+    setup. See the necessary permissions listed in the earlier part of the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You now have an AMI image available on AWS. You can launch AWS VMs that use
+    this image and they will be running our system agent. Feel free to launch a VM
+    set to your new AMI and play with the agent. You can access the agent from your
+    Linux device using `ssh agent@[host]`, where `[host]` is the IP or DNS entry of
+    the host on AWS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we can use Packer to package our images, let's look at Goss for validating
+    our image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Validating images with Goss
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Goss is a tool for checking server configurations using a spec file written
+    in YAML. This way you can test that the server is working as expected. This can
+    be from testing access to the server over SSH using expected keys to validating
+    that various processes are running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Not only can Goss test your server for compliance, but it can be integrated
+    with Packer. That way, we can test that our server is running as expected during
+    the provisioning step and before deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's have a look at making a Goss spec file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a spec file
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A spec file is a set of instructions that tells Goss what to test for.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a couple of ways to make a spec file for Goss. The spec file is used
+    by Goss to understand what it needs to test.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While you could write it by hand, the most efficient way is to use one of two
+    Goss commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`goss add`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`goss autoadd`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The most efficient way to use Goss is to launch a machine with your custom AMI,
+    log in using the `ubuntu` user, and use `autoadd` to generate the YAML file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once logged onto your AMI instance, let''s run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will generate a `process.yaml` file with the following content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This states that we expect the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A system service called `sshd` should be enabled and running via systemd.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The service should be running with user `sshd`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With user ID `110`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With group ID `65534`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Belonging to no other groups.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The user's home directory should be `/var/run/sshd`.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The user should have no login shell.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A process called `sshd` should be running.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let''s add the agent service we deployed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will add similar lines inside the YAML file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s validate the agent location:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will add a section such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This states the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `/home/agent/bin/agent` file must exist.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Must be in mode `0700`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Must have a size of `14429561` bytes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Must be owned by `agent:agent`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Is a file, versus a directory or `symlink`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let''s add another, but being more specific, using `goss add`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead of making a guess at what an argument is as `autoadd` does, we had
+    to specify it was a file. This renders us the same entry as `autoadd` would. For
+    this file, let''s validate the contents of the `authorized_keys` file. To do this,
+    we will use a `SHA256` hash. First, we can get the hash by running the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will return the hash of the file. In the `file` entry for `authorized_keys`
+    in our YAML file, add the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Unfortunately, Goss does not have a way to simply add entire directories of
+    files or automatically add `SHA256` to the entry. An example of that might be
+    to validate that all of Go's 1.17.5 files were present as expected on our image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You might be tempted to do something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: However, this is quite slow because `goss` reads in the YAML file on each run.
+    You might be tempted to try to use `xargs -P 0` to speed things up, but it will
+    cause other problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you have a need to include lots of files and SHA256 hashes, you will need
+    to write a custom script/program to handle this. Fortunately, we have Go, so it''s
+    easy to write something that can do this. And, because Goss is written in Go,
+    we can reuse the data structures from the program. You can see an example of a
+    tool to do this here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12/goss/allfiles](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12/goss/allfiles).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You simply can run it against a directory structure (after compiling it) like
+    so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would output a `goinstall_files.yaml` file that provides a Goss configuration
+    to check these files and their SHA256 hashes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Remember when we installed `dbus`? Let''s validate that our `dbus` packages
+    are installed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: This now makes sure that our `dbus` and `dbus-x11` packages are installed. The
+    `-g dbus.yaml` file writes this to another file called `dbus.yaml` instead of
+    the default `goss.yaml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We now need to create our `goss.yaml` file that references the other files
+    we created. We could have run `goss` without the `-g` option, but this keeps things
+    a little more organized. Let''s create our root file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: This creates a `goss.yaml` file that references all our other files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s use it to validate everything:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will output text similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note, yes, it did run in less than a second!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding a Packer provisioner
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It's great that we can verify what we already had, but what we really want is
+    to validate every image build. To do this, we can use a custom Packer provisioner
+    that Yale University developed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To do that, we need to get the YAML files off the image and onto our build machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the build machine, issue the following commands (replacing things in `[]`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: You need to replace `[user]` with the username on the build machine and `[ip
+    of AMI machine]` with the IP address or DNS entry for the AMI machine you launched.
+    You may also need to supply a `-i [location of pem file]` after `scp`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the Goss provisioner is not built in, we need to download the release from
+    Yale''s GitHub repository and install it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With the provisioner installed, we can add the configuration to the `amazon.pkr.hcl`
+    file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can find other `provisioner` settings for Goss at [https://github.com/YaleUniversity/packer-provisioner-goss](https://github.com/YaleUniversity/packer-provisioner-goss).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s reformat our Packer file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We cannot build the `packer` image yet, because it would have the same name
+    as the image we already have uploaded to AWS. We have two choices: remove the
+    AMI image we built earlier from AWS or change the name held in our Packer file
+    to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Either choice is fine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s build our AMI image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When you run it this time, you should see something similar to the following
+    in the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: This indicates that the Goss tests ran successfully. If Goss fails, a debug
+    output will be downloaded to the local directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can find the final version of the Packer file here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.final.pkr.hcl](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.final.pkr.hcl).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You have now seen how to use the Goss tool to build validations for your images
+    and integrate them into Packer. There are more features to explore and you can
+    read about them here: [https://github.com/aelsabbahy/goss](https://github.com/aelsabbahy/goss).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have used Goss as a provisioner, what about writing our own?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Customizing Packer with plugins
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The built-in provisioners that we used are pretty powerful. By providing shell
+    access and file uploads, it is possible to do almost everything inside a Packer
+    provisioner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For large builds, this can be quite tedious. And, if the case is something common,
+    you might want to simply have your own Go application do the work for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Packer allows for building plugins that can be used as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A Packer builder
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A Packer provisioner
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A Packer post-processor
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Builders are used when you need to interact with the system that will use your
+    image: Docker, AWS, GCP, Azure, or others. As this isn''t a common use outside
+    cloud providers or companies such as VMware adding support, we will not cover
+    this.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Post-processors are normally used to push an image to upload the artifacts generated
+    earlier. As this isn't common, we will not cover this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Provisioners are the most common, as they are part of the build process to output
+    an image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Packer has two ways of writing these plugins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Single-plugins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multi-plugins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Single plugins are an older style of writing plugins. The Goss provisioner is
+    written in the older style, which is why we installed it manually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the newer style, `packer init` can be used to download the plugin. In addition,
+    a plugin can register multiple builders, provisioners, or post-processors in a
+    single plugin. This is the recommended way of writing a plugin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, the official documentation for multi-plugins and doing releases
+    that support `packer init` is incomplete at the time of this writing. Following
+    the directions will not yield a plugin that can be released using their suggested
+    process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The instructions included here will fill in the gaps to allow building a multi-plugin
+    that users can install using `packer init`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's get into how we can write a custom plugin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing your own plugin
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Provisioners are powerful extensions to the Packer application. They allow us
+    to customize the application to do whatever we need.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have already seen how a provisioner can execute Goss to validate our builds.
+    This allowed us to make sure future builds follow a specification for the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To write a custom `provisioner`, we must implement the following interface:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code is described as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ConfigSpec()` returns an object that represents your provisioner''s HCL2 spec.
+    This will be used by Packer to translate a user''s config to a structured object
+    in Go.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Prepare()` prepares your plugin to run and receives a slice of `interface{}`
+    that represents the configuration. Generally, the configuration is passed as a
+    single `map[string]interface{}`. `Prepare()` should do preparation operations
+    such as pulling information from sources or validating the configuration, things
+    that should cause a failure before even attempting to run. This should have no
+    side effects, that is, it should not change any state by creating files, instantiating
+    VMs, or any other changes to the system.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Provision()` does the bulk of the work. It receives a `Ui` object that is
+    used to communicate to the user and `Communicator` that is used to communicate
+    with the running machine. There is a provided `map` that holds values set by the
+    builder. However, relying on values there can tie you to a `builder` type.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For our example provisioner, we are going to pack the Go environment and install
+    it on the machine. While Linux distributions will often package the Go environment,
+    they are often several releases behind. Earlier, we were able to do this by using
+    `file` and `shell` (which can honestly do almost anything), but if you are an
+    application provider and you want to make something repeatable for other Packer
+    users across multiple platforms, a custom provisioner is the way to go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding our provisioner configuration
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To allow the user to configure our plugin, we need to define a configuration.
+    Here is the config option we want to support: `Version (string)[optional]`, the
+    specific version to download defaults to `latest`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will define this in a subpackage: `internal/config/config.go`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In that file, we will add the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unfortunately, we now need to be able to read this from an `hcldec.ObjectSpec`
+    file. This is complicated, so HashiCorp has created a code generator to do this
+    for us. To use this, you must install their `packer-sdc` tool:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To generate the file, we can execute the following from inside `internal/config`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will output a `config.hcl2spec.go` file that has the code we require. This
+    uses the `//go:generate` line defined in the file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the plugin's configuration specification
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: At the root of our plugin location, let's create a file called `goenv.go`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, let''s start by defining the configuration the user will input:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This imports the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `config` package we just defined
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Three packages required to build our plugin:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`packer`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`plugin`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`version`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A `packerConfig` package for dealing with HCL2 configs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The `...` is a stand-in for standard library packages and a few others for brevity.
+    You can see them all in the repository version.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Now, we need to define our provisioner:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is going to hold our configuration, some file content, and the Go tarball
+    filename. We will implement our `Provisioner` interface on this struct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, it's time to add the required methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the ConfigSpec() function
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`ConfigSpec()` is defined for internal use by Packer. We simply need to provide
+    the spec so that Packer can read in the configuration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s use `config.hcl2spec.go` we generated a second ago to implement `ConfigSpec()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: This returns `ObjectSpec` that handles reading in our HCL2 config.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have that out of the way, we need to prepare our plugin to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining Prepare()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Remember that `Prepare()` simply needs to interpret the intermediate representation
+    of the HCL2 config and validate the entries. It should not change the state of
+    anything.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here''s what that would look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creates our empty config
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Decodes the raw config entries into our internal representation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Puts defaults into our config if values weren't set
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validates our config
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We could also use this time to connect to services or any other preparation
+    items that are needed. The main thing is not to change any state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With all the preparation out of the way, it's time for the big finale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining Provision()
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`Provision()` is where all the magic happens. Let''s divide this into some
+    logical sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fetch our version
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Push a tarball to the image
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unpack the tarball
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Test our Go tools installation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following code wraps other methods that execute the logical sections in
+    the same order:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code calls all our stages (which we will define momentarily) and outputs
+    some messages to the UI. The `Ui` interface is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unfortunately, the UI is not well documented in the code or in the documentation.
+    Here is a breakdown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use `Ask()` to ask a question of the user and get a response. As a general
+    rule, you should avoid this, as it removes automation. Better to make them put
+    it in the configuration.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Say()` and `Message()` both print a string to the screen.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Error()` outputs an error message.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Machine()` simply outputs a statement into the log generated on the machine
+    using `fmt.Printf()` that is prepended by `machine readable:`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`getter.ProgressTracker()` is used by `Communicator` to track download progress.
+    You don''t need to worry about it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now that we have covered the UI, let''s cover `Communicator`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Methods in the preceding code block are described as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Start()` runs a command on the image. You pass `*RemoteCmd`, which is similar
+    to the `Cmd` type we used from `os/exec` in previous chapters.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Upload()` uploads a file to the machine image.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`UploadDir()` uploads a local directory recursively to the machine image.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Download()` downloads a file from the machine image. This allows you to capture
+    debugs logs, for example.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`DownloadDir()` downloads a directory recursively from the machine to a local
+    destination. You can exclude files.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can see the full interface comments here: [https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer?utm_source=godoc#Communicator](https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer?utm_source=godoc#Communicator).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s look at building our first helper, `p.fetch()`. The following code determines
+    what URL to use to download the Go tools. Our tool is targeted at Linux, but we
+    support installing versions for multiple platforms. We use Go''s runtime package
+    to determine the architecture (386, ARM, or AMD 64) we are currently running on
+    to determine which package to download. The users can specify a particular version
+    or `latest`. In the case of `latest`, we query a URL provided by Google that returns
+    the latest version of Go. We then use that to construct the URL for download:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code makes the HTTP request for the Go tarball and then stores that in
+    `.content`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have fetched our Go `tarball` content, let''s push it to the machine:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code uploads our content to the image. `Upload()` requires that
+    we provide `*os.FileInfo`, but we don't have one because our file does not exist
+    on disk. So, we use a trick where we write the content to a file in an in-memory
+    filesystem and then retrieve `*os.FileInfo`. This prevents us from writing unnecessary
+    files to disk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the odd things about `Communicator.Upload()` is that it takes a pointer
+    to an `interface (*os.FileInfo)`. This is almost always a mistake by an author.
+    Don't do this in your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next thing needed is to unpack this on the image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines a command that unwraps our tarball and installs to `/usr/local`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Wraps that command in `*packerRemoteCmd` and captures `STDOUT` and `STDERR`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Runs the command with `Communicator`: If it fails, returns the error and `STDOUT`/`STDERR`
+    for debug'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The last step for `Provisioner` is to test that it installed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runs `/usr/local/go/bin/go version` to get the output
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If it fails, returns the error and `STDOUT`/`STDERR` for debug
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, the final part of the plugin to write is `main()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defines our release version as `"0.0.1"`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Defines the release as a `"dev"` version, but you can use anything here. The
+    production version should use `""`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Initializes `pv`, which holds the plugin version information. This is done in
+    `init()` simply because the package comments indicate it should be done this way
+    instead of in `main()` to cause a panic at the earliest time if a problem exists.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Makes a new Packer `plugin.Set`:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sets the version information. If not set, all GitHub releases will fail.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Registers our provisioner with the `"goenv"` plugin name:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can be used to register other provisioners
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Can be used to register a builder, `set.RegisterBuilder()`, and a post processor,
+    `set.RegisterPostProcessor()`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Runs `Set` we created and exits on any error.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We can register with a regular name, which would get appended to the name of
+    the plugin. If using `plugin.DEFAULT_NAME`, our provisioner can be referred to
+    simply by the plugin's name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, if our plugin is named `packer-plugin-goenv`, our plugin can be referred
+    to as `goenv`. If we use something other than `plugin.DEFAULT_NAME`, such as `example`,
+    our plugin would be referred to as `goenv-example`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now have a plugin, but to make it useful we must allow people to initialize
+    it. Let's look at how we can release our plugins using GitHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing Plugins
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this exercise, we don't go into testing Packer plugins. As of the time of
+    publishing, there is no documentation on testing. However, Packer's GoDoc page
+    has public types that can mock various types in Packer to help test your plugin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This includes mocking the `Provisioner`, `Ui`, and `Communicator` types to
+    allow you to test. You can find these here: [https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer](https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Releasing a plugin
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Packer has strict release requirements for allowing the `packer` binary to
+    find and use a plugin. To have the plugin downloadable, the following requirements
+    must be met:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Must be released on GitHub; no other source is allowed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Have a repository named `packer-plugin-*`, where `*` is the name of your plugin.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Only use dashes not underscores.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Must have a plugin release that includes certain assets we will describe.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The official release document can be found here: [https://www.packer.io/docs/plugins/creation#creating-a-github-release](https://www.packer.io/docs/plugins/creation#creating-a-github-release).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'HashiCorp also has a 30-minute video showing how to publish release documents
+    to Packer''s website here: [https://www.hashicorp.com/resources/publishing-packer-plugins-to-the-masses](https://www.hashicorp.com/resources/publishing-packer-plugins-to-the-masses).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first step for generating a release is to create a **GNU Privacy Guard**
+    (**GPG**) key to sign releases. The GitHub instructions can be found here (but
+    see notes directly underneath first): [https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before you follow that document, remember these things while following the
+    instructions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure you add the public key to your GitHub profile.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Do not use `$` or any other symbol in your passphrase, as it will cause issues.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once that is completed, you need to add the private key to your repository so
+    that the GitHub actions we define will be able to sign the releases. You will
+    need to go to your GitHub repository's `|` **Secrets**. Click the provided **New
+    Repository Secret** button.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choose the name `GPG_PRIVATE_KEY`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the value section, you will need to paste in your GPG private key that you
+    can export with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`[key ID or email]` is the identity you gave for the key, typically your email
+    address.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we need to add the passphrase for your GPG key. You can add this as a secret
+    with the name `GPG_PASSPHRASE`. The value should be the passphrase for the GPG
+    key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once that is completed, you will need to download the GoReleaser scaffolding
+    HashiCorp provides. You can do that with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we need the GitHub Actions workflow provided by HashiCorp set up in your
+    repository. This can be done with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we need to download `GNUmakefile`, which is used by the scaffolding.
+    Let''s grab it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our plugin only works for Linux systems. The `.goreleaser.yml` file defines
+    releases for multiple platforms. You can restrict this by modifying the `builds`
+    section of `.goreleaser.yml` to be more restrictive. You can see an example of
+    that here: [https://github.com/johnsiilver/packer-plugin-goenv/blob/main/.goreleaser.yml](https://github.com/johnsiilver/packer-plugin-goenv/blob/main/.goreleaser.yml).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With your code buildable and these files included, you need to commit these
+    files to your repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next step will be to create a release. This needs to be tagged with a semantic
+    version, similar to what you set the `ver` variable to in your plugin''s `main`
+    file. The slight difference is that while it will be strictly numbers and dots
+    in `ver string`, it is prepended with `v` when tagging on GitHub. So `ver = "0.0.1`
+    will be a GitHub release with `v0.0.1`. The GitHub documentation on releases can
+    be found here: [https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you have created a release, you can view the actions being run by viewing
+    the **Actions** tab. This will show the results and detail any problems encountered
+    by the actions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using our plugin in a build
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To use our plugin in the build, we need to modify the HCL2 configuration. First,
+    we need to modify `packer.required_plugins` to require our plugin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This does a few things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Creates a new variable, `installGo`, that gives access to all plugins defined
+    in our multi-plugin. There is only one: `goenv`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sets the version to use to be greater or equal to version `0.0.1`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gives the source of the plugin. You will notice that the path is missing `packer-plugin-`.
+    As that is standard for every plugin, they remove the need to type it.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'You will see that the source is different than our location for the code. This
+    is because we wanted to have a copy of the code in our normal location, but Packer
+    requires a plugin to have its own repository. The code is located at both locations.
+    You may view this copy of the code at: [https://github.com/johnsiilver/packer-plugin-goenv](https://github.com/johnsiilver/packer-plugin-goenv).'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Now, we need to remove the `shell` section under `build.provisioner` that installs
+    Go. Replace it with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, you will need to update the AMI name to something new to store this
+    under.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an alternative, you may also download the modified HCL2 file here: [https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.goenv.pkr.hcl](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.goenv.pkr.hcl).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the terminal, format the file and download our plugin with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This should cause our plugin to download with output text similar to this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can finally build our image with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If successful, you should see the following in the Packer output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: This plugin has been pre-tested. Let's have a look at what you can do if the
+    plugin fails.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Debugging a Packer plugin
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When `packer build .` fails, you may or may not receive relevant information
+    in the UI output. This will depend on whether the problem was a panic or an error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Panics return an `Unexpected EOF` message because the plugin crashed and the
+    Packer application only knows that it didn't receive an RPC message on the Unix
+    socket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can get Packer to help us out by providing this option when we run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will output a `crash.log` file if the build crashes. It also uses `press
+    enter` between each step before continuing and allows only a single `packer` build
+    to run at a time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may see other files show up, as some plugins (such as Goss) detect the `debug`
+    option and output debug configuration files and logs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You may also want to turn on logging for any log messages you or other plugins
+    write. This can be done by setting a few environmental variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: This takes care of most debugging needs. However, sometimes the debug information
+    required is part of the system logs and not the plugin itself. In those cases,
+    you may want to use the communicator's `Download()` or `DownloadDir()` methods
+    to retrieve files when you detect an error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For more debugging information, the official debugging documentation is here:
+    [https://www.packer.io/docs/debugging](https://www.packer.io/docs/debugging).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have detailed the building of a Packer multi-plugin, shown
+    how to set up the plugin in GitHub to be used with `packer init`, and updated
+    our Packer configuration to use the plugin. In addition, we have discussed the
+    basics of debugging Packer plugins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter has taught you the basics of using Packer to build a machine image,
+    using Amazon AWS as the target. We have covered the most important plugins Packer
+    offers to customize an AMI. We then built a custom image that installed multiple
+    packages with the `apt` tool, downloaded and installed other tools, set up directories
+    and users, and finally, set up a system agent to run with systemd.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have covered how to use the Goss tool to validate your images and how to
+    integrate Goss into Packer using a plugin developed at Yale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we have shown you how to create your own plugins to extend the capabilities
+    of Packer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, it is time to talk about IaC and how another of HashiCorp's tools has taken
+    the DevOps world by storm. Let's talk about Terraform.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,1377 @@
+- en: '13'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: How Do You Know It All Works?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Testing our code is how we ensure that our changes are both fit for purpose
+    and that they don’t regress any existing functionality. In a cloud native environment,
+    our complexity increasingly lives in areas beyond the scope of our code, so testing
+    our application in a meaningful way can become complex. Let’s explore how we can
+    test cloud native code in ways that are both time-efficient and meaningful while
+    avoiding some common anti-patterns.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: General testing anti-patterns
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Lack of contract testing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Manual testing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Trying to recreate the cloud
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Poorly structured code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: General testing anti-patterns
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Before we explore the types of tests commonly used in cloud native applications,
+    we must first explore some general testing anti-patterns that we must avoid. These
+    anti-patterns typically result from the evolution of the application’s testing
+    strategy as it is migrated to the cloud. While most of these anti-patterns apply
+    to unit tests, it’s essential to be mindful of them when testing other patterns
+    as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we will look at some testing anti-patterns and how they surface in a
+    cloud native environment. The specific anti-patterns we will explore are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tests that have never failed
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Coverage badge tests
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Testing implementation details
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tests that intermittently fail
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tests with side effects or coupled tests
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multi-stage tests
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tests that have never failed
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When we think about testing, we might think that a test that has never failed
+    is good. That means our code and changes have always complied with our expected
+    behavior, right? Without the test failing, how can we be sure that the test fails
+    when its contract is breached?
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate this situation, I will use my experience with some of our teams
+    in a previous role. The teams had just finished writing their functionality and
+    were in the process of writing tests. They were working with an asynchronous code
+    base in Node.js, and a quirk of asynchronous programming in Node.js is that when
+    an asynchronous function is called and it contains asynchronous code, without
+    a top-level await on the function call in the test, the test will exit before
+    the asynchronous code executes. This means any assertions in the asynchronous
+    code would only throw errors after the test, and because no assertions were thrown
+    during test execution, the test passes. From an untrained perspective, the test
+    appears to test the functionality expected. However, in practice, the test is
+    useless. Unsurprisingly, many tests started failing when we sprinkled in some
+    `async` and `await` syntactic sugar.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example, a lack of understanding of asynchronous programming principles
+    contributed to functionally useless tests that gave the impression everything
+    was okay.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This anti-pattern is an easy trap to fall into in cloud computing. As systems
+    become asynchronous, decoupled, and eventually consistent, our testing strategy
+    must match the system’s complexity. You will notice that the entire situation
+    could have been avoided had the team followed **test-driven development** (**TDD**).
+    The common TDD approach I like to utilize is *Red*, *Green*, and *Refactor*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Red**: First, create the minimum structure required to support your test.
+    This might be an empty function block, method, or object. Second, write a test
+    (or tests) that you believe tests your expected behavior. When you run your tests,
+    they should fail, showing red.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Green**: Fill out your empty placeholder with the logic to make your test
+    pass, showing green.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Refactor**: Create new tests and functionality to handle edge cases. In these
+    scenarios, it is best to create positive and negative test cases and purposefully
+    break the test a few times to ensure it behaves as expected.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the cloud native world, typically, these tests would form part of our automated
+    integration pipeline, such as in AWS CodePipeline, GCP Cloud Build, or Azure DevOps
+    Pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Coverage badge tests
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Another anti-pattern that often comes up is `200` status code might give you
+    good test coverage, but is it a good test? What about the semantic structure of
+    the data? Does the output match the expected input? The behavior of the endpoint
+    is completely untested in this scenario. We haven’t guaranteed that any future
+    changes won’t result in unexpected behaviors, just that they will return a status
+    code of `200`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Incentivizing code coverage in isolation will not give you greater certainty
+    of the emergent behaviors of your application. Instead, you must incentivize writing
+    proper tests that have been peer-reviewed to describe the expected behavior of
+    the system. A simple litmus test for good testing practice is whether the test
+    ensures that the emergent behavior of the system more closely aligns with the
+    behavior in our mental model of the system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing implementation details
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Requiring developers to hit a code coverage threshold set too high can also
+    lead to another anti-pattern: testing implementation details. This anti-pattern
+    can be particularly insidious in the cloud native domain as we are more concerned
+    with the result and emergent system behaviors than the method used to achieve
+    them, as implementation details can be very fluid as we leverage new architectural
+    and technological patterns. For example, if we need to sort an array, we might
+    first check that the input is an array of numbers, then call a bubble sort function
+    if it is. Let’s say we write two tests here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Check that the bubble sort function is not called when the array is not an array
+    of numbers and the result is an error
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Check that the bubble sort function is called when the array is an array of
+    numbers and the result is a sorted array
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Later, someone removes the initial check to see whether the array is an array
+    of numbers and replaces the bubble sort with a merge sort function that already
+    has built-in type checking. This is what happens to our test:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our first test passes, even though we now call the sort function on every execution
+    because our merge sort function differs from our bubble sort function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our second test fails because we did not call the bubble sort function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In this case, we have not changed the emergent behavior of the system; we have
+    only changed the implementation details. Instead, we could design our test to
+    look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Check that we get an error on anything other than an array of numbers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Check that we correctly sort an array of numbers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These tests check solely the exhibited behavior, not how we achieved it. Under
+    this new testing framework, both tests will pass when we perform our refactor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Intermittently failing tests
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: I have often asked clients about a failing test pipeline only to be told, “*Yeah,
+    it does that sometimes. Just rerun it.*” Intermittently failing tests breed ambiguity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When a test pipeline fails, our first instinct is to rerun it. This ambiguity
+    means that our mean time to identify failures in our pipeline goes through the
+    roof, as we don’t know whether the culprit is a failing test or whether the pipeline
+    is just acting up. It is essential to be not only confident in the success of
+    your passing tests but also in your failing tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let us imagine a hypothetical intermittently failing series of tests. These
+    tests would block production deployments, PR reviews, and local testing. It always
+    seems to sort itself by the next run, it only happens a few times a year, and
+    it’s an infrequently updated micro-frontend, so why bother fixing it?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After triaging the issue, we found the culprit pretty quickly: someone asserted
+    in a test that the current UTC minute of the hour was less than 59 instead of
+    less than or equal to. This change, in line with probability, was pushed and merged
+    successfully. The expectation was buried deep in a block that prevented a precursory
+    glance from diagnosing the problem from the test output. This also creates a compelling
+    argument for verbose and well-formatted test outputs. As you can imagine, someone’s
+    pipeline failed after working locally; they decided to rerun it, and it passed.
+    It became known that that particular pipeline was flaky and we could fix it with
+    a rerun. What effect do you think that has on developers?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When I ran into this situation in my work, we found that the number of failed
+    reruns significantly outpaced the actual number of *flaky* runs due to a lack
+    of confidence in the failures of the underlying pipeline. Cloud native delivery
+    allows us to push incremental changes to our code base rapidly. This process means
+    that a high-performing team will run these pipelines multiple times daily.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, in a cloud native environment, having faith in your pipelines, both
+    in success and failure, is imperative. Another common way that tests become flaky
+    is by relying on test side effects or coupled tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tests with side effects or coupled tests
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Relying on side effects or coupling tests is an easy trap, especially as we
+    refactor code and add existing tests, as other tests may already cause side effects
+    that our new tests may unknowingly come to depend on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For illustrative purposes, let us consider tests that ensure user behavior.
+    We have two endpoints: one to create users and one to delete users. We have one
+    test that generates a random email, creates a user with that email, and saves
+    it as a global variable in the test file. Then, another test reads the global
+    variable and deletes the user, checking whether the user is deleted correctly.
+    We have broken both rules here. Not only do we have a side effect by modifying
+    the global state but we have also coupled two tests through that side effect.
+    It’s essential to understand what we have lost here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Isolated testing**: Because of the coupling, if we want to run only the *user
+    delete* test, it will always fail because it needs to be run in concert with the
+    *user create* test. We can now only run the entire test file.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Ability to refactor**: If we move the tests to different files or change
+    their execution order, they will fail. This makes refactoring harder, as we now
+    need to understand its coupled tests to refactor the test for the functionality
+    we are interested in.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Parallel execution**: As our test base grows, it becomes apparent that we
+    need to optimize our pipeline execution. The first tool people will usually reach
+    for is parallel execution. When we couple tests, parallel execution can cause
+    you to lose the deterministic execution of your test suite. This lack of determinism
+    means that your tests may intermittently fail, contributing to “flaky” pipelines
+    as the tests may or may not execute in the correct order.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How can we remove the coupling and side effects from our example? A simple indicator
+    for a single test is to run our test in isolation and check that it still passes.
+    This check ensures that our test has no upstream coupling; it does not test for
+    side effects or downstream coupling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next step is to refactor our test files. Ideally, there should be no global
+    variables. This concept can be controversial as many test implementations will
+    have static data in global variables. Still, strictly controlled generated data
+    will always beat static data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The driving force behind this is simple: having generated data means that you
+    are testing the bounds of your system to a greater extent. It can contribute to
+    intermittently failing test pipelines, but if you hit an intermittent failure,
+    take it as a blessing, not a curse. Hitting an intermittent failure means the
+    data you generated to match your expected production data does not behave as expected!
+    If you had used static data, you would never have found this edge case before
+    production.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other issue with static data is that teams tend to get lazy. The usual culprit
+    is UUIDs. I’ve seen production systems go down because someone had used the same
+    UUID to index two different values and then created a correlation in code where
+    no correlation existed in the production data. The cause was that rather than
+    generate a new UUID, a developer saw a UUID generated for a different entity and
+    decided to copy the already compliant UUID to save about 20 seconds of development
+    effort. As you can imagine, saving those 20 seconds was massively outweighed by
+    the impacts of the eventual downtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most testing libraries have pre-test and post-test hooks to set up your data
+    and application components. A level of granularity is also usually provided. You
+    can run before and after *all* tests or before and after *each* test. The deciding
+    factor on when to use them is based on the application component.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the component has an internal state modified by tests, then that component
+    should be created and disposed of before and after each test. Examples include
+    local caches and persistence layers. If the component does not have an internal
+    state, it is probably safe to optimize by setting it up once for all tests and
+    tearing it down when all tests have finished.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Examples might include authentication layers (unless you’re storing sessions
+    in this layer!), request routing layers, or utility components. When we look at
+    avoiding side effects and ordering in tests, we might think of putting our entire
+    flow in a single test. Then, we’re not breaking the boundaries between our tests!
+    However, this leads us to our next non-functional antipattern: multistage tests.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multistage tests
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Multistage tests** often come about because we see actions as being related.
+    However, we need to keep in mind that the purpose of testing is usually to test
+    a unit of behavior, even in integration tests, albeit with a broader definition
+    of our unit of behavior. To understand why this is an anti-pattern, we need to
+    look at our failure modes. When we have many atomic tests, we can easily see which
+    functionality is broken. With a smaller number of multistage tests, we might cover
+    the same amount of behavior, but we lose fidelity in our reporting.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Early errors in a multistage test can also cause the test to fail early, masking
+    errors from later in the multistage test. It might be a logical fallacy, but if
+    we replaced all our tests with one large multistage test, we would have either
+    a pass or fail for the entire system, which makes the search area on failure very
+    broad. At the other extreme, where we make our tests as atomic as possible, we
+    get extremely high fidelity and know precisely which units of behavior are broken.
+    A pattern to follow in this area is to use **arrange, act, and** **assert** (**AAA**):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Arrange**: Set up everything required for the test to run (data, authentication,
+    application instances, etc.).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Act**: Perform the behavior under test. This action might be calling an endpoint
+    or method, or performing an integration flow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Assert**: Check that the results of your behavior match what you expect.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The key here is that this pattern should only occur in order once in a test.
+    For example, a test that does not follow this pattern might go like this: arrange,
+    act, assert, act, assert, act, assert. Failures in higher asserts mask all actions
+    after the first assert. Therefore, our tests should have the correct level of
+    atomicity to provide as much detail as possible.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far, we have mainly focussed on unit testing, but we should not unit test
+    to the exclusion of all else. Next, we will look at another critical type of testing
+    to ensure semantic correctness: contract testing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lack of contract testing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In a cloud native environment, we often have loose coupling between components,
+    with functionality exposed through a combination of APIs and events while consumed
+    by other microservices, user interfaces, third parties, and every combination
+    and permutation. When developing system components, worrying about the immediate
+    application is no longer enough. Instead, we need to provide confidence about
+    the communications between our services. This is where contract testing comes
+    into play.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Contract testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At the core of **contract testing** is the concept of a contract. A **contract**
+    is a specification that explains precisely how data will be shared between services
+    and its format, and it may even make some assurances around non-functional requirements.
+    This contract may exist as an OpenAPI specification, JSON Schema, Protobuf definition,
+    Smithy interface, or similarly in any **interface definition** **language** (**IDL**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other piece of the data contract puzzle is that it should also give the
+    semantic meaning of the data being transferred. The key is providing consumers
+    with a clear definition of what to expect. Now that we have a contract, we can
+    examine our application’s output and ensure it agrees with our published schema.
+    In other words, we test our application against the contract.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can now decouple the development of different parts of our application. By
+    defining our communication patterns in advance and defining tests that allow us
+    to check our compliance with that pattern, we can build multiple parts of the
+    application if we agree on the contracts we align to. As teams grow and functionality
+    development grows beyond the scope of one developer, these types of tests become
+    increasingly important. If one developer is working on a vertical slice of application
+    functionality, they might iteratively design the communication patterns between
+    the application components as they progress. This allows for agile development;
+    however, it falls over when that developer needs to collaborate on that functionality
+    with other parties. The iterative changes they are keeping in their head suddenly
+    become impediments to the system’s progress as a whole, as these frequent changes
+    need to be communicated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While it may sound slightly waterfall-like to define your communication patterns
+    up front, it’s important to note that the level of upfront planning is minimal.
+    We’re operating at atomic units of functionality here, one or two API endpoints
+    at a time, not a monolithic definition of a system. Putting in the time up front
+    to build a shared understanding of the communication model will pay dividends
+    in the future, as rather than iterative, rapid changes to data exchange models,
+    we are now only making changes to the model as functionally required by and agreed
+    upon by both parties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond the initial contract
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we build out these contracts for data exchange methods, we can start publishing
+    these artifacts for other parties to consume. By ensuring that we remain faithful
+    to our data contracts through contract testing, we ensure that our current and
+    future consumers can enjoy the continued operation of their dependencies. New
+    users can easily onboard as consumers of the system as it is documented.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The question then becomes, what happens when we need to change a contract? This
+    is where two other anti-patterns present themselves. The first anti-pattern is
+    not maintaining a service dependency map. A service dependency map tells us exactly
+    which services consume functionality from the service we have built to the contract
+    specification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This allows us to assess the blast radius of the service we are making a contract
+    change to and ensure that any changes we make to the contract are compatible with
+    other services that consume it. Many cloud service providers will have distributed
+    traceability of transactions through inbuilt observability tooling, or we may
+    be able to build one through any of the third-party tools that offer a similar
+    service. Without a service dependency map, we don’t have any visibility into the
+    blast radius of changes we plan on making. Let’s look at an example of a simple
+    service diagram.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B22364_13_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.1 - A simple example of a user service, exposed through an API gateway,
+    called by two upstream services
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example, we have a user endpoint called by both the messaging service
+    and the backend for frontend services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the preceding example, we can see that a change to the contract of `/user`
+    on the user service will impact two upstream services that may also have to be
+    updated to ensure continuity of service. When we define the new contract, we can
+    use it to test the upstream services and, if they all pass, safely make the change.
+    How can we make contracts that don’t break upstream services when we change them?
+  prefs: []
+  type: TYPE_NORMAL
+- en: This brings us to our second anti-pattern, which directly manipulates the existing
+    data contract. We can extend the data contract to include new functionality instead
+    of modifying the semantic meaning of existing fields or functionality. Consider
+    an object used by the preceding messaging service that returns a `name` field
+    from the `/user` endpoint. Our data contract specifies that this field is the
+    first name of the person, for example, `Alice`. The messaging service might also
+    want to provide a salutation, for example, `Ms. Alice`. With no changes to the
+    messaging service, we could change the semantic meaning of the `/user` endpoint
+    data contract so that *name* now means *salutation plus name*. However, this might
+    have unexpected effects on other consumers of the service. Let’s say the **backend
+    for frontend** (**BFF**) service gets information about multiple users and sorts
+    their names alphabetically. Now, we sort by salutation instead of name. We have
+    unintentionally modified behavior by changing the semantic meaning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This contrived example may seem easy to avoid; however, even simple changes
+    to data contracts can have unintended consequences. There are two options here:
+    either we change the data contract and deal with the fallout (usually hard to
+    predict, discover, and rectify), or we extend our data contract. When we extend
+    our data contract, we rely on services not involved in the change to ignore the
+    extensions. For example, rather than changing the semantic meaning of the `name`
+    field, we add a new field called `salutation`. The messaging service can consume
+    this field to provide the required functionality, and the BFF service can continue
+    using the `name` field as expected, ignoring the `salutation` field.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we really must change the underlying semantics of the data contract, then
+    we can still follow our principle of not modifying the behavior expected by other
+    systems. This may seem counter-intuitive. However, by utilizing API versioning,
+    we can fundamentally change the structure and semantics of our data contract by
+    adding a v2 of our API. This preserves the data contract between our old systems
+    while allowing us to make considerable changes to support new functionality. We
+    can retroactively update the dependent services by aligning them with the new
+    data contract by utilizing contract testing. Eventually deprecating the original
+    endpoint without any material impact, we have essentially decoupled the modification
+    of data contracts from the adoption of the new data contracts, which, in turn,
+    changes a highly synchronous deployment exercise and likely downtime into an asynchronous
+    process that can be undertaken as the business needs arise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Contract enforcement
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It’s all good to define the data contract we use between services, but the next
+    stage is contract enforcement. It is not enough to define the contracts that our
+    services communicate in. Ideally, at both ends, we should check that the data
+    we transfer aligns with our understanding of the contract. An important aspect
+    here is to validate what we know and discard what we don’t; this leaves us the
+    option of contract expansion, as we discussed earlier. Contract validation at
+    runtime can save us from unexpected data behaviors and alert us to mismatches
+    between contracts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A good practice here is to complement our contract testing with fuzzing, injecting
+    corrupted or invalid data to ensure our application rejects it. In the cloud environment,
+    rejecting the wrong data is just as important as accepting the right data!
+  prefs: []
+  type: TYPE_NORMAL
+- en: To provide a good user experience, enforcing our data contract at the application
+    layer is often useful before sending it to our services. Not only does this provide
+    faster feedback to the users but every error we catch in the application is a
+    request we don’t need to serve, reducing the load on the underlying resources.
+    The cheapest computer you can use is usually at the closest edge to the user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the flip side, though, we want to validate our data when we receive it for
+    both correctness and security purposes. Anyone could send anything they want to
+    our endpoints, and it is our responsibility to work out what to do with it. If
+    we enforce contracts on both the backend and frontend, though, we require our
+    data contract to be portable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Portability
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In these scenarios, it should go without saying that the format of your data
+    contracts should aim to be as technology-agnostic as possible. Framework- and
+    language-specific libraries often have valuable features. However, locking us
+    into a framework can make it challenging to operate across technologies. In like-for-like
+    execution environments, say a frontend in React and a backend in Node.js, both
+    run JavaScript under the hood, so it might be tempting to use a specialized solution.
+    However, what if your company acquires a product with a code base in C#? How will
+    they access contracts and ensure data integrity? Hence, the requirements for portability,
+    which are a feature of all formats mentioned earlier in the chapter, should always
+    be at the forefront of the mind.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A mature standard (if you are using JSON, which feels like the de facto cloud
+    native standard, except for perhaps Protobuf in GCP!) is JSON Schema. It is maintained
+    through the **Internet Engineering Task Force** (**ITEF**), and any precursory
+    web search will reveal them as the stewards of many standards we take for granted
+    today. You can typically find very mature libraries to generate, validate, and
+    test JSON schemas in the language and framework of your choice. It also allows
+    for clear delineation between the data schema to test against (JSON Schema) and
+    the interface definition through a standard such as OpenAPI or AsyncAPI. If the
+    schema is the definition of the data, the interface definition is the metastructure
+    that defines the relationships between our schemas and service endpoints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code generation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'If we have both our schemas and our interface definitions predefined, then
+    there exist multiple open source projects that allow for this information to be
+    used to generate code. Typically, this code generation consists of three discrete
+    components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Type generation**: Generating types from our schemas for consumption in our
+    code. This generation is typically a prerequisite for the other two types.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Client generation**: From our interface definitions and our generated types,
+    we can automatically build SDKs to interact with our services, without having
+    to worry about needing to make API requests, marshal and unmarshal data, and so
+    on.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Server stub generation**: From our interface definition, we can generate
+    server stubs that allow us to conform to our interface definition, only requiring
+    us to build out the business logic.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When we look at the big three cloud providers, they use this methodology to
+    maintain the SDKs that they provide for such a wide range of languages. AWS uses
+    the Smithy IDL 2.0, which was custom-made for defining interfaces and code generation
+    for AWS but is open source. Azure uses OpenAPI specifications, which we have discussed
+    in depth already. Finally, GCP uses Protobuf definitions for all its services,
+    which can encode in both JSON or a custom and compact binary format. By using
+    code generation, they can make a change to the underlying contract and apply it
+    across all their subsequent client SDKs by regenerating them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, contract testing ensures we don’t break functionality and semantics for
+    upstream services and ensures we have confidence in calling our downstream services.
+    But how do we ensure continuity in our user interface? This is where an anti-pattern
+    is so prevalent that it deserves its own section: manual testing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Manual testing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'When beginning this section, a quote of disputed origin springs to mind: “*I
+    didn’t have time to write you a short letter, so I wrote you a long one.*” As
+    counter-intuitive as this may seem, people often have the same mentality about
+    manual testing. They are so caught up in the process of testing the long way that
+    they do not pause to consider the possibilities of automation. This anti-pattern
+    is typically heavily ingrained in organizations right down to the team structure.
+    This section will look at the case for transitioning to test automation in a cloud
+    native environment and the practices you can use to migrate your manual testing
+    processes to automated tests.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Typical company testing archetypes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Usually, companies are convinced that unit testing will provide tangible benefits
+    and agree that these can be automated. If you are a company that manually performs
+    unit testing, your engineers must have unlimited patience.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Integration tests form the middle ground, and companies approach this differently.
+    Some companies believe that integration tests are optional if they write enough
+    unit tests (more on that in the next section). Some companies have some integration
+    tests, but they don’t form part of the deployment pipeline or are only run manually
+    once in a blue moon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we have the companies that have integration tests, have them automated,
+    and they form part of the deployment pipeline. There are other approaches/levels
+    of maturity, but these are some common integration testing archetypes we see.
+    At the final tier, we have our end-to-end tests, which may be automated and form
+    part of the deployment process; if this is the case in your company, this section
+    may be preaching to the choir. However, these tests are much more likely to exist
+    in the form of a dedicated QA function, clicking through user interfaces, following
+    steps in a spreadsheet or document, and then reporting back on the result, either
+    pre- or post-deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, at the crux, we are looking at three separate kinds of tests:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Unit tests**: Testing atomic units of functionality within a single service
+    or component'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Integration tests**: Testing the interactions between components'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**End-to-end tests**: Testing the system’s functionality from the end user’s
+    context'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The case for test automation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With these three forms of test in mind, I would also like to call back to the
+    top of your working memory the DORA metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deployment frequency
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Lead time for changes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Change failure rate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Time to restore service
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Tests involve optimizing one metric: *change failure rate*. The more testing
+    we do before we deploy a change, the lower our change failure rate. Note that
+    this eliminates an entire swath of the testing archetypes we discussed earlier
+    in this subsection.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your testing does not occur on your deployment path, you are not protecting
+    your change failure rate! You might have a faster time to restore service as you
+    may uncover errors or their source earlier with post-deployment tests, but this
+    is an entirely different area of expertise (see Chapter 10 for observing your
+    deployed architecture). So, we have established the requirement that for tests
+    to have a meaningful impact on the performance of your software teams, they need
+    to be on the critical path for deployment to production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we have manual processes, we end up batching together our changes so that
+    they can keep up with the pace of change in our code bases. This protects the
+    change failure rate. However, in reality, batching changes together increases
+    our change failure rate because the chances of any of the changes we have batched
+    together negatively impacting the application significantly increased compared
+    to if we deploy those changes individually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s say 5 of our changes fail if we deploy 100 changes individually. Then,
+    we have a 5% change failure rate. If we deploy batches of 10 changes 10 times,
+    we might get lucky, and those 5 failures across those 100 changes are all batched
+    into 1 segment, but that’s still a 10% change failure rate. More than likely,
+    those 5 failures spread throughout those 10 segments, and now, up to half of those
+    segments fail, resulting in a change failure rate of up to 50%. If we just do
+    one significant change, then what ends up happening is every change has a failure.
+    It’s just a matter of magnitude, so batching things together, even though tests
+    are on our critical path, can still cause issues with our change failure rate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, we have established that batches are bad for our change failure rate. Let’s
+    now look at our other metrics: our deployment frequency and lead time for changes.
+    Both of these functions depend on our total pipeline time. Introducing manual
+    stages into our pipeline significantly increases the time it takes to complete.
+    Longer pipeline cycle times mean developers are less likely to deploy small incremental
+    changes; instead, they are more likely to batch together changes, leading to the
+    same problem we discussed before batching together changes for testing. This impacts
+    our deployment frequency.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our other metric, lead time for changes, is a function of all the linear steps
+    that must occur before a change Is deployed to production. By increasing the pipeline
+    time, even if we kept our changes atomic and deployed frequently, the lead time
+    for changes would still be more significant because one of its components takes
+    a long time to complete. So, manual testing is destructive for our change failure
+    rate and affects our other metrics, lead time for changes, and deployment frequency.
+    We discussed earlier on in the book that introducing stages on the deployment
+    path that have long cycle times or increase the times that deployment also means
+    that we are unlikely to perform the same checks when the service is heavily impacted,
+    so changes that are hotfixes or are intended to be fixes for urgent issues in
+    production tend not to be as rigorously tested as of the code that initially caused
+    the problem in the first place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, if we follow our process to the letter, we will see that we negatively impact
+    our time to restore services as well. We can improve our time to restore service
+    only through workarounds and avenues outside of our standard operating procedures.
+    This negates any benefit that might be achieved through the earlier detection
+    of issues through testing production or outside the critical deployment path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As soon as we introduce humans into our process, we introduce variability. Humans
+    are very good at taking the unknown, applying their knowledge and heuristics,
+    and solving problems they have not encountered before. Testing is the exact opposite
+    of this process. We know the issues we want to test for and how to test for them.
+    Therefore, humans are poorly suited to the task of manual testing. We can accelerate
+    this process significantly through automation. As soon as we take humans out of
+    the equation and introduce automated over manual processes, the function of how
+    much testing we can perform does not become a question of *human* resources but
+    of *compute* resources. With the advent of the cloud, on-demand compute resources
+    can quickly be provisioned and deprovisioned as needed to perform testing. This
+    process accelerates our feedback cycle, allowing us not only to have certainty
+    that the changes we are applying will not cause failures but also to have all
+    of our developers empowered to perform adequate testing on all of the code they
+    push into a production environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, this may sound like humans don’t add value to the testing process in any
+    way; however, I would like to postulate that humans add unique value in how they
+    can define and envision test suites rather than the execution of those test suites.
+    The definition and creation of test suites is a unique skill; they are variable
+    and nuanced, and humans are great at that task. A great joke goes like this: a
+    developer walks into a bar and orders 1 beer; a tester walks into a bar and orders
+    1 beer, 10,000 beers, negative 1 beers, a sofa, and so on. Still, the part of
+    testing that we value is the creative side, understanding the problem space, and
+    coming up with unique edge cases to ensure consistency in behavior. The actual
+    execution of these tests is something that testers are wasted on. This section
+    won’t tell you to make your entire testing team redundant. This section tells
+    you to put your testing team to the best use possible by allowing them to exercise
+    their creativity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Migrating manual testing processes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As discussed, manual testing processes typically exist in the end-to-end space.
+    The migration process for manual integration tests puts them on the critical path,
+    as they likely already exist as code-driven tests. If they don’t, then the integration
+    tests can be created using the existing skill set of your development teams. Manual
+    end-to-end tests, on the other hand, can seem like a much more daunting task to
+    migrate. Our testing function may not have coding skills. However, that does not
+    mean we must revamp our entire testing department. Instead, we can perform three
+    key actions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lean on our development function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Utilize tooling to accelerate the migration
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Upskill our testing teams
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As I said before, humans can deal with variability. Our development function
+    may have exploited this not maliciously but inadvertently by relying on visual
+    cues to the tester performing the manual testing. When we migrate to automated
+    testing, typically, we must depend on properties in our user interface that are
+    invisible to the tester but visible to our testing framework. For example, when
+    we change a button in our interface to a hyperlink but keep the same styling,
+    the tester is unlikely to register a change. Still, this is a significant change
+    for an automated test suite looking for a button element.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, our development function needs to improve its working methods to
+    ensure that the artifacts it produces are testable. In the web world, this may
+    look like leveraging ARIA labels to provide meaning to specific elements. In this
+    way, a hyperlink and a button that share an ARIA label can be treated similarly.
+    Regarding aria labels, not only will your testers thank you for making your UI
+    more testable but suitable aria labels also make your site more accessible. Hence,
+    it’s something you should be doing anyway. Our development function is already
+    likely well versed in adding tests to the pipeline to production. So, we can lean
+    on our development teams to help integrate this new test suite into the path to
+    production, removing the requirement for this capability within our testing teams.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We still need help writing the tests. However, it’s unlikely that our development
+    teams will want to go through all of the documentation produced in the past by
+    a manual testing team and convert them into automated tests. This is also not
+    future-proof; any new test we want to add will depend on the development team.
+    This is where we can utilize tooling to accelerate the migration. Many testing
+    suites we would use for end-to-end testing include functionality allowing us to
+    record tests directly from the browser. Using this functionality, we can do one
+    last manual run of our tests, record them, and then save them for use in our automated
+    testing framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our source of truth is no longer copious pieces of documentation but codified
+    tests with no ambiguity. This process gets us significantly closer to automated
+    end-to-end testing without involving the development team. For this initial migration,
+    interfacing with the development team may be beneficial in getting the project
+    off the ground. However, in the long run, the testing team must complete this
+    process autonomously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We must upskill our testing teams in the framework that we use for creating
+    tests. This does not mean that every tester needs to become a developer. However,
+    every tester needs the capability to define, record, and integrate tests into
+    the test suite autonomously. This process is a much smaller ask, but utilizing
+    tooling and leaning on our development function prevents us from needing to change
+    the structure of our teams. The one case in which I recommend changing the structure
+    of your teams is to shift toward the structure we mentioned earlier in the book
+    that allows teams to be self-sufficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your testing function is a standalone unit of your business, consider integrating
+    them into your delivery teams to enable them to be fully autonomous. Not only
+    will this break down the adversarial nature between a standalone testing function
+    and a development function but it will also allow end-to-end ownership of the
+    delivery of the team’s outcomes. This closer alignment means that testers can
+    lean upon the development resources within their teams as they upskill to become
+    fully self-sufficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Trying to recreate the cloud
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous section, we discussed the overuse of unit tests to compensate
+    for the lack of integration tests. Good coding practices drive good testing. Our
+    business logic, the part of our code that drives value, should be unit-tested.
+    However, unit testing for this part of our code should not involve extensive mocking
+    of the environment in which it runs. The anti-pattern we typically see in this
+    space is that people try to recreate the cloud on their local environment through
+    third-party tooling, extensive mocking, or some other method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To dissect this anti-pattern, we will look at the traditional testing paradigm,
+    what testing looks like in a cloud native world, and how we can best leverage
+    cloud services to test our code. Previously, we focused on end-to-end, contract,
+    and unit tests, so it should be no surprise that this section will focus heavily
+    on integration tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The traditional testing paradigm
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The traditional testing paradigm typically consists of a large number of unit
+    tests because they’re cheap, a few integration tests because they’re a little
+    bit harder to write and a little bit harder to run, and just a couple of end-to-end
+    tests because, as discussed previously, this is often a manual function. This
+    typically gives us a pattern referred to as the testing pyramid.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B22364_13_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.2 - The testing pyramid
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the initial premise for this section, I mentioned that our unit test should
+    focus on testing the parts of our code that are unique to our business: our business
+    logic. In the cloud world, resources are cheap, and much of the complexity that
+    used to live inside our application can now be farmed out to the cloud service
+    provider itself. This presents an interesting problem: if our logic is pushed
+    out to the cloud service provider, less and less of our functionality becomes
+    testable through unit tests. Typically, we see developers start relying on extensive
+    mocking in this scenario. It’s not uncommon to enter a code base at a client and
+    see eight or more cloud services mocked out to test a piece of business logic.
+    Third-party tools have also sprung up and promise to provide cloud-like functionality
+    inside your test pipelines or local environment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we continue in our traditional mindset of unit tests first, then these all
+    look like attractive propositions. When we look at the testing pyramid, it may
+    feel that resorting to an integration test is a failure on behalf of the developer:
+    “*I wasn’t good enough to write a unit test for this.*” We may feel that integration
+    tests are reserved explicitly for very complex cross-service behaviors, but this
+    leads us to integrated test territory, not integration test territory. Much like
+    the producers of a popular nature documentary, we want to observe the behavior
+    of our system in its natural habitat. In our case, its natural habitat just happens
+    to be the cloud.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The testing honeycomb
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*Spotify R&D* published an excellent article in 2018 examining the testing
+    honeycomb ([https://engineering.atspotify.com/2018/01/testing-of-microservices/](https://engineering.atspotify.com/2018/01/testing-of-microservices/)).
+    In this honeycomb, we remove our overdependence on unit tests as the base level
+    of testing and rely instead on integration or service tests. Spotify specifically
+    talks about the removal of integrated tests, which are tests that span multiple
+    services. However, we believe that end-to-end tests can still produce value even
+    if they span numerous services. They should not be taken as an indication of an
+    individual service’s health but as an overall system health check before deployment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B22364_13_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.3 - The testing honeycomb
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using integration tests, we more accurately represent the real-world deployed
+    environment than in unit tests. Instead of testing against a simulacrum of the
+    cloud, we deploy our services to the cloud and then test them in their natural
+    habitat. This was fine in the traditional model, where a large amount of our functionality
+    existed within the context of our application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, as we have said, more of the common parts of our application are being
+    outsourced to managed services in the cloud. Therefore, it can be easy to produce
+    tight coupling between cloud services and the logic we want to test. In the next
+    section, we will go into more detail on structuring our code, but for now, let’s
+    focus on integration testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing in the cloud versus testing for the cloud
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Earlier in this book, we discussed development in ephemeral environments. The
+    same concept can be used in our testing pipeline. Using the structure of the testing
+    honeycomb, we have many integration tests that specify how our application interacts
+    with the cloud environment. These tests can be run in a temporary cloud environment.
+    This allows us to test our code in the cloud, using actual cloud services rather
+    than mocking them. When we mock out services in the cloud, we are testing our
+    code against our mental model of the cloud. When we use actual cloud services,
+    there is no transitive mental model that our code needs to pass through to be
+    tested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are some core concepts that we need to have implemented to be able to
+    test our code in ephemeral environments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We must have solid **infrastructure as code** (**IaC**) foundations to spin
+    up and tear down environments as required
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We need to understand which parts of our infrastructure take longer to provision
+    and supply pre-provisioned resources for testing purposes to keep cycle times
+    low
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our testing pipeline must have access to a cloud environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When discussing solid IaC foundations, we mean following good practices when
+    implementing IaC. To test our applications effectively, we need to pull up just
+    the part of our infrastructure required for testing instead of our entire application.
+    Typically, we need firm domain boundaries between different application areas
+    to test our system effectively with the cloud in isolation from other application
+    components. For more information on providing firm boundaries between application
+    components and strong cohesion within application components, we recommend reviewing
+    the *Tight coupling, low* *cohesion* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other interesting part of IaC that is typically exposed through this practice
+    is the solidification and codification of specific IaC properties. When we need
+    to deploy multiple copies of our application to run tests, sometimes numerous
+    copies simultaneously, we can quickly highlight any areas of our infrastructure
+    that have solidified around a single deployment. Hence, testing this way can also
+    highlight gaps in our resiliency plan and ability to bring up new application
+    instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some parts of IaC configurations can be provisioned very quickly. Things such
+    as serverless functions or API gateways can be provisioned in minimal time. On
+    the other hand, more traditional resources such as relational database instances
+    or virtual machines may require more time to be created. Typically, we can use
+    common resources between our test environments and partition them by namespaces
+    or any other supported partitioning method. For example, suppose we had a relational
+    database service. In that case, each test environment might use the same database
+    instance, which takes a long time to provision. However, create a separate database
+    within that instance to perform its test and then delete it upon completion. An
+    in-memory key store might use a single instance with keys prefixed with namespaces
+    unique to the test suite execution. This process ensures that we keep our cycle
+    times low and provide fast feedback to our developers while also allowing us to
+    maintain a high deployment frequency and low lead time for changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fundamental to all of this is that our testing environment needs to be a real
+    cloud environment. This requirement might mean linking our testing pipeline with
+    cloud credentials, infrastructure pipelines, and CI/CD processes. This increases
+    complexity; however, the benefit is increased certainty in our deployments. Applying
+    the same best cloud practices described elsewhere in this book to the cloud environment
+    used for testing is also essential. We can still apply the practices of good cloud
+    governance, FinOps, DevSecOps, and platform engineering to make this cloud environment
+    a first-class citizen in our cloud estate. By practicing good hygiene in this
+    cloud environment, we not only make it easier for the developers who need to run
+    tests in this environment but also gain increased certainty in the tests we run,
+    avoiding the issues of flaky pipelines, long pipeline runtimes, and long lead
+    times for changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing non-functional requirements
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that we are testing in a real cloud environment and have mature integration
+    tests, we can also test for properties that were previously unfeasible. Some of
+    the key properties that are great to test for in this space include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Latency**: This ensures our requests are completed in a reasonable amount
+    of time'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Consistency**: Many cloud systems operate on the principle of eventual consistency,
+    but we might have non-functional requirements regarding time to consistency'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scalability**: We might want to perform load testing to ensure that our services
+    can handle the expected traffic shapes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Resilience**: Assuming we have resiliency strategies, we will want to test
+    them based on the reasons we discussed earlier in the book'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At this point, you need to apply your judgment. Previously, we talked about
+    testing needing to be on the critical path to be useful. Testing non-functional
+    requirements is not always feasible to perform on the critical path and often
+    deals with slowly changing properties of our application. Therefore, running this
+    sort of testing on a schedule can occasionally be better due to its complex nature.
+    Typically, these tests are used to test for regression from previous executions.
+    We can also apply the same rigor of checking for regressions of non-functional
+    requirements on our other tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can certainly check test execution times for regressions on the critical
+    path. In a recent case, a manually discovered regression uncovered a vulnerability
+    in XZ, a popular compression utility. A developer noticed regressions in SSH execution
+    times, which, in the subsequent investigation, revealed a complex multi-year-long
+    plot to backdoor the utility. The full story sounds like the plot of a spy movie
+    and is worth additional research by any interested readers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even though these were manually discovered regressions, had they not been found,
+    they could have had potentially catastrophic effects for many projects built on
+    these tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Poorly structured code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One of the key anti-patterns we see in writing cloud native software is a false
+    equivalency between 100% code coverage and code quality. It’s important to remember
+    that high code quality and good coding practices should naturally result in sufficient
+    code coverage to guarantee the behavior we want to test. As professionals, we
+    must ensure that we adhere to these practices. One of the main impediments to
+    writing good tests is poorly structured code, or, to put it another way, low-quality
+    code. Therefore, in this section, we will explore some common anti-patterns that
+    can arise when writing cloud native software and how that impacts our ability
+    to test.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Key terms
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before we discuss code structure, we need to define some key terms to understand
+    the topic at hand:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Business logic** is anything our application does that transforms the information
+    between our user and the persistence layer. Business logic might consist of evaluating
+    custom rules to determine whether a customer is eligible for a product or assigning
+    inventory to a new order that has just entered a purchasing system. Fundamentally,
+    business logic is the part of our application that presents our unique business
+    proposition. If we connect the user directly to the persistence layer, are we
+    adding any value for the customer? Other non-business logic areas of the company
+    still derive value by providing things such as a good user experience, reliability,
+    and fulfillment. But, in a software sense, the codifying and repeatability of
+    processes through business logic is usually one of the core elements through which
+    we derive value.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Side effects** are anything our application does that affects other parts
+    of the system and relies on behavior outside the defined function. For example,
+    a side effect might be creating a new record in the database or sending a notification
+    to a user’s phone. Anything that our function does other than returning a value
+    based on its arguments is a side effect. Side effects are not inherently wrong.
+    Instead, they are an essential part of our application, allowing us to perform
+    actions such as persistence, evolution, and eventing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The monolith
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Just because we escaped the monolithic application through microservices or
+    serverless functions does not mean we’ve escaped the conceptual idea of the monolith
+    within our code. I defined the previous two terms because they represent two significant
+    but very different actions an application must perform. The critical difference
+    is that a pure function can typically represent our business logic. This function
+    has no side effects and relies solely on its arguments to produce a return value.
+    To maintain the results of this function, we must rely on side effects to communicate
+    with other parts of our system, such as our database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is where we can once again fall into the monolithic trap. It can be tempting
+    to intersperse our business logic with side effects as we require them. This makes
+    sense from a logical perspective, and from structuring our code, we add effects
+    as we need them where we need them. However, this leads us down the path of high
+    coupling and low cohesion, which we had previously in the monolithic structure.
+    Instead, what we should look to do is separate our concerns from our business
+    logic. The rules that define how we operate should be written as pure functions.
+    They shouldn’t have any side effects, making our company’s unique value proposition
+    directly testable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we start introducing side effects directly alongside our business logic,
+    we suddenly run into the requirement to provide mocking that mimics these side
+    effects simply to test the rules by which we run our business. This can turn the
+    practice of testing our business logic from a 10-minute exercise testing a pure
+    function into a multi-hour exercise where most of our time is spent setting up
+    the environment to run our tests by mocking out the side effects. Recalling the
+    testing honeycomb from the previous section, we can test our side effects through
+    a different type of test. In that case, we should use integration tests and test
+    our code in the cloud rather than extensive mocking and unit tests. The logical
+    extension of this is writing our business logic as a pure function and testing
+    only our business logic to ensure correctness against our business rules and expectations.
+    Then, when we want to test our system’s side effects, we can begin integration
+    testing against the deployed service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, now we’ve managed to separate the concerns of our business logic from the
+    side effects required to make it useful. A lot of functional glue still binds
+    our business logic with our side effects. While this could be tested through integration
+    testing, other alternatives allow us to increase our code coverage without replicating
+    the cloud in our unit tests. This is advantageous because unit tests have lower
+    complexity, faster execution, and faster feedback cycles than integration tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hexagonal architecture
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In 2005, Alistair Cockburn introduced the concept of hexagonal architecture.
+    Broadly speaking, hexagonal architecture provides a methodology for decoupling
+    the implementation of our side effects from their usage. I’ll provide a diagram
+    for hexagonal architecture and then we can go into it in more detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B22364_13_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.4 - Conceptual diagram of the hexagonal architecture model
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the core of our application, we have our application code that glues our
+    side effects and business logic together; this bundle is our entity. The side
+    effects are exposed through standard interfaces referred to as **ports**. For
+    example, we might have a persistence port or a notification port. What’s important
+    is that the entity is agnostic of the implementation of these ports. All it knows
+    is the interface by which this functionality is exposed. Adapters implement these
+    interfaces or ports. The adapter contains all the knowledge to interact with the
+    external system. For example, our database port may connect to an adapter that
+    provides a database through a PostgreSQL-compatible service. Our entity is unaware
+    of Postgres; it could be DynamoDB, SQL Server, MySQL, or any other database engine.
+    What’s important is that it exposes the functionality expected by the entity and
+    defined in the port. Likewise, our notification port could use SMS email push
+    notifications or carrier pigeons; it doesn’t matter to the entity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, we have ports driven by external adapters for incoming traffic to
+    our entity. Whether our entity is triggered by an event from an event queue or
+    by a direct HTTP request, we have ports that represent the interface of the request
+    and then adapters that connect those ports to our entity. This is a crucial distinction:
+    we have driving ports, external forces that act upon our entity, and driven ports,
+    which our entity uses to act on external systems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This might seem unrelated to testing; however, one of the key benefits of this
+    architecture pattern is that it makes our entities, our application code, agnostic
+    of where it’s being run. The complexity of actually interacting with actual services
+    is hidden away in the adapters. Mocking our side effects becomes much easier through
+    the simplified interface presented through our ports, as we can produce a new
+    adapter that implements the expected behavior rather than trying to mock out cloud
+    native services. This also prevents us from tying our unit testing and application
+    code to specific libraries or SDKs, as all of that is taken care of in our adapters
+    and will eventually be tested through our integration tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, here, we not only get a benefit in the testability of our code but we also
+    gain portability of our code if we need to change an integration with an external
+    system; it is a simple matter of writing a new adapter that agrees with the interface
+    for the existing port. This negates one of the key arguments against writing cloud
+    native software: it will cause vendor lock-in. By utilizing hexagonal architecture,
+    we can ensure the code we are writing is agnostic of where it’s being run, increasing
+    the portion of our code base that will be utilized if we decide to migrate cloud
+    providers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Structuring your code correctly from day one
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We have covered test-driven development in a few sections of this chapter, but
+    I want to discuss it in a different context. When we talk about structuring our
+    code to be testable and about good structure in general, TDD can help us achieve
+    this outcome. If the first thing we write in our code base for new functionality
+    is a test, then, by default, the code we write to fulfill this test will be testable
+    implicitly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I will use Java to paint a picture of testable versus untestable code, as it
+    has some insidious anti-patterns. Let’s assume we’re testing some business logic,
+    and we have a class that contains everything we need for our feature to run. We
+    might be tempted to implement our business logic as a private method in this class
+    to call it from within our application logic that is exposed to the outside world
+    as a public method. If we’re already following some of the practices in this section,
+    we might also mark our private business logic method as static to indicate that
+    it doesn’t rely on this class’s internal state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, it comes time to test our code; of course, the main function we want to
+    test is our business logic to ensure that the business rules we are solidifying
+    in the code are correctly implemented. However, due to the structure of our class,
+    this is one of the least testable parts of our code because it’s private and only
+    exposed to our class’s internals.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What can happen in this scenario is that the developer can be tempted to do
+    one of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make the method public
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Test the application code in a way that tests all bounds of business logic
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The first method is not preferable because we’re changing the visibility of
+    class internals specifically for testing purposes. Other people relying on this
+    business logic may call it directly from this class, which is not its primary
+    purpose, violating the single responsibility principle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second is not preferable because we are testing the code through a proxy,
+    which makes the test brittle to application changes. It also causes us more work
+    on the testing side as we have to mock out everything required for the application
+    code to run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, consider if we had written a test that expected a method that would implement
+    our business logic. What might our code look like in this scenario? We’re free
+    from the constraints of the application so it’s unlikely that we would try to
+    test it through the application code. We could make a public method, but it’s
+    also likely our application code doesn’t exist yet because we want to refine the
+    business logic. So, rather than add it to the class for the application code,
+    we instead produce a static class that solely implements our business logic, is
+    directly testable, has a single responsibility, and is consumable within our application
+    code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Therefore, TDD is not only a tool for writing productive tests but also for
+    helping drive well-structured code. This doesn’t mean you need to write every
+    test before starting to write code, just that you define the core behavior that
+    you want to achieve in advance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Testing is one of the greatest tools we have in the cloud native toolbox. It
+    prevents regressions, ensures compatibility, and allows us to have more confidence
+    that the behavior of our system closely matches the behavior of our mental model.
+    Hopefully, you have picked up some tips on how to build meaningful tests without
+    blowing your development timelines. Good testing practices are critical to scaling
+    cloud native applications, and by avoiding the anti-patterns in this chapter,
+    you will be well on your way to deploying quickly and with confidence. We have
+    covered a lot so far. Next up, we will look at how to get started on your cloud
+    native journey.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,1556 @@
+- en: '9'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Handling Data with Puppet
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will focus on how to handle data using Puppet. It will look at
+    Hiera, Puppet’s key-value data lookup tool, and how it ensures that Puppet’s reusable
+    code is made more configurable without burdening it with excessive logic and variables.
+    The basic structure of Hiera will be reviewed, showing how it stores data in hierarchies
+    that provide a rules-based key lookup without a lot of fuss and how it can look
+    up keys in this data to return values using different backends, which are implementations
+    such as YAML files of data or API calls to applications. The use of automatic
+    parameter lookup will be discussed showing how this allows the parameterized profiles
+    to receive data automatically and how the lookup function can be used in Puppet
+    code directly to call data. We will briefly discuss the changes between Hiera
+    3 and Hiera 5 in terms of legacy Puppet. Then, the three Hiera layers will be
+    reviewed in detail (the global, environment, and module layers), discussing how
+    hierarchies and data should be managed in these different layers. The options
+    available for lookup merging and priority behavior will be shown to highlight
+    how data can either be found on the first match or by combining or merging different
+    values found. We will then discuss when and where data should be used depending
+    on the use case and best practice, and where the code should be kept in terms
+    of directly in a control repo or in its own Hiera data repo. The security of data
+    will then be discussed showing how data can be kept secure with different methods
+    in storage, in transport, and while being used in Puppet code, highlighting the
+    effects and limitations of using the `Sensitive` type, the `node_encrypt` module,
+    and encryption of files via `eyaml`. Finally, some common issues and troubleshooting
+    approaches/tools will be reviewed, showing how the `lookup` command can be optimally
+    used to debug and explain values, and showing why we should never use global variables
+    in hierarchies, how to avoid defaults, the dangers of using Hiera for classification,
+    and how the **Hiera Data Manager** (**HDM**) can act as a tool to make your data
+    more accessible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is Hiera?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hiera levels
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deciding when to use static code or dynamic data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Keeping data secure
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pitfalls, gotchas, and issues
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Clone the control repo from [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
+    to your GitHub account as `controlrepo-chapter9` and update the following in this
+    repo on the production branch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Puppetfile` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/Puppetfile'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Manifests/site.pp` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/site.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/site.pp'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a branch from production called `lab_error` and replace the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`data` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/data](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/data'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`hiera.yaml` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/hiera.yaml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/hiera.yaml)'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Build a standard cluster with two Linux clients and two Windows clients by
+    downloading the `params.json` file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch09/params.json
+    ) and updating it with the location of your control repo and your SSH key from
+    the control repo. Then, run the following command from your `pecdm` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let us first find out what Hiera is and why it is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is Hiera?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, we have discussed how using Puppet creates stateful and reusable code
+    and how, by using the roles and profiles method, parameters can be made available
+    to make modules configurable. We also showed how to use those parameters in code,
+    but to create a scalable, readable, and site-specific data source, Puppet uses
+    a tool called **Hiera**. Without using Hiera data in Puppet code, it would require
+    endless logic and variables to represent data variations required for node exceptions,
+    location differences, OS version variations, organization differences, and many
+    other circumstances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hiera is a data lookup tool that looks up values in files of JSON, HOCON, YAML,
+    and EYAML, the built-in backends, or using custom backends that can call external
+    sources such as websites or databases. It stores data in key-value pairs that
+    can be looked up either explicitly via a function call in code or automatically
+    using the automatic parameter lookup, which matches parameter names from classes
+    to Hiera data values. As this name would suggest, Hiera is focused on using a
+    hierarchy to find data, and the lookups follow a common default with a hierarchy
+    of data sources that override as a more specific node match is found for the data.
+    The hierarchies are configured in a `hiera.yaml` file; this YAML file lists out
+    the levels in order of priority. This `hiera.yaml` file sets the version of Hiera
+    to be used, which is required, although *5* is the only active version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the built-in backends
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'For built-in backends in a hierarchy map, there will be a list of hierarchies,
+    each of which will have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name` – A readable label describing the level'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`datadir` – The base path relative to `hiera.yaml` where all data is stored'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`data_hash` – The Hiera backend/file type to use'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Either `path`, `paths`, `glob`, `globs`, or `mapped_paths` – The file path or
+    paths to the data relative to `datadir`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A default map can also be created with these keys so that values don’t need
+    to be needlessly repeated in each layer of the hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `data_hash` lookup function key accepts `yaml_data`, `json_data`, and `hocon_data`
+    as values but most Puppet implementations just use YAML data, so this book will
+    default to the `yaml_data` backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The file path allows a hierarchy level to state a specific location for the
+    data file of that hierarchy using variables interpolated in the code associated
+    with the node, such as global variables associated with the `%{<variable_name}`,
+    and to call a fact, the `facts` array is accessed using dots (`.`). So, `%{facts.application_owner}`
+    would access the `application_owner` fact. Further dots can be used to access
+    structured facts, such as `%{facts.os.family}` to access the `family` value within
+    the `os` fact. Trusted facts similarly are accessed from the `trusted` array,
+    such as `%{trusted.certname}`, and trusted external facts can be accessed using
+    `%{trusted.external.pds.data}`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, a simple hierarchy could be created in the `hiera.yaml` file with the following
+    piece of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This hierarchy would mean that a host with the `certname` trusted fact of `examplehost`
+    and a `data_center` fact of `enterprisedc1` would first look in `data/nodes/examplehost.yaml`,
+    then in `data/location/enterprisedc1.yaml`, and lastly, in the `/data/common.yaml`
+    common file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is also possible to combine multiple variable interpolations together on
+    a path, such as updating the location layer to differentiate on another fact –
+    for example, assuming a `brand` fact existed and different brands within the organization
+    would have variation for a data center, `path: "location/%{facts.brand}-%{fact.data_center}.yaml"`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, if `examplehost` had the `brand` fact set to `retail`, it would look in
+    `data/location/retail-enterprisedc1.yaml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In these lookups, if it doesn’t find a matching file for its level, it will
+    return nothing and go to the next level. Using the `paths` path file variable
+    instead would allow simplification. Since the only real difference between the
+    hierarchy levels is the path, it could instead be declared with a single hierarchy
+    and paths with an array of `paths`. For example, the hierarchy from the previous
+    example could be reduced to one layer with `paths`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: If additional Hiera layers were required for a different backend, it would need
+    to be understood that any hierarchy would have all its paths examined in order
+    before moving on to the next hierarchy, which may prevent this simplification
+    to maintain the correct order of hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will cover globs, only because they can be found in code
+    bases, but they should *not* be used, as they make the data structure a lot more
+    complicated than any environment truly needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The file path can use `glob` or `globs` to pass Ruby’s style `Dir.glob` method.
+    The full documentation of this can be viewed at [https://www.puppet.com/docs/puppet/latest/hiera_config_yaml_5.html#specifying_file_paths.](https://www.puppet.com/docs/puppet/latest/hiera_config_yaml_5.html#specifying_file_paths
+    ) This allows the use of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An asterisk (`*`) as a wildcard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two asterisks (`**`) to match recursively through directories
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A question mark (`?`) to match any one character
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A comma-separated list within curly braces (`{this,that,or,not}`) for a literal
+    match with any option in the list
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sets of characters within square brackets (`[xyz]`) to match any one character
+    in the given set
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A backslash (`\`) to escape special characters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, take the `facts.os.windows` fact and then match either from `display_id`
+    (which was introduced in later versions of Windows 2019) or from `release_id`
+    (which was introduced in Windows 2016 and deprecated in Windows 2019). This combination
+    allows a consistent Hiera layer for a source that has changed repeatedly and needs
+    a combination of facts to find different versions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To create a layer containing network information for the network on the primary
+    interface or the network domain, the following code could be created, which would
+    search through any directory structure in the network folder to match:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: If multiple matches are found, the files will be searched in alphanumerical
+    order. Also, multiple strings can be used in the search using `globs:` and passing
+    an array of strings in a similar fashion to paths.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The final file path option is `mapped_paths`. This option works by providing
+    a variable containing a collection of strings, a variable name (which maps each
+    element of the collection of strings), and a template. For example, if a fact
+    called `$oracle_sids` contained the `[''ora1'',''ora2'',''ora3'']` array, the
+    following hierarchy would perform lookups in the `/oracle_dbs/ora1.yaml`, `/oracle_dbs/ora2.yaml`,
+    and `/``oracle_dbs/ora3.yaml` files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Although we have taken some time to cover globs, it’s important to reiterate
+    that this should only be used to understand pre-existing complex data structures
+    in code and for you to try and refactor and simplify. *This should not be used
+    in new* *code bases*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having discussed the hierarchy in detail, it’s now time to shift focus to the
+    data used and how to call the lookups to the hierarchy. As was mentioned in the
+    *Using the built-in backends* section, YAML is the most commonly used built-in
+    data type and will be used in all examples, but the difference will only be in
+    the presentation of the language rather than the actual structures used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the YAML data files, we create key-value pairs and keys with lists of values.
+    The keys can just be single values but, more commonly, will be structured with
+    the format `<module_name>::<paramater_name>`, where `module_name` can contain
+    multiple segments reflecting a certain class namespace within the module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give an example of this, for the `exampleapp` profile module, a data file
+    could contain the settings for the `enable_service` parameter to be `true`, it
+    could contain an array of options of `[opt1,opt2,opt3]`, and for a `user`’s parameter,
+    it could contain a hash of each user’s settings to be created for `exampleuser`
+    and `anotheruser`. This would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Accessing data
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The next point would be how this hierarchy and data is accessed in Puppet code
+    and, as was mentioned at the beginning of this chapter, there are two ways Puppet
+    looks up data in code: via the automatic class parameter lookup or via the Puppet
+    lookup function. The recommended model involves driving virtually all data required
+    via automatic parameter lookups to profile classes using the Role and Profile
+    model (discussed in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)) and the Forge.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The automatic class parameter lookup works by taking any parameters of a class
+    that has been included/declared as a resource and, first, checking whether the
+    parameter has been set by the declaration, and if not, performing a Hiera lookup
+    on each parameter of the `<module_name>::< parameter_name>` form. It is important
+    to note that this is not a namespaced key itself in Hiera; it is just a string
+    name and values can’t be inserted into the data structure. In the case of using
+    profiles and having a set profile module and an Oracle profile, this could look
+    like `profile::oracle::version`. To set data for this, we might have a specific
+    version for a `server1.example.com` node in a `data/nodes/server1.example.com.yaml`
+    file, such as setting the version parameter for `profile::oracle` to Oracle 21c
+    with the following line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`profile::oracle::version: 21c`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If this lookup had failed, it would look to see whether any default value was
+    set in the parameter in the class manifest, before then assigning it as `undef`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The data found in Hiera by default will return as a string or an array of strings;
+    we will show later how this can be converted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The automatic class parameter lookups do not work for defined resource types,
+    only classes. To mimic the functionality, you can use an explicit `lookup()` call
+    in your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The other mechanism in Puppet code is the `lookup` function. It is more direct
+    and can be used within Puppet code; it is called with a key, which can be multiple
+    segments, each separated by two colons (`::`), or it can be simple global values.
+    The colons are used here simply for convention and do not drill down into a data
+    structure. To look up the same Oracle parameter, the following example would assign
+    it to an `oracle_version` variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`$``oracle_version=lookup(profile::oracle::version)`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If the data is an array, it is possible to access a specific key using dot
+    notation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`$``exampleuser_id=lookup(profile::exampleapp::users.exampleuser.id)`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is possible to provide a default value if no value is returned by using
+    the arguments in the function or an options hash (the full options can be viewed
+    in the documentation at [https://www.puppet.com/docs/puppet/latest/hiera_automatic.html#puppet_lookup-arguments](https://www.puppet.com/docs/puppet/latest/hiera_automatic.html#puppet_lookup-arguments))
+    and providing a value to return – for example, to return the `no id found` string
+    if the lookup in the previous example had returned no value, the following could
+    be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`exampleuser_id=lookup(profile::exampleapp::users.exampleuser.id, {default_value
+    => ''no` `id found''})`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This will be discussed in more detail in the *Pitfalls, gotchas, and issues*
+    section, but providing defaults is considered poor practice, as it hides failures
+    and may make people assume a value has in fact been found and things are functioning
+    correctly. It will also be noticed that the second and third arguments are marked
+    as `undef`; these are for data type and the merge strategy, which will be discussed
+    next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `lookup` function replaces the legacy `hiera_<data_type>` and `hiera` functions
+    that existed with Hiera 3\. As these functions are deprecated, they should not
+    be used as they can produce inconsistent results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What has been discussed so far is the simplest case, where we expect to simply
+    look up a value and find the first match. This is Hiera’s default behavior and
+    allows you to override values to varying degrees of specificity. Sometimes, though,
+    you might want to return some combination of all the values present in all the
+    layers of the hierarchy. Lookup options can be set in the data files to describe
+    how this should happen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `lookup_options` reserved key allows for different merge behaviors to be
+    set on lookups that are set against either a particular key or against a regular
+    expression following this format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The most common approach is to put this behavior in the `common.yaml` file,
+    but if, say, a node override or some priority override may be more important,
+    it can make sense to then put it into different levels of the hierarchy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are four merge behaviors that can be set with the data files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`first` – Return the first match in the hierarchy order'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`unique` – Return an array of all matching unique values in the hierarchy'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`hash` – Return a hash of shallow merged hash keys using the highest hierarchy
+    key match'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`deep` – Return a hash of deep merged hash keys using the highest hierarchy
+    key match'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Hiera’s default behavior, `first`, will look for the first value to match in
+    hierarchy order. Assuming there is no other `lookup_option` value declared for
+    the key, there is no need to implicitly declare it. But if, for example, `common.yaml`
+    was set to `unique` and, for our node exception, we wanted to set only the values
+    we had declared for `profile:oracle::limits`, we could set the following in our
+    node’s YAML data file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `unique` keyword will find all matching keys and return a merged and flattened
+    array. So, for example, if we wanted to install all requested Oracle versions
+    in a profile, we could set the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the `11` value was found at the node level, `12` at the organizational level,
+    and `11,13` found at the common hierarchy level, the returned value would be an
+    array of `[11,12,13]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `hash` keyword will merge hashes from all matching levels by merging the
+    top-level keys of the hashes together. This essentially performs a shallow hash
+    merge, which means that top-level keys are merged but the merge will not recursively
+    descend and merge data structures nested underneath. This will keep the order
+    in which the keys are written as matched from the lowest priority data source
+    but will take the values from the highest priority source. It’s easiest to think
+    of this as it is adding the keys to a hash as it steps from highest to lowest
+    levels. It will override and append values as it does so but it won’t recursively
+    merge the values in the keys. For example, imagine a lookup was performed on `profile::oracle::limits`
+    and at the lowest level, `common.yaml` existed and contained the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then imagine that `/node/examplenode.server.com.yaml` had a higher priority
+    due to the following `hiera.yaml` section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And `/node/examplenode.server.com.yaml` contained the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The hash lookup on `profile::oracle::limits` would return the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that, in this case, the `profile::oracle::limits.oracle/stack` key was
+    taken from the highest priority so only the hard value was seen, and no recursive
+    merge was performed. This shortcut syntax with a dot (`.`) can be used to access
+    an element in hash or array, where, in the case of an array, the index number
+    is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `deep` merge combines any number of hashes or arrays but is able to merge
+    values inside the hash or array recursively. This means that `hash` values are
+    merged with another `deep` merge and arrays are not flattened and can contain
+    nested arrays. If the previous example lookup options were configured as `deep_merge`,
+    then the lookup would return both hard and soft limits for the `oracle/stack`
+    key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Merging more than three nested levels of nesting in a hash will have a serious
+    performance impact on Hiera and should be avoided.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are also options that can be assigned to affect the merging of arrays.
+    For instance, `sort_merged_arrays` will result in the merged array being sorted
+    by key rather than the default behavior, where the array is ordered from lowest
+    priority to highest, and `merge_hash_arrays`, where hashes within arrays will
+    be deep merged if set to `true`. One final option allows `deep` merges to have
+    a `knockout_prefix` key, whereby a key containing a value, normally as double
+    dashes (`--`), is used as a prefix before the value and will cause a value to
+    be removed instead of added.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if the model given in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)for
+    using flexible classes is implemented, using a `deep` merge and a `knockout` prefix
+    would allow classes to be added or removed at each hierarchy level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Some example data could be for `node/example.server.com.yaml`, where the highest
+    level of the hierarchy, `node`, contained the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In contrast, `datacenter/europe.dc.1.yaml`, a lower hierarchy, contained the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would result in a lookup on `profile::base::extra_classes` containing `gdpr`
+    and `pci::dss`, in that order, but not `email`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far, the examples have used the most common place to set `lookup_options`
+    in `common.yaml`. But `lookup_options` performs a hash merge, which will take
+    the highest order of each key found. So let’s say, for example, that `/data/common.yaml`,
+    the lowest level, contained the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And `/data/example.server.com.yaml`, at a higher level, contained the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then a lookup that matched the `profile::base::extra_classes` key in `/data/example.server.com.yaml`
+    would use the first match lookup and not a `deep` merge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another lookup option is to use regex and the `convert_to` option, which converts
+    values to something other than a string. One particularly useful example of this
+    is when using values we wish to keep sensitive, we could simply add a regex string
+    in the common level of the hierarchy, which would match all keys beginning with
+    `profile` and a final key name that ended with `password` and ensure that the
+    parameter was converted to `Sensitive`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the *Keeping data secure* section, there will be more discussion on securing
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While it is possible to essentially override the lookup settings set in the
+    data file in the `lookup` function itself, we would strongly recommend against
+    this as it could be confusing to have the data saying one thing and the `lookup`
+    function behaving otherwise. It could lead to changes in the data that have unexpected
+    consequences for the `lookup` function. If it is required, the syntax can be found
+    in the documentation at [https://www.puppet.com/docs/puppet/8/hiera_automatic.html#puppet_lookup](https://www.puppet.com/docs/puppet/8/hiera_automatic.html#puppet_lookup).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interpolation is also available in Hiera data via both variables and functions.
+    While this can be useful to avoid the repetition of data, it can also make the
+    data vastly more complicated than we would want it to be, and in general, we would
+    advise against it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As with hierarchies using facts, `trusted` and `server_facts` can provide consistent
+    variables, and the variables are interpolated in the same way, so a simple example
+    would be to set a `config` file that uses the hostname as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tivoli_config_file: ''/opt/app/tivoli/client/%{trusted.hostname}.conf''`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Hiera provides a limited number of special interpolation functions. They are
+    not the same as Puppet functions. The following functions can be used to interpolate
+    Hiera data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lookup` (or `hiera`)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`alias`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`literal`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`scope`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using the same format as variables, a function can be declared as `${<function>(<arguments>)}`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `lookup` function allows a Hiera value to be looked up from within the
+    data. This can be useful to prevent data having to be repeatedly entered and reduce
+    maintenance since, if the data changed, it would only need to be changed in one
+    place. For example, something like a repository server could vary depending on
+    the client’s location or be used repeatedly to provide the full location of packages.
+    The following example shows how two binaries could provide their full paths using
+    a lookup and reduce repetition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would also make maintenance much simpler; if the artifactory server was
+    to change, only one line would need to be updated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `alias` function allows for data structures in Hiera data to be returned
+    since `lookup` would only return a string. So, if the `base` profile had an `extensions`
+    parameter that took an array of strings and we wanted to pass the same list of
+    extensions to another profile, `exampleapp`, it would be coded like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `literal` function allows the escaping of the percentage sign (`%`) so
+    that it does not assume it is for a variable or function to be interpolated. To
+    do this, we use the `%{literal(''%'')}` function where a `%` sign is to be used.
+    This can be useful in scenarios such as Apache configuration files or for Windows
+    environmental variables; if, for example, we wanted to have the `%PACKAGEHOME%/External`
+    string at `profile::nuget::`, then the following code could be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `scope` function is likely only to be used in legacy code. It really just
+    interpolates variables and only had a use case when Puppet variables were dynamically
+    scoped. The same Tivoli example in this section would be written as `tivoli_config_file:
+    ''/opt/app/tivoli/client/%{scope(facts.hostname)}.conf''`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using custom backends
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In addition to the built-in backends described so far, custom backends can be
+    written or downloaded from the Forge and configured into Hiera. It is beyond the
+    scope of this book to write custom backends but Puppet’s documentation covers
+    how to write them at [https://www.puppet.com/docs/puppet/8/hiera_custom_backends.html#custom_backends_overview](https://www.puppet.com/docs/puppet/8/hiera_custom_backends.html#custom_backends_overview).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Custom backends use one of three data types, selected based on their performance
+    requirements for the type of data being accessed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `data_hash` backend type, as was seen for the built-in backend, is used
+    for data sources that are cheap to read, such as files on a disk. This profile
+    is used where the data is small, static, can be read all at once, and most of
+    it gets used. It returns a hash of key-value pairs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `lookup_key` type is used for data sources that are expensive to read, such
+    as secure HTTP API connections. This profile is used where the data is big, only
+    part is used, and it can change during compilation. It returns a key pair. The
+    most commonly used custom backend is `hiera-eyaml` for encrypting Hiera, which
+    will be covered in detail in the *Keeping data* *secure* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `data_dig` backend type is used for data sources that access arbitrary elements
+    of a collection, such as a database. With a similar profile to `lookup_key` but
+    accessing subkeys of elements to return a key pair, the function will dig into
+    a dotted key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A final data type to mention is `hiera3_backend`, which was only relevant as
+    a stepover from legacy Puppet setups; this book will not cover this configuration,
+    but details can be found in the Puppet documentation at [https://www.puppet.com/docs/puppet/8/hiera_config_yaml_5.html](https://www.puppet.com/docs/puppet/8/hiera_config_yaml_5.html).
+    The Puppet documentation advises how to migrate from Hiera 3 backends if you encounter
+    them in legacy code at [https://www.puppet.com/docs/puppet/8/hiera_migrate.html](https://www.puppet.com/docs/puppet/8/hiera_migrate.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a user perspective, Hiera version 5 is an evolution of Hiera 3, with Hiera
+    4 as an experimental version, but Hiera 5 was fully implemented in Puppet itself
+    while Hiera 3 was its own standing implementation. Puppet 7 and below has a dependency
+    on a Ruby gem for Hiera version 3 to support any legacy Hiera 3 backends where
+    *Hiera:Backend* was extended. This dependency was removed in Puppet 8.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These data types can then be combined with the file paths, as already discussed
+    with the built-in backends, but with the additional paths of `uri` and `uris`
+    to allow the direction to URIs such as web sources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `options` parameter then allows a hash of anything required by the custom
+    backend, such as credentials or key information, and the content will depend on
+    the implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Most modules will explain in their README file how to use the `options` parameter.
+    For example, [https://forge.puppet.com/modules/petems/hiera_vault/](https://forge.puppet.com/modules/petems/hiera_vault/)
+    is a Hiera backend for HashiCorp’s Vault; building on their example, the following
+    code shows an example assuming that the keys would all start with `secret_`, come
+    from a `vault.example.com` server, and have mounts for two teams (`digital` and
+    `trade`), which used the node name, location, and `common` for their secret hierarchy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another example is [https://forge.puppet.com/modules/tragiccode/azure_key_vault/](https://forge.puppet.com/modules/tragiccode/azure_key_vault/),
+    allowing access to secrets in Azure, which, if we were to create a lookup based
+    on the department assigned to the server looking for keys starting with `secret`,
+    would look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: In [*Chapter 13*](B18492_13.xhtml#_idTextAnchor321), the **Puppet Data Service**
+    (**PDS**) will be examined, along with a series of backends useful for extending
+    Puppet’s data access.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have reviewed how Hiera works, let us look at how it works in the
+    different layers of Puppet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hiera layers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Hiera has been discussed just in the context of the levels in a single hierarchy
+    but there are three layers of hierarchy, each of which contains its own configuration
+    of levels. When a lookup is performed by Puppet as part of a Puppet run, it will
+    look through each of these layers, examining the levels of hierarchy within each.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The global layer is the first layer and is configured by default in `$confdir/hiera.yaml`,
+    usually `/etc/puppetlabs/puppet/hiera.yaml`. Hiera version 3 only works at this
+    layer, and its existence is more just a leftover for compatibility purposes. Puppet’s
+    documentation suggests its only purpose should be for Hiera 3 compatibility and
+    acting as a global override, but we would advise you to *not use it at all* since
+    it exists outside of the code deployment and control processes, which will be
+    reviewed in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272). This would leave
+    control of the file localized to the Puppet server, which would only be desirable
+    if you wanted to step around the code deployment process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The environment layer is the next and main layer of data, and it is configured
+    inside each environment usually at a path such as `/etc/puppetlabs/code/production/hiera.yaml`.
+    Environments and control repos will be discussed in complete detail in [*Chapter
+    11*](B18492_11.xhtml#_idTextAnchor272), but to understand the context here, an
+    environment is a set of Puppet modules and manifests at fixed versions for a specific
+    group of Puppet nodes, and a control repo is a module structure used to manage
+    the environments, containing a file called a Puppetfile detailing the sources
+    of the modules, at which version they should be deployed, and where they should
+    be deployed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A choice needs to be made as to whether the `hiera.yaml` file and data will
+    be contained in the control repo together, or whether to have a separate control
+    repo and modules containing Hiera data. This is configured by the control repo
+    deploying the modules typically into a data directory in the environment and ensuring
+    that Hiera uses that data path in its `hiera.yaml` file. This separation can make
+    sense when the control of a set of data needs to be managed by a certain team
+    or group and containing it within the control repo would allow too much access/visibility.
+    For example, if our `hiera.yaml` file was configured to use data as a source path,
+    we could add Hiera data from a module into that path with an entry into a Puppetfile:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The final layer is the module layer, and this is configured by a `hiera.yaml`
+    file inside each module, typically with a data folder in the module too. So, when
+    deployed in an environment on a server, the `hiera.yaml` file would be in a location
+    such as `/etc/puppetlabs/code/environments/production/modules/example_module/hiera.yaml`.
+    The best use for the module layer is to set defaults for the parameters of all
+    classes in the modules, being careful to keep them relevant to the focus of the
+    module, and not external organizational data, which would be better placed into
+    the environment layer. An example of setting defaults can be seen in the `puppetlabs/ntp`
+    module, available at [https://github.com/puppetlabs/puppetlabs-ntp](https://github.com/puppetlabs/puppetlabs-ntp),
+    which sets defaults based on the OS version. The `hiera.yaml` file could also
+    be configured to allow for increasing granularity of specific OS versions, going
+    from defaults and a general OS family such as Windows to a specific full OS version,
+    such as AlmaLinux-8.5, as shown in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The module layer is often seen as an alternative to the `params.pp` class, which
+    used to be part of the module pattern and contained default values and Hiera lookup
+    calls. It was used before the modern Hiera layers existed with automatic parameter
+    lookups.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can only bind data keys in the module’s namespace, so in the `exampleapp`
+    module, only `exampleapp::key` values could be set, not a global key such as `key1`
+    or another module such as `anotherapp::key`. This can lead to another pattern
+    option particularly useful for in-house written modules, whereby this limitation
+    is used to allow application teams to have full control of their environmental
+    data for modules without being able to affect other modules. This might be a consideration
+    for the profiles modules owned by a particular team who wishes to manage expectations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`default_hierarchy` is sometimes known as the fourth layer and is only available
+    in the module layer; it essentially involves declaring a `default_hierarchy` key
+    within the module hierarchy. The key difference with this layer is that it will
+    only be called if there is no match within the other three layers, so there is
+    no merging behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`default_hierarchy` produces the same behavior as the `params.pp` approach
+    did since any match in the three Hiera layers will ignore and not merge any matching
+    values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed these layers, this leads to a question of how should the hierarchies
+    be constructed. Hierarchies can be made complicated very quickly but we should
+    remember that the underlying approach is that they should be made to run from
+    the most specific data for a node down to general data. They should be as short
+    as possible since data files are easier to work with, and the more evaluations
+    of hierarchies you create, the greater the impact on Puppet’s infrastructure performance.
+    Too many backends (particularly customized backends) will create complications
+    and external dependencies, which can break Puppet compilation. The Roles and Profiles
+    method should allow less data to be managed in Hiera, and if built-in facts are
+    not enough, custom facts can be created and multiple facts can be used in a path
+    together.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The global level lends itself to just being structured on the name of the node
+    and data common to all nodes since it would only be used for overrides outside
+    of Puppet code environment control.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the environment layer, the common structure of node data to look at is
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name of the node
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The node owner
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The node’s purpose
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The location of the node
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Data common to all nodes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'This could lead to a simple hierarchy such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The module layer, as discussed, then just becomes a focus for defaults for values
+    often based on facts such as OS version and platform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Do not use the `environment` fact itself in any hierarchy. Use the environment
+    layer for environment-based data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – add data to a module
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this lab, download and update the Grafana module from [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212)to
+    contain defaults in Hiera data instead of on the parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To do this, let us assume the `common.yaml` file will contain all the present
+    defaults in `init.pp`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For Red Hat, we will have the following: d`ownload_source = ''`[https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm](https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.3-1.x86_64.rpm)`''package_provider
+    =''yum''`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While for Windows, we will have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can refer to [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch08/grafana](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch08/grafana).
+  prefs: []
+  type: TYPE_NORMAL
+- en: An example answer is at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/grafana.](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/grafana
+  prefs: []
+  type: TYPE_NORMAL
+- en: )
+  prefs: []
+  type: TYPE_NORMAL
+- en: Later, in the *Keeping data secure* section, it will be shown how the password
+    can be properly secured and not just in plain text in the YAML file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we have seen how to use the three layers of Hiera and how to
+    structure the hierarchy in these layers. Now, we will look at when data should
+    be used in Hiera and when it should just be used in code directly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deciding when to use static code or dynamic data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Having viewed all the possibilities of managing data structure and looking
+    over the code examples covered in this book, it probably raises the question about
+    when to write code and when to use data. *Figure 9**.1* highlights a decision
+    tree to follow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.1 – Data or code decision tree](img/B18492_09_01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.1 – Data or code decision tree
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first key thing is if the data doesn’t vary over nodes and it’s only used
+    once, the simplest thing is to hardcode the data in Puppet code – for example,
+    just directly setting the owner of a file as `exampleuser` in a file resource
+    attribute.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a value is used multiple times, then there is clearly a value in assigning
+    a variable and using this variable where it is required. This simplifies maintenance
+    if the value needs to be changed but does mean you have to keep track of variables
+    when reading the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If, on the other hand, there is variation across nodes and overriding the value
+    on certain conditions, the first question should be about how complex the logic
+    is. If it is as simple as a single check, then the gain from abstracting into
+    Hiera is not big; the issue with abstracting values into Hiera is that they are
+    no longer clearly visible looking at the code and require translation and thought.
+    So, if simple conditional logic can be used, it’s generally better to keep the
+    values in code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once logic becomes more complicated and can vary based on combinations of conditions,
+    then we can use Hiera data and an auto parameter lookup, or if it was found to
+    be required, the `lookup` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is also best throughout this to use the simplest method available at the
+    time and escalate through the levels of complexity as code changes and grows.
+    Creating complex data structures and performing abstraction for the future simply
+    creates complexity and requires more work without really gaining benefits.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keeping data secure
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One of the key elements of managing data is ensuring that secret data is kept
+    secure, and this can be challenging with Puppet when this data must be stored,
+    transferred across the infrastructure to the client, and used within Puppet code
+    to set the state. In this section, we will discuss the methods available to secure
+    data, what levels data can be secured at, and the limitations of the methods used
+    at each level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most common first step is to secure data in storage. This can be achieved
+    using `hiera-eyaml`, a custom Hiera backend available at [https://github.com/voxpupuli/hiera-eyaml](https://github.com/voxpupuli/hiera-eyaml).
+    This module creates `pkcs7` keys, which are then used to encrypt and decrypt data.
+    Having followed the instructions in the module to create and distribute keys,
+    a hierarchy can be created, such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: It can simplify the hierarchy to note that the `eyaml` backend can read YAML
+    files too, and there’s no reason to separate `yaml` and `eyaml` files into different
+    hierarchies assuming their path and options are the same, as shown in the previous
+    example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`hiera-eyaml` is fine for simple encryption and limited numbers of users involved
+    with encrypting secrets, but for larger setups, using `gpg` keys with [https://github.com/voxpupuli/hiera-eyaml-gpg](https://github.com/voxpupuli/hiera-eyaml-gpg)
+    becomes more practical rather than sharing signing keys amongst multiple teams.
+    Once the configuration and key management are done, this simply varies by using
+    `gpg_gnugpghome` options rather than `pkcs7` key options, such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: An alternative to these encrypted data file approaches is if an appropriate
+    secure key store exists, such as HashiCorp Vault, or a cloud-native key store,
+    such as Azure Key Vault, then using a backend that can access these services will
+    ensure data is securely stored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of the backend choice, this will only ensure the data is secured
+    in storage. As was discussed in the *Accessing data* section, by default, Hiera
+    will return a string when accessed by Puppet code. `lookup_options` can be used
+    to convert the parameter type to `Sensitive` in Puppet 5.5 and above, and care
+    should be taken to ensure all secure parameters are covered either via wildcards
+    or explicit naming.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Care must be taken to use the `Sensitive` data type well; it can be easy to
+    either mistakenly keep it secured so the value can’t be used where it is needed
+    or accidentally expose it when using the `unwrap` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When using `file` and `content`, for example, the following attempt to put
+    `secret_value` into a `/etc/secure` file would be exposed on a file diff, which,
+    as discussed in [*Chapter 3*](B18492_03.xhtml#_idTextAnchor048), is when a comparison
+    of changes to files is recorded into the report logs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: This could be prevented by setting the `file_diff` parameter to `false` or setting
+    the server not to use file diffs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similarly, for templates, care must be taken. If using Puppet 6.2 or greater,
+    then templates will work directly with Sensitive values and you can simply use
+    the Sensitive value in a template:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For versions below Puppet 6.2, you would need to unwrap the variable in the
+    template and then mark the contents as Sensitive, as in this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`content => Sensitive(epp(''example.epp'', { ''password'' =>` `unwrap($secure_password)})),`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `Sensitive` well keeps the data out of the logs, but unfortunately, not
+    the catalog file itself, and if you are using PuppetDB, catalogs will be stored
+    there too. In this case, using the `node_encrypt` module available at [https://forge.puppet.com/modules/binford2k/node_encrypt](https://forge.puppet.com/modules/binford2k/node_encrypt)
+    allows for any secret to be encrypted in the catalog using the clients’ keys,
+    and using a `Deferred` function decrypts them at the time of catalog application.
+    This keeps secrets out of the catalog and the report produced after a catalog
+    is applied.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Assuming the instructions to configure `node_encrypt` have been followed on
+    the infrastructure, this means the line assigning values to the `content` parameter
+    in the previous piece of code could be updated to invoke the `node_encrypt::secret`
+    function as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The current version of `node_encrypt` relies on `Deferred` functions, which
+    became available in Puppet 6, so version 0.4.1 needs to be used to work on older
+    versions, and you would use the `node_encrypt::file` type instead of the `file`
+    type to encrypt file resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section has shown how to keep data secure in storage, transport to catalog,
+    and report processing, and some of the issues that can be experienced. In the
+    next section, we will discuss general issues and problems when handling data in
+    Hiera.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – use eyaml to store a secret
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this lab, the `puppet-hiera_eyaml` module has been used to set up `eyaml`
+    with default `pkcs` keys, with a global Hiera setup to look at the node name,
+    OS, and common values. In `site.pp`, a Hiera lookup is performed to look up the
+    value of `secret::examplefiles`, which is used as content to create a `/var/tmp/secret_example`
+    file on the Puppet primary server. The lookup has a default of not set. In this
+    lab, you will encrypt a secret and add it within the OS level so the content of
+    the file changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SSH to the primary server and elevate to root:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Run the `eyaml encrypt –p` command from within the `/etc/puppetlabs/puppet`
+    directory and enter a secret of your choice at the prompt:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Copy the output after the string starting with `ENC[` and paste it into the
+    data section at `/etc/puppetlabs/puppet/data/os/RedHat.eyaml` so it contains something
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Run `puppet agent –t` and observe the change in the `/var/tmp/secret_example`
+    content to the content you set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This was a very simple example and it should be noted, as was highlighted in
+    the *Hiera layers* section, that you would more likely be using an environment
+    hierarchy and keeping your data secure, as was shown in the *Keeping data secure*
+    section, by using the Sensitive option in the lookup `options` parameter. Additionally,
+    the public key used for `eyaml` could be copied to a desktop to encrypt secrets,
+    if that was secure enough for your organization’s policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have fully reviewed the Hiera configuration, we will show how we
+    can understand issues with lookup and data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pitfalls, gotchas, and issues
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: When working in large datasets with multiple levels and layers, it can become
+    complicated to understand why certain answers have been generated or where errors
+    have been inserted. This section will focus on approaches to understanding and
+    debugging data lookups and tools that can make the data more visible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Hiera problems tend to fall into a few categories: syntax, formatting, backend
+    communication and performance issues, hierarchy ordering mistakes, and many others.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `puppet lookup` command is the best way to test Hiera data and is, in effect,
+    like the `lookup` function used in Puppet code. Using this on the primary server,
+    the basic syntax of this command is `puppet lookup <key> --node <node_name> --``environment
+    <environment_name>`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This command will return the value, if found, or nothing. It is important to
+    understand the effect of the various flags available to the command to return
+    more detailed information. A common mistake is to use the `--debug` and `--explain`
+    flags together; they shouldn’t be used together as the former is focused on high
+    levels of logging to allow you to understand why errors such as syntax, formatting,
+    or the backend are being generated, while the latter is focused on showing how
+    a value was reached, where Hiera looked, and what it found.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, an `explain` lookup on `motd::content` might look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Looking at the output from debug, we see far more information with regards
+    Facter and other system work going on, as can be seen from the command and sample
+    output as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Without a node being provided, the lookup will assume the lookup is for the
+    server you are running the command from, and the environment will default to `production`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In terms of syntax and formatting problems, one of the most common errors is
+    when the opening `---` of the YAML file is malformed. This can happen in a couple
+    of ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A space is inadvertently added to the start of the line or a Unicode character
+    conversion takes place, changing it to `—`. In this case, an error in `debug`
+    will look like this:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Error: Could not run: (<unknown>): mapping values are not allowed in this
+    context at line 2` `column 8`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If a space is inserted within the dashes, such as `-- -`, then an error in
+    `debug` will be seen like this:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Error: Could not run: (<unknown>): did not find expected ''--'' indicator
+    while parsing a block collection at line 1` `column 1`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another common syntax mistake is using key-value pairs without a space between
+    the colon symbol (`:`) and the value; so `key: value` and `key : value` are valid
+    but `key:value` is not and it will error in debugging like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Error: Could not run: (<unknown>): mapping values are not allowed in this
+    context at line 3` `column 10`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If tabs are used instead of spaces for indentation, then in debugging, an error
+    will be caused such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Error: Could not run: (<unknown>): found character that cannot start any token
+    while scanning for the next token at line 4` `column 1`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For formatting, using single quotes in data with variables will result in a
+    literal string of the variable name being returned instead of interpolation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: File permissions can also be an issue and, therefore, it is worth ensuring you
+    are running the lookup commands as the same user, as Puppet will be typically
+    running under the `pe-puppet` or `puppet` user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using `--debug`, it can be useful to see whether custom backends are the areas
+    that experience issues, errors, or slowdowns. In general, we would recommend examining
+    patterns such as the PDS and external data providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Be careful to note this will not debug the actual data but only the `hiera.yaml`
+    file, data files that are not valid YAML will just be ignored, which can be seen
+    using `--explain`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In terms of hierarchy problems, this is where the `--explain` flag will prove
+    most useful since it will step through explaining the configuration files used,
+    the hierarchies found, the merge strategy, and the paths examined in detail so
+    that it becomes clear how it stepped through the hierarchy and how it may not
+    be working as expected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Depending on what variables are being used in your hierarchy, it may be required
+    to use the `--compile` flag since, by default, when using Puppet `lookup`, it
+    will not perform a catalog compilation, so only the `$facts`, `$trusted`, and
+    `$server_facts` variables will be available. We strongly advise against using
+    arbitrary values from manifests as these can vastly overcomplicate the lookup
+    and produce unpredictable results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From this, it can be seen that you always want to use the `Facter` array, to
+    avoid the risk of module variables and top-scope `Facter` variables clashing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some other options can be useful to test what would happen if you changed the
+    configuration, such as changing the merge strategy with the `--merge` flag or
+    by providing updating facts using `--facts`, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The full command reference of options for lookups can be seen at [https://www.puppet.com/docs/puppet/latest/man/lookup.html](https://www.puppet.com/docs/puppet/latest/man/lookup.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If updating the global Hiera file, be careful to restart the **Puppet Server
+    Services** to ensure it is re-read.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having touched on the point previously in the *Accessing data* section, we do
+    not recommend using defaults on `lookup` functions. Data defaults in modules or
+    profiles should be meaningful as well. So, providing the default config file location
+    makes sense for a module if you expect most users just to use it, but if it is
+    being added just to avoid failure in lookup, that can be a serious mistake and
+    will mask issues in Hiera data or code that won’t be noticed, as the code is successfully
+    applied with defaults. The key thing to avoid is passing a default value that
+    then requires lots of logic in Puppet code to work out how to translate it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classification in Hiera is possible since some users choose to look up Hiera
+    data and include classes in the `site.pp` file. Modules such as [https://github.com/ripienaar/puppet-classifier](https://github.com/ripienaar/puppet-classifier)
+    focus on this sort of approach. There is a balance of coding structure to consider,
+    as can also be seen in our flexible roles and profiles approach. By putting too
+    much data into Hiera, it can abstract away from clear coding since the data is
+    then not directly visible in the code. So, it is best to consider whether the
+    complexity elevation is worth it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the issues of Hiera can be its structure, which makes it inaccessible
+    to less involved users. To make Hiera data more visible, **Betadots Hiera Data
+    Manager (**[https://forge.puppet.com/modules/betadots/hdm)](https://forge.puppet.com/modules/betadots/hdm
+    ) is an excellent option as it allows graphical search, updates, and deletion
+    of Hiera data. However, in production environments, this should be limited to
+    just viewing data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 9.2 – Hiera Data Manager example lookup](img/B18492_09_02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 9.2 – Hiera Data Manager example lookup
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another option to make Hiera data more accessible for self-service is the PDS,
+    which will be discussed in detail in [*Chapter 13*](B18492_13.xhtml#_idTextAnchor321).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – troubleshoot Hiera
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Troubleshoot the Hiera data in the production environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SSH to the primary server, elevate to root, and deploy the `lab_error` environment:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Perform a lookup with the `debug` flag of the `profile::error::example` key
+    on the primary server in the `lab_error` environment and work through the errors
+    found, correcting them in your control repo and running the `code deploy` command
+    from the previous step:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Resolve the errors in the data in `controlrepo-chapter9/data` and `hiera.yaml`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Run the same command with `explain` to understand how it gets to the current
+    solution and why it is not finding a value based on its `os.family` fact:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Update the Hiera data in the `control` repo branch, `lab_error`, and redeploy
+    so that the lookup now finds the value for the `os.family` fact of the primary
+    node:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**puppet code deploy environment** **lab_error --wait**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**puppet lookup profile::error::example --debug --****environment lab_error**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Check the commented solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/data_solutions](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch09/data_solutions).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As part of creating the lab environment in the *Technical requirements* section,
+    HDM has been installed using the `puppet-HDM` module. Try using HDM to view the
+    data following these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Open a web browser at `http://<public IP` `of puppetserver>:3000`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Complete the signup details to create an admin user (the details are not important).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click `non-admin user` (the details again are not important).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click the admin user name on the top right, log out, and then log back in as
+    the non-admin user you created.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select `environment production` and `lab_error` in turn.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Explore the Hiera keys and values visible to HDM in each environment.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we examined how Puppet can handle data using the Hiera tool,
+    reducing how much complexity would need to be put into code to represent a node,
+    data center, organizational, OS, and other configuration differences. Hiera was
+    shown to be a tool based on hierarchies of data that allowed us to access different
+    files based on facts. It had built-in backends for data to be stored in YAML,
+    JSON, HOCON, and EYAML files. The data structure was shown; we examined how values
+    could be put into data files and how lookups can be performed; the types of merge
+    were examined here as well as how special setups such as `knockout` prefixes can
+    be used in arrays.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then showed how some custom backends can be used that have data types on
+    different profiles; typically, these are specific integrations such as Vault or
+    EYAML from the Forge, or in-house developed integrations to access data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then covered how Hiera worked over three layers – global, environment, and
+    module – showing how global layers had little purpose in a modern Puppet setup
+    but can be used as an override system, environment as the main source for data,
+    and module allowing for defaults to be set on modules. Some common approaches
+    to structuring hierarchies were then discussed, including an approach that stepped
+    through the name of the node, the node owner, the node’s purpose, the location
+    of the node, and common to all nodes’ data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A review of how to make decisions on whether to use data in code or in Hiera
+    showed that it depended on how flexible data needed to be, and this can vary from
+    static data that is hardcoded in Puppet code to more advanced and flexible data
+    requiring the full hierarchy to be described accurately. It was advised not to
+    build ahead but to refactor as required so as not to make data more complicated
+    than it needs to be.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then discussed how to keep data secure in storage and transport, and when
+    being used in Puppet catalogs, reports, and PuppetDB. We saw how to use `eyaml`
+    to secure data in storage by encrypting values with the more flexible PGP approach,
+    allowing multiple keys and teams. Then, the `Sensitive` value was shown to ensure
+    values were not exposed in logs or code. This did not prevent values in catalogs
+    and reports, and the `node_encrypt` module was shown to allow resources and values
+    to be encrypted and be applied at configuration time using `Deferred` functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Approaches to debugging and troubleshooting were then reviewed, highlighting
+    the difference between `--explain` and `--debug`. The former allows an understanding
+    of how the hierarchy was reviewed and the latter returns errors such as syntax
+    and failures with backends. The advice was given to be careful with using Hiera
+    as a classifier, as this would abstract classification information away from code,
+    but highlighted that the PDS did use this approach in later chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, having reviewed the Puppet language in detail, the focus
+    will change to the Puppet infrastructure. We will examine the open source components
+    that make up the Puppet platform, how they make themselves available to the system
+    via APIs, and how they communicate and log. The full Puppet agent life cycle will
+    be examined, looking at the process of agent registration and communication with
+    the platform. PuppetDB and PostgreSQL will be seen to allow the storage of data
+    such as facts, reports, and catalogs, allowing discovery and examination with
+    the **Puppet Query Language** (**PQL**). Compile servers will then be discussed
+    as Puppet’s method of scaling horizontally.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Part 3 – The Puppet Platform and Bolt Orchestration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this part, you will understand how Puppet is structured as a platform, how
+    the various components work together and communicate, and the common architecture
+    approaches used to deliver scale. We will then show the various methods that can
+    be used to classify which code is applied to servers and how code is versioned
+    and deployed to infrastructure. Bolt will be introduced as Puppet’s way of running
+    procedural scripts and code, which can be traditional scripts in various languages
+    or plans based on the Puppet language. We will then review how you can monitor,
+    tune, and integrate Puppet infrastructure with various tools and third-party products.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part has the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 10*](B18492_10.xhtml#_idTextAnchor252), *Puppet Platform Parts and
+    Functions*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 11*](B18492_11.xhtml#_idTextAnchor272), *Classification and Release
+    Management*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 12*](B18492_12.xhtml#_idTextAnchor293), *Bolt for Orchestration*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 13*](B18492_13.xhtml#_idTextAnchor321), *Taking Puppet Server Further*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

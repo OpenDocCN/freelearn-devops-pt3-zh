@@ -1,0 +1,1891 @@
+- en: '7'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Securing Your Code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that you know how to configure your GitLab CI/CD pipeline to verify that
+    your project’s code is meeting its requirements, the next step in constructing
+    a pipeline is to add jobs that look for security vulnerabilities. This is an optional
+    step, but since GitLab makes it easy to add security scanning to your pipelines,
+    and since there’s virtually no downside other than adding a few minutes to your
+    pipeline’s runtime, *we recommend that you enable all security scanners that are
+    relevant to* *your projects*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll start this chapter by providing an overview of GitLab’s general strategy
+    around using security scanners; several aspects of security scanning are helpful
+    to understand before you start learning about individual scanners. Then, we’ll
+    explain the purpose of each of the seven types of security testing that GitLab
+    offers: **Static Application Security Testing** (**SAST**), **Secret Detection**,
+    **Dynamic Application Security Testing** (**DAST**), **Dependency Scanning**,
+    **Container Scanning**, **License Compliance**, and **Infrastructure as Code**
+    (**IaC**) **Scanning**. We’ll show you how to enable each type of scanner in your
+    pipelines, and then discuss some sample configuration options and techniques you
+    can use to adjust their behavior to best suit your needs. Finally, we’ll cover
+    three additional GitLab features that make security scanners easier to use and
+    more powerful: reading scanner reports, tracking scanner findings using vulnerability
+    management, and integrating outside security scanners.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you’ll have learned some critical skills for keeping
+    your code safe and your data secure. You’ll understand how to identify which GitLab-provided
+    security scanners are relevant to your project. You’ll know how to add them to
+    your CI/CD pipelines and configure their behavior to suit your needs. You’ll have
+    a solid grasp of the different types of security reports that GitLab provides.
+    You’ll also be able to track your team’s progress in remediating any security
+    vulnerabilities. Finally, you’ll understand how to add third-party security scanners
+    to your pipelines. In short, you’ll feel confident that your code is as secure
+    as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following topics will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding GitLab’s security scanning strategy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using SAST to scan your source code for vulnerabilities
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Secret Detection to find private information in your repository
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using DAST to find vulnerabilities in web applications
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Dependency Scanning to find vulnerabilities in dependencies
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Container Scanning to find vulnerabilities in Docker images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using License Compliance to manage licenses of dependencies
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using IaC Scanning to find problems in infrastructure configuration files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding the different types of security reports
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing security vulnerabilities
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Integrating outside security scanners
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GitLab uses the same handful of configuration techniques for all of its security
+    scanners. To avoid repetition, we’ll discuss these in detail only in the section
+    dedicated to the first scanner type (SAST). When we discuss configuration techniques
+    for the other scanners, we’ll refer you back to the SAST section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While we’re on the subject of scanner configuration, it’s important to understand
+    that most of these scanners offer *many* configuration options, and it is impossible
+    to discuss all of them – or even most of them – in this book. Instead, we’ll show
+    you how to get each scanner up and running in a fairly basic form, give you a
+    sample of the kinds of configuration options that exist for each scanner, and
+    point you to the official GitLab documentation as the best source of up-to-date
+    information about the full range of configuration settings for each type of scanner.
+    Fortunately, the documentation on this subject is both clear and comprehensive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, note that many of these scanners are only available to users with a
+    GitLab Ultimate license. However, GitLab has a history of making Ultimate-only
+    scanners available to Premium or Free license users in later releases. At the
+    time of writing, SAST, Secret Detection, Container Scanning, and Infrastructure
+    as Code Scanning are available to all users regardless of license tier, albeit
+    sometimes in a feature-limited (but still useful) form. So, if you find your favorite
+    scanner is not yet available for your license, there’s a chance that it will become
+    available in the future, even if you never upgrade your license.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As with the previous chapters, you’ll get the most out of this chapter if you
+    have an account on a GitLab instance (either self-managed or **Software-as-a-Service**
+    (**SaaS**)) that you can log in to and use for practicing and experimenting with
+    the concepts discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding GitLab’s security scanning strategy
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: There are a few fundamental principles underlying GitLab’s security scanners
+    that will be useful for you to know before you learn about what each scanner does.
+    Let’s look at those now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab uses open-source scanners
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It might surprise you to learn that all the security scanners discussed in this
+    chapter are **third-party, open-source tools**; none of them are developed in-house
+    by GitLab. For example, IaC scanning is performed by the open-source tool **Keeping
+    Infrastructure as Code Secure** (**KICS**), and Dependency Scanning is handled
+    by the open-source tool **Gemnasium**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That doesn’t mean that these third-party scanners are inferior to GitLab-developed
+    software in any way. They are all rigorously researched and vetted by GitLab before
+    they are adopted as official GitLab scanners. Furthermore, GitLab frequently reviews
+    new open-source security scanners to see whether they should replace or supplement
+    any of the product’s current scanners. So, don’t worry – these scanners are all
+    first-rate additions to your pipelines, even if their code wasn’t written by GitLab
+    developers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Security scanners that are developed by organizations or companies that are
+    dedicated solely to security are likely to have fewer bugs than proprietary software
+    developed by companies for whom security is not their primary focus. As the saying
+    about open-source code goes, “*given enough eyeballs, all bugs are shallow.*”
+    Making bugs shallow – and then fixing them – is especially important for security-related
+    tools: using a poorly designed security scanner that gives you the false impression
+    that your code is secure is worse than knowing nothing about your product’s security
+    at all.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since these scanners are open-source software, what’s stopping you from downloading
+    them yourself and running them independently of GitLab? Nothing! But it’s hard
+    to see why you’d want to. The scanners that are blessed by GitLab are simple to
+    integrate into GitLab CI/CD pipelines, and GitLab automatically updates them to
+    ensure that your pipelines always run the latest versions (unless you specify
+    otherwise), with no action on your part required. If you have CI/CD pipelines
+    set up in GitLab already, and if your GitLab license tier gives you access to
+    the scanners you need, we advise that you use these tools within GitLab rather
+    than running them independently. You would have nothing to gain and a fair amount
+    to lose in the form of extra system administration and maintenance if you were
+    to download and run them on your own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which languages do GitLab’s security scanners support?
+  prefs: []
+  type: TYPE_NORMAL
+- en: To see a list of all the languages supported by each type of GitLab security
+    scanner, as well as the names of the open-source tools that are used, consult
+    the official GitLab documentation ([https://docs.gitlab.com/ee/user/application_security/sast/#supported-languages-and-frameworks](https://docs.gitlab.com/ee/user/application_security/sast/#supported-languages-and-frameworks)).
+    Keep in mind that these details do change from time to time, so it’s wise to revisit
+    the documentation periodically to see which new languages are supported by the
+    different scanner types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scanners are packaged as Docker images
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When a security scanner runs in your GitLab CI/CD pipeline, it runs within a
+    Docker container. This is irrelevant for most GitLab users, but there are three
+    implications that you should know about.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, because the pipeline job that runs a scanner has to pull down the Docker
+    image for that scanner, this will add a minute or so to the job’s runtime. Of
+    course, the exact delay depends on your network speed and on whether the image
+    has been cached somewhere. This usually isn’t a big problem since many scanners
+    take a few minutes to run, even after their Docker image has been downloaded.
+    Also, most non-trivial pipelines run in minutes rather than seconds, so you probably
+    won’t notice any short delays caused by pulling down security scanner Docker images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Second, any security scanning jobs must run on a GitLab Runner that uses Docker
+    or Kubernetes executors. You can refresh your memory about GitLab Runner executors
+    by referring to the previous chapter if you’re not sure what this means. If your
+    organization uses the SaaS version of GitLab (that is, you use the instance at
+    `gitlab.com`), this problem is solved for you: all SaaS-provided GitLab Runners
+    use one of those two executors. If you’re using a self-managed instance of GitLab,
+    you probably have a GitLab administrator who is in charge of setting up all the
+    GitLab Runners that your team needs. Just make sure they understand that at least
+    some of those Runners must use Docker or Kubernetes executors if you intend to
+    add security scanning to your pipelines.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Third, because your jobs download security scanner Docker images every time
+    they run, you never have to worry about updating your security scanners. GitLab
+    makes sure that the latest version of each scanner is included in the Docker image
+    pulled down by each job. That’s one less maintenance chore for you to keep track
+    of.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some scanners use different analyzers for different languages
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Some scanners, such as SAST and Dependency Scanning, rely on different open-source
+    tools for scanning code written in different computer languages. GitLab calls
+    these language-specific tools **analyzers**. For example, when you enable SAST
+    in a project that contains only Go code, GitLab will run an open-source, Go-aware
+    SAST analyzer called **Semgrep**. But when you enable SAST on a Ruby-based project,
+    GitLab runs a different open-source analyzer called **Brakeman**, which knows
+    how to scan Ruby code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You don’t need to tell GitLab which analyzers to run – it detects the computer
+    languages in your project automatically and only runs the analyzers that work
+    with those languages. It does this by looking for `.py`, it assumes that your
+    project contains Python code and runs Python-based analyzers for any security
+    scanners you’ve enabled. It also looks for certain configuration files that are
+    traditionally used with various languages, such as `Gemfile` or `Gemfile.lock`
+    in Ruby projects, `requirements.txt` in Python projects, and `pom.xml` in Java
+    projects that use the Maven build tool. Most of the time, you don’t need to worry
+    about making your computer languages easy for GitLab to detect – it’s smart enough
+    to do the right thing with almost all projects. But if you find that it’s not
+    recognizing languages as it should, you can see lists of trigger files in the
+    official GitLab documentation for each security scanner type, and make sure that
+    you have at least one trigger file for each language in your project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s fine to use multiple computer languages in the same project. GitLab will
+    detect all languages in the project’s repository and run the appropriate analyzer
+    for each, assuming that an analyzer exists for that scanner type and language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For some combinations of scanner type and language, GitLab has more than one
+    analyzer available. When this occurs, it runs all of the relevant analyzers. For
+    example, if you enable SAST on a project with Python code, it will run both the
+    **Semgrep** and **Bandit** analyzers. If both of the analyzers detect the same
+    problems, you may see duplicate results in the scanner reports, with one result
+    from each analyzer. This might clutter up your reports somewhat, but it’s better
+    to be safe than sorry. Also, since every open-source analyzer is written by a
+    different development team with a different focus or area of concern, and since
+    different analyzers have different levels of comprehensiveness or maturity, running
+    multiple analyzers is a great way to maximize the number of vulnerabilities found.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If running more than one analyzer for a particular language is producing too
+    much noise, you can configure most scanners to disable individual analyzers. For
+    example, you could tell GitLab to run only the Bandit analyzer and not the Semgrep
+    analyzer when performing SAST scans on Python code. However, we generally recommend
+    that you keep as many analyzers enabled as possible to reduce the chance of vulnerabilities
+    slipping through. And there’s no need to disable analyzers for languages that
+    are not included in your project: GitLab is smart enough to run only the analyzers
+    that support the languages that it detects.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Not all analyzers for a particular scanner type will find the same problems.
+    For example, if you have a divide-by-zero vulnerability in Go code and the same
+    vulnerability in Ruby code, one of the two analyzers might report this as a potential
+    problem, while the other analyzer might ignore it. Again, this is the result of
+    different open-source analyzers being written and maintained by different teams
+    of developers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Vulnerabilities don’t stop the pipeline
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The default behavior for most GitLab jobs is to abort the pipeline as soon as
+    the stage containing the failed job completes. After all, if your tests fail in
+    an early stage, there’s no need to deploy your code in a later stage. GitLab’s
+    security scanners sort of follow this standard… and sort of don’t. Let’s explain
+    what we mean by that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Every security scanner that runs successfully marks its pipeline job as *passed*,
+    regardless of whether it detected any vulnerabilities. In other words, seeing
+    that a security scanner’s pipeline job has a *passed* status simply means the
+    scanner ran to completion – it doesn’t tell you anything about whether the scanner
+    found vulnerabilities. So even if your pipeline’s scanners find a huge number
+    of vulnerabilities in your code, their jobs will be given a *passed* status and
+    the pipeline will continue to later stages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This might seem counterintuitive. Isn’t detecting a vulnerability similar to
+    having an automated test fail? Well, yes and no. Vulnerabilities are typically
+    something that your team should look at carefully, but as you’ll learn later when
+    we talk about GitLab’s vulnerability management feature, you might decide not
+    to fix the vulnerability. GitLab doesn’t want to presume that you will fix all
+    the vulnerabilities before deploying your code to production, so it continues
+    running pipelines even after vulnerabilities are found. This approach equips development
+    teams with all the information GitLab can provide about the security of their
+    code, without asking the tool to make any assessments about whether that code
+    is suitable to be deployed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Findings appear in three different reports
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Any vulnerabilities or other problems discovered by GitLab’s security scanners
+    appear in reports that consolidate the results from all the different scanners.
+    There are three of these reports in different places within the GitLab GUI. Each
+    report shows subtly different information than the others, and it’s important
+    to understand the purpose of each so that you don’t misinterpret the results.
+    We’ll discuss this topic in more detail later in this chapter, but for now, we’ll
+    just introduce you to the vulnerability report, which you can find by clicking
+    **Security & Compliance** in the left navigation pane and then clicking **Vulnerability
+    report**. When we discuss the security scanners in the rest of this chapter, we’ll
+    include screenshots of sample findings from each scanner as they appear in the
+    vulnerability report.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipelines can use non-GitLab-provided scanners
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Although GitLab’s built-in scanners might give you all the protection you need
+    from security vulnerabilities, it’s possible to supplement your security testing
+    by adding many other third-party scanners to your pipelines. We’ll discuss how
+    to configure this type of integration in a dedicated section (*Integrating outside
+    security scanners*) toward the end of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you understand some of the concepts that underly all of GitLab’s security
+    scanners, let’s look at each scanner to learn what kinds of problems it can spot
+    and how to use them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using SAST to scan your source code for vulnerabilities
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let’s start our survey of scanners with **SAST**. *We encourage you to read
+    this section carefully, even if you don’t intend to use SAST*, because many of
+    the principles and practices involved with using SAST carry over to the other
+    scanners as well. Understanding how to use SAST gives you a huge head start in
+    terms of enabling, configuring, and reading the findings of other scanners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding SAST
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: SAST looks at your project’s source code, as opposed to interacting with your
+    code as it runs. Sometimes, this approach is referred to as *white-box scanning*,
+    meaning that the scanner looks *inside* your app to inspect its code instead of
+    staying *outside* the app and simply analyzing its behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This scanner looks for bad coding practices, anti-patterns, or the hallmarks
+    of poorly designed or structured code, which are sometimes referred to as *code
+    smells*, that could potentially result in exploitable security problems. For example,
+    consider this single line of Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: It looks harmless, but non-Python programmers might be surprised to learn that
+    it’s considered a security vulnerability. A Python best practice is to use the
+    language’s built-in `tempfile` module to create and manage temporary directories
+    and files. Any directories or files created with this module are automatically
+    deleted when the program finishes executing, which ensures that no sensitive data
+    is accidentally left on the computer’s filesystem. Creating a directory to hold
+    temporary files is dangerous because it’s easy to forget to clean up after yourself
+    by deleting this directory when the program no longer needs it. This is exactly
+    the kind of problem that SAST is designed to detect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned in the previous section, different SAST analyzers for different
+    computer languages will look for different security vulnerabilities. The GitLab
+    SAST analyzer for a different language might not detect a similar problem in code
+    written in that language, either because the code isn’t considered to be a vulnerability
+    in that language or because the analyzer might not be as mature or robust as GitLab’s
+    Python SAST analyzers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling SAST
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are two ways to enable SAST in a GitLab project’s pipeline: manually,
+    or with the GitLab GUI. They boil down to the same thing since they both result
+    in adding a few lines of content to the `.gitlab-ci.yml` file that configures
+    your CI/CD pipeline. Let’s look at both approaches.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling SAST manually
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'To enable SAST manually, you need to do two things to your project’s `.``gitlab-ci.yml`
+    file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure the pipeline has a `test` stage defined
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Include a template called `Security/SAST.gitlab-ci.yml`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The code looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first of these steps is easy since pipelines usually already have a `test`
+    stage defined by the time you must add security scanning. But if you’re adding
+    security scanning before you’ve added any other test-related jobs, just add the
+    first two lines in the preceding snippet. Of course, if you already have other
+    stages defined, don’t delete them when adding your `test` stage – just add `test`
+    to the existing stages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that the order in which you list stages matters because that’s the
+    order in which GitLab will run them in your pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second step involves adding a template to your CI/CD configuration. A template
+    is a file provided by GitLab that contains CI/CD code that defines new job definitions
+    or adds other features. By including a template in your CI/CD configuration file,
+    you can add job definitions that perform tasks such as SAST scanning without having
+    to know how those jobs work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this case, the template adds a job definition for each GitLab SAST analyzer.
+    It also adds logic to detect which languages exist in your project so that it
+    knows which of the SAST-related jobs to run. If you imagine that your `hats-for-cats`
+    project contains only Python code, you would expect this template to run two new
+    jobs in the project’s pipeline: one for Bandit and one for Semgrep, which are
+    GitLab’s two Python SAST analyzers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Sure enough, if you commit this change to `.gitlab-ci.yml` and look at the
+    details of the pipeline triggered by that commit, you’ll see that those jobs are
+    now included in your pipeline, under the `test` stage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.1 – Python SAST jobs on the pipeline details page](img/B18073_07_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 – Python SAST jobs on the pipeline details page
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember that if your project contains code in a language other than Python,
+    you’ll see different job names and potentially a different number of jobs on this
+    page. And if your project contains code in Python and another language, you’ll
+    see jobs for the SAST analyzers for each of those languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling SAST with the GitLab GUI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Strangely enough, using the GUI to add SAST scanning to your pipeline is a
+    more involved process than doing so manually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Start the process by navigating to the **Security and Compliance** option in
+    the left pane and then selecting **Configuration**. This will direct you to a
+    control panel for enabling and configuring most (but not all) of GitLab’s security
+    scanners.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The exact GUI controls sometimes change with new GitLab releases, but there
+    will be a button that lets you enable SAST. Clicking that button will take you
+    to a new page for configuring SAST.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You can usually keep all the options set to their default values and click the
+    button at the bottom that creates a merge request. That will take you to a merge
+    request creation page.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once again, you can usually leave all the fields at their default values and
+    click the button at the bottom to create the merge request.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Navigate to the merge request and merge it to complete the process. Your `.gitlab-ci.yml`
+    file should now include the `test` stage if it didn’t do so already, as well as
+    include the SAST template described in the previous section. You can see how simply
+    editing that file manually would have probably been much easier!
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Once you’ve enabled SAST using the GUI, you should see the same results as
+    if you’d enabled SAST manually: two new jobs will be added to each run of your
+    pipeline, corresponding to the two Python-based analyzers that GitLab supports
+    for SAST.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring SAST
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now, you know how to add SAST to your GitLab pipeline. But what if you want
+    to change SAST’s default behavior? The techniques you can use for configuring
+    SAST are also used to configure most of the other security scanners. We’ll discuss
+    these techniques in detail here and then refer you back to this section instead
+    of repeating this information when we introduce you to the other scanners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are three ways to configure SAST or any other security scanner:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In `.gitlab-ci.yml`, set a global variable
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In `.gitlab-ci.yml`, override a job definition that was originally added by
+    the template you included, and set a job-scoped variable for that job
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the GitLab GUI
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Which of these three techniques you use to configure SAST or any other scanner
+    depends on what configuration option you want to set. Unfortunately, you don’t
+    get to pick which of these techniques you’d like to use to set a particular configuration
+    option – you have to refer to the GitLab documentation to see which technique
+    or techniques you must use to set the configuration option you’re interested in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s see some examples of configuring SAST.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring SAST with a global variable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'First, say that you want to disable the Semgrep SAST analyzer for Python. You
+    can do that by setting a global variable within `.gitlab-ci.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you add this variable to your CI/CD configuration file and then rerun your
+    pipeline, you’ll notice that the `semgrep-sast` job you saw in the preceding screenshot
+    is now gone.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, if your CI/CD configuration file already has a `variables` section,
+    you should add this new variable to any existing variables instead of creating
+    an entirely new `variables` section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring SAST by overriding a job definition and setting a job-scoped variable
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Next, imagine that you want the Bandit SAST analyzer not to scan certain directories,
+    such as a directory that contains test code. Perhaps you know that your tests
+    are filled with security vulnerabilities, but you don’t care because customers
+    will never use that code. You can set that configuration option by editing `.gitlab-ci.yml`
+    to override the definition of the job that triggers Bandit, and setting a job-scoped
+    variable within the new job definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Don’t be thrown by the strange-looking value of the variable. This particular
+    variable expects a value written in the slightly odd `fnmatch` syntax. That’s
+    the kind of detail you’ll learn about when you consult the GitLab documentation
+    to learn more about various configuration options for this and other scanners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you add this code to your CI/CD configuration file and rerun your pipeline,
+    the Bandit analyzer will stop reporting any vulnerabilities it finds in the `my_tests`
+    directory. We haven’t talked about how to view the results of these analyzers
+    yet, but don’t worry – that will come later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring SAST with the GUI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Finally, you can use GitLab’s GUI to set certain configuration options for some
+    scanners. For example, on the same GUI page that you used to enable SAST, you
+    can configure SAST to use an analyzer from an alternative Docker image, change
+    the pipeline stage it runs in, or change the depth of directories it searches
+    when detecting the languages in your project. You can also use that GUI page to
+    disable certain language-specific SAST analyzers if you find that they are unhelpful
+    or produce findings that duplicate the results generated by other analyzers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to other scanner types, SAST makes an unusually large number of configuration
+    options available from the GUI. The GitLab documentation can give you more information
+    about which options are available in the GUI for other scanners, and which options
+    must be set by editing `.``gitlab-ci.yml` instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing SAST’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Once you’ve enabled and, optionally, configured SAST, it will run the appropriate
+    analyzer(s) for whatever language(s) it detects in your project, and will display
+    its findings in GitLab’s three security reports. For example, here’s the finding
+    for the vulnerability related to temporary directories that was described previously,
+    as shown in GitLab’s **Vulnerability** **Report** area:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.2 – SAST finding](img/B18073_07_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 – SAST finding
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This wraps up our summary of SAST. Let’s move on to a separate but related
+    security scanner: Secret Detection.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Secret Detection to find private information in your repository
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: You can think of Secret Detection as a special, focused version of SAST that’s
+    dedicated to finding secrets that are accidentally lurking in your source code,
+    such as United States social security numbers or AWS deploy keys. It operates
+    in the same way as SAST – that is, by scanning your source code rather than by
+    interacting with your executing application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Secret Detection used to be part of GitLab’s SAST feature but was eventually
+    spun off to become its own first-class security scanner. We are mentioning this
+    so that you won’t be confused if you run into references in old documentation
+    or blog posts suggesting that Secret Detection is performed by GitLab’s SAST scanner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding Secret Detection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Secret Detection looks for a wide variety of strings that represent secrets
+    that should not normally be stored in files in a Git repository. In addition to
+    the social security numbers and AWS deploy keys already mentioned, here are just
+    a few of the 50 or so kinds of secrets it looks for:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Short- and long-lived Dropbox API tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GitLab personal access tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Heroku API keys
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Private SSH keys
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stripe access tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, Secret Detection should find and report on all three of the secrets
+    contained in this snippet of Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Secret Detection is based on **regular expressions** (or **regexes**): the
+    scanner has a regex for each type of string it tries to detect and reports any
+    string literals that match those regexes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The use of regexes means that Secret Detection is completely language-agnostic.
+    Since it just scans files to see whether any strings match regexes, it doesn’t
+    care what computer language is used in your repository. This means that, unlike
+    SAST, Secret Detection doesn’t require separate analyzers for different languages:
+    it uses one analyzer for all source code files. Secret Detection is even file
+    type-agnostic: it will scan configuration files, README files, plain text files,
+    and any other non-binary files in your repository. It can look for strings that
+    match regexes in a JSON configuration file just as easily as it can look for strings
+    in a Go source code file.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While regexes are a powerful tool, Secret Detection’s reliance on them does
+    mean that the scanner has an important limitation: it can’t detect passwords.
+    This sounds surprising at first but makes sense once you realize that a well-written
+    password should be difficult to capture with a regex. It’s hard to think up a
+    regex that would capture any possible password without also matching non-secret
+    text such as a sentence in documentation or a series of words in a GUI element.
+    But other than this one case, Secret Detection does a great job at ferreting out
+    strings that should be kept in a more secure location than a Git repository.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s one fantastic feature that Secret Detection is the only GitLab scanner
+    to offer: **historic mode**. If you enable this mode, Secret Detection will scan
+    all the commits in your repository to see whether there have *ever* been any secrets
+    committed to it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why is historic mode important? Since one of the goals of version control systems
+    such as Git is to allow you to go back to the state of files as they were at any
+    point in time, it’s easy to see any secrets that have ever been committed, even
+    if they were immediately removed in the very next commit. Once a secret is in
+    a Git repository, it’s always retrievable. So, whenever Secret Detection discovers
+    a secret, the entry it creates in any of the security scanner reports always mentions
+    that the secret should not just be removed, but *revoked*. Any secret that makes
+    its way into a Git repository should be considered to have been exposed to the
+    world, and should no longer be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is an extremely important point! If Secret Detection finds a password,
+    you should immediately retire that password and set a new one (which, of course,
+    you shouldn’t check into Git). If it detects a deploy key, you should cancel that
+    key and create a new one. This principle holds for any kind of secret. If Secret
+    Detection spots it, simply removing it from the repo is not sufficient. It should
+    be considered no longer usable and should be replaced as soon as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling and configuring Secret Detection
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Since Secret Detection used to be a part of SAST, it’s not surprising that you
+    can use the same manual or GUI-based methods to enable both scanners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable Secret Detection manually, make sure you have a `test` stage defined
+    in your pipeline. Then, include the GitLab-provided template that contains the
+    Secret Detection-related job definitions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s all there is to it! The next time you trigger a pipeline, you will notice
+    that a Secret Detection job is now running under the `test` stage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable Secret Detection using the GUI, you can use the same process as for
+    SAST: click the `.gitlab-ci.yml` file to include the Secret Detection template
+    described previously. If you merge the request and trigger a new pipeline run,
+    you’ll find that Secret Detection is now enabled in your pipeline. As with SAST,
+    many people find this process more cumbersome than simply editing `.gitlab-ci.yml`
+    manually, but your experience may vary.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like most GitLab security scanners, Secret Detection has several configurable
+    options. You can learn about all of the options and how to set them in the GitLab
+    documentation, but two are especially worth highlighting here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, you might want to enable the special `test/` directory, and have fake
+    deploy keys stored in a `docs/` directory. You would probably want to prevent
+    Secret Detection from flagging these as security vulnerabilities by excluding
+    those directories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can set both of these configuration options by overriding the `secret_detection`
+    job definition that’s provided by the Secret Detection CI/CD template and then
+    setting job-scoped variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: With Secret Detection already configured and enabled, let us now view its findings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing Secret Detection’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Once you’ve enabled and configured Secret Detection to your liking and it has
+    run successfully in a pipeline, you can see the results in the **Vulnerability
+    Report** area, just like you did with the SAST results. For example, here are
+    the results that are generated by running Secret Detection on the Python code
+    provided previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.3 – Secret Detection findings](img/B18073_07_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 – Secret Detection findings
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that you’ve got a handle on Secret Detection, it’s time to look at the
+    next security scanner in the GitLab arsenal: DAST.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using DAST to find vulnerabilities in web applications
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let’s move on to the next type of security scanner: **DAST**. This scanner
+    interacts with your code as it runs instead of looking at your source code. If
+    SAST and Secret Detection are examples of “white-box” testing – they look inside
+    your app to see how it works – then DAST is a form of “black-box” testing – it
+    just sends input and looks for potential problems or security vulnerabilities
+    in the output, without knowing how your application performs that transformation
+    of input into output.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding DAST
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'DAST tests either **web application URLs** or **Web API endpoints**. If you
+    feed DAST the URL of a website’s home page, it will visit that page, identify
+    any links or clickable GUI elements on the page, follow those links or click those
+    elements, and repeat the process. It will continue this “spidering” procedure
+    until it has visited every page that it can reach within your app. At each step,
+    it checks the results returned by the web application to see whether it finds
+    any problems. Here are just three examples of the sorts of things it looks for:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exposure of private personal information
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Missing cross-site request forgery tokens
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Accepting sensitive information such as passwords through query strings
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you tell DAST to scan a Web API endpoint, it sends information to the endpoint
+    and analyzes the response, looking for the same sorts of problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of whether it targets URLs or Web API endpoints, DAST can operate
+    in either **passive** or **active** mode. Every time DAST runs, it performs a
+    passive scan, which means that it makes benign, non-malicious requests similar
+    to the requests sent by a real user. If you want a deeper analysis of your web
+    app, you can enable a so-called **full scan**, which adds active attacks to the
+    passive requests that it normally makes. These active attacks are more aggressive
+    and could be considered malicious if they were directed at a website or Web API
+    that you don’t own. However, they are invaluable in that they mimic the types
+    of attacks that actual hackers might use, and therefore reveal many weaknesses
+    that could be exploited by malicious actors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling and configuring DAST
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: DAST has a plethora of configuration options. We’ll cover a handful of the most
+    commonly used options, which will be enough to get you up and running with DAST.
+    As usual, the official GitLab documentation has full details on all of the ways
+    you can configure DAST to behave in non-default ways.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s easiest to enable and configure DAST using the GUI. The exact details of
+    this process may change in future GitLab releases, so we’ll cover the high-level
+    concepts without going too far into specific details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can start enabling and configuring DAST by visiting the same security scanner
+    configuration page you used for SAST and Secret Detection: click the **Security
+    and Compliance** option in the left navigation pane and select **Configuration**.
+    From there, you’ll be able to click a button to enable DAST, though the button
+    will first take you to another page that lets you set up some configuration options
+    that DAST needs to go through.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, you’ll need to set up a **scanner profile**. This tells DAST whether
+    to use only passive scans or to perform active scans as well. You can also set
+    timeout values to limit the amount of time DAST spends spidering a website. GitLab
+    will let you name this profile so that you can use the same profile later with
+    several different URLs or Web API targets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, GitLab will guide you to create a **site profile**. This profile contains
+    the URL of the website’s home page or Web API endpoint that you want to scan.
+    If you’re scanning a website, you can optionally add authentication credentials
+    to the site profile. These allow DAST to sign in to the website like a user would,
+    which typically exposes additional URLs to be scanned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After you’ve created the two profiles, the GUI will present a code snippet
+    that you can copy and paste into your project’s `.gitlab-ci.yml` file. This is
+    a slightly different workflow than the merge request-driven workflow you use to
+    enable SAST or Secret Detection through the GUI, but the result is the same: you
+    add a few lines of code to your CI/CD configuration file, instructing DAST to
+    run in your pipeline.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which URLs can you target with DAST?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although you can create a site profile with the URL of any website or web API,
+    we strongly recommend that you only target websites and API endpoints that you
+    own and manage. This is especially true if you are using DAST’s **full scan**
+    option, which conducts more aggressive scanning. Furthermore, we recommend that
+    you run DAST only against your application as it runs in a review, staging, or
+    pre-production environment. Running DAST against the production version of your
+    application could destabilize it, degrade performance for real users, or even
+    knock it out completely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you prefer to enable and configure DAST manually, you’ll need to add a `dast`
+    stage to your pipeline *after* the `deploy` stage. You must also include the DAST
+    template, set a global variable with the URL that you’d like DAST to scan, and
+    set any additional global or job-scoped variables that you need to modify DAST’s
+    behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You might have noticed that DAST is the first scanner we’ve run across that
+    expects to run in its own dedicated stage. The reason for this becomes obvious
+    once you remember that DAST scans executing code and not source code: it can’t
+    execute your code until it has been built and deployed. Those tasks usually take
+    place in the `build` and `deploy` stages, so DAST must occur in a stage that falls
+    after those stages in the pipeline.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because DAST can sometimes take a long time to work its way through all the
+    pages of a website, and because you don’t always want to hold up your pipeline
+    while DAST does its thing, GitLab also allows you to run DAST scans on demand
+    or according to a schedule. The process of triggering an on-demand scan or creating
+    a scanning schedule is quite straightforward: in the **Security & Compliance**
+    option in the left navigation pane, select **On-demand scans** and let the GUI
+    wizard guide you through the process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, DAST offers an unusually wide array of configurable
+    options. There are far too many to describe here, but the options we’ve discussed
+    so far are enough for you to get useful vulnerability findings in most cases.
+    If you need to set timeout values for the spider process, disable particular vulnerability
+    checks, set login credentials for the target website, or adjust DAST’s behavior
+    in other ways, you can find all the information you need in the official GitLab
+    documentation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing DAST’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The results of a DAST scan show up in the **Vulnerability Report** area, just
+    like the results for SAST and Secret Detection. Since we don’t have a full **Hats
+    for Cats** app available to run DAST against, here are some sample results from
+    running a DAST passive scan against [https://example.com](https://example.com).
+    You can see that all of the results concern header fields, which is the most common
+    type of finding resulting from passive scans:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.4 – DAST findings](img/B18073_07_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 – DAST findings
+  prefs: []
+  type: TYPE_NORMAL
+- en: That concludes your introduction to DAST. Now, let’s change gears and investigate
+    Dependency Scanning, a type of security scan that looks at code that you’ve imported
+    into your project from some outside source.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Dependency Scanning to find vulnerabilities in dependencies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Why write your own functions when someone else has already written, tested,
+    and documented a library to perform exactly what you need? It’s often easy to
+    find third-party Python modules, Ruby gems, Java JARs, or other open-source software
+    packages that speed up the development of your project. Unfortunately, these third-party
+    dependencies can contain security vulnerabilities, and if you include them in
+    your project, you inherit those problems. This is where GitLab’s Dependency Scanning
+    feature steps in – it ensures that any dependencies you use are free of known
+    vulnerabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding Dependency Scanning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Like SAST, Dependency Scanning supports many languages – including all of the
+    major languages you’d expect – but not every language under the Sun. You can consult
+    the GitLab documentation to see an up-to-date list of supported languages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dependency Scanning knows how to parse the configuration files used by the package
+    managers of each supported language, and it uses this information to determine
+    which dependencies your project relies on. For example, it might scan `Gemfile.lock`
+    in a Ruby project, `requirements.txt` or `requirements.pip` in a Python project,
+    or `pom.xml` in a Java project that uses the Maven build tool. As you can see
+    from the fact that we mentioned two different Python configuration files, the
+    scanner is smart enough to know that some languages use several different files
+    to list their configurations and it can parse all the most commonly used files
+    in each language. Just like SAST, Dependency Scanning can handle projects that
+    contain several different computer languages. It will parse the dependency configuration
+    files for any languages that it detects, and look for vulnerabilities in all of
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, if your Hats for Cats website is built on an old version of the
+    Django web framework, your project might contain a `requirements.txt` file with
+    just one entry:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The scanner looks not just for the names and version numbers of dependencies
+    that your project declares explicitly but also for the names and version numbers
+    of any dependencies that those dependencies have. In other words, it looks recursively
+    through the dependency tree to detect transitive dependencies, as well as direct
+    dependencies. It reports on vulnerabilities found on *any* dependencies within
+    the tree, which means that you might see vulnerabilities reported in dependencies
+    that you didn’t even know your project used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once Dependency Scanning knows the names and version numbers of each dependency
+    in your project, it looks up each dependency name and version number in a database
+    to see whetherthere are known vulnerabilities in that particular version of that
+    particular library. It’s important to understand that Dependency Scanning does
+    not do SAST-style scanning of the dependency code – that is, it does not analyze
+    the code within the dependencies, trying to detect new vulnerabilities. Instead,
+    it uses a much more straightforward strategy. It simply determines whether the
+    database contains any information about vulnerabilities that have *already been
+    discovered* in that version of that dependency. This may sound like an unsophisticated
+    approach, but it turns out to be extremely useful and is quite good at revealing
+    problems with commonly used libraries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dependency Scanning has a special feature that isn’t always available but can
+    be a nice time-saver when it is. If the scanner detects a vulnerability in an
+    old version of a library and knows that the vulnerability has been fixed in a
+    later version of the same library, it will sometimes offer to create a merge request
+    that rewrites your project’s dependency configuration file so that it uses the
+    later, fixed version of the library. This only happens under some circumstances
+    and with some languages but is worth taking advantage of when it’s offered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling and configuring Dependency Scanning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You have the same GUI or manual options for adding Dependency Scanning to your
+    project’s pipelines as you do for SAST, Secret Detection, or DAST. To enable it
+    through the GUI, click the `.gitlab-ci.yml` file, which enables the scanner. Merge
+    the merge request, and you’re done.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Enabling it manually is even simpler. Just make sure your pipeline has a `test`
+    stage defined and add the Dependency Scanning template to `.gitlab-ci.yml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Like the other scanners, Dependency Scanning has several configurable options.
+    Also, like the other scanners, these are controlled either by setting global variables
+    in `.gitlab-ci.yml` or by overriding job definitions and setting job-scoped variables
+    in that file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following code sets a job-scoped variable that tells Dependency
+    Scanning’s Python analyzer to look for a dependency configuration file with a
+    non-standard name instead of the traditional `requirements.txt` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Viewing Dependency Scanning’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The vulnerability report shows any potential security problems detected in
+    your project’s dependencies. For example, here are five critical and high-severity
+    vulnerabilities stemming from Hats for Cats’ dependency on an old version of the
+    Django library, as specified in the sample `requirements.txt` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.5 – Dependency Scanning findings](img/B18073_07_5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.5 – Dependency Scanning findings
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By now, you should have a firm grasp of what Dependency Scanning does and how
+    to use it. Let’s move on and look at a Docker-focused security scanner: Container
+    Scanning.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Container Scanning to find vulnerabilities in Docker images
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Container Scanning does for Docker images what Dependency Scanning does for
+    your project’s dependencies: it checks for known vulnerabilities in the particular
+    versions of Linux distributions that your project uses as a base when it builds
+    Docker images.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding Container Scanning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If you package and deploy your application as a Docker image – or, technically,
+    an Open Container Initiative-compliant image – you should use GitLab’s Container
+    Scanning feature to find known vulnerabilities in the base Linux distribution
+    that your image is built on top of.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you haven’t worked with Docker images before, this might sound mysterious,
+    but it’s not complicated. Think of a Docker image as a little bit like a virtual
+    machine. There’s a special file called `Dockerfile` that serves as a “recipe”
+    for creating that virtual machine. This `Dockerfile` file specifies which Linux
+    distribution to use as the virtual machine’s operating system, which additional
+    software packages you should install on top of Linux to support your application,
+    and ultimately what application you want to install on the virtual machine. This
+    whole stack of the operating system and the dependencies and your application
+    makes up a Docker image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Container Scanning looks for vulnerabilities both in the software packages that
+    come installed by default in that base Linux operating system and in any additional
+    packages that you specified in your `Dockerfile`. As you would expect, the older
+    the Linux distribution, and the more dependencies you install on it, the more
+    problems Container Scanning is likely to find.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although Container Scanning doesn’t know how to find vulnerable packages in
+    all versions of all Linux distributions, it does support the last two or three
+    versions of the most commonly used distributions. Unless you use a truly exotic
+    distribution to serve as the base of your application’s Docker image, you should
+    be able to use Container Scanning. The GitLab documentation has a list of all
+    supported distributions if you’d like to make sure your images are scannable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Container Scanning has an optional feature that is disabled by default: it
+    can also look for vulnerabilities in “language packages,” which are libraries
+    that are added by a language’s package manager. For example, you might use Ruby’s
+    `bundler` utility to install the `Ruby on Rails` gem, or Python’s `pip` tool to
+    install the `Flask` module. You might notice that this functionality covers the
+    same ground as GitLab’s Dependency Scanning – and as a result, often produces
+    duplicate findings. Because of this, many GitLab users rely on Dependency Scanning
+    instead of enabling this feature in Container Scanning.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although Container Scanning can look for problems in any Docker image that it
+    can access via the web, its default behavior is to scan any images it finds in
+    your project’s **Container Registry**. The Container Registry is a feature provided
+    for all GitLab projects and lets you store Docker images in a safe, access-controlled
+    location instead of storing them on a site such as Docker Hub, which is open to
+    everyone, or in an instance of a tool such as Artifactory. To use Container Scanning
+    to inspect an image in the Container Registry, you’ll need your pipeline to build
+    a Docker image and then push it to the registry. We’ll discuss this process in
+    the next chapter on deployment strategies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling and configuring Container Scanning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'You can enable Container Scanning by manually editing `.gitlab-ci.yml` or by
+    using the GitLab GUI. To enable it manually, make sure your pipeline contains
+    a `test` stage and include the Container Scanning template:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To configure Container Scanning with the GUI, you can use the same technique
+    as for the other scanners discussed so far: click the **Security & Compliance**
+    option in the left navigation pane, select **Configuration**, and find the control
+    for enabling Container Scanning. This will produce an MR that adds the preceding
+    template to your CI/CD configuration file. Merge this MR, and you’re done.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you’re happy with having Container Scanning look for Docker images in your
+    project’s Container Registry, these manual or GUI-based techniques for enabling
+    the scanner are the only steps you need to perform. But if you need to change
+    its default behavior, you can use two of the same techniques you’ve used to configure
+    other scanners: set a global variable or override a job definition and set a job-scoped
+    variable. Some of the configuration options available for this scanner include
+    aiming the scanner at a Docker image stored in a location other than your project’s
+    Container Registry, enabling language package scanning, or setting the minimum
+    severity level that a vulnerability must have to be included in the Container
+    Scanning’s findings.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing Container Scanning’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: It’s not unusual for Container Scanning to find dozens of vulnerabilities in
+    a Docker image that you’ve built, especially if you’re using a less-than-recent
+    Linux distribution as your base image. When you consider the huge number of packages
+    that are installed by default on every Linux distribution, and the speed with
+    which vulnerabilities are found in open-source packages, this is not surprising.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, Alpine Linux is known as one of the smallest major distributions,
+    meaning that it has fewer packages installed than other popular distributions,
+    such as Ubuntu or Debian. This makes it a popular distribution to use as a base
+    for Docker images. If you build a Docker image based on Alpine Linux version 3.14.1,
+    which is only 10 months old at the time of writing, Container Scanning finds no
+    fewer than 30 vulnerabilities among its default packages. You can see a handful
+    of the highest severity vulnerabilities found in a Docker image built on this
+    distribution, as displayed in the **Vulnerability** **Report** area:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.6 – Container Scanning findings](img/B18073_07_6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.6 – Container Scanning findings
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we’ve covered the basics of Container Scanning, let’s take a look
+    at yet another security scanner: License Compliance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using License Compliance to manage licenses of dependencies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It can be easy to lose track of what software licenses are used by your project’s
+    various dependencies. It’s also easy to forget which licenses are compatible with
+    your project’s overall license, and which licenses should be excluded for various
+    reasons. This is where GitLab’s License Compliance feature can help out.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding License Compliance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Most open-source libraries are released under a software license. There are
+    hundreds of licenses available – though only 20 or so are commonly used – and
+    the legal details of each vary considerably. If you use a third-party library
+    in your project, you must make sure that the library’s license and the license
+    under which you intend to release your software are compatible with each other.
+    If they are incompatible, you must replace that dependency with an alternative
+    library that uses a friendlier license.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What do we mean by “compatible” when talking about licenses? Most licenses
+    are considered to be **permissive**, meaning that you can use software released
+    under that license for almost any purpose. Two well-known examples of this type
+    of license are the MIT license and the BSD license. You generally won’t face any
+    compatibility problems if you stick to dependencies that use permissive licenses.
+    Other licenses are **protective** rather than permissive, meaning that they restrict
+    how you can use software that’s released under those licenses. Here are some examples
+    of the restrictions imposed by protective licenses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some open-source licenses such as GPL or AGPL fall under a category informally
+    called **copyleft**. Software released under these licenses can be used as dependencies
+    in other projects, but only if those other projects are themselves released under
+    the same copyleft license. For example, if your Hats for Cats app uses an open-source
+    Python sorting library that is released under the GPL license, then *the entire
+    Hats for Cats project must also use the GPL license*. It’s not hard to see how
+    this would be a problem if you intended to sell your software rather than release
+    it as open source.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To use more controversial terms, copyleft licenses are sometimes called “viral”
+    because they can be thought of as “infecting” parent projects. This disease metaphor
+    is probably unfair, and many fine pieces of software have been released using
+    copyleft licenses, but the fact remains that you need to be careful about using
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some licenses explicitly *disallow use by certain industries*, such as the military.
+    Code released under a military exclusion license can’t be used as a dependency
+    for missile guidance software, for example.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A license could *exclude usage of the software by certain countries*. This isn’t
+    commonly seen, but it is legal for a license to include restrictions of this type.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you can see, it’s important to understand what licenses your project’s dependencies
+    use so that you’re aware of any restrictions imposed by those licenses and you
+    steer well clear of any dependencies that are released under licenses that will
+    restrict your ability to use or sell your software in the ways that you intend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GitLab’s License Compliance feature has three phases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The scanner looks through your project’s dependencies and generates a list of
+    all licenses used.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The software development team – or your company’s legal department – creates
+    **license policies** that explicitly allow or deny each license that’s found in
+    your project’s dependencies. Alternatively, you can preemptively create license
+    policies before any dependencies are added to the project if you already know
+    which licenses are incompatible with your main project’s overall license.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a developer introduces a new dependency on a branch, and that dependency
+    uses a license that has been denied, the License Compliance feature blocks the
+    merge request for that branch until the license is removed or the block is overridden.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'From this workflow, you can tell that creating license policies is an important
+    part of using the License Compliance feature. To view, create, delete, or edit
+    license policies, click **Security & Compliance** in the left navigation pane
+    and then click **License compliance**. Here’s what that screen looks like when
+    you’ve approved two licenses and denied two other licenses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.7 – License policies](img/B18073_07_7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.7 – License policies
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The workflow description mentions the power of License Compliance to block
+    any merge request that introduces a dependency that uses a license that has been
+    explicitly denied with a license policy. To block an MR, License Compliance deactivates
+    or hides the **Merge** button so that it can’t be clicked. Here’s a blocked MR,
+    which displays a list of licenses used by a new dependency (and its dependencies)
+    that have been introduced on the MR’s branch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.8 – Merge request blocked by a denied license](img/B18073_07_8.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.8 – Merge request blocked by a denied license
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using GitLab rulesets to unblock an MR
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: GitLab has several other triggers that cause an MR to become blocked until some
+    sort of corrective action is taken, in addition to the case you’ve just seen.
+    To take just one example, when a developer writes new product code without writing
+    automated tests to cover that code, GitLab can be configured to notice that the
+    “code coverage” figure on the developer’s branch has dropped, and the MR for that
+    branch will be blocked until the developer adds automated tests that test their
+    new code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any MR that is automatically blocked can be unblocked with a GitLab feature
+    called **approval rules**. These rules allow specific people to unblock an MR
+    simply by **approving** that MR. Each of these approval rules has a name; the
+    rule that lets you override blocks caused by denied licenses is called **License-Check**.
+    We don’t have room to go into configuring approval rules here, but they are quite
+    straightforward to set up and use. The GitLab documentation can give you more
+    details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling and configuring License Compliance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'You can’t use the GUI to enable License Compliance, but the manual technique
+    of enabling it should seem very familiar by now. Just ensure that you have a `test`
+    stage defined in your pipeline and include the License Compliance template:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Configuring License Compliance can be accomplished in the same way you configure
+    the other scanners: edit `.gitlab-ci.yml` to either set a global variable or override
+    a job definition and set a job-scoped variable.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned previously, an important part of configuring License Compliance
+    is creating the license policies that stipulate which open-source licenses are
+    allowed or denied for your project’s dependencies. To create or edit these policies,
+    navigate to the **Security & Compliance** option in the left navigation pane,
+    click **License compliance**, and click the **Policies** tab. From there, you
+    can add policies to either allow or deny any of the hundreds of licenses that
+    GitLab recognizes. You can create policies for licenses, regardless of whether
+    your project contains dependencies with those licenses. It might make sense for
+    your legal team to create policies for any denied licenses before the development
+    of your project begins so that MRs are blocked immediately if they introduce dependencies
+    that use denied licenses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prerequisite for editing license policies
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is not well documented by GitLab, but to add, remove, or edit license policies,
+    you must first run at least one instance of a pipeline that contains the License
+    Scanning job. This “unlocks” the allowed and denied license lists and lets you
+    edit policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing License Compliance’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Unlike the other scanners we’ve looked at so far, License Compliance does not
+    display its findings in the **Vulnerability Report** window. To see which licenses
+    it has identified among the *dependencies on your project’s default branch*, click
+    the **Security & Compliance** option in the left navigation pane, and then click
+    **License compliance**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To see which licenses are used by *dependencies that are on a feature or bugfix
+    branch*, navigate to the pipeline details page for a pipeline that ran against
+    that branch and click the **Licenses** tab. This view also shows you which licenses
+    are allowed, which are denied, and which are not yet categorized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You’re now equipped to put License Compliance to use in your projects. It’s
+    time to tackle the final security scanner provided by GitLab: Infrastructure as
+    Code Scanning.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using IaC Scanning to find problems in infrastructure configuration files
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the last decade or so, the phrase “treat hardware as cattle, not pets” has
+    been used to describe a new approach to managing computers. By thinking of hardware
+    as a fungible commodity rather than a collection of special snowflakes, development
+    and operations teams are liberated from carefully configuring and maintaining
+    the computers they use to host deployment environments, run databases, serve web
+    applications, or do any of the countless other tasks involved with developing
+    and deploying software. By using so-called IaC tools such as Ansible or Terraform
+    to configure and maintain the configuration state on hardware (whether real or
+    virtual, local or cloud-based), system administrators can adjust server capacity,
+    create new environments, or experiment with hardware configurations without worrying
+    about how difficult it will be to revert their systems if something goes wrong
+    or an experiment fails. To get back to normal, they can simply wipe out the old
+    machines and reconfigure them automatically with IaC tools, using settings that
+    have already been proven to work. The time savings and freedom this grants development
+    teams are enormous.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But with this new freedom comes a new kind of vulnerability. It’s easy to create
+    configuration files for IaC tools that introduce security vulnerabilities to machines
+    that are configured with those files. GitLab’s IaC scanner looks for exactly that
+    sort of vulnerability. Once they are identified, a team can remediate them in
+    the configuration file and then easily reconfigure their machines using the newer,
+    safer setup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding IaC Scanning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: GitLab’s IaC Scanning is a specialized form of SAST. It looks through a project’s
+    repository to see whether it can find any configuration files from the supported
+    IaC tools (the GitLab documentation can give you an up-to-date list of which IaC
+    tools this scanner supports). It then identifies any vulnerabilities or poor programming
+    practices in those configuration files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a trivial Terraform configuration file that creates an S3 bucket:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code looks simple enough, but it introduces several security vulnerabilities
+    and fails to follow some best practices for Terraform configuration files, as
+    you’ll see in an IaC scanning report later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Enabling and configuring IaC scanning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As with many of the other scanners, you can enable IaC Scanning either with
+    the GUI or by manually editing `.gitlab-ci.yml`. To enable it through the GitLab
+    GUI, you can use the same technique you used to enable the other scanners: under
+    the **Security & Compliance** option in the left navigation pane, click **Configuration**,
+    tell the GUI to create a merge request, and merge the merge request.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable IaC Scanning manually, add a `test` stage to your project’s pipeline
+    if it doesn’t already have one, and include the scanner’s template:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: IaC Scanning doesn’t currently offer any configuration options but may do so
+    in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing IaC Scanning’s findings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The Terraform configuration for creating an S3 bucket that was presented previously
+    contains quite a few problems in just a few lines of code. There are some security
+    vulnerabilities and some failures to follow best practices around creating S3
+    resources. The findings shown in the Vulnerability Report are invaluable in helping
+    you understand where you need to tighten up your Terraform code to eliminate these
+    problems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.9 – IaC Scanning findings](img/B18073_07_9.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.9 – IaC Scanning findings
+  prefs: []
+  type: TYPE_NORMAL
+- en: By looking at the **Tool** column of the findings in the vulnerability report,
+    you’ll see that the IaC Scanning findings are all listed as coming from SAST instead
+    of the IaC scanner. That’s because the IaC scanner is classified within GitLab
+    as belonging to the SAST group of tools. To see only IaC findings in the vulnerability
+    report, you’ll need to pick **SAST** in the **Tool** dropdown – and even then,
+    you’ll still see findings from the SAST tool and any third-party scanners you’ve
+    integrated into the SAST group of tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This concludes our survey of GitLab’s seven security scanners. Let’s move on
+    to discuss two features that GitLab offers to make its security scanners easier
+    to use and more powerful: reports and vulnerability management.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the different types of security reports
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'All GitLab security scanners display their results in three separate reports.
+    Because each report shows results from all of the scanners, there’s no need to
+    bounce around the GitLab GUI, collecting information from all the different scanners.
+    However, each of the three report locations presents a slightly different spin
+    on the scanners’ findings. It’s important to understand how these three reports
+    differ, so let’s look at each one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `main` or `master`). If you want to know how secure your stable code base
+    is, look at the vulnerability report. It won’t tell you anything about the state
+    of security on any feature or bugfix branches – only the default branch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **pipeline details page** for each pipeline that runs tells you about security
+    problems that exist on whatever branch that pipeline ran on. So, if a pipeline
+    ran against the default branch, its pipeline details page will contain the same
+    information as the vulnerability report. But the pipeline details page for pipelines
+    that run against feature or bugfix branches will alert you to whatever vulnerabilities
+    exist on those branches, regardless of whether they also exist on the default
+    branch. This page will reveal a tab called **Licenses** if License Compliance
+    is enabled and has detected dependencies with licenses, and a tab called **Security**
+    if it has findings from any of the other scanners to display. The types of information
+    displayed on the pipeline details page are identical to what is displayed in the
+    vulnerability report, albeit formatted slightly differently.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Every **merge request** displays scanner results from the most recent pipeline
+    that ran against the MR’s source branch. However, the reports found in MRs are
+    different from the vulnerability report and the pipeline details report in an
+    important way: an MR report only displays the *differences* between vulnerabilities
+    found by the last pipeline that ran on the MR’s source branch and vulnerabilities
+    found on the MR’s target branch. In other words, it shows a delta view rather
+    than a full list of all vulnerabilities on its branch.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s consider an example to illustrate the difference between these three
+    reports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine that the `main` branch for Hats for Cats has one SAST vulnerability
+    and one problem spotted by Secret Detection.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A developer makes a branch off of `main` called `make-hats-sortable`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Following the best practices of GitLab Flow, the developer creates an MR with
+    `make-hats-sortable` as the source branch and `main` as the target branch.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The developer commits code to the `make-hats-sortable` branch. Let’s say that
+    the commit fixes the SAST vulnerability but introduces a new DAST vulnerability.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Here’s what each of the three reports will show at this point:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `main` branch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `make-hats-sortable` branch (that is, the merge request’s source branch)
+    shows only the vulnerabilities found by Secret Detection and DAST since the SAST
+    vulnerability has been fixed on that branch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `make-hats-sortable` and `main` branches.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: That concludes our discussion of the different types of GitLab security reports.
+    After you read these reports and understand where your security vulnerabilities
+    lie, how do you track your progress in remediating those vulnerabilities? That’s
+    the topic of the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing security vulnerabilities
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Whenever any scanner except License Compliance finds a vulnerability, it grants
+    that vulnerability the **Needs Triage** status. This status shows up in the vulnerability’s
+    entry in the vulnerability report and the pipeline details page report.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should decide what you intend to do about each vulnerability that has that
+    status and change its status accordingly. Here are the possible status values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Dismissed** means that you do not intend to remediate this vulnerability.
+    Maybe you’ve determined that it’s a false positive, maybe you’ve decided it’s
+    a real problem but isn’t worth fixing, or maybe you’ve realized that it doesn’t
+    apply to your product or your users.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Confirmed** means that it’s a real problem, and you do intend to fix it.
+    After setting a finding to this status, you would normally create an issue to
+    track your progress as your team works to remediate this vulnerability. GitLab
+    offers a few shortcuts in the report GUIs to do this, and even prepopulates the
+    issue’s title and description with information from the finding to make it as
+    easy as possible to fix.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Resolved** means that you have fixed the problem, so it no longer exists
+    in your project. This status has to be set manually. *GitLab will not automatically
+    resolve vulnerabilities*. This is because it does not want to accidentally resolve
+    problems that are still present, thereby giving you a false sense of security.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'GitLab’s vulnerability management feature just boils down to setting the status
+    of a vulnerability and then optionally using a GitLab issue to track progress
+    on fixing that vulnerability. A typical vulnerability management workflow might
+    look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A scanner reports a vulnerability, giving it the **Needs** **Triage** status.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The development team triages the vulnerability and decides not to fix it, in
+    which case you set its status to **Dismissed** and stop the workflow.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Alternatively, the team triages the vulnerability and decides that it does need
+    to be fixed, in which case you can set its status to **Confirmed**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optionally, you can create an issue that contains information about the vulnerability
+    and possibly instructions on how to fix it. This issue is discussed, added to
+    a sprint, and assigned to a developer just like any other issue.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The developer assigned to the issue creates a branch, creates a merge request
+    for that branch, and fixes the issue on that branch.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The “delta” security report for the merge request shows that the issue exists
+    on the default branch but no longer exists on the developer’s branch.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Your team merges the merge request. The vulnerability is now remediated in the
+    default branch.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You close the issue.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: On the vulnerability report, you must set the vulnerability’s status to **Resolved**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This process may feel cumbersome when you see it laid out like this, but most
+    people quickly get used to the flow and come to appreciate the visibility it gives
+    them into the state of security in their projects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, you know how to track your team’s efforts at fixing security vulnerabilities
+    in your code. There’s one final topic to tackle in this chapter: using security
+    scanners other than the ones that are provided by GitLab.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Integrating outside security scanners
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Many teams are committed to using one or more security scanners that are not
+    part of GitLab’s security offering. Never fear – it’s usually possible to integrate
+    outside scanners into your GitLab CI/CD pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Integration has two parts. First, you need to tell your pipeline to trigger
+    the outside scanner. This is easy, so long as your scanner comes packaged in a
+    Docker image and can be run from the command line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a new pipeline job in the `test` stage (unless there’s a reason to run
+    it elsewhere).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use the `images` keyword in the job definition to specify the location of the
+    Docker image that contains the scanner you’d like to add to your pipeline.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the `script` section of the job definition, trigger the scanner using whatever
+    CLI command you use when you run it manually. You might need to pass some options
+    to the CLI command to control where it generates its results file, and what format
+    it uses for that file.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Add `allow_failure: true` to your job definition so that the pipeline will
+    continue to run even if the outside scanner finds vulnerabilities.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The second part of integrating an outside scanner is to tell GitLab how to include
+    the scanner’s results in the three standard GitLab security reports that we’ve
+    discussed in this chapter. GitLab can only incorporate these results if they are
+    written to a JSON file that conforms to specific JSON schemas, where each scanner
+    type (SAST, DAST, and so on) has a separate schema. The documentation for each
+    scanner type provides more information about these schemas.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Integrating third-party scanners that generate non-standard results files
+  prefs: []
+  type: TYPE_NORMAL
+- en: If your third-party scanner can’t generate results files that validate against
+    the appropriate schema, you’ll need to write a short script to parse the results
+    and create a new results file that does conform to the schema. You’ll need to
+    trigger this script somewhere in your pipeline after the scanner runs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the job definition you create for the third-party scanner, you must declare
+    the scanner’s results file to be an artifact, specifically an artifact that contains
+    the results for a certain type of security report. For example, if you are integrating
+    an additional SAST scanner that creates a results file called `my_scanner/results.json`,
+    you would need to include this code in the job definition that runs that scanner:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This high-level description may be all you need to integrate third-party scanners,
+    but if you need more detailed configuration instructions – including guidance
+    on results schemas, best practices for what to name your pipeline job and results
+    files, and more – the official GitLab documentation has a very thorough page on
+    exactly this topic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Security is one of the biggest and most complicated topics covered in this book,
+    so congratulations on making it through! Let’s take stock of what we learned in
+    this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we covered some common principles that underly all of GitLab’s security
+    scanners. We discussed the fact that all of the scanners are open-source tools
+    developed outside of GitLab, and why that’s a good thing. We saw that some scanners
+    use different analyzers to support different computer languages, though all scanners
+    support the most commonly used languages, and some scanners are completely language-agnostic.
+    We learned about the implications of packaging the scanners as Docker images.
+    We saw that scanners don’t stop CI/CD pipelines when they find vulnerabilities,
+    and we learned that it’s usually possible to integrate outside scanners into your
+    pipelines if the GitLab-provided scanners aren’t sufficient for your needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we marched through the list of GitLab security scanners, learning what
+    kinds of problems each one looks for, how to enable them with the GUI or manually,
+    how to configure their behavior, and how to view their findings. We saw the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SAST looks for vulnerabilities in source code
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Secret Detection looks for sensitive information that should not be stored in
+    Git repositories
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: DAST finds vulnerabilities in running web apps or Web APIs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dependency Scanning spots known vulnerabilities in your project’s third-party
+    libraries
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Container Scanning finds known problems with Linux distributions that form the
+    base of your Docker images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: License Compliance identifies dependencies with licenses that are incompatible
+    with your overall project license
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: IaC Scanning looks for infrastructure configuration files that could introduce
+    vulnerabilities into computers that you manage
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Finally, we investigated three topics adjacent to the scanners themselves:
+    the differences between the three different security reports provided by GitLab,
+    managing security vulnerabilities that are identified by the scanners, and integrating
+    outside scanners into your pipeline for projects that need even more protection.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, security concerns have become such a large and important part
+    of developing software. But as we’ve seen throughout this chapter, GitLab’s suite
+    of tools for detecting and fixing security vulnerabilities is one of its most
+    powerful and valuable features. We can breathe a little easier knowing that many
+    potential problems can now be identified early in the development process when
+    there’s still plenty of time to fix them before they result in embarrassing, expensive,
+    or reputation-damaging security breaches in production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, your code has been written, verified, and secured. The next step
+    in the software development life cycle is to package and deploy it. We’ll tackle
+    those tasks in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL

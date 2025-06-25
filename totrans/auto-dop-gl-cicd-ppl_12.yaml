@@ -1,0 +1,641 @@
+- en: '12'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Troubleshooting and the Road Ahead with GitLab
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: By now, we have covered the end-to-end use of GitLab CI/CD for planning, building,
+    testing, and shipping software. You should hopefully be familiar with the vocabulary
+    of GitLab CI/CD pipelines and Runner infrastructure, and you should also have
+    the confidence to develop and deploy basic applications with GitLab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CI/CD occupies a constantly shifting space in the software industry. The best
+    practices and tools of the trade today may very well be obsolete five years from
+    now, if not earlier. We have made a conscious effort in this book to maintain
+    a balanced focus between concepts and tooling. The goal is to preserve relevance
+    by emphasizing CI/CD and DevOps fundamentals, while still offering you a chance
+    to practice and follow along, even if the syntax and some of the tools change
+    over the next several years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The purpose of this final chapter is to synthesize what we’ve learned and guide
+    you toward the next steps in your DevOps journey. We will first discuss some common
+    troubleshooting scenarios and “gotchas” that you might encounter when working
+    with CI/CD. Next, we’ll discuss using GitLab CI/CD in an operations capacity,
+    applying software development workflows and version control to your infrastructure.
+    Finally, we will discuss how the industry is likely to change going forward, and
+    summarize key takeaways from this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is how we’ll cover the topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Troubleshooting and best practices for common pipeline problems
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing your operational infrastructure using GitOps
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Future industry trends
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Conclusion and next steps
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As in previous chapters, an account on a GitLab instance (SaaS or self-managed)
+    is recommended. Some of the content in this chapter is more conceptual than example-based,
+    but access to **Infrastructure-as-Code** (**IaC**) tooling such as Terraform and
+    Ansible is recommended if you wish to practice the concepts discussed in the *Managing
+    your operational infrastructure using GitOps* section. In that case, an account
+    in a cloud service provider (such as AWS or Microsoft Azure) would be recommended
+    for infrastructure provisioning and configuration management using your chosen
+    IaC tool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will now turn to identifying and troubleshooting common issues when working
+    with GitLab CI/CD.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Troubleshooting and best practices for common pipeline problems
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Problems encountered in GitLab CI/CD pipelines tend to fall into two broad categories.
+    The first category is errors or unexpected behavior caused by the syntax and logic
+    in `.gitlab-ci.yml`, the primary CI/CD configuration file. The second category
+    involves limitations or misconfigurations in the runner infrastructure used to
+    run CI/CD jobs. We will address each of these categories in turn.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Troubleshooting CI/CD syntax and logic
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When errors in GitLab CI/CD can be narrowed down to the content of `.gitlab-ci.yml`,
+    the first step in troubleshooting is to identify whether the issue is faulty or
+    unsupported syntax, or misconfiguration (or misunderstanding) of an otherwise
+    valid YAML file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Syntax errors in .gitlab-ci.yml
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'One of the easiest cases to troubleshoot (and therefore a good place to check
+    for problems first) is syntax or formatting errors in `.gitlab-ci.yml`. A typical
+    example is errors caused by omitting required keywords. GitLab CI/CD at minimum
+    requires at least one stage (defined using the `stages` keyword), each job must
+    be assigned to a stage, and then each job must do something (generally defined
+    using the `script` or `trigger` keywords). The example that follows shows a very
+    basic configuration that defines two stages and two jobs. However, the `compile_assets`
+    job lacks a stage assignment. And the `build` stage, therefore, does not have
+    at least one job assigned to it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '*Figure 12**.1* shows the pipeline error that we see if we navigate to **CI/CD**
+    | **Pipelines**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.1 – Configuration error message shown on the pipelines page](img/B18073_12_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 – Configuration error message shown on the pipelines page
+  prefs: []
+  type: TYPE_NORMAL
+- en: Notice that GitLab does not even attempt to run the pipeline (that is, assign
+    jobs to runners) when there is a YAML syntax error. We see the error mentions
+    that the stage for the `compile_assets` job does not exist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Default Stage Assignments for Jobs
+  prefs: []
+  type: TYPE_NORMAL
+- en: The error shown in *Figure 12**.1* is actually a bit nuanced. Technically, if
+    a CI/CD job is not explicitly assigned to a stage in the config, GitLab will automatically
+    assign it to the `test` stage. However, we did not define a `test` stage in this
+    example. Therefore, GitLab is reporting that the “chosen” stage (to which GitLab
+    would otherwise assign the `compile_assets` job) does not exist, as we only defined
+    `build` and `deploy` stages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GitLab will also produce an error if the configuration does not follow the
+    correct YAML formatting. Let’s attempt to fix the previous error by adding the
+    `compile_assets` job to the `build` stage:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we look at the pipeline graph again, we see another error, more generic
+    this time, saying that the configuration does not have valid YAML syntax (see
+    *Figure 12**.2*). Despite the vagueness of the error, GitLab does include a link
+    to a CI linter that can help identify where the problem might be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.2 – Generic syntax error message for CI/CD pipeline](img/B18073_12_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2 – Generic syntax error message for CI/CD pipeline
+  prefs: []
+  type: TYPE_NORMAL
+- en: Following the link takes us to a tool called `.gitlab-ci.yml` file. In this
+    case, *Figure 12**.3* shows an error description referencing an unknown mapping
+    value. Ultimately, the issue lies in the indentation requirements for YAML. The
+    `stage` keyword must be indented at least two spaces so that it is a valid element
+    in the `compile_assets` job definition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.3 – Pipeline Editor showing an invalid CI/CD configuration](img/B18073_12_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.3 – Pipeline Editor showing an invalid CI/CD configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After proper indentation, *Figure 12**.4* now shows the Pipeline Editor describing
+    valid CI/CD syntax. GitLab will now create a functioning pipeline from this configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.4 – Pipeline Editor showing a valid CI/CD configuration](img/B18073_12_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.4 – Pipeline Editor showing a valid CI/CD configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thus, a primary takeaway for CI/CD syntax issues is to take advantage of the
+    Pipeline Editor so that you can check for logical and stylistic errors in your
+    CI/CD configuration in real time. The editor is valuable for identifying typos,
+    omitted required keywords, and YAML formatting issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CI/CD configuration logic and job order
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Another key area of CI/CD troubleshooting is understanding the logic of your
+    job definitions and order. As your pipelines get advanced, your `.gitlab-ci.yml`
+    file might start to be filled with the `rules` keyword governing how jobs run,
+    and your primary configuration might call other configurations as templates or
+    downstream pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the following CI/CD configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we have a mix of logical keywords and job ordering in the configuration.
+    The `test_app` job uses the `rules` keyword so that it never runs on the `main`
+    branch; otherwise, it runs on all other branches. Meanwhile, the `deploy_app`
+    job uses the `only` keyword to specify it only runs on the `main` branch (and
+    no other branches). Finally, the `deploy_app` job needs the `build_app` job to
+    pass before it runs on the `main` branch, and the `static_tests` job runs independently
+    on feature branches without waiting for any other jobs (such as `build_app`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As your pipelines grow, the mix of logic and different CI/CD variables can
+    be difficult to parse. There are some features in the GitLab UI that can help
+    you keep your job logic and order straight. The **Job dependencies** (see *Figure
+    12**.5*) and **Needs** tabs in **CI/CD** | **Pipelines** | **Pipeline ID** allow
+    you to show which jobs are dependent on other jobs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.5 – Pipeline Editor showing a valid CI/CD configuration](img/B18073_12_5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.5 – Pipeline Editor showing a valid CI/CD configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Pipeline Editor also has a `main`) branch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.6 – Pipeline validation in Pipeline Editor](img/B18073_12_6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.6 – Pipeline validation in Pipeline Editor
+  prefs: []
+  type: TYPE_NORMAL
+- en: We heavily encourage you to make use of these features to organize and visualize
+    your pipelines during development and deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Troubleshooting pipeline operation and runner assignment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Aside from syntax and logic errors, it is also important to take note of the
+    runners used for CI/CD execution, and ensure your pipeline configurations can
+    be supported by your runner infrastructure. Examples of potential problems that
+    can arise include mismanagement of runner tags and lack of or misconfigured container
+    support.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Properly managing runner tags
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `tags` CI/CD keyword (not to be confused with tagged Git commits) tells
+    GitLab to only assign jobs to runners that include the same tags. There are a
+    couple of considerations needed to ensure that CI/CD job tags are properly understood
+    and used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When multiple tags are specified in a CI/CD job, that means GitLab will only
+    assign a job to a runner that features all of those tags. For example, the following
+    job will only be assigned to a runner that has the `ubuntu` tag, the `python3`
+    tag, and the `amd64` tag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: On the other hand, the runner picking up the job can also have other descriptive
+    tags associated with it, as long as those include at minimum the `ubuntu`, `python3`,
+    and `amd64` tags. Check the runner’s assigned tags under **Settings** | **CI/CD**
+    | **Runners** if the job is not being picked up by the expected runner. Remember
+    that different runners may be configured in different parts of GitLab – that is,
+    at the project, group, or instance level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing containerized CI/CD pipelines
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Container-based environments such as Docker and Kubernetes are ever more frequently
+    used by software teams for development, testing, and deployment. The `image` keyword
+    is a critical keyword in a CI/CD job for specifying the type of Docker container
+    in which a job must run. However, much is dependent on the proper execution of
+    container-based CI/CD jobs, correct configuration syntax aside. Consider the following
+    job definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The job’s instructions are to start web services inside a container launched
+    from a Node.js Docker image with a supporting Postgres database running alongside.
+    Let’s think about what the job requires in order to successfully execute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runners in the environment that support Docker containers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Non-container runners won’t inadvertently pick up the job.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The runner has network connectivity to a container registry such as Docker Hub
+    to pull down the base images.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is just one simple example that requires developers to think about the
+    infrastructure their jobs use for execution. One way to solve the second listed
+    point, non-container runners picking up jobs, is to define a CI/CD tag specifically
+    for container-based runners and include that tag in any jobs that use the `image`
+    keyword.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Needing to manage operational infrastructure alongside application logic can
+    be intimidating for developers. In the next section, we will introduce the concept
+    of GitOps to help unify development and operations under a best-practice workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing your operational infrastructure using GitOps
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Development cannot be divorced from the infrastructure executing the code. We’ve
+    seen this clearly as we’ve journeyed from using GitLab as a source code management
+    tool to defining CI/CD pipelines to define how our source code is built and deployed,
+    with runners (infrastructure) as an essential component of CI/CD.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DevOps properly conceptualized is a culture unifying development and operations.
+    How, then, can we incorporate configuring and managing our operational infrastructure
+    into the GitLab flow already used and understood by developers? The answer lies
+    in implementing **GitOps**. GitOps is a development practice that falls under
+    DevOps, which encourages using a similar iterative change management model already
+    used by development teams. As the term suggests, Git is an essential part of the
+    workflow. Infrastructure should be under version control, just like application
+    source code. Changes to infrastructure are then made by contributing changes to
+    the code base, which in turn triggers CI/CD pipelines updating our environments
+    with the committed changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitOps Means Generally Putting Infrastructure Under Software Version Control
+  prefs: []
+  type: TYPE_NORMAL
+- en: The GitOps described in this chapter is broader than the specific GitOps workflow
+    for Kubernetes clusters that we previously discussed. Here, GitOps simply means
+    applying Git development workflows to any manner of infrastructure management.
+    This chapter uses Terraform and Ansible as reference examples that can be cross-applied
+    to many different configuration management tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall *Figure 3**.10* from [*Chapter 3*](B18073_03.xhtml#_idTextAnchor061)
+    (shown again here), when we introduced GitLab flow as an iterative branching model
+    for developers to make changes in a structured yet efficient way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.7 – Major steps in GitLab flow](img/B18073_12_7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.7 – Major steps in GitLab flow
+  prefs: []
+  type: TYPE_NORMAL
+- en: A core motivation of this workflow is removing friction from the development
+    process. Textual changes to files in a Git-versioned code base trigger automated
+    pipeline building, testing, and deploying to appropriate environments. Reviews
+    and approvals are baked into the merge request feature, ensuring all our changes
+    are intentional, and version control ensures we can roll back as required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How, then, do we apply this model to infrastructure management? Just as developers
+    use programming languages to engineer applications, the industry now has a plethora
+    of text-based tools that can be used to describe, provision, and configure an
+    operational environment. These tools are described as infrastructure as code because
+    they are designed to put infrastructure (servers, networking, storage, databases,
+    identity, and access) under a similar programmatic model as traditional software
+    applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: IaC is a quickly evolving field, where new tools are constantly being supplanted
+    by newer tools. It can be difficult to decide which software to introduce in this
+    kind of book due to rapid innovation threatening to render today’s common tooling
+    obsolete. However, as of this writing, we’ve seen a couple of IaC tools widely
+    used for GitOps with GitLab. We present them here with the understanding that
+    in infrastructure tooling, the state of the art is rapidly changing. That said,
+    the tools we see frequently used are **Terraform** for infrastructure provisioning
+    and **Ansible** for configuration management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Terraform to deploy and update infrastructure state
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Terraform is an IaC tool used to describe how your infrastructure should look.
+    The core project is open source, with enterprise versions developed and sold by
+    HashiCorp. Terraform includes a language and syntax for describing infrastructure
+    state, as well as a set of command-line tooling for validating and updating the
+    said infrastructure. The configuration model used is *declarative*. We describe
+    how our compute, networking, storage, and so on should look, and the software
+    performs the minimum necessary changes so that our infrastructure reflects the
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at a very basic example where we use Terraform to provision an object
+    storage resource in AWS. Terraform has you describe your configuration in state
+    files that end with the extension `.tf`. The details of Terraform syntax are well
+    outside the scope of this book, but the following syntax shows how an S3 bucket
+    might be configured in AWS. This “code” might be stored in a file called `bucket.tf`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: This simple state file specifies an S3 bucket resource in AWS with a name and
+    access permissions. It is then up to Terraform to “make it happen.” In the context
+    of GitOps with GitLab, the “making it happen” takes place via a CI/CD pipeline.
+    The pipeline will run the necessary Terraform commands to initialize, validate,
+    and apply the configuration to your AWS account.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing and configuring Terraform can take a bit of work. Thankfully, GitLab
+    packages Terraform’s tooling in a Docker image that can be launched using the
+    `image` keyword in `.gitlab-ci.yml`. GitLab maintains a public example project
+    with a sample `.gitlab-ci.yml` file ([https://gitlab.com/gitlab-org/configure/examples/gitlab-terraform-aws/-/blob/master/.gitlab-ci.yml](https://gitlab.com/gitlab-org/configure/examples/gitlab-terraform-aws/-/blob/master/.gitlab-ci.yml))
+    containing the relevant jobs and commands for applying or updating a Terraform
+    configuration in AWS. We recommend exploring this page and testing the examples
+    in your own AWS account. Notice how the `prepare`, `validate`, `build`, and `deploy`
+    stages and accompanying jobs are conceptually similar to the `build`, `test`,
+    and `deploy` stages in typical application development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Terraform is a tool primarily used to deploy or provision infrastructure. The
+    second tool we will discuss is primarily used to configure the resources that
+    have been provisioned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Ansible to manage resource configurations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Ansible is also an open source IaC tool, with paid versions offered by Red
+    Hat. Like Terraform, Ansible is used by declaring resource configurations in files,
+    whose contents are then translated into configuration changes by running commands.
+    These Ansible resource configuration files are called **playbooks** and are written
+    in YAML format. The content of an extremely basic playbook that installs and starts
+    Apache might look like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Like Terraform, we use a declarative syntax to describe how our environment
+    should look, and rely on the tool (in this case Ansible) to make it so. Here,
+    we specify that a collection of hosts called `web` should have the `apache2` package
+    installed, and the corresponding service should be enabled and started. Ansible
+    would then connect to the hosts in question, and once connected, install and start
+    `apache2`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Also like Terraform, we would define CI/CD jobs that run the tool’s commands
+    to apply the configuration change. In the case of Ansible, GitLab does not have
+    an official Docker image with Ansible tooling. So we might instead tell GitLab
+    to use a runner that we know is an Ansible host to run our playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding job is assigned to a runner with the `ansible` tag (which we may
+    assume is a runner with Ansible installed and configured). The job script then
+    runs the playbook and might also pass in credentials using CI/CD variables so
+    that Ansible can authenticate to the servers it is configuring.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more details about using Ansible with GitLab, including interpreting and
+    parsing CI/CD job output when Ansible commands are run, we refer you to this article
+    ([https://about.gitlab.com/blog/2019/07/01/using-ansible-and-gitlab-as-infrastructure-for-code/](https://about.gitlab.com/blog/2019/07/01/using-ansible-and-gitlab-as-infrastructure-for-code/))
+    published by GitLab as a more in-depth reference. Please also refer to the official
+    Terraform and Ansible docs sites for further details on setup and system requirements.
+    Ultimately, the goal of this section has been to introduce you to GitOps concepts
+    as a paradigm for incorporating IaC tools into the CI/CD workflows we have learned
+    so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Future industry trends
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It goes without saying that learning anything new comes with the expectation
+    that the knowledge will remain relevant in the future. Looking forward, continuous
+    integration and delivery are well positioned to persist as critical practices
+    in the software landscape, while continuing to undergo evolutionary changes. We
+    can identify three likely ways the software development life cycle will change
+    in the coming years. Those trends are increased automation, increased abstraction,
+    and reduced development cycle time. We can also expect that GitLab as a platform
+    will continue to play an important role. The concepts, examples, and tools presented
+    in the previous chapters will serve as a good foundation to be a more productive
+    developer right now while providing the confidence needed to adapt as the industry
+    inevitably shifts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automation will create more software at a larger scale
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Ask any organization today what is the most expensive part of operating, and
+    they will likely respond that it’s the humans. Skilled human workers, which includes
+    technologists, are particularly pricey. Talented engineers are hard to find, harder
+    to replace, and expensive to keep. Moreover, those same engineers have designed
+    software and tooling to make their own jobs easier and more productive. Organizations
+    are now leveraging that tooling so that they can create and deploy more software
+    using fewer people.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Think about the teams of manual quality assurance testers that companies employed
+    20 or even 10 years ago. Now consider the role that tools like GitLab play in
+    allowing a single developer to automate the process of releasing software, from
+    conceptualization to deployment. Moreover, cloud service providers now offer almost
+    limitless amounts of infrastructure to any developer with a credit card—dedicated
+    teams for racking and stacking servers are no longer required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Yet, predictions of the singularity aside, humans aren’t going anywhere anytime
+    soon. The prevalence of automation requires people who can understand and maintain
+    that tooling. The more you can speak the language of automation and the platforms
+    such as GitLab powering the trend, the more equipped you will be to contribute
+    to the automation revolution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Abstraction will lead to everything-as-code business models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In 2011, Marc Andreessen wrote his now-famous article titled *Why Software Is
+    Eating the World* ([https://a16z.com/2011/08/20/why-software-is-eating-the-world/](https://a16z.com/2011/08/20/why-software-is-eating-the-world/)).
+    Andreessen predicted that the next generation of internet companies was leading
+    a broad economic shift in which software becomes the language and engine of most,
+    if not all, industries. Ten years later, in 2021, Jon Eckhardt wrote a follow-up
+    article called *Software Is Eating the Software That’s Eating the World* ([https://eiexchange.com/content/software-is-eating-the-software-thats-eating-the-world](https://eiexchange.com/content/software-is-eating-the-software-thats-eating-the-world)).
+    Eckhardt recognized that not only have traditional industries been disrupted by
+    software, but there is a whole generation of new tooling disrupting existing software
+    models. This tooling can be thought of as powerful, easier-to-use programs that
+    allow developers to work at a higher layer of abstraction. That is, developers
+    can focus on the business logic while the tool handles the finer details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A good example of increased abstraction is how infrastructure has changed over
+    the past 30 years. The industry has moved from mainframes to the server model.
+    It then moved to virtual machines, so we can start to view operating systems as
+    flexible, software-defined resources on a shared host. Then, configuration management
+    helped take care of maintaining our IT resources so that we could focus more on
+    the “what” and less on the “how.” Then, cloud services took off so that no one
+    needed to set foot in a data center. And now, additional tools, such as containers
+    and functions, allow developers to focus solely on their code without even needing
+    to think about the computers and networks it may be running on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We expect this abstraction trend to continue. Like automation, we by no means
+    anticipate that humans will be rendered irrelevant. Rather, we expect increased
+    consolidation and specialization. Code will always be running on someone’s computer,
+    somewhere, and we’ll need infrastructure experts to build and maintain those environments.
+    But we also expect tools like GitLab to continue to proliferate, offering self-documenting,
+    programmatic models that offer observability into all layers of the business.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reduced cycle time will help teams release better software faster
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The DevOps philosophy is primarily cultural, but it also represents a system
+    of work inspired by the lean manufacturing revolution. Building on the trends
+    of automation and abstraction, combined with project management methodologies
+    such as Agile and Scrum, teams are now developing software in such a way that
+    they release early and often, incorporating small improvements, and rolling back
+    as needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Books such as *The Lean Startup* by Eric Ries have introduced the language for
+    this development model, and tooling has proliferated that allows developers to
+    build, test, and release software in a very fast but controlled way. GitLab is
+    one of these core platforms. Source code management and version control ensure
+    continuous integration into a shared code base, and pipelines allow for a common
+    set of build, test, and deploy tasks after every small commit. This allows for
+    rapid, iterative development that can constantly adapt to meet business needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The combination of automation, abstraction, and smaller release cycles will
+    require developers to be comfortable with iterative approaches to project management
+    and design. Don’t be afraid of failure, as rapid small changes will inevitably
+    cause some broken or buggy code. Adopt a mindset of continuous improvement, focusing
+    on developing better software rather than perfect software.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conclusion and next steps
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This book has guided you through using GitLab as a platform to manage your software
+    development life cycle. After discussing the state of the industry before DevOps
+    emerged as a culture and methodology, you were then guided through the basics
+    of Git version control and GitLab’s project management components. Then, GitLab
+    CI/CD pipelines were introduced as the central feature for organizing, designing,
+    and automating your development workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You learned that GitLab CI/CD comprises three components: the text-based pipeline
+    configuration file, the runners that execute pipeline tasks, and the main GitLab
+    application that coordinates between the configuration and the runner agents.
+    We then walked through how to leverage pipelines to verify, secure, package, and
+    deploy your code. You learned that you can use GitLab CI/CD as a unified tool
+    to perform these often-disparate steps in the software life cycle.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After covering the supported CI/CD features and workflows, we moved to some
+    advanced topics and best practices. You learned how to improve pipeline speed
+    and maintainability, and how you can leverage GitLab CI/CD in other workflows
+    that might not be immediately obvious.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, [*Chapter 11*](B18073_11.xhtml#_idTextAnchor268) introduced you to
+    an end-to-end example using all the concepts and features previously covered.
+    That chapter’s objective is to show a basic but real use case of GitLab supporting
+    all steps in the workflow of planning, building, and deploying an application.
+    We then concluded with this chapter, offering some final troubleshooting tips,
+    guidelines for next-gen infrastructure management with GitLab, and a look at where
+    the industry is likely to go in the coming years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We hope your journey with GitLab, CI/CD, and DevOps doesn’t end with the conclusion
+    of this book. GitLab itself is open core, and GitLab the company is transparent
+    in how it intends to steward and evolve the software over time. We encourage you
+    to continue following GitLab’s evolution and product roadmap by keeping tabs on
+    the core product’s issue-tracking system and referring to the product’s online
+    handbook pages, which document the category directions for each of GitLab’s features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ultimately, as technologists, we know that learning never stops. We hope this
+    book was helpful in familiarizing you with GitLab as a software platform, the
+    problems it’s designed to solve, and how you can use it to meet the challenges
+    faced in your own organization. We wish you the best as you continue your DevOps
+    journey.
+  prefs: []
+  type: TYPE_NORMAL

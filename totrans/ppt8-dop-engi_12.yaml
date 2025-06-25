@@ -1,0 +1,1487 @@
+- en: '12'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Bolt for Orchestration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will cover **Bolt** and Puppet Enterprise’s **orchestrator**.
+    We will show how Bolt is Puppet’s tool for ad hoc orchestration, allowing work
+    to be done that does not fit into Puppet’s state-based enforcement model. We will
+    discuss how to configure it to connect to clients with different transport mechanisms
+    and credentials and run simple commands and upload files. Furthermore, we will
+    show how **tasks** allow single-action scripts in various languages to be run
+    via Bolt, while **plans** allow combinations of tasks to be written using logic
+    and variables in the Puppet or YAML language. The project directory structure
+    will be examined, allowing Bolt content to be stored and shared. This will be
+    compared to how plans and tasks can be stored in a Puppet module using the **Puppet
+    Enterprise Cloud Deployment Module** (**PECDM**) **Bolt project** as an example.
+    We will then show how Bolt can be extended with plugins to dynamically load information
+    from other sources. We will also show how Bolt can directly be used with Puppet
+    to apply manifest blocks, connect to PuppetDB, and use Hiera.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exploring and configuring Bolt
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding the structure of projects
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introducing tasks and plans
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Plugins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Clone the control repo, `controlrepo-chapter12`, from [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
+    to your GitHub account and update the Puppetfile with the contents of [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch12/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch12/Puppetfile)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Build a standard cluster with two Unix clients and two Windows clients by downloading
+    the `params.json` file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch12/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch12/params.json)
+    and updating it with the location of your control repo and your SSH key for the
+    control repo. Then, run the following command from your `pecdm` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Exploring and configuring Bolt
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Throughout this book so far, we have focused on Puppet’s strengths as a state-based
+    and idempotent configuration management tool. But there are situations where this
+    approach simply doesn’t fit, such as service restarts as part of troubleshooting
+    or ordering application deployments with vendor-based install scripts. There is
+    any number of tasks that fit into the wider automation effort that are ad hoc
+    and single use; therefore, Bolt was introduced by Puppet to act as an agentless
+    orchestrator. Bolt is now in its 3.x version, since its release in 2017, and a
+    lot of rapid development has taken place. Over 2022, it stabilized, with far fewer
+    releases and changes to features, but we would strongly advise you to keep Bolt
+    as up to date as possible to avoid any confusion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed the general purpose of Bolt as an ad hoc task runner, the first
+    step is to understand how Bolt can connect to clients with transports and targets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting to clients with transports and targets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Bolt is a fully open sourced project available at [https://github.com/puppetlabs/bolt](https://github.com/puppetlabs/bolt),
+    written in `bolt`. It connects to devices via one of the various **transports**
+    it offers, which is the mechanism/protocol that allows it to establish a connection
+    to multiple platforms, such as virtual machines, network devices, or containers
+    without an agent. The transports available are as follows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'System transports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Local, which, as would be expected, just runs commands on a local machine.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`net-ssh` Ruby library or `native ssh`, if selected. Commonly used for Linux
+    and Unix machines.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Windows Remote Management** (**WinRM**) for connecting to Microsoft Windows-based
+    machines.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Remote, which is used for API- or web-based devices, for example, network devices
+    such as switches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Puppet Enterprise transport:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Puppet Communication Protocol** (**PCP**), used with the Puppet Enterprise
+    orchestrator service, discussed in [*Chapter 14*](B18492_14.xhtml#_idTextAnchor340)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Container transports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Docker, which is an application container technology developed by Docker Inc
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Pod Manager** (**Podman**), which is an application container engine developed
+    by Red Hat'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Linux Container Hypervisor** (**LXD**), which is a system container engine
+    that uses **Linux Containers** (**LXC**), developed by [https://linuxcontainers.org](https://linuxcontainers.org)
+    and sponsored by Canonical'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bolt fails to connect to targets from Windows using SSH unless `native-ssh`
+    is set to `true` in the transport settings, as per [https://puppet.com/docs/bolt/latest/bolt_known_issues.html#unable-to-authenticate-with-ed25519-keys-over-ssh-transport-on-windows](https://puppet.com/docs/bolt/latest/bolt_known_issues.html#unable-to-authenticate-with-ed25519-keys-over-ssh-transport-on-windows).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By default, Bolt will use local SSH configuration and at its simplest level
+    can run commands directly on devices that are known in Bolt terminology as **targets**.
+    A simple example command is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, the command is within single quotes and the provided target is a resolvable
+    hostname or an IP address. Bolt also has **PowerShell cmdlets**, which provide
+    a more integrated experience for PowerShell users with more flexibility for chaining
+    commands and using structured data for arguments. The same command as previously
+    but as a PowerShell cmdlet would look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This takes the default settings of the SSH transport using the current user
+    and any saved credentials. To make a choice on the command line, a transport choice
+    can be added ahead of the transport name, `<transport_name>://`, multiple targets
+    are listed, separated with commas (`,`) and additional options are set to configure
+    the transport. For example WinRM requires a username, password and the `no-ssl`
+    option set if SSL is not setup for WinRM connections. Take the following example
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: This command will run `systeminfo` on the `host1.example.com` and `host2.example.com`
+    targets using `winrm` to connect, and the `windows` and `Pupp3tL@b5P0rtl@nd!`
+    credentials with no SSL check. Bolt runs requests concurrently, by default up
+    to 50 at a time. This can be changed using the concurrent argument, `--concurrent`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A full list of options available to be used with each transport can be viewed
+    in the documentation: [https://puppet.com/docs/bolt/latest/bolt_transports_reference.html](https://puppet.com/docs/bolt/latest/bolt_transports_reference.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bolt 1.3.6 deprecated the `nodes` flag in favor of `targets` and removed it
+    in Bolt 2.0.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running ad hoc commands with Bolt
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this section, we will show how to run ad hoc commands with Bolt, using both
+    Windows PowerShell and Linux Shell command examples. The following table shows
+    how these commands compare across the implementations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: "![Figure 12.1 \uFEFF– PowerShell and Linux Bolt commands](img/B18492_12_01.jpg)"
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 – PowerShell and Linux Bolt commands
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run quoted commands, use double quotes or backslashes (`\`) to escape. For
+    example, we could run a search for `lang` in `/etc/locale` with `grep -I ''lang''`.
+    To do this, the following command could be run in PowerShell:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, the `password-prompt` option would ask for the password securely
+    on the command line rather than directly entering it into the executed command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run multiple commands listed in a file, we are not suggesting running a
+    script but a step-by-step set of commands; for multiple targets in a file, the
+    at symbol (`@`) can be used with the filename within quotes (`''''`). So, for
+    example, to run a list of commands from a file called `commandlist` on a list
+    of targets in `targetfile`, the following command could be run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For Unix-based systems, to read input from `stdin` for targets or commands,
+    the minus symbol (`-`) can be used in place of a target or command string. So,
+    to take the same `targetfile` and send the output of the `cat` command to the
+    `bolt` command, the following could be run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To run the `uname` and `date` commands on the `hosts1.example.com` and `host2.example.com`
+    targets, the following could be command could be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using both a file and `stdin` with a list of commands will result in a single
+    connection to the target to run all the commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run a script in a file, the `bolt script run` command or `Invoke-BoltScript
+    -Script` PowerShell cmdlet can be used along with any arguments to be passed at
+    the end of the command. For example, on a Unix host, the following command could
+    be used to run an `install.sh` script on the targets in the `application_clients`
+    file with `10.6` `no-gui` arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `arguments` flag can be used to be clearer on the name of the argument
+    for each passed value. Any argument with spaces can be surrounded with quotes
+    (`''''`). For example, on a Windows system running the `dotnet-install.ps1` script
+    on a list of targets on a file with the `-Channel LTS` argument, the command would
+    be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: In Unix, any script can be executed on a target by including a shebang (`#!`)
+    line at the top of the file specifying the interpreter. For Windows targets, the
+    `.ps1`, `.rb`, and `.pp` files are enabled by default, but further extensions
+    can be enabled in configuration files, which will be discussed in the next section.
+    The scripts can be located from the `modulepath`, this can be of the form `<modulename>/scripts/install.sh`,
+    a relative path from the root of the `bolt` folder, or as an absolute path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Unix systems, Puppet manifest files and sections of Puppet code can be applied
+    to a set of targets with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In PowerShell, this can be achieved with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To apply Puppet code, the following command would ensure that a `/etc/exampleapp`
+    directory exists on the Unix systems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For PowerShell cmdlets, the command used would be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This format should seem similar to `puppet apply` and `puppet apply -e ''<code>''`.
+    Similarly, for code to be applied via Bolt, we must ensure that the code is declared
+    to be included in a catalog and not just defined. When a class or type is defined,
+    it is available to be used in the catalog but it will not have been added to the
+    catalog. In the previous example, if `exampleapp.pp` contained a class definition
+    with resources, this would result in a warning: `Manifest only contains definitions
+    and will result in no changes on the targets`. The class itself would need to
+    be included for it to be added to the catalog and applied via Bolt.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are also commands to upload files from your local machine to the target
+    or to download from the targets to your machine. Some simple examples using both
+    the Unix version and the Windows version are shown in the following commands.
+    The first file listed is the source and the second is the target, regardless of
+    whether you’re uploading or downloading:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s take a look at the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Output and debugging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'So far, the focus has been on how to run commands and not the output. Bolt
+    by default logs these commands to the `bolt-debug.log` file in the directory from
+    which the Bolt command was run, as well as to the console. There are six logging
+    levels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`trace`: The most detailed level of logging, which shows the inner workings
+    of Bolt.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`debug`: Information about target-specific steps.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`info`: This is high-level logging showing the steps taking place in Bolt.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`warn`: Warning about deprecations and other harmful scenarios. This is the
+    default console level.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`error`: Error messages experienced during the execution of Bolt commands.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`fatal`: Error messages from Puppet code used with Bolt.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A specific log level can be chosen using the `--log-level` flag and the output
+    format can be selected using the `format` flag, which can use `human`, `json`,
+    or `rainbow`. The output from a Bolt command running `uname` on three hosts would
+    look like this in JSON:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In comparison, in human-readable format, it would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `rainbow` output looks similar to human-readable format but, as the name
+    suggests, it makes the lines multi-colored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As part of this output, a `.rerun.json` file will be generated. This will list
+    the targets that were processed during the run, indicating which targets failed
+    and which succeeded. For the next Bolt command, we can use a `--rerun` flag with
+    a value of `success`, `failure`, or `all`. This reads the relevant target section
+    from `.rerun.json` to use targets from the previous run. For example, the following
+    command could be run as a result of an `install` task failing and choosing to
+    run a cleanup task on all failures:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are more options for the commands; the full command reference is available
+    at [https://puppet.com/docs/bolt/latest/bolt_command_reference.html](https://puppet.com/docs/bolt/latest/bolt_command_reference.html
+    ) for Unix-based commands and [https://puppet.com/docs/bolt/latest/bolt_cmdlet_reference.html](https://puppet.com/docs/bolt/latest/bolt_cmdlet_reference.html
+    ) for PowerShell-based commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bolt has a built-in CLI guide that can be accessed by running `bolt guide` on
+    the Unix or PowerShell command line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, what we have discussed using Bolt for is useful on a very small scale
+    but clearly would work with large numbers of servers and more complex configurations.
+    So, the next area to cover is the project structure and configuration files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the structure of projects
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: A `bolt-project.yaml` file exists in it, and this file contains a name key.
+    To create this file, run `bolt project init` for Unix systems or `New-BoltProject`
+    for PowerShell from within a directory in which you wish to add Bolt project files.
+    This will use the name for the project as the name of the directory, but you can
+    override this by running it with a name using the `bolt project init customname`
+    or `New-BoltProject -Name customname` command, for Unix systems and PowerShell,
+    respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This project name must start with a lowercase letter and can only use lowercase
+    letters, digits, and underscores. This is because Bolt projects are like modules
+    and get loaded into the module path. This is important to note because modules
+    contained within the Bolt project will essentially be overwritten in the module
+    path if the Bolt project has the same name as the module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the directory, the `init` command will have created a `bolt-project.yaml`,
+    `inventory.yaml`, and `.``git-ignore` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at how we can configure a Bolt project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring a project
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`bolt-project.yaml` contains settings to override the default Bolt behavior,
+    a lot of which was discussed in the previous section. The settings to be used
+    with the Bolt command can be set here, as well as project configuration such as
+    paths to configuration files and data. Largely, the defaults for these settings
+    will not need to be changed and the core settings that will be configured include
+    the `modules` attribute, which defines modules to manage in the Bolt project,
+    and the `plans`, `policies`, and `tasks` attributes, which limit the visibility
+    of each item by providing a list that will be visible to project users. A sample
+    `bolt-project.yaml` file containing some modules and choosing plans, policies,
+    and tasks to be publicly visible could look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: The full list of settings can be found at [https://puppet.com/docs/bolt/latest/bolt_project_reference.html](https://puppet.com/docs/bolt/latest/bolt_project_reference.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `module` attribute has multiple ways to be updated. When adding items from
+    Forge, this can be updated via the `bolt module add` Unix command or the `Add-BoltModule`
+    PowerShell cmdlet. For example, in Unix systems, `bolt module add puppetlabs/apt`
+    will update the `modules` parameter to contain `- name:puppetlabs-apt` in `bolt-project.yaml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, the `bolt module install` Unix command or the `Install-BoltModule` PowerShell
+    cmdlet can be used, which will automatically do several things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Find dependencies on all Forge modules
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Find compatible versions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Update the Puppetfile
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Install the modules into the Bolt project
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The modules can also be added at project creation time using the following
+    command in Unix systems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In PowerShell, this can be done using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you need modules pinned at a specific version or Git modules added, you
+    will need to add these manually to the Bolt project file and run the `Force` flag
+    with the following Bolt module installation command: `Install-BoltModule -Force`
+    on Windows or `bolt module install --force` on Unix systems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: These modules allow us to use Puppet code within plans, as well as bring in
+    plans and tasks from modules, which will be shown in detail in the *Introducing
+    tasks and* *plans* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring transports
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `inventory.yaml` file contains configuration information about targets,
+    creating groups of targets with details about how Bolt connects to them. The inventory
+    contains a top level that includes settings that act as defaults for all targets,
+    group objects that allow targets to be grouped based on common settings, such
+    as all Windows nodes using certain WinRM settings, and target objects, which are
+    individual settings. For each setting, there are common fields that can be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Alias**: An alias to use instead of the **Uniform Resource Identifier** (**URI**),
+    which can be shorter and more human readable'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Config**: A map of transport configuration options for the target'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Facts**: A map of facts for the target(s)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Features**: An array of features to be enabled (features will be discussed
+    later in the chapter)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Name**: Used with groups to give a human-readable name'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Plugin hooks**: A map of plugin configurations (plugins will be discussed
+    in the *Plugins* section of this chapter)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**URI**: A target’s URI'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Vars**: A map of variables'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'A sample inventory file could look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would provide default settings for SSH transport. It should be noted in
+    this example it was shown how to create groups within groups in any inventory
+    to ease management and settings for groups. In this case, we have an agents group,
+    which contains a `linux_agents` group and a `windows_agents` group. The `windows_agents`
+    group contains WinRM transport configuration. This allows us to run Bolt against
+    all agents but with different transports set. There is then a single target called
+    `Primary` outside of these groups.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The full `inventory.yaml` configuration documentation is available at [https://puppet.com/docs/bolt/latest/bolt_inventory_reference.html](https://puppet.com/docs/bolt/latest/bolt_inventory_reference.html),
+    while the transport configuration is available at [https://puppet.com/docs/bolt/latest/bolt_transports_reference.html](https://puppet.com/docs/bolt/latest/bolt_transports_reference.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To return the contents of the `inventory.yaml` file, the `bolt inventory show`
+    Unix command or the `Get-BoltInventory` PowerShell cmdlet can be used. Specific
+    targets can be viewed with the `targets` flag.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As was discussed in the previous section, for Windows scripts, additional extensions
+    can be allowed using the inventory file, so in a `config` section, the following
+    could be added to allow `.py` and `.pl` scripts to be run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having reviewed how to configure settings at a project level in Bolt, it is
+    now important to also know how system-level settings can be set in Bolt and also
+    how previous legacy versions of Bolt projects may be configured differently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: System level and legacy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In addition to the project settings, system-level settings can be set in the
+    `/etc/puppetlabs/bolt/bolt-defaults.yaml` file on Unix-based systems and the `%PROGRAMDATA%\PuppetLabs\bolt\etc\bolt-defaults.yaml`
+    file on Windows systems. User-level settings can be set in `.puppetlabs/etc/bolt/bolt-defaults.yaml`
+    in the user’s home directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Bolt will choose which project to use with its commands based on the following
+    order of priority:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The project location set in the `BOLT_PROJECT` environment variable
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `project` flag on a Bolt command with the project location set (`--``project
+    /tmp/myproject`)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: By traversing from the current directory up until a `bolt-project.yaml` or `boltdir`
+    directory is found
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `.puppetlabs/bolt/` folder in the home directory of the user
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the Unix environment, Bolt does not load a world-writeable Bolt project directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you want to ship Bolt within an application project but the base Bolt project
+    files would clutter the application, it is possible to embed a Bolt project by
+    creating a `boltdir` directory within the application directory. Bolt could still
+    be run from the parent directory as it would recognize `boltdir` as containing
+    the project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have used older versions of Bolt before 2.36, you will note that projects
+    used to create a single `bolt.yaml` file instead of `bolt-project.yaml` and `inventory.yaml`.
+    Support for v1 `bolt.yaml` projects was removed in v3.0.0 of Bolt. Additionally,
+    Bolt-managed modules changed with the deprecation of manual editing of the Puppetfile
+    in v2.42 and the removal of manual editing in v3.0.0\. This also changed the module
+    path from containing the `site-modules` and `site` modules to the modern version
+    of `modules` and `.modules`. Previously, managed modules had existed in `modules`
+    and unmanaged modules in `site` and `site-modules`. This has now been changed
+    to managed modules in `.modules` and unmanaged modules in `modules`. To migrate
+    an old-style Bolt project to the new style, the `bolt project migrate` Unix command
+    or `Update-BoltProject` PowerShell command can be run. As with all automated conversions,
+    ensure your pre-migration configuration is backed up in revision control. The
+    full details of changes made during the migration process can be found at [https://puppet.com/docs/bolt/latest/projects.html#migrate-a-bolt-project](https://puppet.com/docs/bolt/latest/projects.html#migrate-a-bolt-project).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed the structure created for Bolt configuration and target transport,
+    it is now time to look at more structured ways of running Bolt via tasks and plans.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing tasks and plans
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Tasks** and **plans** are more forms of scripts and allow users to manage
+    parameters, logic, and flow between actions. Unlike normal Puppet code, plans
+    and tasks run through the script in sequential order, even for Puppet plans that
+    compile a catalog.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating tasks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Tasks are single-action scripts that can be in any language that will run on
+    a target machine. The key differences between the normal scripts we have run with
+    Bolt previously and a task are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tasks are paired with a JSON file to provide metadata such as parameters, which
+    allow them to be shared and reused more easily
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tasks can handle structure/typed input and output
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tasks can handle multiple implementations to make them cross-platform
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: They can be stored in the task directory of a Bolt project or the task directory
+    in a Puppet module. Task implementations should contain their extension in the
+    name. The name can include digits, underscores, and upper and lowercase letters
+  prefs: []
+  type: TYPE_NORMAL
+- en: When calling these tasks, a namespace is created that is made up of the name
+    of the Bolt project or module containing the task and the task name, except if
+    the task has been named `init`, in which case it will be referred to only by the
+    Bolt project or module name.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, the task to install an agent with the `peadm::agent_install`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The`.json` and `.md` extensions are reserved and cannot be used for tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For Unix shell systems the script part must contain a shebang (`#!`) line at
+    the top of the file specifying the interpreter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of task implementation is when the PEADM module is used to configure
+    the labs using the following code on Unix systems under the `agent_install.sh`
+    task name:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Parameters are passed based on variables starting with `$PT_`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With PowerShell, which has a built-in argument handler, this can be done without
+    `$PT_` using the `param` function in a task called `agent_install.ps1`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To make these files visible to Bolt commands and allow callers to pass the
+    parameters, a JSON file is written with the same name as the task. For the `agent_install`
+    example, it looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: The metadata provides a description of the task, which is displayed when listing
+    tasks. In addition, the metadata includes a list of parameters with names that
+    must start with a lowercase letter and only include lowercase letters, underscores,
+    and digits. The parameter type, which may match any Puppet type that can be represented
+    in JSON format, and default values for the parameter can also be specified.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring the type is an enum or more specific type, such as an integer within
+    a specified size range, can make the task much more secure, limiting the input
+    and therefore the attack vector. Also, within tasks, you should ensure that the
+    parameters for the implementation you are working on are properly separated and
+    do not allow strings to be called. Precise examples can be seen at [https://puppet.com/docs/bolt/latest/writing_tasks.html#secure-coding-practices-for-tasks](https://puppet.com/docs/bolt/latest/writing_tasks.html#secure-coding-practices-for-tasks).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `implementations` parameter allows us to define what scripts are used in
+    what environments. In this case, ensure the `.sh` implementation is run on the
+    Unix shell and `.ps1` on PowerShell.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this file in place, the `bolt task show` Unix command or `Get-BoltTask`
+    PowerShell cmdlet will show all modules available in the module path, and specific
+    tasks can be viewed with `bolt task show <name of task>` or `Get-BoltTask –Name
+    <name` `of task>`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setting the `private` parameter to `true` prevents the task from being listed
+    and can be useful for hiding tasks that are under development, although as we
+    showed in the *Configuring a project* section, the same could be achieved at the
+    Bolt project level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A parameter can be marked as `sensitive` by setting the parameter value to `true`,
+    and variables can be set to `sensitive` within code to ensure they will be redacted
+    in logs and output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A parameter of `supports_noop` in the metadata allows users to pass a `noop`
+    argument to the task and will result in the `_noop` parameter being `true` or
+    `false`. It is then possible to use this parameter in your task code to logically
+    check whether changes should be made or just tested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the `remote` parameter is set to `true`, the task will only be able to run
+    on remote transport to prevent tasks from being run on incompatible transports.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a task with lots of options or that returns a lot of information, it may
+    be better to use structured input and output rather than just simple parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Bolt passes task parameters as a single JSON object on `STDIN`, as well as
+    environment variables by default. These can then be read in as parameters by a
+    Ruby script with the following line: `params =` `JSON.parse(STDIN.read)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For complex output, it should be ensured that the task prints a single JSON
+    object to `stdout` in the task. This can be useful if you want to use the result
+    within another task. For example, in Python, the following code snippet would
+    dump the JSON of two value sets to stdout, using `json.dump` to convert the result
+    string into JSON and passing it to the `sys.stdout` method Python uses to print
+    to stdout:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To return error messages from tasks, an `Error` object can be returned. In
+    structured output, the `_error` key is expected and the `msg` key is available
+    as a human-readable message for the UI, `kind` as the string for script handling,
+    and `details` with structured data about the task failure, such as exit code tails.
+    Take the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the `_error` key is not present, Bolt generates a generic error instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Within a module, `pdk new task <taskname>` can be run to generate a `<taskname>.json`
+    file and a `<taskname>.sh` file in the task folder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run these tasks, the `bolt task run` Unix command or `Invoke-BoltTask` PowerShell
+    cmdlet can be used with the parameters either passed as arguments or using the
+    `@` symbol via a string of JSON or a filename with the `.json` extension. For
+    example, the first task would install a Puppet agent on targets in the agents
+    group with the server and `install_flags` parameters set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second task would run the `package` task and take a JSON string with the
+    `params` flag to check the status of the `apache2` package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having seen how to create and run tasks, it is now time to review plans, which
+    allow for greater structure, logic,and flow to be applied in managing tasks and
+    the ability to use Puppet code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating Puppet plans
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Plans are written in Puppet code or YAML and allow multiple tasks and commands
+    to be brought together and to apply logic and control of flow and data between
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A Puppet plan is written in a manifest and in a similar format to a Puppet
+    class. It starts with the `plan` keyword, then the name of the plan, attributes
+    within brackets `()`, and code between curly braces `{}`. So, for example, a sample
+    plan in a sample project contained in the plan directory would look as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Plans are named similarly to tasks, with the first segment the name of the module
+    or project and the second segment and all following segments named with lowercase
+    letters, digits, and underscores.
+  prefs: []
+  type: TYPE_NORMAL
+- en: They must not use a reserved word or have the same as a Puppet data type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `init.pp` class, as with tasks and modules, is different. It would skip
+    the need for the task to be named directly. However, it can only be used at the
+    base level but not in any subdirectory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To create a new plan, the following commands can be used for Unix systems and
+    PowerShell, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having reviewed how to create a plan, we will now see how plans receive their
+    target and transport information via the `TargetSpec` type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Constructing targets
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In addition to the normal attribute data types, plans use the `TargetSpec` type,
+    which allows for strings exactly like were used with Bolt command targets in the
+    *Connecting to clients with transports and targets* section, such as `ssh://examplehost.com`,
+    arrays of `Target` types, and recursively, an array of `TargetSpec` types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Target` type represents a target and its specific connections in such a
+    way that they can be added to an inventory file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Within a plan, the `get_targets` function can be used to return targets from
+    a `TargetSpec`. The following is a simple example of how this is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: This plan takes a `TargetSpec` object of `apache_servers`, which is passed to
+    the `get_targets` function. The Apache `reload` task is then run on each individual
+    target server, with the `action` parameter set to `reload`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Target objects can also be constructed and changed within a plan manifest using
+    functions beginning with `set_` or `add_` for the various parts of the inventory
+    config, such as the `set_config`, `set_var`, `add_facts`, and `add_to_group` functions.
+    For example, a new target could be assembled like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: It is possible to access parts of the target, such as `$example_server.config['ssh']`,
+    but the targets will only last in memory for as long as the plan is running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we understand how to connect to clients using plans, we will show how
+    functions can be used in the Puppet code block of a plan to use features of Bolt
+    and the Puppet core language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using plan functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As was shown in the *Constructing targets* section, using `run_task`, Bolt plan
+    functions can be used within the Puppet code block itself, many of which are the
+    same types of commands that were run directly in Bolt, such as `run_command`,
+    `run_script`, and `run_task`. The full list is available at [https://puppet.com/docs/bolt/latest/plan_functions.html](https://puppet.com/docs/bolt/latest/plan_functions.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is also possible to run a plan from within a plan using the `run_plan` function.
+    This can be useful to ensure no plan gets too large and they can be more easily
+    reused. A pattern that can be observed in the PEADM module is the use of the `subplan`
+    folder for plans we only expect to be used within plans, reducing the size and
+    complexity of the catalogs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It should be noted that most Puppet language features, such as functions, the
+    sensitive type, and lambdas, can be used within this code, but other features,
+    such as deferred functions, cannot since the catalog is not being sent to the
+    node to be applied. The differences are fully documented at [https://puppet.com/docs/bolt/latest/writing_plans.html#puppet-and-ruby-functions-in-plans](https://puppet.com/docs/bolt/latest/writing_plans.html#puppet-and-ruby-functions-in-plans).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, within PEADM, the following `run_command` function stops Puppet
+    on all the targets stored in the `$all_targets` variable and then runs a `modify_certificate`
+    plan on the targets in the `covert_target` variable, passing in a primary `add`
+    parameter and the extensions to be added:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Puppet code can also be applied via the `apply` function similar to how a `puppet
+    apply` command would run. For example, PEADM uses the following code to create
+    node groups:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: This applies the `node_manager_yaml` class, passing a `primary_host` parameter.
+    It should be noted that if Puppet libraries are needed in advance of applying
+    Puppet code, the `apply_prep` function can be used to ensure they are available
+    before using the `apply` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging and results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To add logging to plans, the `out::message` and `out::verbose` functions are
+    used, with message logging on every run and verbose message output only if Bolt
+    is run in `verbose` mode. Take the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`Error` would be printed on every Bolt run, but only when the `–verbose` flag
+    is used would the second message be displayed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each function returns an object type of `ResultSet` with each target containing
+    its own `Result` object type, except the `apply` function, whose `ResultSet` contains
+    `ApplyResult` objects. A plan returns a `PlanResult` type as output, which can
+    contain all these data types and just about any Puppet data type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These objects can be assigned to variables and then functions used to expose
+    data. There are two common functions used in all of these object types. `ok` is
+    a function that returns a simple Boolean confirming whether there were any errors
+    and the `value` function returns the output of the run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further type-specific functions can be viewed in the documentation at [https://puppet.com/docs/bolt/latest/bolt_types_reference.html](https://puppet.com/docs/bolt/latest/bolt_types_reference.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To return output from the plan, the return function should be used with any
+    appropriate data type; this could be the direct output from a task or as simple
+    as a string. If no return function is used, the output will be `undef`. For example,
+    the following code will run the task `error_check_task` and only if that is successful
+    will it return the `ResultSet` type output from the task `output_task`; otherwise,
+    it will return the string `OH NO`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s look at how we can handle errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Handling errors
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To perform a simple check and fail a plan as a result, the `fail_plan` function
+    can be used. For example, the following code would check whether the `$targets`
+    variable only contained a single target:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If Bolt functions fail and `_catch_errors` is not set to `true`, then the plan
+    will fail. If `_catch_errors` is used, this allows the plan to continue and the
+    error can be handled:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, the `catch_result` function can be used to catch specific types
+    of errors, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: With an understanding of logging and error handling in plans, we can now look
+    at how external data can be used in plans. Since Bolt uses Puppet as a library,
+    it can use Hiera to access external data. As was covered in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233),
+    this can ensure we separate code and data into plans as we do with Puppet code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing data sources
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Facts can be collected from the hosts using the built-in facts plan or from
+    PuppetDB using `puppetdb_facts`, assuming PuppetDB is set up in a Bolt configuration
+    already. Using either plan would cause the targets to query PuppetDB to automatically
+    have their in-memory inventory updated with the facts. The following example would
+    run `facts` on `targets`, and those targets for which the `os.name` fact is equal
+    to `Windows` are assigned to the `windows_targets` variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'PuppetDB can also have general queries run against it using the `puppetdb_query`
+    function. To return all the `certnames` fact values of `windows` hosts listed
+    in PuppetDB, use the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hiera can be used with plans by using either modules or Bolt project-level Hiera
+    and having an appropriate `hiera.yaml`. The `lookup` function can then be used
+    either inside `apply` functions or simply in the plan. If `lookup` is used within
+    an `apply` function, and assuming the `apply_prep` function is run, we can gather
+    all the facts and Hiera will function as expected. When using it within a plan,
+    the important differences to note are that Bolt has no automatic parameter lookup
+    capabilities like normal Puppet code with classes and the Bolt hierarchy can’t
+    use top scope variables or facts. When Hiera is used within Bolt, it uses two
+    levels of hierarchy, the project and module levels, with the project level being
+    higher in precedence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of the Bolt hierarchy would be a `hiera.yaml` project containing
+    a hierarchy with Node data and the `plan_hierarchy` key without Node data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A `lookup` function in the plan could do the following and with an `application`
+    variable be able to look up the `dns_server_name` variable in the org level of
+    the plan hierarchy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the following section, we will look at how comments can be used to document
+    metadata.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Documenting plan metadata
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Unlike tasks, since plans do not have a `metadata.json` file, it is necessary
+    to document via comments so that when `puppet plans show <plan name>` is run,
+    a description is provided. The first comment line is taken as the description,
+    or an `@summary` tag can be used. Using `@param <param name>` on a comment will
+    indicate it is the description of a parameter and using `@api private` will mark
+    the plan as private. An example of using all of these fields is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: The data type details are picked up automatically by the `bolt plan` `show`
+    command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It can be useful to add plans and tasks to the control repo, but it should be
+    noted that when using PDK validate, PDK cannot validate plans and will only ignore
+    plans in the default bottom-level plan directory. If you have a structure that
+    puts plans at a lower level, you will have to run `pdk` to ignore these lower
+    level directories of plans, such as `pdk set config` `project.validate.ignore
+    subdir1/subdir2/plan`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plan testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Testing Puppet plans is beyond the scope of the book. This is because plan testing
+    is currently not fully implemented and difficult compared to the normal RSpec
+    testing we saw in [*Chapter 8*](B18492_08.xhtml#_idTextAnchor212). Certain things
+    are simply not implemented, such as mocking uploading a file or custom functions,
+    which makes it difficult to carry out meaningful and complete testing compared
+    to module testing. The testing functions currently available can be viewed at
+    [https://puppet.com/docs/bolt/latest/testing_plans.html](https://puppet.com/docs/bolt/latest/testing_plans.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing YAML plans
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'YAML plans will be summarized here due to their much lower level of usage than
+    Puppet plans. They are named similarly to Puppet-based plans but end with an extension
+    of `.yaml` (not `.yml`). However, there is no command to create them. YAML plans
+    contain the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Description`: What will be displayed in the `show` command'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Parameters`: A hash of parameters that can be passed to the plan'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Private`: A Boolean stating whether the plan is visible to the `show` command'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Return`: An array, Boolean, hash, number, or string to return from the plan'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Steps`: An array of steps to be run'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The steps essentially represent the action to be performed in that step and
+    the variables the step needs. There is a similarity between the options available
+    in Bolt and the actions in Puppet plans, such as commands, tasks, scripts, file
+    downloads, and file uploads. As with Puppet plans, YAML plans can call other plans
+    with a plan step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following example task plan, which uses the Docker `puppetlabs` module
+    from Forge [https://forge.puppet.com/modules/puppetlabs/docker](https://forge.puppet.com/modules/puppetlabs/docker)
+    to create and join an additional manager node to a Docker swarm, shows some of
+    these features in use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: This task takes the `firstnode` and `othernodes` variables of the `TargetSpec`
+    type to provide the servers to the target. It uses the `swarm_init` task to initialize
+    on the first node and runs the `swarm_token` task on this node. The `Fact` task
+    is then run on `firstnode`, and in the final step, the `join_swarm` task is run
+    on `othernodes`. It can be seen calling a variable with the name of previous step
+    allows us to access the output created by that step. So we can take the output
+    of the token step and map out the taskspec type returned to use the `stdout` as
+    the token. For the `manager_ip` parameter, we perform a similar action, but this
+    time, as there is more content in `stdout`, we must find the `networking.interface.ip`
+    address fact we wish to pass. The plan then sets the return key to take the `stdout`
+    output of the `join` step to confirm the result of the plan.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is also possible to use the `eval` step to calculate values, and both Puppet
+    and Bolt functions can be used with this. The `message` and `verbose` steps are
+    available for output just as they were in Puppet plans, while string interpolation
+    follows the normal Puppet principle of single quotes (`''`) having no interpolation,
+    just printing the text, double quotes (`""`) performing interpolation, and also
+    using a pipe (`|`) with a new line to allow for expressions of a block of Puppet
+    code to be displayed on the next line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To show some of this, the following plan takes an array of strings to install
+    as packages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can see that the `unique_packages eval` step uses the `unique` function to
+    find only unique values in the array and the `numer_of_packages eval` step uses
+    the `size` function, the result of which is passed to the `verbose` output and
+    interpolated into a string which shows the number of packages. The `example::install_packages`
+    task is run with the output of the `unique_packages` eval step before its output
+    is used in the returned value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This has been just a summary of using YAML plans. The full options available
+    on each step and more are available in the documentation: [https://puppet.com/docs/bolt/latest/writing_yaml_plans.html](https://puppet.com/docs/bolt/latest/writing_yaml_plans.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following section, let’s look at some examples of plugins that are commonly
+    used with Bolt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plugins
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Plugins allow Bolt to dynamically load data during a Bolt run. Plugins are essentially
+    just modules containing tasks with a `bolt_plugin.json` file identifying which
+    tasks are plugins and what type of plugins they are. Some are built into Bolt,
+    while others can be added to extend the functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are three types of Bolt plugins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Reference**: Used to fetch data from external sources, such as loading information
+    into the inventory file'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Secret**: Used to create keys to encrypt text and decrypt cipher text'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`apply_prep` function is called on a target'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will look at these in detail in the following subsections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reference plugins
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`inventory.yaml` or `bolt-project.yaml` using a `_plugin` key with the plugin
+    name as the value and followed by parameters associated with the plugin. For example,
+    to use the `puppetdb` plugin and query and select all the window nodes in PuppetDB,
+    we could add the following group to `inventory.yaml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is assuming the PuppetDB connection configuration details are set in one
+    of the configuration files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the PuppetDB plugin configured a one-time query like this can be used
+    to query PuppetDB: `bolt task run ''inventory[certname] { facts.kernel = "``Windows"
+    }''`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another approach to reference plugins can be with passwords where the `prompt`
+    plugin will result in user input from the command line that sets a password. For
+    example, the following will ensure that when running against `target1.example.com`,
+    Bolt will connect on `winrm` with the user `bill` and the password prompted by
+    the message `Enter` `your password`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Plugins can also be used in plans via the `resolve_references` function. The
+    following example shows a subsection of the `pecdm` module using plugins via the
+    `resolve_references` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code block, it essentially iterates through each group name
+    and builds an array of target entries read in from the `terraform` directory set
+    by the `tf_dir` variable. To see a further example, look at the contents of the
+    `inventory.yaml` file for your lab setup, which uses the `terraform` plugin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Secret plugins
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`pckcs7` is Bolt’s default and only secret plugin. To create the encryption
+    keys, run the `bolt secret createkeys -–force` Unix command or the `New-BoltSecretKey
+    -Force` PowerShell cmdlet. This will create the keys in the `keys` folder of your
+    project. Cipher text can be generated via the `bolt secret encrypt ''N33dt0kn0wba515!''
+    --plugin pckcs7` Unix command or the `Protect-BoltSecret -Text ''N33dt0kn0wba515!
+    '' -Plugin pckcs7` PowerShell cmdlet.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cipher text from this command can then be used in places such as `inventory.yaml`
+    using the `pkcs7` reference plugin, for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note the previous encrypted string was shortened and has a default key size
+    of `2048`. This can be changed by configuring the plugin in `bolt-project.yaml`
+    or the default and user configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet library
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`apply_prep` function is called in a plan. Each target the plugin is run on
+    must be able to use the scripting language used by the plugin. Currently, only
+    `puppet-agent` exists as a Puppet library plugin and it is configured to be available
+    by default. But any future libraries or custom written libraries would be added
+    to the Bolt, user, or default configuration in a similar fashion to this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: The full list of supported and built-in plugins can be viewed at [https://puppet.com/docs/bolt/latest/supported_plugins.html](https://puppet.com/docs/bolt/latest/supported_plugins.html).
+    Writing plugins is beyond the scope of this book, but the documentation at [https://puppet.com/docs/bolt/latest/writing_plugins.html](https://puppet.com/docs/bolt/latest/writing_plugins.html)
+    advises further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having covered Bolt in detail, we will now practice creating and using a bolt
+    project in the following lab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – creating and using a Bolt project
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this lab, we will create a Bolt project. We will create a task that runs
+    the `facter` command on a Windows and Linux node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The steps are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create a Bolt project with the following line of code:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Create an `inventory.yaml` file by performing a lookup of Windows and Linux
+    clients from the PECDM Bolt project and copying the output:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Write a task to cover both Windows and Linux that runs the `facter` command,
+    taking a single argument if only a single fact should be returned.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Write a plan that uses `run_command` to run `facter` and return the results
+    of the plan.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Run the task and plan on your Windows and Linux clients.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can find example solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch12](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch12).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we showed how Bolt complements Puppet’s state-based management
+    by providing a capability to run ad hoc actions for anything that doesn’t fit
+    the declarative enforcement methods of Puppet. We also showed how transports provide
+    the ability for Bolt to connect to targets. We saw how, using the Bolt commands
+    via Unix or PowerShell, we could run commands, scripts, Puppet code, and manifests
+    on targets, as well as uploading and downloading files. We reviewed how Bolt logs
+    to `bolt-debug.log` and how to configure logging to get more logs for different
+    issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then showed how Bolt projects provide a directory structure to contain the
+    configuration and data for Bolt. Bolt projects provide the `inventory.yaml` file
+    to contain target and transport configuration and the `bolt-project.yaml` file
+    to contain project-level configuration settings for Bolt and to allow module dependencies
+    to be downloaded into the project. We discussed how the Bolt project is loaded
+    into the module path along with any modules it had downloaded. We then highlighted
+    how the project format has changed over different versions of Bolt and how the
+    `bolt migrate` command can convert older projects to the new format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then discussed how tasks are single-action scripts that can be in any language
+    that will run on a target machine, paired with a JSON file to provide metadata
+    such as parameters. We also showed how a task can list multiple implementations
+    depending on the target. We looked at how sensitive parameters allow passwords
+    and other secrets to be used by tasks without logging in the APIs. The `noop`
+    option was introduced as a standard way to pass a parameter to a task and run
+    in no-execute mode. We also showed how remote tasks contain the `remote` parameter,
+    set to `true`, and a remote transport to allow web access services to use tasks
+    despite being unable to log on in the traditional way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we discussed how tasks are capable of sharing scripts in implementations
+    and referring to other modules. Some security practices were discussed to ensure
+    parameters are safely passed to tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plans were then discussed as a way of running multiple tasks together and providing
+    logic and control flow. We saw how plans could be written in either the Puppet
+    language or YAML and how targets can be created using the `targetspec` data type
+    and functions. We also saw how structured results can be returned after running
+    a plan.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then discussed how Bolt plugins provide ways to dynamically load data into
+    Bolt runs using reference plugins to fetch data and store it, such as to fill
+    the inventory with data from Terraform. We can also use secret plugins to provide
+    keys for encrypting and decrypting values in Bolt runs. The third type of plugin
+    we looked at was Puppet library plugins, which has only been implemented currently
+    for the installation of Puppet agent via Bolt.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we saw how Bolt can be paired with Puppet to get the best of
+    both declarative and stateful language approaches to allow for flexibility in
+    Puppet configurations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed how to use Bolt and Puppet Enterprise, in the next chapter,
+    we will look at more advanced topics on how to monitor and scale Puppet infrastructure,
+    review performance issues, and use the **Puppet Data Service** to implement the
+    external data pattern and allow users to enter data into Puppet setups with self-service
+    APIs.
+  prefs: []
+  type: TYPE_NORMAL

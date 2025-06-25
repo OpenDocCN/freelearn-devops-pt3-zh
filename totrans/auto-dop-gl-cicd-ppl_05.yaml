@@ -1,0 +1,1326 @@
+- en: '5'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Installing and Configuring GitLab Runners
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In [*Chapter 4*](B18073_04.xhtml#_idTextAnchor084), you learned about the fundamentals
+    of GitLab CI/CD. We defined and introduced the vocabulary and concepts around
+    CI/CD pipelines, which included CI/CD pipeline components, different pipeline
+    types, how to observe and interact with pipelines in the GitLab UI, and how to
+    write a pipeline’s configuration using the `.gitlab-ci.yml` file. A few paragraphs
+    were also spent introducing GitLab Runner as the crucial component of GitLab CI/CD,
+    which actually runs pipeline tasks and reports the results back to GitLab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sole focus of this chapter will be the topic of GitLab runners. You will
+    learn in this chapter that GitLab runners act as the “muscle” in the CI/CD process.
+    Runners are small programs that are installed separately from the main GitLab
+    application. Their purpose is to receive new CI/CD jobs published by GitLab and
+    follow the jobs’ instructions as specified in the `.gitlab-ci.yml` file. Runners
+    can be installed and configured to work with a variety of types of infrastructure,
+    including standalone servers, VMs, containers, and others.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll begin by introducing the runner architecture as well as comparing and
+    contrasting GitLab Runner with other tools that you may be familiar with. Next,
+    we’ll describe installing and configuring runners so they can be paired with GitLab
+    to run CI/CD jobs. Finally, we’ll end with discussing best practices for using
+    different runner types for different circumstances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once you have learned how to install, configure, use, and maintain GitLab runners,
+    you will be well on your way to managing the end-to-end life cycle for building,
+    testing, and deploying your application. Here is how we’ll cover the topics in
+    this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining GitLab runners and their relationship to CI/CD
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The runner architecture and supported platforms
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installing the Runner agent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring and registering the runner with GitLab
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding when and why to use the various runner types and executors
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Like the previous chapters, you’ll get the most out of this chapter if you have
+    an account on a GitLab instance **software-as-a-service** (**SaaS**) or self-managed).
+    In addition, installing the GitLab Runner agent requires a computer (Windows,
+    Mac, or Linux) on which to install the runner binary. A personal laptop would
+    be fine—the runner is lightweight and its system requirements are minimal. If
+    you are using GitLab.com, CI/CD pipelines can also be run using GitLab’s SaaS
+    runners, though be aware of possible usage charges.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining GitLab runners and their relationship to CI/CD
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Recall that GitLab CI/CD is a series of tasks performed against code in your
+    project, which often include some combination of build, test, and deploy jobs.
+    Importantly, CI/CD pipelines are not run inside the GitLab application, as each
+    job will generally require some specific platform and set of tools to successfully
+    run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab runners are programs that accept CI/CD jobs from GitLab, run the jobs’
+    tasks in an appropriate execution environment, and then report the results back
+    to GitLab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab Runner is an open source application written in Go
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The official repository for the GitLab Runner application lives in a project
+    hosted on [GitLab.com](http://GitLab.com) called `gitlab-runner`. At the time
+    of writing, you can navigate to [https://gitlab.com/gitlab-org/gitlab-runner](https://gitlab.com/gitlab-org/gitlab-runner)
+    to view the project’s development and source code. Like the main GitLab application,
+    GitLab Runner follows a monthly release cadence. The latest version of GitLab
+    Runner is *usually* the same major and minor release number as GitLab, though
+    that is not guaranteed to always be the case. Like most of GitLab, GitLab Runner
+    is open source and distributed under the MIT license.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A perusal of the code base referenced in the previous URL shows us that Gitlab
+    Runner is written in the Go programming language. The program is compatible with
+    most major computer architectures (x86, AMD64, ARM, and so on) and operating systems
+    (Windows, macOS, and Linux)—really, just about anywhere that supports installing
+    Go binaries. We’ll soon see that installing the runner executable is straightforward
+    and requires few dependencies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab Runner runs CI/CD jobs specified in .gitlab-ci.yml
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Recall from the previous chapter that GitLab CI/CD pipelines comprise stages
+    and jobs defined in `.gitlab-ci.yml`. Each job contains a set of instructions,
+    which is often shell-style commands to be run in sequence. By default, every new
+    commit to a branch where a `.gitlab-ci.yml` file is defined launches a new pipeline
+    run. That means the jobs in `.gitlab-ci.yml` will be scheduled to run following
+    the order and logic specified in the configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: During a CI/CD pipeline run, when a job arrives at its “turn,” the job will
+    be assigned to an available GitLab runner that is able to run the job’s instructions.
+    One job gets assigned to one runner. After the runner receives the job from GitLab,
+    one of the first things it will do is fetch the commit that launched the pipeline,
+    so it has the relevant snapshot of the code base. The runner may then perform
+    steps such as compiling a build, running unit tests, running security scans, or
+    deploying the application to some kind of environment. Remember, the runner just
+    follows the job’s instructions from `.gitlab-ci.yml`. Once the runner completes
+    the tasks specified in the job, it will report the results back to GitLab. That
+    will almost always include returning a pass or fail status, as well as any artifacts
+    generated or modified during job execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As discussed near the beginning of [*Chapter 4*](B18073_04.xhtml#_idTextAnchor084)
+    (see the *Viewing a list of pipelines* section), the pipeline status and job execution
+    can be monitored in real time via the GitLab UI. The runner constantly communicates
+    with GitLab, and from the UI, you can view available runners, modify runner settings,
+    intervene with pipeline and job execution, view uploaded artifacts, and more.
+    One way to think about the relationship between GitLab’s CI/CD components is to
+    think of runners as the muscles that follow the instructions of `.gitlab-ci.yml`
+    (the brain). GitLab would then be like the nervous system, which coordinates the
+    communication between the brain (the pipeline configuration) and the muscles (the
+    runners doing the heavy lifting of running CI/CD jobs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The runner architecture and supported platforms
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Before going into further details about runner components, installation, and
+    configuration, it’s worth clarifying a few pieces of terminology. So far in this
+    chapter, the words *GitLab Runner* and *runner* may appear to have been used interchangeably.
+    However, a bit of nuance is required. *GitLab Runner* refers to the application
+    installed once on a computer. Once the GitLab Runner application is installed,
+    it does not yet communicate with GitLab or run CI/CD jobs. In order to connect
+    to GitLab and run CI/CD jobs, an administrator will need to execute a GitLab Runner
+    command that *registers* individual *runners* with GitLab and specifies the execution
+    environment those runners will use. Each registered runner will then be a dedicated
+    process that checks into GitLab and runs CI/CD jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This setup can appear confusing at first because a single GitLab Runner application
+    will normally support registering multiple runner processes on the computer where
+    it’s installed. Moreover, those runner processes might use a variety of execution
+    environments for running their jobs. For example, consider a single, bare-metal
+    Linux server. An admin may install the GitLab Runner application, which they then
+    use to register the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A runner process that executes a job in a shell session on the server OS
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A second runner process that executes a job in a Docker container
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A third runner process that pipes a job’s commands to another server over SSH
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'That is, a single GitLab Runner application installed on a single computer
+    can register multiple runners. The Gitlab Runner application is responsible for
+    starting, stopping, and managing the individual runner processes and picking up
+    CI/CD jobs from GitLab. *Figure 5**.1* summarizes the flow of information between
+    GitLab, a runner, and the environment used to execute the job payload:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.1 – GitLab Runner communication and job execution](img/Figure_5.01_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 – GitLab Runner communication and job execution
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the purposes of this chapter, don’t worry too much about the finer details
+    of this flow. Just understand that runners communicate with GitLab in order to
+    receive and run CI/CD jobs in an associated execution environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab Runner is supported on most platforms and architectures
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At the time of writing this book, GitLab Runner can be installed on every major
+    Linux distribution and architecture, as well as on FreeBSD, Windows, macOS, Docker,
+    and Kubernetes. GitLab also offers a FIPS 140-12 runner binary for those organizations
+    that require it for legal or internal compliance reasons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Table 5.1* summarizes the supported architectures and operating system platforms
+    as of GitLab Runner 15.3:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Officially Supported Computer Architectures** | **Officially Supported**
+    **Operating Systems** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| x86 | Debian |'
+  prefs: []
+  type: TYPE_TB
+- en: '| AMD64 | Ubuntu |'
+  prefs: []
+  type: TYPE_TB
+- en: '| ARM | CentOS |'
+  prefs: []
+  type: TYPE_TB
+- en: '| ARM64 | Red Hat Enterprise Linux |'
+  prefs: []
+  type: TYPE_TB
+- en: '| s390x | Fedora |'
+  prefs: []
+  type: TYPE_TB
+- en: '| ppx64le | Linux Mint |'
+  prefs: []
+  type: TYPE_TB
+- en: '|  | Microsoft Windows |'
+  prefs: []
+  type: TYPE_TB
+- en: '|  | macOS |'
+  prefs: []
+  type: TYPE_TB
+- en: '|  | FreeBSD |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 5.1 – GitLab Runner-supported platforms
+  prefs: []
+  type: TYPE_NORMAL
+- en: This table lists the architecture and OS platforms that GitLab explicitly supports
+    per its documentation. For the Linux distributions listed, GitLab makes official
+    GitLab Runner packages available that can be managed with the distribution’s native
+    package manager. However, even if your Linux distribution of choice doesn’t appear
+    in the table, you can generally install the GitLab Runner binary manually on any
+    Linux box provided it has a compatible computer architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As previously mentioned, GitLab Runner can also be hosted in a container or
+    container orchestration system, namely Docker and Kubernetes, respectively. Note
+    this refers to the hosting of the GitLab Runner agent itself, as opposed to the
+    executor or execution environment it uses to run jobs. When we discuss executors
+    in detail later in the chapter, we will learn that a runner can be directed to
+    use Docker or Kubernetes as its executor, regardless of where the GitLab Runner
+    agent is installed, provided it has access to the relevant container tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runners can be specific, group, or shared
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In [*Chapter 3*](B18073_03.xhtml#_idTextAnchor061), we learned that work in
+    GitLab is organized into projects and groups. Projects and groups are intended
+    to represent organizational boundaries such as teams or product lines. Projects
+    normally (though not always) host a Git repository containing source code. Groups
+    are containers that hold projects and other groups, similar to how folders organize
+    files and other folders in a filesystem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 4*](B18073_04.xhtml#_idTextAnchor084) then introduced CI/CD pipelines.
+    We learned that CI/CD pipelines run inside a project against that project’s code.
+    How, then, do we organize and assign runners in GitLab, making them available
+    for CI/CD pipelines to run their jobs? It turns out that we can organize runner
+    availability similarly to how we can organize many other GitLab resources: by
+    making them available at the project, group, or instance level.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specific runners are enabled for individual projects
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Project owners and maintainers may choose to register runners just for their
+    projects. **Specific runners** are assigned to specific projects, and only pick
+    up and run jobs from CI/CD pipelines running in the project they’re assigned to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using specific runners has a couple of advantages. The first is that specific
+    runners empower project owners and developers to set up the runner infrastructure
+    they need without changing anything outside the project they’re working in. For
+    example, a developer might install GitLab Runner on their local laptop, and register
+    a specific runner to a project where they’re the lead contributor. The developer
+    won’t need to ask IT or platform owners to go through some global change management
+    process. Project-specific runners can be managed under project settings, as shown
+    in *Figure 5**.2*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.2 – Project-level runner settings](img/Figure_5.02_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 – Project-level runner settings
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another advantage of specific runners is the possibility of dedicated or customized
+    tooling for individual projects. Specific runners allow for easier project-level
+    accounting of resource use. Moreover, security and compliance policies may require
+    that certain projects use dedicated infrastructure that is separate from the rest
+    of the organization. A runner registered to one specific project will only run
+    pipeline code from inside that project. Pipelines from other parts of GitLab won’t
+    have access to it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Group runners are available for all projects inside a group
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We’ve learned that some resources in GitLab are only available in projects,
+    some resources are only available in groups, and others can be available in both
+    projects and groups. Runners are an example of that third type of resource. Registering
+    a runner at the group level makes that runner available to all pipelines in all
+    projects within that group and its subgroups. *Figure 5**.3* shows that group
+    runners can be registered in a group’s CI/CD settings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.3 – Group runner settings](img/Figure_5.03_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.3 – Group runner settings
+  prefs: []
+  type: TYPE_NORMAL
+- en: Group owners can create and manage group runners, which accept and run CI/CD
+    jobs on a **first-in, first-out** (**FIFO**) basis. Group runners are useful for
+    teams that want to share resources or run multi-project CI/CD pipelines, but still
+    need to manage their own runners for accounting or compliance reasons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shared runners are available to all projects across GitLab
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: GitLab instance administrators can choose to register runners that can pick
+    up CI/CD jobs from any project in any group across the GitLab instance. This allows
+    platform owners to abstract away runner management from developers or project
+    managers. Instance admins can also configure CI/CD quotas at the global level
+    that limit the amount of CI/CD pipeline minutes individual projects can use across
+    available shared runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shared Runners Only Apply to Self-Managed GitLab
+  prefs: []
+  type: TYPE_NORMAL
+- en: Administrators can only configure shared runners on self-managed GitLab instances.
+    [GitLab.com](http://GitLab.com) customers can choose to use SaaS runners provided
+    by GitLab, as well as register their own group or specific runners. A certain
+    number of pipeline minutes for SaaS runners are included in each GitLab license
+    tier, with additional minutes available for purchase. There is never a charge
+    to use your own group or specific runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Container-based platforms such as Kubernetes are a common executor choice for
+    shared runners in order to provide ephemeral resources that can be quickly scaled.
+    Unlike group runners, which pick jobs on a FIFO basis, shared runners operate
+    via a *fair usage queue*. Projects with the fewest CI/CD jobs using shared runners
+    have priority over those with more active jobs using shared runners. That helps
+    to ensure that a single massive pipeline from one project doesn’t hog the entire
+    shared runner infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each runner has a defined executor
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s review some of the components we have mentioned so far:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The GitLab application, which schedules and coordinates CI/CD pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GitLab Runner, the binary installed on a computer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Individual runners, which are processes that run CI/CD jobs and are managed
+    by the GitLab Runner agent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If you look back at *Figure 5**.1*, you will notice an **Executor component**,
+    which receives the job payload and returns the job output and status. The executor
+    refers to the environment that a runner process uses to run a received CI/CD job.
+    A runner’s executor is specified when the runner is first registered with GitLab.
+    Recall that multiple runner processes, each with its own executor, can be registered
+    from a single computer that has the GitLab Runner agent installed. *Table 5.2*
+    summarizes the supported runner executors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Officially Supported GitLab Runner Executors** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Docker |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Shell |'
+  prefs: []
+  type: TYPE_TB
+- en: '| VirtualBox |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Parallels |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Kubernetes |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Docker Machine |'
+  prefs: []
+  type: TYPE_TB
+- en: '| SSH |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Custom |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 5.2 – GitLab Runner supported executors
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will describe each executor in turn.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Docker executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A runner using the Docker executor runs CI/CD jobs in Docker containers that
+    are launched from a specified Docker image. This provides a reproducible environment
+    containing the tools needed to run the CI/CD job. Using the Docker executor requires
+    that Docker Engine be installed on the same computer as GitLab Runner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Docker is the most common executor used among GitLab users. Docker containers
+    are also the default environment used by the shared SaaS runners on GitLab.com.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Docker executor makes it easy to ensure CI/CD jobs have the tools they
+    need to successfully run. Those tools are provided in the container image that
+    the runner is instructed to use for the job. The image used for a job can be specified
+    in a few separate places:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inside a job definition in `.gitlab-ci.yml`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Globally in `.gitlab-ci.yml`, so it is used for all jobs in the pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As the default image used by a runner with the Docker executor if `.gitlab-ci.yml`
+    does not specify an image to use
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The image the runner uses can be in a local GitLab container registry, another
+    external registry, or a public container registry such as Docker Hub. For example,
+    if your CI/CD job requires an environment with Python tooling, you might instruct
+    the runner to fetch the `python:3.10` image from Docker Hub, and then launch a
+    container from that image to run the job. Once the job completes, the runner will
+    delete the container until it receives a new job, at which point the runner will
+    run the job in a fresh container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Shell executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The Shell executor runs jobs directly in a shell session on the machine where
+    GitLab Runner is installed. The content of the `script` keyword in each job definition
+    in `.gitlab-ci.yml` is run as if a user were typing commands in a terminal. The
+    key advantage of the Shell executor is that it is simple to get started since
+    it uses the native shell and filesystem of wherever GitLab Runner is installed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are, however, a couple of challenges that make the Shell executor difficult
+    to scale:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first is that you need to have the necessary build, test, or deploy tools
+    required by the CI/CD job already on the server for the Shell executor to access.
+    Or you would need to have steps in the `script` keyword that install the necessary
+    dependencies.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second challenge is the lack of a clean-slate environment for CI/CD jobs.
+    It is easy to leave leftover build and test artifacts since the job will be executed
+    directly in the server’s filesystem, rather than in a reproducible environment
+    such as a container.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So while the Shell executor may be the best executor to use as a beginner standing
+    up your first pipelines, it is recommended that you use a different executor for
+    more complicated build environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The VirtualBox executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The VirtualBox executor is a way to provide reproducible environments for CI/CD
+    jobs that may still require full operating system resources. The executor can
+    only be used on computers that have the VirtualBox hypervisor installed. When
+    you register a runner with the VirtualBox executor, specify a **virtual machine**
+    (**VM**) template that the runner will use to run CI/CD jobs. When the runner
+    picks up a job, it will spin up a new VM from the base template, run the job in
+    a shell session on that VM, report the results back to GitLab, and then tear down
+    the VM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While useful as a way of ensuring clean-slate environments, the VirtualBox executor
+    may not be necessary unless the job requires access to an operating system running
+    on a Type-2 hypervisor. Consider using the Docker or Kubernetes executor if you
+    would like standardization without the overhead of a VM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Parallels executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The Parallels executor is configured and runs jobs the same way as the VirtualBox
+    executor, the difference being that it uses the Parallels virtualization platform
+    instead of VirtualBox. This allows you to run CI/CD jobs in a Windows VM running
+    on a macOS host machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Kubernetes executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: When a runner is registered with the Kubernetes executor, it runs a CI/CD job
+    in a Pod (that is, a group of one or more containers) in a Kubernetes cluster.
+    This naturally requires you to have a Kubernetes cluster set up, which the runner
+    connects to via the Kubernetes API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the time of writing, there are a few different ways that GitLab Runner can
+    connect to a Kubernetes cluster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab offers an official **Helm chart** to deploy the Runner agent into a cluster.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GitLab also includes a broader method to connect a Kubernetes cluster to a GitLab
+    instance, called **GitLab Agent for Kubernetes**. Once the GitLab instance is
+    connected to a cluster, you can then use the agent to deploy a runner with the
+    Kubernetes executor onto the cluster.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GitLab is actively working on a tool called **GitLab Operator** that further
+    automates the provisioning of GitLab resources in Kubernetes, using container
+    management platforms such as Red Hat OpenShift. Operator will provide another
+    method of deploying a runner with the Kubernetes executor to a cluster. While
+    not yet recommended for production use, Operator can be used to effectively manage
+    resources in your dev and test environments. Refer to the GitLab documentation
+    for more details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ultimately, successfully working with container orchestrations requires a high
+    degree of knowledge and experience in networking, storage, and security. If you
+    or your team has Kubernetes expertise, the Kubernetes executor can be a powerful
+    way to implement and scale a cloud-native CI/CD workflow. If not, it is better
+    to stick with previously mentioned executors such as Docker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Docker Machine executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: While the Docker executor provisions individual Docker containers for running
+    CI/CD jobs, the Docker Machine executor provisions the entire host (VMs) that
+    has Docker Engine instead. Those hosts themselves then support the launching of
+    Docker containers. Docker Machine is normally used with a cloud provider with
+    autoscaling, so you can quickly and flexibly launch container-compatible hosts
+    as demand requires.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Docker (the company) is no longer actively developing Docker Machine in favor
+    of Docker Desktop. GitLab maintains a fork of Docker Machine in order to continue
+    supporting the Docker Machine executor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can somewhat think of the Docker Machine executor as a combination of the
+    VirtualBox/Parallels executor and the Docker executor, with additional autoscaling
+    support included. Docker Machine can also be useful to ensure isolated resources
+    for each job, by ensuring containers run on their own dedicated VMs. In fact,
+    GitLab uses Docker Machine for its own Linux SaaS runners, offering users runners
+    that are both scalable and properly isolated on the multi-tenant platform.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The SSH executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Sometimes you might want to run CI/CD jobs on a piece of infrastructure where,
+    for technical or compliance reasons, you are unable to install GitLab Runner.
+    If that infrastructure supports SSH access from a computer where you *can* install
+    GitLab Runner, you can use the SSH executor to run CI/CD jobs on the remote host.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you register a GitLab runner using the SSH executor, you will also specify
+    the remote host to run the CI/CD job, and the SSH identity file used to connect
+    to that host. When the runner receives a CI/CD job, it will then “pipe” the commands
+    over SSH so they are executed on the remote host. While the SSH executor currently
+    only supports Bash commands and scripts, you might find it useful if you do not
+    want to install the GitLab Runner program on every machine on which you want to
+    run CI/CD jobs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far, we’ve described the major components of GitLab runners: the GitLab
+    Runner agent, its individual registered runner processes, and the executor each
+    runner process might use to run its jobs. There is one more element of runner
+    configuration worth discussing, and that is runner tags.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runner tags restrict which runners can pick up which jobs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`apache`, `rhel`, or `ios`. Tags can also represent the runner’s intended use
+    in a certain stage in the CI/CD process, such as `build`, `staging`, or `prod`.
+    When you also specify one or more tags in a CI/CD job definition, you can ensure
+    that the runner has the proper tooling and environment needed to run that job.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, consider the example following job in a `.``gitlab-ci.yml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `windows` and `staging` tags, as included in the CI/CD job definition, ensure
+    that the `deploy-to-staging` job will only ever be assigned to runners that have
+    both the `windows` and `staging` tags also assigned to them. By default, runners
+    that have tags will not run untagged jobs – that is, jobs that do not have tags
+    matching them to a certain tagged runner. This default can be overwritten in the
+    runner’s settings, where you can permit tagged runners to run jobs that do not
+    have tags, and therefore presumably do not care where they are run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runner Tags ≠ Git Tags
+  prefs: []
+  type: TYPE_NORMAL
+- en: The word “tag” in GitLab can seem confusing because the term is used in a few
+    different contexts. In this discussion, “tag” is simply a label put on runners
+    that matches them to CI/CD jobs with the same tag or tags. These are not Git tags,
+    which are descriptive labels placed on Git commits, and are also found in GitLab.
+    Runner tags are unrelated to tags used in Git version control.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By now, we’ve covered all the essential information around GitLab runners, how
+    they work conceptually, and the different supported platforms and executors. It
+    is time to walk through the runner installation process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing the Runner agent
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This section will be most helpful if you follow along and install and register
+    a runner on your own computer. You will find that the installation steps will
+    differ slightly depending on your system type: Windows, macOS, Linux with a supported
+    package manager, or a generic Linux system. Regardless of platform, the same two-step
+    process holds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Install the GitLab Runner agent.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Register a runner with GitLab.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Installing GitLab Runner
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As previously mentioned, the method of installation will differ slightly depending
+    on your operating system. For major Linux distributions, the documentation ([https://docs.gitlab.com/runner/install/linux-repository.html](https://docs.gitlab.com/runner/install/linux-repository.html))
+    will direct you to add the runner repository to your system, and then use your
+    native package manager to install the `gitlab-runner` package. For Windows, macOS,
+    and other Linux distros, you will use `curl` to get the program directly from
+    GitLab, make it executable, then install and start the runner agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s take the example of a Red Hat Linux Enterprise server with an *x86_64*
+    architecture and RPM-based package management system. The GitLab documentation
+    directs us to first download and execute a shell script that adds the `gitlab-runner`
+    repositories to our system’s package manager:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you were to examine the content of the shell script, you would see that all
+    it does is detect the operating system platform, and then run the relevant package
+    management comment to add the `gitlab-runner` repository. You can verify that
+    this step has been completed by checking your list of available repositories (`sudo
+    dnf repolist` in RHEL). You should see `gitlab-runner` in the list alongside the
+    primary OS repositories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ve added the runner repository, but have not yet installed GitLab Runner.
+    We can easily do so by installing the `gitlab-runner` package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the installation completes, GitLab Runner should automatically start in
+    the background (you will need to manually start GitLab Runner if you installed
+    it on Windows or macOS, or installed it manually on Linux). You can verify that
+    the GitLab Runner agent is started and running with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: You should see confirmation that the agent is running, and also that there are
+    not yet any runners registered with GitLab. Registering runners is what we will
+    do next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Registering a runner with GitLab
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We have so far installed the GitLab Runner agent on a computer, where it runs
+    as a background service. However, there are not yet any runners communicating
+    with GitLab. The way we set up runners to communicate with GitLab and run CI/CD
+    jobs is by *registering* one or more runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall the previous discussion on shared, specific, and group runners. When
+    you register a runner with GitLab, you bind runners to an entire GitLab instance
+    (shared runners), a group (group runners), or a project (specific runners). Registration
+    instructions and runner settings after registration appear in the respective part
+    of GitLab where you register the runner (instance, group, or project). For example,
+    recalling *Figure 5**.2*, we see that we can find these details under **Settings**
+    | **CI/CD** | **Runners** in the *Hats for* *Cats* project:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.4 – Project-level runner settings](img/Figure_5.04_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.4 – Project-level runner settings
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition, take note of the registration token shown in *Figure 5**.4*. The
+    runner registration token is generated by GitLab and is used by the runner to
+    authenticate to the correct area of GitLab where it is registered:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are following along on a demo system, copy the registration token to
+    your clipboard, as we will need it when we register a runner from the computer
+    where we have GitLab Runner installed.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Next, return to the computer where GitLab Runner is installed. From a Terminal
+    session, run a prompt-based runner registration script:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'GitLab will first prompt you for the URL of your GitLab application instance.
+    For SaaS, this will be [https://gitlab.com](https://gitlab.com). Otherwise, it
+    will be the URL you use to reach your self-managed instance. In this example,
+    we will stick with `gitlab.com`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Next, the script will ask for the runner registration token. This is the token
+    shown in *Figure 5**.2* and will be different depending on the project or group
+    with which you are registering a runner. Put another way, the registration token
+    authenticates the runner to GitLab and ensures that it is registered to the correct
+    project or group:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'You can then provide an optional description that will show up in the runner’s
+    metadata in the GitLab UI. This example might presume the runner is a Linux server
+    where developers can build and test their code:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The next message prompts you to enter any optional runner tags. Recall that
+    tags are label metadata that you assign to a runner. Tags advertise the runner
+    as being able to pick up CI/CD jobs that have those same tags. For example, a
+    build job might include the `rhel` tag to indicate that the job requires tooling
+    provided by Red Hat Linux. Only runners with that tag will be allowed to pick
+    up the job. Tags can be assigned on runner registration, as shown here, and can
+    also be modified via the runner settings in the GitLab UI:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The optional maintenance note is another area of descriptive metadata that
+    doesn’t otherwise configure the runner behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At this point in the script, the newly created runner process will reach out
+    to GitLab to confirm that it can communicate and authenticate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Lastly, the runner will ask for the execution environment it should use to
+    run CI/CD jobs. Also, remember that the executor depends on having the necessary
+    tooling available; for example, selecting Docker requires that Docker Engine is
+    installed and available on the server. In this example, we’ll select `Shell`,
+    as it’s the easiest executor with which to get started and requires no dependencies:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The script will finally confirm that runner registration has succeeded. A runner
+    process is now running on the computer, managed by the local GitLab Runner agent,
+    and ready to pick up a CI/CD job from the GitLab instance:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can verify successful registration and communication in a couple of ways.
+    From where GitLab Runner is installed, you can view the configured runners with
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: A runner with a description of `Linux dev server` is listed, along with its
+    executor, registration token, and the GitLab instance the runner is registered
+    to.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can also verify that the runner is properly registered from the GitLab side.
+    The runner we just registered is registered with our *Hats for Cats* project.
+    *Figure 5**.5* shows that if we return to the project via `Linux dev runner` registered
+    and available to the project:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.5 – Specific runner successfully registered with GitLab](img/Figure_5.05_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.5 – Specific runner successfully registered with GitLab
+  prefs: []
+  type: TYPE_NORMAL
+- en: The GitLab UI shows a couple of other interesting features from our specific
+    runner. The `dev` and `rhel` tags are shown alongside the runner ID and description.
+    The lock icon next to the runner ID indicates that the runner is locked to the
+    specific project to which it is registered, and it cannot be assigned to other
+    projects. The pencil icon will take us to runner settings that we can adjust in
+    the GitLab UI, and the pause button will “pause” the runner. Pausing the runner
+    will keep it registered with GitLab, but will prevent the runner from accepting
+    new jobs while it is paused.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can view existing runner settings and statistics by clicking on the hyperlinked
+    runner ID. *Figure 5**.6* shows information from the runner we registered earlier,
+    which can be viewed in the GitLab UI. This information includes the runner’s architecture
+    and networking details, its activity status, and assignable attributes such as
+    runner tags, its protected or unprotected status, description, and ability to
+    be assigned to other projects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.6 – Runner information in the GitLab UI](img/Figure_5.06_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.6 – Runner information in the GitLab UI
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we return to the runner settings (as shown in *Figure 5**.5*) and select
+    the edit (pencil) icon, we arrive at a page that shows additional runner details
+    as well as attributes we can set from the UI. These settings include protecting
+    the runner and modifying the description and runner tags, as shown in *Figure
+    5**.7*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The maximum job timeout field tells the runner to report a job as failed by
+    default after a certain period elapses. Be careful with this option; if you set
+    it, make sure it is a value larger than the maximum amount of time you would expect
+    one of your builds to take.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.7 – Runner settings in the GitLab UI](img/Figure_5.07_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.7 – Runner settings in the GitLab UI
+  prefs: []
+  type: TYPE_NORMAL
+- en: At this point, your runner is registered, active, and ready to start picking
+    up CI/CD jobs. The topic we will next turn to is considerations around the runner
+    configurations and executors based on your or your organization’s needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Considerations regarding the various runner types and executors
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We’ve learned that there are many types of runners, configuration options, and
+    execution environments. In this section, we will discuss some performance, security,
+    and monitoring considerations to help guide your decision-making regarding which
+    runners to use, and when to use them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Performance considerations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As a developer or operator, you want to make sure that pipelines run as efficiently
+    as possible. Key performance considerations around CI/CD job execution are runner
+    availability and resources, repository size, and how you handle job and application
+    dependencies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runner availability
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Consider the three scopes of runners discussed earlier in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shared runners configured at this instance level (if using self-managed GitLab),
+    available to all projects in the instance
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Group runners available to all projects in a group and its subgroups
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Specific runners registered only to designated projects
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The way each of the types of runners handles CI/CD jobs can affect pipeline
+    efficiency and execution times. Specific runners are a fairly straightforward
+    case. Use specific runners when you know you need dedicated resources for a project.
+    That said, you may gain pipeline efficiency at the expense of the efficient use
+    of resources. Idle server time can be a consequence of widely using specific runners.
+    Moreover, pooling resources together in group and shared runners can also allow
+    you to take advantage of autoscaling features offered by cloud services in a way
+    that may not be economically feasible with specific runners. So, if your application’s
+    resource use and demand are predictable, look to use specific runners. If you
+    expect fluctuation in resource requirements, consider group or shared runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regarding group and shared runners, they may appear to be roughly equivalent
+    in practice, especially if your GitLab instance has a single top-level group storing
+    all your projects. However, group and shared runners are quite different in the
+    way they pick up their respective jobs. Group runners process jobs on a FIFO basis.
+    This means a single resource-intensive pipeline can “hog” a set of group runners
+    as its jobs are queued, especially if there are many jobs in a single stage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specific runners, on the other hand, operate via a fair usage queue. That is,
+    projects on the GitLab instance with the fewest jobs already using shared runners
+    are given priority. That may be desirable in some cases, as it suggests more equitable
+    pipeline execution across all your projects in GitLab. In practice, some projects
+    may be more important than others, and you will want those projects to have priority
+    execution, where pending jobs aren’t sent to the back of the line because others
+    in the project have already run. In that case, group runners with their FIFO assignment
+    may be your best bet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Repository size
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: GitLab’s documentation describes a “large” repository as containing more than
+    50,000 files in the working tree (that is, in the collection of checked-out files).
+    When repositories are large, a rate-limiting step in the pipeline can be the runner
+    cloning or fetching the project repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab Runner already has some optimizations in place to minimize the time and
+    resources it takes to pull down project files. If the project has previously been
+    cloned to the runner’s execution environment, the runner will perform an incremental
+    fetch so that the entire repository isn’t pulled down for each job. Moreover,
+    runners will by default perform a shallow clone, copying down only the latest
+    20 commits from the project (this setting can be adjusted with the `GIT_DEPTH`
+    variable in your `.``gitlab-ci.yml` file).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For some more advanced configuration, you can use the `pre_clone_script` keyword
+    in your `.gitlab-ci.yml` file to set Git configuration commands that run before
+    the runner clones the repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Caching dependencies
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The considerations around dependency and artifact caching are conceptually similar
+    to the discussion around large repositories. The idea is that we want to minimize
+    the need for runners to repeatedly download the same files, and download only
+    the files they need for the CI/CD job currently assigned to the runner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `cache` keyword in `.gitlab-ci.yml` is where you specify file paths that
+    should remain on the runner between jobs. We recommend combining the `cache` keyword
+    with runner tags so that jobs such as tooling are assigned to runners that have
+    those dependencies pre-cached.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, each runner will also download all artifacts for every job that
+    has previously run in that pipeline. You can use the `dependencies` keyword to
+    select which jobs’ artifacts should be downloaded. For example, if you have separate
+    Windows and Linux build jobs, and separate test jobs for your Windows and Linux
+    builds, it makes sense for the test jobs to only download the artifacts from their
+    respective build job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, if your pipelines are container-based, you might spend heavy amounts
+    of networking resources pulling container images from public registries to run
+    your jobs. GitLab has a feature called Dependency Proxy, where you can configure
+    a local registry to cache Docker images, so the runner executor does not need
+    to pull from a public source on each run. Rather, the runner will pull from the
+    local registry, and pulling from the public source will only need to take place
+    for updating the container versions in the cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Security considerations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There is far more to discuss concerning security and GitLab than can be covered
+    in this book. However, two considerations are immediately implicated by your choices
+    in installing and configuring runners. Those considerations are the choice of
+    runner executor, and how you handle secrets in your CI/CD pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your choice of runner executor
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Remember that CI/CD pipelines are fundamentally the execution of commands on
+    a remote host – that is, hosts where GitLab Runner is installed. You, therefore,
+    run the inherent risk of performing operations not just on your source code but
+    also on the underlying infrastructure hosting the runner.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In general, some runner executers can be thought of as “safer” than others.
+    Using the shell executor, while convenient, exposes your server’s filesystem to
+    the runner, and operations performed against the filesystem may persist across
+    jobs. For example, a CI/CD pipeline job for project A might be able to access
+    files from project B if a pipeline for project B recently used that same runner.
+    The `gitlab-runner` user will run under the authority of whichever user registered
+    the runner. If `sudo` was used for registration, that means the runner will have
+    full root access. Therefore, we recommend using the shell executor only for specific
+    runners in projects you trust.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Docker executor can be thought of as somewhat safer because containers are
+    an additional abstraction layer away from the host system. The runner clones project
+    code and runs job commands inside an isolated container, and then tears down the
+    container after reporting the results back to GitLab. Of critical importance,
+    though, is making sure the containers run in unprivileged mode. That is, the jobs
+    must be run by non-root users to ensure job execution does not involve access
+    to the host system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The VirtualBox/Parallels executor can be considered among the safest of the
+    runner executors because jobs are run inside an ephemeral VM with an isolated
+    OS and filesystem. CI/CD jobs will not have access to the underlying hypervisor,
+    and there is minimal risk of information unintentionally being shared between
+    jobs. Consider using these executors if you are otherwise unsure of your ability
+    to secure shell or Docker environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Secret management
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Managing secrets and avoiding their unintentional disclosure is a topic with
+    a larger scope than the focus of this chapter. However, because runners receive
+    both repository information and environment variables from GitLab, it is important
+    to understand how poor secret management can cause your runners to be a vector
+    for exposing sensitive information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Never, under any circumstances, hardcode secrets (passwords, cloud credentials,
+    deploy keys, and so on) into your project repository. The nature of Git version
+    control is that once information is committed to the project, it is a part of
+    the repository’s immutable snapshot history. Simply removing the secret with a
+    future commit does not remove it from previous commits. Because runners clone
+    project repositories with a certain depth of historic snapshots, secrets accidentally
+    left in a project are propagated to the runner infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 7*](B18073_07.xhtml#_idTextAnchor162) will cover how you can use
+    GitLab’s Secret Detection tool to perform historic scans on your repository for
+    potentially hardcoded secrets. Ultimately, the solution to the “I accidentally
+    committed sensitive information” problem is to consider that information irrevocably
+    exposed, and to therefore reset or rotate the affected credentials or keys.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A similar situation arises with CI/CD variables. Variables used in GitLab CI/CD
+    are exported as environment variables to a runner’s shell session. Unmasked and
+    unprotected variables that store secrets run the risk of ending up on runners
+    that execute untrusted builds. To guard against this possibility, store variables
+    as masked and protected variables at the project or group level, ensuring they
+    can only be used on protected branches, and ensuring their values are not exposed
+    on the runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring considerations
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Recall that GitLab Runner runs as a separate application on infrastructure outside
+    the GitLab instance. Monitoring the data around your runners and pipelines is
+    essential to ensure proper security and resource utilization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The three key areas of consideration around monitoring your runners are as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The analytics available in the Gitlab UI
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The runner logging system
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The exportable metrics produced by the runners themselves
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Self-managed GitLab has in-depth logging and monitoring facilities. Most monitoring
+    can be managed by the built-in Prometheus server, and logs can be exported to
+    aggregation systems such as **Splunk**. Similarly, GitLab Runner generates log
+    entries that can be managed in the local operating system as well as by external
+    or web-based tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab UI analytics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'General CI/CD analytics can be found at the project level under **Analytics**
+    | **CI/CD**. *Figure 5**.8* shows statistics for the public GitLab project hosted
+    on [GitLab.com](http://GitLab.com):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.8 – CI/CD analytics for the GitLab project](img/Figure_5.08_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.8 – CI/CD analytics for the GitLab project
+  prefs: []
+  type: TYPE_NORMAL
+- en: The metrics shown in the UI here only account for general pipeline trends, namely
+    overall pipeline success and failure rates. However, this data can serve as a
+    useful starting point from which you can determine whether pipeline failures are
+    caused by logic errors in source code or issues with the underlying infrastructure
+    (that is, your runners). If runners appear to be the culprit, you can then dive
+    deeper into runner-specific logs and metrics, as discussed in the next few paragraphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runner logging
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: GitLab Runner does not have a dedicated log file. Rather, messages are published
+    to the general system log file. Normally that would be `/var/log/syslog` in Debian-flavored
+    operating systems (such as Ubuntu) and `/var/log/messages` in Fedora-flavored
+    operating systems (such as Red Hat Linux). Errors in the runner service, its configuration,
+    or its ability to communicate with GitLab will be logged in these files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A useful way to confirm that the runner has a valid configuration and that
+    it can communicate properly with GitLab is to run the `gitlab-runner verify` command
+    as shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding output, you can verify the runner’s architecture, version,
+    process ID, registration ID, and ability to talk to GitLab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Runner Prometheus metrics
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Self-managed GitLab has in-depth logging and monitoring facilities. Most monitoring
+    can be managed by the built-in Prometheus server. Similarly, GitLab Runner includes
+    an embedded HTTP server that can advertise its metrics to an available Prometheus
+    server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In order to expose the runner’s metrics, you first need to edit the runner’s
+    main configuration file, `config.toml`, which can normally be found in `/etc/gitlab-runner`.
+    Add the `listen_address` parameter to tell the metrics server which port to listen
+    on. An example `config.toml` file with the `listen_address` parameter added may
+    look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: After you edit the configuration file, restart the GitLab Runner service with
+    `sudo gitlab-runner restart`. An available Prometheus server will then be able
+    to read in and instrument the runner metrics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we described the part that runners play in GitLab CI/CD pipelines.
+    We learned that runners can be thought of as the “muscle” of CI/CD executing jobs
+    specified in `.gitlab-ci.yml`. Runners can be installed as standalone programs
+    on most computer platforms and can be shared with all projects in GitLab, or with
+    only certain projects or groups. Moreover, wherever you have a runner installed,
+    you can choose the execution environment it uses to run CI/CD tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regardless of your role, it is helpful to understand how runner settings can
+    affect pipeline performance, application security, and observability in the development
+    life cycle. We encourage you to practice the process of installing and registering
+    runners, even if maintaining the runner infrastructure is not part of your day-to-day
+    responsibilities. A confident knowledge level of runner architecture and workflows
+    will make you a better software practitioner as you continue your GitLab journey.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next chapter will build upon what we’ve learned so far and will introduce
+    you to building out a robust test infrastructure using GitLab CI/CD. Application
+    verification, and later, security, will serve as core topics whose coverage will
+    enable you to continuously improve the efficiency, sustainability, and security
+    of your DevOps workflows.
+  prefs: []
+  type: TYPE_NORMAL

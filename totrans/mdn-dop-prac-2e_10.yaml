@@ -1,0 +1,1435 @@
+- en: '10'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Immutable Infrastructure with Packer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we looked at configuration management with Ansible
+    and the tool’s core concepts. We also discussed Terraform and IaC in [*Chapter
+    8*](B19877_08.xhtml#_idTextAnchor1010), *Infrastructure as Code (IaC) with Terraform*.
+    In this chapter, we will look at another way of provisioning your infrastructure
+    and configuration using both tools, as well as another one, called **Packer**.
+    With all three tools, let’s boot up a scalable **Linux**, **Apache**, **MySQL**,
+    **and PHP** (**LAMP**) stack on Azure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Immutable infrastructure with HashiCorp’s Packer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creating the Apache and MySQL playbook
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building the Apache and MySQL images using Packer and Ansible provisioners
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creating the required infrastructure with Terraform
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: You will need an active Azure subscription to follow the exercises for this
+    chapter. Currently, Azure is offering a free trial for 30 days with $200 worth
+    of free credits; sign up at [https://azure.microsoft.com/en-in/free](https://azure.microsoft.com/en-in/free).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will also need to clone the following GitHub repository for some of the
+    exercises:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e%0D)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to clone the repository into your home directory,
+    and `cd` into the `ch10` directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: You also need to install **Terraform** and **Ansible** on your system. Refer
+    to [*Chapter 8*](B19877_08.xhtml#_idTextAnchor1010), *Infrastructure as Code (IaC)
+    with Terraform*, and [*Chapter 9*](B19877_09.xhtml#_idTextAnchor1198), *Configuration
+    Management with Ansible*, for more details on installing and setting up Terraform
+    and Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Immutable infrastructure with HashiCorp’s Packer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Imagine you are the author of a book and you need to make changes to an existing
+    edition. When you want to make changes, such as improving the content or fixing
+    the issues and ensuring the book is up to date, you don’t edit the existing book.
+    Instead, you create a new edition with the desired updates while keeping the existing
+    editions intact, like the new edition of this book. This concept aligns with **immutable
+    infrastructure**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In IT and systems management, immutable infrastructure is a strategy where,
+    instead of making changes to existing servers or **Virtual Machines** (**VMs**),
+    you generate entirely new instances with the desired configuration. These new
+    instances replace the old ones instead of modifying them, like creating a new
+    book edition when you want to incorporate changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s how it works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Building from scratch**: When you need to update a part of your infrastructure,
+    you avoid making direct changes to the existing servers or machines. Instead,
+    you create new ones from a pre-established template (an image) that includes the
+    updated configuration.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**No in-place modifications**: Like not editing an existing book, you avoid
+    making in-place modifications to current servers. This practice reduces the risk
+    of unforeseen changes or configuration inconsistencies.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Consistency**: Immutable infrastructure ensures that every server or instance
+    is identical because they all originate from the same template. This uniformity
+    is valuable for ensuring reliability and predictability.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rolling updates**: When it’s time to implement an update, you systematically
+    replace the old instances with the new ones in a controlled manner. This minimizes
+    downtime and potential risks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scalability**: Scaling your infrastructure becomes effortless by generating
+    new instances as needed. This is akin to publishing new book editions when there’s
+    a surge in demand, or things become outdated.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rollback and recovery**: If issues arise from an update, you can swiftly
+    revert to the previous version by re-creating instances from a known good template.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So, consider immutable infrastructure as a means of maintaining your infrastructure
+    by creating new, improved instances rather than attempting to revise or modify
+    existing ones. This approach elevates consistency, reliability, and predictability
+    within your IT environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To understand this further, let’s consider the traditional method of setting
+    up applications via Terraform and Ansible. We would use Terraform to spin up the
+    infrastructure and then use Ansible on top to apply the relevant configuration
+    to the infrastructure. That is what we did in the last chapter. While that is
+    a viable approach, and many enterprises use it, there is a better way to do it
+    with modern DevOps approaches and immutable infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Immutable infrastructure is a ground-breaking concept that emerged due to the
+    problems with **mutable infrastructure**. In a mutable infrastructure approach,
+    we generally update servers in place. So, we follow a mutable process when we
+    install Apache in a VM using Ansible and customize it further. We may want to
+    update the servers, patch them, update our Apache to a newer version, and update
+    our application code from time to time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The issue with this approach is that while we can manage it well with Ansible
+    (or related tools, such as **Puppet**, **Chef**, and **SaltStack**), the problem
+    always remains that we are making live changes in a production environment that
+    might go wrong for various reasons. Worse, it might update something we did not
+    anticipate or test in the first place. We also might end up in a partial upgrade
+    state that might be difficult to roll back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With the scalable infrastructure that the cloud provides, you can have a dynamic
+    horizontal scaling model where VMs scale with traffic. Therefore, you can have
+    the best possible utilization of your infrastructure – the best bang for your
+    buck! The problem with the traditional approach is that even if we use Ansible
+    to apply the configuration to new machines, it is slower to get ready. Therefore,
+    the scaling is not optimal, especially for bursty traffic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Immutable infrastructure helps you manage these problems by taking the same
+    approach we took for containers – *baking configuration directly into the OS image
+    using modern DevOps tools and practices*. Immutable infrastructure helps you deploy
+    the tested configuration to production by replacing the existing VM without doing
+    any updates in place. It is faster to start and easy to roll back. You can also
+    version infrastructure changes with this approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**HashiCorp** has an excellent suite of DevOps products related to infrastructure
+    and configuration management. HashiCorp provides **Packer** to help you create
+    immutable infrastructure by baking configurations directly in your VM image, rather
+    than the slow process of creating a VM with a generic OS image and then customizing
+    it later. It works on a similar principle as Docker uses to bake container images;
+    that is, you define a template (configuration file) that specifies the source
+    image, the desired configuration, and any provisioning steps needed to set up
+    the software on the image. Packer then builds the image by creating a temporary
+    instance with the base image, applying the defined configuration, and capturing
+    the machine image for reuse.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Packer provides some of the following key features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Multi-platform support**: Packer works on the plugin architecture and, therefore,
+    can be used to create VM images for a lot of different cloud and on-premises platforms,
+    such as VMware, Oracle VirtualBox, Amazon EC2, Azure’s ARM, Google Cloud Compute,
+    and container images for Docker or other container runtimes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Automation**: Packer automates image creation and eliminates manual effort
+    to build images. It also helps you with your multi-cloud strategy, as you can
+    use a single configuration to build images for various platforms.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Fosters GitOps**: Packer configurations are machine-readable and written
+    in HCL or JSON, so they can easily sit with your code. This, therefore, fosters
+    GitOps.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Integration with other tools**: Packer integrates well with other HashiCorp
+    tools, such as Terraform and Vagrant.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Packer uses a staging VM to customize the image. The following is the process
+    that Packer follows while building the custom image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You start with Packer configuration HCL files to define the base image you want
+    to start from and where to build the image. You also define the provisioner for
+    building the custom image, such as Ansible, and specify what playbooks to use.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: When you run a Packer build, Packer uses the details in the configuration files
+    to create a build VM from the base image, run the provisioner to customize it,
+    turn off the build VM, take a snapshot, and save that as a disk image. It finally
+    saves the image in an image repository.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You can then build the VM from the custom image using Terraform or other tools.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The following figure explains the process in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.1 – Packer build process](img/B19877_10_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.1 – Packer build process
+  prefs: []
+  type: TYPE_NORMAL
+- en: The result is that your application is quick to start up and scales very well.
+    For any changes within your configuration, create a new disk image with Packer
+    and Ansible and then use Terraform to apply the changes to your resources. Terraform
+    will then spin down the old VMs and spin up new ones with the new configuration.
+    If you can relate it to the container deployment workflow, you can make real sense
+    of it. It's akin to using the container workflow within the VM world! But is immutable
+    infrastructure for everyone? Let’s understand where it fits best.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When to use immutable infrastructure
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Deciding to switch to immutable infrastructure is difficult, especially when
+    your Ops team treats servers as pets. Most people get paranoid about the idea
+    of deleting an existing server and creating a new one for every update. Well,
+    you need to do a lot of convincing when you first come up with the idea. However,
+    it does not mean that you must use immutable infrastructure to do proper DevOps.
+    It all depends on your use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s look at each approach’s pros and cons to understand them better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pros of mutable infrastructure
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s begin with the pros of mutable infrastructure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If adequately managed, mutable infrastructure is faster to upgrade and change.
+    It makes security patches quicker.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is simpler to manage, as we don’t have to worry about building the entire
+    VM image and redeploying it for every update.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cons of mutable infrastructure
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Next, let’s see the cons of mutable infrastructure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It eventually results in configuration drift. When people start making changes
+    manually in the server and do not use a config management tool, it becomes difficult
+    to know what’s in the server after a particular point. Then, you will have to
+    start relying on snapshots.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Versioning is impossible with mutable infrastructure, and rolling back changes
+    is troublesome.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There is a possibility of partial updates because of technical issues such as
+    a patchy network, unresponsive **apt** repositories, and so on.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There is a risk because changes are applied directly to the production environment.
+    There is also a chance that you will end up in an unanticipated state that is
+    difficult to troubleshoot.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Because of configuration drift, it is impossible to say that the current configuration
+    is the same as being tracked in version control. Therefore, building a new server
+    from scratch may require manual intervention and comprehensive testing.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Similarly, let’s look at the pros and cons of immutable infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pros of immutable infrastructure
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The pros of immutable infrastructure are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It eliminates configuration drift as the infrastructure cannot change once deployed,
+    and any changes should come via the CI/CD process.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It is DevOps-friendly as every build and deployment process inherently follows
+    modern DevOps practices.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It makes discrete versioning possible as every image generated from an image
+    build can be versioned and kept within an image repository. That makes rollouts
+    and rollbacks much more straightforward and promotes modern DevOps practices such
+    as **canary** and **blue-green** deployments with A/B testing.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The image is pre-built and tested, so we always get a predictable state from
+    immutable infrastructure. We, therefore, reduce a lot of risk from production
+    implementations.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It helps with horizontal scaling on the cloud because you can now create servers
+    from pre-built images, making new VMs faster to start up and get ready.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cons of immutable infrastructure
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The cons of immutable infrastructure are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building and deploying immutable infrastructure is a bit complex, and it is
+    slow to add updates and manage urgent hotfixes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are storage and network overheads in generating and managing VM images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So, as we’ve looked at the pros and cons of both approaches, it ultimately depends
+    on how you currently do infrastructure management and your end goal. Immutable
+    infrastructure has a huge benefit, and therefore, it is something that every modern
+    DevOps engineer should understand and implement if possible. However, technical
+    and process constraints prevent people from doing it – while some constraints
+    are related to the technology stack, most are simply related to processes and
+    red tape. Immutable infrastructure is best when you need consistently reproducible
+    and exceptionally reliable deployments. This approach minimizes the risk of configuration
+    drift and streamlines updates by reconstructing entire environments instead of
+    tweaking existing elements. It proves especially advantageous in scenarios such
+    as microservices architectures, container orchestration, and situations where
+    rapid scaling and the ability to roll back changes are paramount.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We all know that DevOps is not all about tools but it is a cultural change that
+    should originate from the very top. If it is not possible to use immutable infrastructure,
+    you can always use a **config management** tool such as Ansible on top of live
+    servers. That makes things manageable to a certain extent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, moving on to Packer, let’s look at how to install it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Packer
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'You can install Packer on a variety of platforms in a variety of ways. Please
+    refer to [https://developer.hashicorp.com/packer/downloads](https://developer.hashicorp.com/packer/downloads).
+    As Packer is available as an **apt** package, use the following commands to install
+    Packer on Ubuntu Linux:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To verify the installation, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we see, Packer is installed successfully. We can proceed with the next activity
+    in our goal – *creating playbooks*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating the Apache and MySQL playbooks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As our goal is to spin up a scalable **LAMP stack** in this chapter, we must
+    start by defining Ansible playbooks that would run on the build VM. We’ve already
+    created some roles for Apache and MySQL in [*Chapter 9*](B19877_09.xhtml#_idTextAnchor1198),
+    *Configuration Management with Ansible*. We will use the same roles within this
+    setup as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, we will have the following directory structure within the `ch10`
+    directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: We have two playbooks within the `ansible` directory – `webserver-playbook.yaml`
+    and `dbserver-playbook.yaml`. Let’s look at each to understand how we write our
+    playbooks for Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`webserver-playbook.yaml` looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`dbserver-playbook.yaml` looks like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, both playbooks have `hosts` set to `default`. That is because
+    we will not define the inventory for this playbook. Instead, Packer will use the
+    build VM to build the image and dynamically generate the inventory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: Packer will also ignore any `remote_user` attributes within the task and use
+    the user present in the Ansible provisioner’s config.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we’ve already tested this configuration in the previous chapter, all we need
+    to do now is define the Packer configuration, so let’s go ahead and do that in
+    the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building the Apache and MySQL images using Packer and Ansible provisioners
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will now use Packer to create the Apache and MySQL images. Before defining
+    the Packer configuration, we have a few prerequisites to allow Packer to build
+    custom images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prerequisites
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We must create an **Azure service principal** for Packer to interact with Azure
+    and build the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, log in to your Azure account using the Azure CLI with the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, set the subscription to the subscription ID we got in response to the
+    `az login` command to an environment variable using the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, let’s set the subscription ID using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, create the service principal with contributor access using the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: We’ve successfully created the service principal. The response JSON consists
+    of `appId`, `password`, and `tenant` values that we will use in the subsequent
+    sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can also reuse the service principal we created in [*Chapter 8*](B19877_08.xhtml#_idTextAnchor1010),
+    *Infrastructure as Code (IaC) with* *Terraform*, instead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s go ahead and set the values of these variables in the `packer/variables.pkrvars.hcl`
+    file with the details:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will use the variable file in our Packer build. We also need a resource group
+    for storing the built images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To create the resource group, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s go ahead and define the Packer configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the Packer configuration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Packer allows us to define configuration in JSON as well as HCL files. As JSON
+    is now deprecated and HCL is preferred, let’s define the Packer configuration
+    using HCL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access resources for this section, switch to the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will create the following files in the `packer` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`variables.pkr.hcl`: Contains a list of variables we would use while applying
+    the configuration'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`plugins.pkr.hcl`: Contains the Packer plugin configuration'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`webserver.pkr.hcl`: Contains the Packer configuration for building the web
+    server image'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`dbserver.pkr.hcl`: Contains the Packer configuration for building the `dbserver`
+    image'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`variables.pkrvars.hcl`: Contains the values of the Packer variables defined
+    in the `variables.pkr.hcl` file'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The `variables.pkr.hcl` file contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `variables.pkr.hcl` file defines a list of user variables that we can use
+    within the `source` and `build` blocks of the Packer configuration. We’ve defined
+    four string variables – `client_id`, `client_secret`, `tenant_id`, and `subscription_id`.
+    We can pass the values of these variables by using the `variables.pkrvars.hcl`
+    variable file we defined in the last section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always provide sensitive data from external variables, such as a variable file,
+    environment variables, or a secret manager, such as HashiCorp’s Vault. You should
+    never commit sensitive information with code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `plugins.pkr.hcl` file contains the following block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`packer`: This section defines the common configuration for Packer. In this
+    case, we’ve defined the plugins required to build the image. There are two plugins
+    defined here – `ansible` and `azure`. Plugins contain a `source` and `version`
+    attribute. They contain everything you would need to interact with the technology
+    component:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `webserver.pkr.hcl` file contains the following sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`source`: The `source` block contains the configuration we would use to build
+    the VM. As we build an `azure-arm` image, we define the source as follows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: build {
+  prefs: []
+  type: TYPE_NORMAL
+- en: sources = ["source.azure-arm.webserver"]
+  prefs: []
+  type: TYPE_NORMAL
+- en: provisioner "ansible" {
+  prefs: []
+  type: TYPE_NORMAL
+- en: playbook_file = "../ansible/webserver-playbook.yaml"
+  prefs: []
+  type: TYPE_NORMAL
+- en: '}'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ../ansible/webserver-playbook.yaml.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: You can specify multiple sources in the `build` block, each with the same or
+    different types. Similarly, we can have numerous provisioners, each executed in
+    parallel. So, if you want to build the same configuration for multiple cloud providers,
+    you can specify multiple sources for each cloud provider.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Similarly, we’ve defined the following `dbserver.pkr.hcl` file:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `source` block has the same configuration as the web server apart from `managed_image_name`.
+    The `build` block is also like the web server, but instead, it uses the `../``ansible/dbserver-playbook.yaml`
+    playbook.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Now, let’s look at the Packer workflow and how to use it to build the image.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The Packer workflow for building images
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The Packer workflow comprises two steps – `init` and `build`.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: As we already know, Packer uses plugins to interact with the cloud providers;
+    therefore, we need to install them. To do so, Packer provides the `init` command.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Let’s initialize and install the required plugins using the following command:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the plugin is now installed. Let’s now go ahead and build the
+    image.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'We use the `build` command to create an image using Packer. As we would need
+    to pass values to variables, we will specify the variable values using a command-line
+    argument, as in the following command:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Packer would build parallel stacks using both the `webserver` and `dbserver`
+    configs.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Packer first creates temporary resource groups to spin up staging VMs:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Packer then validates and deploys the deployment templates and gets the IP
+    addresses of the staging VMs:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, Packer uses SSH to connect with the staging VMs and provisions them with
+    Ansible:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the Ansible run is complete, Packer gets the disk details, captures the
+    images, and creates the machine images in the resource groups we specified in
+    the Packer configuration:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, it removes the deployment object and the temporary resource group
+    it created:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It then provides the list of artifacts it has generated:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we look at the `packer-rg` resource group, we will find that there are two
+    VM images within it:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 10.2 – Packer custom images](img/B19877_10_2.jpg)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 10.2 – Packer custom images
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: We’ve successfully built custom images with Packer!
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Tip
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: It isn’t possible to rerun Packer with the same managed image name once the
+    image is created in the resource group. That is because we don’t want to override
+    an existing image accidentally. While you can override it by using the `-force`
+    flag with `packer build`, you should include a version within the image name to
+    allow multiple versions of the image to exist in the resource group. For example,
+    instead of using `apache-webserver`, you can use `apache-webserver-0.0.1`.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: It’s time to use these images and create our infrastructure with them now.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Creating the required infrastructure with Terraform
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Our goal was to build a scalable LAMP stack, so we will define a `apache-webserver`
+    image we created and a single VM with the `mysql-dbserver` image. A VM scale set
+    is an autoscaling group of VMs that will scale out and scale back horizontally
+    based on traffic, similar to how we did with containers on Kubernetes.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'We will create the following resources:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A new resource group called `lamp-rg`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A virtual network within the resource group called `lampvnet`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A subnet within `lampvnet` called `lampsub`
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Within the subnet, we create a `db-nic` that contains the following:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A network security group called `db-nsg`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A VM called `db` that uses the custom `mysql-dbserver` image
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We then create a VM scale set that includes the following:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A network profile called `webnp`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A backend address pool
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A load balancer called `web-lb`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A public IP address attached to `web-lb`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An HTTP probe that checks the health of port `80`
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following figure explains the topology graphically:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 10.3 – Scalable LAMP stack topology diagram](img/B19877_10_3.jpg)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 10.3 – Scalable LAMP stack topology diagram
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'To access resources for this section, switch to the following directory:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: We use the following Terraform template, `main.tf`, to define the configuration.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'We first define the Terraform providers:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define the custom image data sources so that we can use them within
+    our configuration:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define the resource group, virtual network, and subnet:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the Apache web servers will remain behind a network load balancer, we will
+    define the load balancer and the public IP address that we will attach to it:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will then define a backend address pool to the load balancer so that we
+    can use this within the Apache VM scale set:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will define an HTTP probe on port `80` for a health check and attach it
+    to the load balancer:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We need a `80` on the load balancer with port `80` of the backend pool VMs.
+    We will also attach the HTTP health check probe in this config:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we will define the VM scale set within the resource group using the custom
+    image and the load balancer we defined before:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then go ahead and define the OS disk and the data disk:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The OS profile defines how we log in to the VM:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define a network profile that will associate the scale set with the
+    load balancer we defined before:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, moving on to the database configuration, we will start by defining a network
+    security group for the database servers to allow ports `22` and `3306` from internal
+    servers within the virtual network:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define a NIC to provide an internal IP to the VM:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will then associate the network security group to the network interface:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we’ll define the database VM using the custom image:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, as we’ve defined everything we needed, fill the `terraform.tfvars` file
+    with the required information, and go ahead and initialize our Terraform workspace
+    by using the following command:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As Terraform has initialized successfully, use the following command to apply
+    the Terraform configuration:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As Terraform has applied the configuration and provided the load balancer IP
+    address as an output, let’s use that to navigate to the web server:'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 10.4 – LAMP stack working correctly](img/B19877_10_4.jpg)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_IMG
+- en: Figure 10.4 – LAMP stack working correctly
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: As we get the `Database Connected successfully` message, we see that the configuration
+    is successful! We’ve successfully created a scalable LAMP stack using Packer,
+    Ansible, and Terraform. It combines *IaC*, *configuration as code*, *immutable
+    infrastructure*, and modern DevOps practices to create a seamless environment
+    without manual intervention.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In this chapter, we have covered immutable infrastructure with Packer. We used
+    Packer with the Ansible provisioner to build custom images for Apache and MySQL.
+    We used the custom images to create a scalable LAMP stack using Terraform. The
+    chapter introduced you to the era of modern DevOps, where everything is automated.
+    We follow the same principles for building and deploying all kinds of infrastructure,
+    be it containers or VMs. In the next chapter, we will discuss one of the most
+    important topics of DevOps – **continuous integration**.
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Immutable infrastructure helps avoid configuration drift. (True/False)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It is a best practice to source sensitive data from external variables such
+    as environment variables or a secret management tool such as HashiCorp’s Vault.
+    (True/False)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What modifications must we make to our existing playbooks to allow Packer to
+    use them?
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Remove any existing `ansible.cfg` files from the current working directory.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Remove any host files from the current working directory.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Update the `hosts` attribute to default within the playbook.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. None of the above.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following are the limitations of using the Ansible provisioner
+    with Packer? (Choose two)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. You cannot pass Jinja2 macros as is to your Ansible playbooks.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. You cannot define `remote_user` within your Ansible playbooks.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. You cannot use Jinja2 templates within your Ansible playbooks.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. You cannot use roles and variables within your Ansible playbooks.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: While naming managed images, what should we consider? (Choose two)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Name images as specifically as possible.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Use the version as part of the image.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Don’t use the version as part of the image name. Instead, always use the
+    `-force` flag within the Packer build.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: When using multiple provisioners, how are configurations applied to the build
+    VM?
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. One after the other based on occurrence in the HCL file
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Parallelly
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: We can use a single set of Packer files to build images with the same configuration
+    in multiple cloud environments. (True/False)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: What features does a VM scale set provide? (Choose two)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. It helps you horizontally scale VM instances with traffic.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. It helps you auto-heal faulty VMs.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. It helps you do canary deployments.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. None of the above.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Answers
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: C
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B, C
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Part 4:Delivering Applications with GitOps
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This section forms the core of the book and elucidates various tools and techniques
+    to effectively implement modern DevOps in the cloud. With GitOps as the central
+    guiding principle, we will explore various tools and techniques for continuously
+    building, testing, securing, and deploying our applications into development,
+    testing, and production environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part has the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 11*](B19877_11.xhtml#_idTextAnchor1412), *Continuous Integration
+    with GitHub Actions and Jenkins*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 12*](B19877_12.xhtml#_idTextAnchor1554), *Continuous Deployment/Delivery
+    with Argo CD*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 13*](B19877_13.xhtml#_idTextAnchor1679), *Securing and Testing Your
+    CI/CD Pipeline*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

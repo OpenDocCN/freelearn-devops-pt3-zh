@@ -1,0 +1,1719 @@
+- en: '11'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Continuous Integration with GitHub Actions and Jenkins
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapters, we looked at individual tools that will help us implement
+    several aspects of modern DevOps. Now, it’s time to look at how we can combine
+    all the tools and concepts we’ve learned about and use them to create a **continuous
+    integration** (**CI**) pipeline. First, we will introduce a sample microservices-based
+    blogging application, **Blog App**, and then look at some popular open source
+    and SaaS-based tools that can get us started quickly with CI. We will begin with
+    **GitHub Actions** and then move on to **Jenkins** with **Kaniko**. For every
+    tool, we will implement CI for Blog App. We will try to keep the implementations
+    cloud-agnostic. Since we’ve used the **GitOps** approach from the beginning, we
+    will also use the same here. Finally, we will cover some best practices related
+    to build performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The importance of automation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to the sample microservices-based blogging application – Blog App
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a CI pipeline with GitHub Actions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Scalable Jenkins on **Kubernetes** with Kaniko
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Automating a build with triggers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Build performance best practices
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'For this chapter, you will need to clone the following GitHub repository for
+    some of the exercises: [https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to clone the repository into your home directory,
+    and `cd` into the `ch11` directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, let’s get started!
+  prefs: []
+  type: TYPE_NORMAL
+- en: The importance of automation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Automation is akin to having an efficient team of robots at your disposal,
+    tirelessly handling repetitive, time-consuming, and error-prone tasks. Let’s simplify
+    the significance of automation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Efficiency**: Think of it as having a magical helper who completes tasks
+    in a fraction of the time you would take. Automation accelerates repetitive tasks,
+    executing actions, processing data, and running commands far more swiftly than
+    humans.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Consistency**: Humans can tire or become distracted, leading to inconsistencies
+    in task execution. Automation guarantees that tasks are consistently carried out
+    according to predefined rules, every single time.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Accuracy**: Automation operates without the fatigue or lapses that humans
+    may experience. It adheres to instructions with precision, minimizing the likelihood
+    of errors that could result in costly repercussions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scale**: Whether managing one system or a thousand, automation effortlessly
+    scales operations without additional human resources.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Cost savings**: By reducing the reliance on manual labor, automation yields
+    significant cost savings in terms of time and human resources.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Risk reduction**: Certain tasks, such as making data backups and performing
+    security checks, are crucial but can be overlooked or skipped by humans. Automation
+    ensures these tasks are consistently performed, mitigating risks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Faster response**: Automation detects and responds to issues in real time.
+    For instance, it can automatically restart a crashed server or adjust resource
+    allocation during high traffic, ensuring uninterrupted user experiences.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Resource allocation**: Automating routine tasks liberates human resources
+    to concentrate on more strategic and creative endeavors that require critical
+    thinking and decision-making.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Compliance**: Automation enforces and monitors compliance with policies and
+    regulations, reducing the potential for legal and regulatory complications.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Data analysis**: Automation processes and analyzes vast data volumes rapidly,
+    enabling data-driven decision-making and insights.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**24/7 operations**: Automation operates tirelessly, 24/7, guaranteeing continuous
+    operations and availability.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Adaptability**: Automation can be reprogrammed to adapt to evolving requirements
+    and environments, making it versatile and future-proof.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the tech realm, automation is the bedrock of modern IT operations, spanning
+    from automating software deployments to managing cloud resources and configuring
+    network devices. It empowers organizations to streamline processes, enhance reliability,
+    and remain competitive in the fast-paced digital landscape.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In essence, automation resembles an exceedingly efficient, error-free, round-the-clock
+    workforce that empowers individuals and organizations to accomplish more with
+    less effort.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To benefit from automation, the project management function is quickly diluting,
+    and software development teams are transitioning to Agile teams that deliver in
+    Sprints iteratively. Therefore, if there is a new requirement, we don’t wait for
+    the entire thing to be signed off before we start doing design, development, QA,
+    and so on. Instead, we break software into workable features and deliver them
+    in smaller chunks to get value and customer feedback quickly. That means rapid
+    software development with less risk of failure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Well, the teams are agile, and they develop software faster. Still, many things
+    in the **software development life cycle** (**SDLC**) process are conducted manually,
+    such as the fact that some teams generate Code Builds only after completing the
+    entire development for that cycle and later find numerous bugs. It becomes difficult
+    to trace what caused that problem in the first place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What if you could know the cause of a broken Build as soon as you check the
+    code into source control? What if you understand that the software fails some
+    tests as soon as the builds are executed? Well, that’s CI for you in a nutshell.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CI is a process through which developers frequently check code into a source
+    code repository, perhaps several times a day. Automated tooling behind the scenes
+    can detect these commits and then build, run some tests, and tell you upfront
+    whether the commit has caused any issues. This means that your developers, testers,
+    product owners, operations team, and everyone comes to know what has caused the
+    problem, and the developer can fix it quickly. This creates a feedback loop in
+    software development. We always had a manual feedback loop within software development,
+    which was slow. So, either you wait a long time before doing your next task or
+    do the wrong thing until you realize it is too late to undo all of that. This
+    adds to the rework effort of everything you have done hitherto.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we all know, fixing a bug earlier in the SDLC cycle is cheaper than fixing
+    it later. Therefore, CI aims to provide continuous feedback on the code quality
+    early in the SDLC. This saves your developers and the organization a lot of time
+    and money on fixing bugs they detect when most of your code is tested. Therefore,
+    CI helps software development teams develop better software faster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since we’ve mentioned Agile, let’s briefly discuss how it compares with DevOps.
+    Agile is a way of working and is silent on the tools, techniques, and automation
+    required to achieve it. DevOps is an extension of the Agile mindset and helps
+    you implement it effectively. DevOps focuses heavily on automation and looks at
+    avoiding manual work wherever possible. It also encourages software delivery automation
+    and seeks to amplify or replace traditional tools and frameworks. With the advent
+    of modern DevOps, specific tools, techniques, and best practices simplify the
+    life of a developer, QA, and operator. Modern public cloud platforms and DevOps
+    provide teams with ready-to-use dynamic infrastructure that helps businesses reduce
+    the time to market and build scalable, elastic, high-performing infrastructure
+    to keep enterprises live with minimal downtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When introducing modern DevOps in the first chapter, we discussed that it usually
+    applies to modern cloud-native applications. I’ve built an example microservices-based
+    Blog App to demonstrate this. We will use this application in this and future
+    chapters of this book to ensure seamless development and delivery of this application
+    using modern DevOps tools and practices. We’ll look at the sample application
+    in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to the sample microservices-based blogging application – Blog App
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Blog App is a sample modern microservices-based blogging web application that
+    allows users to create, manage, and interact with blog posts. It caters to both
+    authors and readers. Users can sign up to this platform using their email addresses
+    and start writing blog posts. Readers can publicly view all blog posts created
+    by several authors, and logged-in users can also provide reviews and ratings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The application is written in a popular Python-based web framework called **Flask**
+    and uses **MongoDB** as the database. The application is split into several microservices
+    for user, post, review, and rating management. There is a separate frontend microservice
+    that allows for user interaction. Let’s look at each microservice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**User Management**: The User Management microservice provides endpoints to
+    create a user account, update the profile (name and password), and delete a user
+    account.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Posts Management**: The Posts Management microservice provides endpoints
+    to create, list, get, update, and delete posts.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Reviews Management**: The Reviews Management microservice allows users to
+    add reviews on posts and update and delete them. Internally, it interacts with
+    the Ratings Management microservice to manage the ratings provided, along with
+    the reviews.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Ratings Management**: The Ratings Management microservice manages ratings
+    for posts associated with a particular review. This microservice is called from
+    the Reviews Management microservice internally and is not exposed to the Frontend
+    microservice.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Frontend**: The Frontend microservice is a Python Flask user interface application
+    built using **Bootstrap**, which provides users with a rich and interactive user
+    interface. It allows users to sign up, log in, view, and navigate between posts,
+    edit their posts, add and update reviews, and manage their profiles. The microservice
+    interacts with the backend microservices seamlessly using HTTP requests.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **users**, **posts**, **reviews**, and **ratings** microservices interact
+    with **MongoDB** as the database.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following service diagram shows the interactions graphically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.1 – Blog App services and interactions](img/B19877_11__1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.1 – Blog App services and interactions
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see, the individual microservices are fairly decoupled from each other
+    and, therefore, can independently scale. It is also robust because the other parts
+    of the application will work if a particular microservice is not working. The
+    individual microservices can be independently developed and deployed as separate
+    components, adding to the application’s flexibility and maintainability. This
+    application is an excellent example of leveraging microservices to build a modern,
+    feature-rich web application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s implement CI for this application. To implement CI, we will need
+    a CI tool. We’ll look at some of the popular tools and the options you have in
+    the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a CI pipeline with GitHub Actions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**GitHub Actions** is a SaaS-based tool that comes with **GitHub**. So, when
+    you create your GitHub repository, you get access to this service out of the box.
+    Therefore, GitHub Actions is one of the best tools for people new to CI/CD and
+    who want to get started quickly. GitHub Actions helps you automate tasks, build,
+    test, and deploy your code, and even streamline your workflow, making your life
+    as a developer much easier.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s what GitHub Actions can do for you:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**CI**: GitHub Actions can automatically build and test your code whenever
+    you push changes to your repository. This ensures that your code remains error-free
+    and ready for deployment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**CD**: You can use GitHub Actions to deploy your application to various hosting
+    platforms, such as AWS, Azure, and GCP. This allows you to deliver updates to
+    your users quickly and efficiently.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Workflow automation**: You can create custom workflows using GitHub Actions
+    to automate repetitive tasks in your development process. For example, you can
+    automatically label and assign issues, trigger builds on specific events, or send
+    notifications to your team.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Custom scripts**: GitHub Actions allows you to run custom scripts and commands,
+    giving you full control over your automation tasks. Whether you need to compile
+    code, run tests, or execute deployment scripts, GitHub Actions can handle it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`npm` to deploying to popular cloud providers. You can easily incorporate these
+    actions into your workflow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scheduled jobs**: You can schedule actions to run at specific times or intervals.
+    This is handy for tasks such as generating reports, sending reminders, or performing
+    maintenance during non-peak hours.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Multi-platform support**: GitHub Actions supports various programming languages,
+    operating systems, and cloud environments, which means you can build and deploy
+    applications for different platforms with ease.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Integration**: GitHub Actions seamlessly integrates with your GitHub repositories,
+    making it a natural extension of your development environment. You can define
+    workflows by using YAML files directly in your repository.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GitHub Actions revolutionizes the way developers work by automating routine
+    tasks, ensuring code quality, and streamlining the SDLC. It’s a valuable tool
+    for teams and individual developers looking to enhance productivity and maintain
+    high-quality code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s create a CI pipeline for our sample Blog App. Blog App consists of
+    multiple microservices, and each microservice runs on an individual **Docker**
+    container. We also have unit tests written for each microservice, which we can
+    run to verify the code changes. If the tests pass, the build will pass; otherwise,
+    it will fail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access the resources for this section, `cd` into the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This directory contains multiple microservices and is structured as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `frontend` directory contains files for the `app.py` (the Flask application
+    code), `app.test.py` (the unit tests for the Flask application), `requirements.txt`
+    (which contains all Python modules required by the app), and `Dockerfile`. It
+    also includes a few other directories catering to the user interface elements
+    of this app.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `app.py`, `app.test.py`, `requirements.txt`, and `Dockerfile` files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, let’s start by switching to the `posts` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we know that Docker is inherently CI-compliant, we can run the tests using
+    `Dockerfile` itself. Let’s investigate the Dockerfile of the posts service:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This `Dockerfile` starts with the `python:3.7-alpine` base image, installs the
+    requirements, and copies the code into the working directory. It runs the `app.test.py`
+    unit test to check whether the code would work if we deploy it. Finally, the `CMD`
+    command defines a `flask run` command to run when we launch the container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s build our `Dockerfile` and see what we get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, it built the container, executed a test on it, and responded
+    with `Ran 8 tests in 0.026s` and an `OK` message. Therefore, we could use `Dockerfile`
+    to build and test this app. We used the `--progress=plain` argument with the `docker
+    build` command. This is because we wanted to see the stepwise output of the logs
+    rather than Docker merging progress into a single message (this is now a default
+    behavior).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at GitHub Actions and how we can automate this step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a GitHub repository
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we can use GitHub Actions, we need to create a GitHub repository. As
+    we know that each microservice can be independently developed, we will place all
+    of them in separate Git repositories. For this exercise, we will focus only on
+    the **posts** microservice and leave the rest to you as an exercise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To do so, go to [https://github.com/new](https://github.com/new) and create
+    a new repository. Give it an appropriate name. For this exercise, I am going to
+    use `mdo-posts`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once you’ve created it, clone the repository by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, change the directory into the repository directory and copy the `app.py`,
+    `app.test.py`, `requirements.txt`, and `Dockerfile` files into the repository’s
+    directory using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we need to create a GitHub Actions workflow file. We’ll do this in the
+    next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a GitHub Actions workflow
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A GitHub Actions workflow is a simple YAML file that contains the build steps.
+    We must create this workflow in the `.github/workflows` directory within the repository.
+    We can do this using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will use the following GitHub Actions workflow file, `build.yaml`, for this
+    exercise:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This file comprises the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name`: The workflow’s name – `Build and Test App` in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`on`: This describes when this workflow will run. In this case, it will run
+    if a `push` or `pull` request is sent on the `main` branch.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs`: A GitHub Actions workflow contains one or more jobs that run in parallel
+    by default. This attribute includes all jobs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs.build`: This is a job that does the container build.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs.build.runs-on`: This describes where the build job will run. We’ve specified
+    `ubuntu-latest` here. This means that this job will run on an Ubuntu VM.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs.build.steps`: This consists of the steps that run sequentially within
+    the job. The build job consists of four build steps: `checkout`, which will check
+    out the code from your repository; `login`, which will log in to Docker Hub; `build`,
+    which will run a Docker build on your code; and `push`, which will push your Docker
+    image to **Docker Hub**. Note that we tag the image with the Git commit SHA. This
+    relates the build with the commit, making Git the single source of truth.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs.build.steps.uses`: This is the first step and describes an action you
+    will run as a part of your job. Actions are reusable pieces of code that you can
+    execute in your pipeline. In this case, it runs the `checkout` action. It checks
+    out the code from the current branch where the action is triggered.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always use a version with your actions. This will prevent your build from breaking
+    if a later version is incompatible with your pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`jobs.build.steps.name`: This is the name of your build step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs.build.steps.id`: This is the unique identifier of your build step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jobs.build.steps.run`: This is the command it executes as part of the build
+    step.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The workflow also contains variables within `${{ }}`. We can define multiple
+    variables within the workflow and use them in the subsequent steps. In this case,
+    we’ve used two variables – `${{ secrets.DOCKER_USER }}` and `${{ secrets.DOCKER_PASSWORD
+    }}`. These variables are sourced from **GitHub secrets**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is best practice to use GitHub secrets to store sensitive information. Never
+    store these details directly in the repository with code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You must define two secrets within your repository using the following URL:
+    `https://github.com/<your_user>/mdo-posts/settings/secrets/actions`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Define two secrets within the repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s move this `build.yml` file to the `workflows` directory by using
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we’re ready to push this code to GitHub. Run the following commands to
+    commit and push the changes to your GitHub repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, go to the `https://github.com/<your_user>/mdo-posts/actions`. You should
+    see something similar to the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.2 – GitHub Actions](img/B19877_11__2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.2 – GitHub Actions
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we can see, GitHub has run a build using our workflow file, and it has built
+    the code and pushed the image to **Docker Hub**. Upon visiting your Docker Hub
+    account, you should see your image present in your account:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.3 – Docker Hub image](img/B19877_11__3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.3 – Docker Hub image
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s try to break our code somehow. Let’s suppose that someone from your
+    team changed the `app.py` code, and instead of returning `post` in the `create_post`
+    response, it started returning `pos`. Let’s see what would happen in that scenario.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Make the following changes to the `create_post` function in the `app.py` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, commit and push the code to GitHub using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, go to GitHub Actions and find the latest build. You will see that the
+    build will error out and give the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.4 – GitHub Actions – build failure](img/B19877_11__4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.4 – GitHub Actions – build failure
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we can see, the `app.test.py` execution failed. This is because of a test
+    case failure with `AssertionError: ''post'' not found in {''pos'': ''60458fb603c395f9a81c9f4a''}`.
+    As the expected `post` key was not found in the output, `{''pos'': ''60458fb603c395f9a81c9f4a''}`,
+    the test case failed, as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.5 – GitHub Actions – test failure](img/B19877_11__5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.5 – GitHub Actions – test failure
+  prefs: []
+  type: TYPE_NORMAL
+- en: We uncovered the error when someone pushed the buggy code to the Git repository.
+    Are you able to see the benefits of CI already?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s fix the code and commit the code again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Modify the `create_post` function of `app.py` so that it looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, `commit` and `push` the code to GitHub using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This time, the build will be successful:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.6 – GitHub Actions – build success](img/B19877_11__6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.6 – GitHub Actions – build success
+  prefs: []
+  type: TYPE_NORMAL
+- en: Did you see how simple this was? We got started with CI quickly and implemented
+    GitOps behind the scenes since the config file required to build and test the
+    code also resided with the application code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As an exercise, repeat the same process for the **reviews**, **users**, **ratings**,
+    and **frontend** microservices. You can play around with them to understand how
+    it works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Not everyone uses GitHub, so the SaaS offering might not be an option for them.
+    Therefore, in the next section, we’ll look at the most popular open source CI
+    tool: Jenkins.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scalable Jenkins on Kubernetes with Kaniko
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Imagine you’re running a workshop where you build all sorts of machines. In
+    this workshop, you have a magical conveyor belt called Jenkins for assembling
+    these machines. But to make your workshop even more efficient and adaptable, you’ve
+    got a team of tiny robot workers called Kaniko that assist in constructing the
+    individual parts of each machine. Let’s draw parallels between this workshop analogy
+    and the technology world:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Scalable Jenkins**: Jenkins is a widely used automation server that helps
+    automate various tasks, particularly those related to building, testing, and deploying
+    software. “Scalable Jenkins” means configuring Jenkins in a way that allows it
+    to efficiently handle a growing workload, much like having a spacious workshop
+    capable of producing numerous machines.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Kubernetes**: Think of Kubernetes as the workshop manager. It’s an orchestration
+    platform that automates the process of deploying, scaling, and managing containerized
+    applications. Kubernetes ensures that Jenkins and the team of tiny robots (Kaniko)
+    work seamlessly together and can adapt to changing demands.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Kaniko**: Kaniko is equivalent to your team of miniature robot workers. In
+    the context of containerization, Kaniko is a tool that aids in building container
+    images, which are akin to the individual parts of your machines. What makes Kaniko
+    special is that it can do this without needing elevated access to the Docker daemon.
+    Unlike traditional container builders, Kaniko doesn’t require special privileges,
+    making it a more secure choice for constructing containers, especially within
+    a Kubernetes environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let’s combine the three tools and see what we can achieve:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Building containers at scale**: Your workshop can manufacture multiple machines
+    simultaneously, thanks to Jenkins and the tiny robots. Similarly, with Jenkins
+    on Kubernetes using Kaniko, you can efficiently and concurrently create container
+    images. This ability to scale is crucial in modern application development, where
+    containerization plays a pivotal role.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Isolation and security**: Just as Kaniko’s tiny robots operate within a controlled
+    environment, Kaniko ensures that container image building takes place in an isolated
+    and secure manner within a Kubernetes cluster. This means that different teams
+    or projects can use Jenkins and Kaniko without interfering with each other’s container-building
+    processes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Consistency and automation**: Similar to how the conveyor belt (Jenkins)
+    guarantees consistent machine assembly, Jenkins on Kubernetes with Kaniko ensures
+    uniform container image construction. Automation is at the heart of this setup,
+    simplifying the process of building and managing container images for applications.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To summarize, scalable Jenkins on Kubernetes with Kaniko refers to the practice
+    of setting up Jenkins to efficiently build and manage container images using Kaniko
+    within a Kubernetes environment. It enables consistent, parallel, and secure construction
+    of container images, aligning perfectly with modern software development workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, the analogy of a workshop with Jenkins, Kubernetes, and Kaniko vividly illustrates
+    how this setup streamlines container image building, making it scalable, efficient,
+    and secure for contemporary software development practices. Now, let’s dive deeper
+    into Jenkins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Jenkins** is the most popular CI tool available in the market. It is open
+    source, simple to install, and runs with ease. It is a Java-based tool with a
+    plugin-based architecture designed to support several integrations, such as with
+    a source code management tool such as *Git*, *SVN*, and *Mercurial*, or with popular
+    artifact repositories such as *Nexus* and *Artifactory*. It also integrates well
+    with well-known build tools such as *Ant*, *Maven*, and *Gradle*, aside from the
+    standard shell scripting and Windows batch file executions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Jenkins follows a *controller-agent* model. Though technically, you can run
+    all your builds on the controller machine itself, it makes sense to offload your
+    CI builds to other servers in your network to have a distributed architecture.
+    This does not overload your controller machine. You can use it to store the build
+    configurations and other management data and manage the entire CI build cluster,
+    something along the lines of what’s shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.7 – Scalable Jenkins](img/B19877_11__7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.7 – Scalable Jenkins
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding diagram, multiple static Jenkins agents connect to a Jenkins
+    controller. Now, this architecture works well, but it needs to be more scalable.
+    Modern DevOps emphasizes resource utilization, so we only want to roll out an
+    agent machine when we want to build. Therefore, automating your builds to roll
+    out an agent machine when required is a better way to do it. This might be overkill
+    when rolling out new virtual machines, as it takes some minutes to provision a
+    new VM, even when using a prebuilt image with Packer. A better alternative is
+    to use a container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Jenkins integrates quite well with Kubernetes, allowing you to run your build
+    on a Kubernetes cluster. That way, whenever you trigger a build on Jenkins, Jenkins
+    instructs Kubernetes to create a new agent container that will then connect with
+    the controller machine and run the build within itself. This is *build on-demand*
+    at its best. The following diagram shows this process in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.8 – Scalable Jenkins CI workflow](img/B19877_11__8.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.8 – Scalable Jenkins CI workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: This sounds great, and we can go ahead and run this build, but there are issues
+    with this approach. We must understand that the Jenkins controller and agents
+    run as containers and aren’t full-fledged virtual machines. Therefore, if we want
+    to run a Docker build within the container, we must run the container in privileged
+    mode. This isn’t a security best practice, and your admin should already have
+    turned that off. This is because running a container in privileged mode exposes
+    your host filesystem to the container. A hacker who can access your container
+    will have full access so that they can do whatever they want in your system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve that problem, you can use a container build tool such as **Kaniko**.
+    Kaniko is a build tool provided by Google that helps you build your containers
+    without access to the Docker daemon, and you do not even need Docker installed
+    in your container. It is a great way to run your builds within a **Kubernetes
+    cluster** and create a scalable CI environment. It is effortless, not hacky, and
+    provides a secure method of building your containers, as we will see in the subsequent
+    sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section will use **Google Kubernetes Engine** (**GKE**). As mentioned previously,
+    Google Cloud provides a free trial worth $300 for 90 days. You can sign up at
+    [https://cloud.google.com/free](https://cloud.google.com/free) if you have not
+    already done so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Spinning up Google Kubernetes Engine
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Once you’ve signed up and are in your console, open the **Google Cloud Shell**
+    CLI to run the following commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You need to enable the Kubernetes Engine API first using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To create a two-node autoscaling GKE cluster that scales from *one* to *five*
+    nodes, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: And that’s it! The cluster will be up and running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You must also clone the following GitHub repository for some of the exercises
+    provided: [https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to clone the repository into your home directory
+    and `cd` into the following directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will use the **Jenkins Configuration as Code** feature to configure Jenkins
+    as it is a declarative way of managing your configuration and is also GitOps-friendly.
+    You need to create a simple YAML file with all the required configurations and
+    then copy the file to the Jenkins controller after setting an environment variable
+    that points to the file. Jenkins will then automatically configure all aspects
+    defined in the YAML file on bootup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s start by creating the `casc.yaml` file to define our configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating the Jenkins CaC (JCasC) file
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The `casc.yaml` file for that purpose, and I will explain parts of it. Let’s
+    start by defining **Jenkins** **Global Security**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring Jenkins Global Security
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'By default Jenkins is insecure – that is, if you fire up a vanilla Jenkins
+    from the official Docker image and expose it, anyone can do anything with that
+    Jenkins instance. To ensure that we protect it, we need the following configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding configuration, we’ve defined the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`remotingSecurity`: We’ve enabled this feature, which will secure the communication
+    between the Jenkins controller and agents that we will create dynamically using
+    Kubernetes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`securityRealm`: We’ve set the security realm to `local`, which means that
+    the Jenkins controller itself will do all authentication and user management.
+    We could have also offloaded this to an external entity such as LDAP:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`allowsSignup`: This is set to `false`. This means you don’t see a sign-up
+    link on the Jenkins home page, and the Jenkins admin should manually create users.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`users`: We’ll create a single user with `id` and `password` sourced from two
+    environment variables called `JENKINS_ADMIN_ID` and `JENKINS_ADMIN_PASSWORD`,
+    respectively.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`authorizationStrategy`: We’ve defined a matrix-based authorization strategy
+    where we provide administrator privileges to `admin` and read privileges to `authenticated`
+    non-admin users.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Also, as we want Jenkins to execute all their builds in the agents and not
+    the controller machine, we need to specify the following settings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: We’ve set `numExecutors` to `0` to allow no builds on the controller and also
+    set `systemMessage` on the Jenkins welcome screen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we’ve set up the security aspects of the Jenkins controller, we will
+    configure Jenkins to connect with the Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connecting Jenkins with the cluster
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: We will install the Kubernetes plugin to connect the Jenkins controller with
+    the cluster. We’re doing this because we want Jenkins to dynamically spin up agents
+    for builds as Kubernetes **pods**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will start by creating a `kubernetes` configuration under `jenkins.clouds`,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we have a placeholder called `<kubernetes_control_plane_ip>` within the
+    configuration, we must replace this with the Kubernetes control plane’s IP address.
+    Run the following command to fetch the control plane’s IP address:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, replace the `<kubernetes_control_plane_ip>` placeholder with the actual
+    IP address you obtained from the preceding command by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s look at each attribute in the config file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`serverUrl`: This denotes the Kubernetes control plane server URL, allowing
+    the Jenkins controller to communicate with the Kubernetes API server.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jenkinsUrl`: This denotes the Jenkins controller URL. We’ve set it to http://jenkins-service:8080.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`jenkinsTunnel`: This describes how the agent pods will connect with the Jenkins
+    controller. As the JNLP port is `50000`, we’ve set it to `jenkins-service:50000`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`podLabels`: We’ve also set up some pod labels, `key=jenkins` and `value=agent`.
+    These will be set on the agent pods.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Other attributes are also set to their default values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Every Kubernetes cloud configuration consists of multiple pod `templates` describing
+    how the agent pods will be configured. The configuration looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we’ve defined the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The template’s `name` and `label`. We set both to `jenkins-agent`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`hostNetwork`: This is set to `false` as we don’t want the container to interact
+    with the host network.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`seviceAccount`: We’ve set this to `jenkins` as we want to use this service
+    account to interact with Kubernetes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`imagePullSecrets`: We have also provided an image pull secret called `regcred`
+    to authenticate with the container registry to pull the `jnlp` image.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Every pod template also contains a **container template**. We can define that
+    using the following configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we have specified the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`name`: Set to `jnlp`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`image`: Here, we’ve specified the *Docker agent image* we will build in the
+    next section. Ensure that you replace the `<your_dockerhub_user>` placeholder
+    with your Docker Hub user by using the following command:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`workingDir`: Set to `/home/jenkins/agent`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We’ve set the `command` and `args` fields to blank as we don’t need to pass
+    them.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`livenessProbe`: We’ve defined a liveness probe for the agent pod.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`volumes`: We’ve mounted the `regcred` secret to the `kaniko/.docker` file
+    as a volume. As `regcred` contains the Docker registry credentials, Kaniko will
+    use this to connect with your container registry.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that our configuration file is ready, we’ll go ahead and install Jenkins
+    in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Jenkins
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we’re running on a Kubernetes cluster, we only need the latest official Jenkins
+    image from Docker Hub. We will customize the image according to our requirements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following `Dockerfile` file will help us create the image with the required
+    plugins and the initial configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Dockerfile` starts from the Jenkins base image. Then, we declare two environment
+    variables – `CASC_JENKINS_CONFIG`, which points to the `casc.yaml` file we defined
+    in the previous section, and `JAVA_OPTS`, which tells Jenkins not to run the setup
+    wizard. Then, we copy the `casc.yaml` and `plugins.txt` files to their respective
+    directories within the Jenkins container. Finally, we run `jenkins-plugins-cli`
+    on the `plugins.txt` file, which installs the required plugins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `plugins.txt` file contains a list of all Jenkins plugins that we will need
+    in this setup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can customize and install more plugins for the controller image based on
+    your requirements by updating the `plugins.txt` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s build the image from the `Dockerfile` file using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we’ve built the image, use the following command to log in and push
+    the image to Docker Hub:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We must also build the Jenkins agent image to run our builds. Remember that
+    Jenkins agents need all the supporting tools you need to run your builds. You
+    can find the resources for the agents in the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will use the following `Dockerfile` to do that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This `Dockerfile` uses a multi-stage build to take the `kaniko` base image
+    and copy the `kaniko` binary from the `kaniko` base image to the `inbound-agent`
+    base image. Let’s go ahead and build and push the container using the following
+    commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To deploy Jenkins on our Kubernetes cluster, we will first create a `jenkins`
+    service account. A Kubernetes `cluster-admin` using a cluster role binding. A
+    Kubernetes `jenkins-sa-crb.yaml` manifest describes this. To access these resources,
+    run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To apply the manifest, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: The next step involves creating a **PersistentVolumeClaim** resource to store
+    Jenkins data to ensure that the Jenkins data persists beyond the pod’s life cycle
+    and will exist even when we delete the pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To apply the manifest, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we will create a Kubernetes `regcred` to help the Jenkins pod authenticate
+    with the Docker registry. Use the following command to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we’ll define a `jenkins-deployment.yaml`, that will run the Jenkins container.
+    The pod uses the `jenkins` service account and defines a `jenkins-pv-storage`
+    using the `PersistentVolumeClaim` resource called `jenkins-pv-claim` that we defined.
+    We define the Jenkins container that uses the Jenkins controller image we created.
+    It exposes HTTP port `8080` for the *Web UI*, and port `50000` for *JNLP*, which
+    the agents would use to interact with the Jenkins controller. We will also mount
+    the `jenkins-pv-storage` volume to `/var/jenkins_home` to persist the Jenkins
+    data beyond the pod’s life cycle. We specify `regcred` as the `imagePullSecret`
+    attribute in the pod image. We also use `initContainer` to assign ownership to
+    `jenkins` for `/var/jenkins_home`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the file contains placeholders, replace `<your_dockerhub_user>` with your
+    Docker Hub user and `<jenkins_admin_pass>` with a Jenkins admin password of your
+    choice using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Apply the manifest using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we’ve created the deployment, we can expose the deployment on a `jenkins-svc.yaml`
+    manifest. This service exposes ports `8080` and `50000` on a load balancer. Use
+    the following command to apply the manifest:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s get the service to find the external IP to use that to access Jenkins:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, to access the service, go to `http://<LOAD_BALANCER_EXTERNAL_IP>:8080`
+    in your browser window:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.9 – Jenkins login page](img/B19877_11_9.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.9 – Jenkins login page
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we can see, we’re greeted with a login page. This means Global Security
+    is working correctly. Let’s log in using the admin username and password we set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.10 – Jenkins home page](img/B19877_11_10.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.10 – Jenkins home page
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see, we’ve successfully logged in to Jenkins. Now, let’s go ahead
+    and create our first Jenkins job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running our first Jenkins job
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we create our first job, we’ll have to prepare our repository to run
+    the job. We will reuse the `mdo-posts` repository for this. We will copy a `build.sh`
+    file to the repository, which will build the container image for the **posts**
+    microservice and push it to Docker Hub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `build.sh` script takes `IMAGE_ID` and `IMAGE_TAG` as arguments. It passes
+    them to the `Dockerfile` and pushes it to Docker Hub using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will need to copy this file to our local repository using the following
+    commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once you’ve done this, `cd` into your local repository – that is, `~/mdo-posts`
+    – and commit and push your changes to GitHub. Once you’ve done this, you’ll be
+    ready to create a job in Jenkins.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To create a new job in Jenkins, go to the Jenkins home page and select **New
+    Item** | **Freestyle Job**. Provide a job name (preferably the same as the Git
+    repository name), then click **Next**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Click on **Source Code Management**, select **Git**, and add your Git repository
+    URL, as shown in the following example. Specify the branch from where you want
+    to build:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.11 – Jenkins Souce Code Management configuration](img/B19877_11_11.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.11 – Jenkins Souce Code Management configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Go to **Build Triggers**, select **Poll SCM**, and add the following details:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.12 – Jenkins – Build Triggers configuration](img/B19877_11__12.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.12 – Jenkins – Build Triggers configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, click on `build.sh` script with the `<your_dockerhub_user>/<image>` argument
+    and the image tag. Change the details according to your requirements. Once you’ve
+    finished, click **Save**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.13 – Jenkins – Execute shell configuration](img/B19877_11__13.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.13 – Jenkins – Execute shell configuration
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we’re ready to build this job. To do so, you can either go to your job
+    configuration and click **Build Now** or push a change to GitHub. You should see
+    something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.14 – Jenkins job page](img/B19877_11_14.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.14 – Jenkins job page
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Jenkins will successfully create an agent pod in Kubernetes, where it will
+    run this job, and soon, the job will start building. Click **Build** | **Console
+    Output**. If everything is OK, you’ll see that the build was successful and that
+    Jenkins has built the **posts** service and executed a unit test before pushing
+    the Docker image to the registry:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.15 – Jenkins console output](img/B19877_11_15.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.15 – Jenkins console output
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we’re able to run a Docker build using a scalable Jenkins server.
+    As we can see, we’ve set up polling on the SCM settings to look for changes every
+    minute and build the job if we detect any. However, this is resource-intensive
+    and does not help in the long run. Just imagine that you have hundreds of jobs
+    interacting with multiple GitHub repositories, and the Jenkins controller is polling
+    them every minute. A better approach would be if GitHub could trigger a **post-commit
+    webhook** on Jenkins. Here, Jenkins can build the job whenever there are changes
+    in the repository. We’ll look at that scenario in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automating a build with triggers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The best way to allow your CI build to trigger when you make changes to your
+    code is to use a post-commit webhook. We looked at such an example in the GitHub
+    Actions workflow. Let’s try to automate the build with triggers in the case of
+    Jenkins. We’ll have to make some changes on both the Jenkins and the GitHub sides
+    to do so. We’ll deal with Jenkins first; then, we’ll configure GitHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Go to **Job configuration** | **Build Triggers** and make the following changes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.16 – Jenkins GitHub hook trigger](img/B19877_11__16.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.16 – Jenkins GitHub hook trigger
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Save the configuration by clicking **Save**. Now, go to your GitHub repository,
+    click **Settings** | **Webhooks** | **Add Webhook**, and add the following details.
+    Then, click **Add Webhook**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.17 – GitHub webhook](img/B19877_11__17.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.17 – GitHub webhook
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, push a change to the repository. The job on Jenkins will start building:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.18 – Jenkins GitHub webhook trigger](img/B19877_11__18.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.18 – Jenkins GitHub webhook trigger
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is automated build triggers in action. Jenkins is one of the most popular
+    open source CI tools on the market. The most significant advantage of it is that
+    you can pretty much run it anywhere. However, it does come with some management
+    overhead. You may have noticed how simple it was to start with GitHub Actions,
+    but Jenkins is slightly more complicated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Several other SaaS platforms offer CI and CD as a service. For instance, if
+    you are running on AWS, you’d get their inbuilt CI with **AWS Code Commit** and
+    **Code Build**; Azure provides an entire suite of services for CI and CD in their
+    **Azure DevOps** offering; and GCP provides **Cloud Build** for that job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CI follows the same principle, regardless of the tooling you choose to implement.
+    It is more of a process and a cultural change within your organization. Now, let’s
+    look at some of the best practices regarding CI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building performance best practices
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: CI is an ongoing process, so you will have a lot of parallel builds running
+    within your environment at a given time. In such situations, we can optimize them
+    using several best practices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Aim for faster builds
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The faster you can complete your build, the quicker you will get feedback and
+    run your next iteration. A slow build slows down your development team. Take steps
+    to ensure that builds are faster. For example, in Docker’s case, it makes sense
+    to use smaller base images as it will download the code from the image registry
+    every time it does a build. Using a single base image for most builds will also
+    speed up your build time. Using tests will help, but make sure that they aren’t
+    long-running. We want to avoid a CI build that runs for hours. Therefore, it would
+    be good to offload long-running tests into another job or use a pipeline. Run
+    activities in parallel if possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always use post-commit triggers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Post-commit triggers help your team significantly. They will not have to log
+    in to the CI server and trigger the build manually. That completely decouples
+    your development team from CI management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configure build reporting
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You don’t want your development team to log in to the CI tool and check how
+    the build runs. Instead, all they want to know is the result of the build and
+    the build logs. Therefore, you can configure build reporting to send your build
+    status via email or, even better, using a **Slack** channel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Customize the build server size
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Not all builds work the same in similar kinds of build machines. You may want
+    to choose machines based on what suits your build environment best. If your builds
+    tend to consume more CPU than memory, it will make sense to choose such machines
+    to run your builds instead of the standard ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensure that your builds only contain what you need
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Builds move across networks. You download base images, build your application
+    image, and push that to the container registry. Bloated images not only take a
+    lot of network bandwidth and time to transmit but also make your build vulnerable
+    to security issues. Therefore, it is always best practice to only include what
+    you require in the build and avoid bloat. You can use Docker’s **multi-stage builds**
+    for these kinds of situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parallelize your builds
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Run tests and build processes concurrently to reduce overall execution time.
+    Leverage distributed systems or cloud-based CI/CD platforms for scalable parallelization,
+    allowing you to handle larger workloads efficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make use of caching
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Cache dependencies and build artifacts to prevent redundant downloads and builds,
+    saving valuable time. Implement caching mechanisms such as Docker layer caching
+    or use your package manager’s built-in caches to minimize data transfer and build
+    steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use incremental building
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Configure your CI/CD pipeline to perform incremental builds, rebuilding only
+    what has changed since the last build. Maintain robust version control practices
+    to accurately track and identify changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optimize testing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Prioritize and optimize tests by running quicker unit tests before slower integration
+    or end-to-end tests. Use testing frameworks such as TestNG, JUnit, or PyTest to
+    categorize and parallelize tests effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use artifact management
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Efficiently store and manage build artifacts, preferably in a dedicated artifact
+    repository such as Artifactory or Nexus. Implement artifact versioning and retention
+    policies to maintain a clean artifact repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Manage application dependencies
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Keep a clean and minimal set of dependencies to reduce build and test times.
+    Regularly update dependencies to benefit from performance improvements and security
+    updates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Utilize Infrastructure as Code
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Utilize **Infrastructure as Code** (**IaC**) to provision and configure build
+    and test environments consistently. Optimize IaC templates to minimize resource
+    utilization, ensuring efficient resource allocation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use containerization to manage build and test environments
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Containerize applications and utilize container orchestration tools such as
+    Kubernetes to manage test environments efficiently. Leverage container caching
+    to accelerate image builds and enhance resource utilization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Utilize cloud-based CI/CD
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Consider adopting cloud-based CI/CD services such as AWS CodePipeline, Google
+    Cloud Build, Azure DevOps, or Travis CI for enhanced scalability and performance.
+    Harness on-demand cloud resources to expand parallelization capabilities and adapt
+    to varying workloads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitor and profile your CI/CD pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Implement performance monitoring and profiling tools to identify bottlenecks
+    and areas for improvement within your CI/CD pipeline. Regularly analyze build
+    and test logs to gather insights for optimizing performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipeline optimization
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Continuously review and optimize your CI/CD pipeline configuration for efficiency
+    and relevance. Remove unnecessary steps or stages that do not contribute significantly
+    to the process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implement automated cleanup
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Implement automated cleanup routines to remove stale artifacts, containers,
+    and virtual machines, preventing resource clutter. Regularly purge old build artifacts
+    and unused resources to maintain a tidy environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Documentation and training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Document best practices and performance guidelines for your CI/CD processes,
+    ensuring that the entire team follows these standards consistently. Provide training
+    and guidance to team members to empower them to implement and maintain these optimization
+    strategies effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By implementing these strategies, you can significantly enhance the speed, efficiency,
+    and reliability of your CI/CD pipeline, ultimately leading to smoother software
+    development and delivery processes. These are some of the best practices at a
+    high level, and they are not exhaustive, but they are good enough so that you
+    can start optimizing your CI environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter covered CI, and you understood the need for CI and the basic CI
+    workflow for a container application. We then looked at GitHub Actions, which
+    we can use to build an effective CI pipeline. Next, we looked at the Jenkins open
+    source offering and deployed a scalable Jenkins on Kubernetes with Kaniko, setting
+    up a Jenkins controller-agent model. We then understood how to use hooks for automating
+    builds, both in the GitHub Actions-based workflow and the Jenkins-based workflow.
+    Finally, we learned about build performance best practices and dos and don’ts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By now, you should be familiar with CI and its nuances, along with the various
+    tooling you can use to implement it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will delve into continuous deployment/delivery in the
+    container world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Answer the following questions to test your knowledge of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which of the following are CI tools? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Jenkins
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. GitHub Actions
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Kubernetes
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. AWS Code Build
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: It is a best practice to configure post-commit triggers. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Jenkins is a SaaS-based CI tool. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Kaniko requires Docker to build your containers. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Jenkins agents are required for which of the following reasons? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. They make builds more scalable
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. They help offload the management function from the Jenkins controller
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. They allow for parallel builds
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. They keep the Jenkins controller less busy
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following is required for a scalable Jenkins server, as described
+    in the example in this chapter? (Choose three)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Kubernetes cluster
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Jenkins controller node
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Jenkins agent node
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Credentials to interact with the container registry
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Answers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The following are the answers to this chapter’s questions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A, B, D
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'False'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'False'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, C, D
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, B, D
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

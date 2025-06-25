@@ -1,0 +1,1772 @@
+- en: '8'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Developing and Managing Modules
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Having reviewed many aspects of the Puppet language, it is clear that using
+    manifest files and classes alone would not scale or provide the structure needed
+    as a code base grows for a diverse range of servers and customer requirements.
+    In this chapter, we will review the components required to create Puppet code
+    at scale. We will be looking at Puppet **modules**, which allow us to bundle code
+    and data focused on a single technology implementation, thus making it easy to
+    share and combine with other implementations. Then, we’ll explore the **roles
+    and profiles method** to show you how profiles can group modules to create technology
+    stacks and roles, then combine profiles to match business requirements. After,
+    we’ll cover the **Puppet Development Kit** (**PDK**), showing how it can automate
+    the process of creating and managing modules. The directories and files templated
+    by the PDK will be shown, highlighting its built-in validation and linting checks,
+    as well as unit compilation checks. Next, we’ll look at **Rspec**, as a method
+    that expands on this to provide more thorough unit testing, as well as **ServerSpec**,
+    which is used for server testing, at a high level. Then, we’ll discuss the **Puppet
+    Forge** catalog, which acts as the source of modules developed by Puppet itself,
+    as well as vendors and members of the community. We will show you how to filter
+    various aspects of modules to understand how they are supported, their compatibility
+    with OS and Puppet versions, and scoring/scanning ratings so that you can choose
+    the best module for your organization’s needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is a module and what is in it?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Roles and profiles method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The PDK and how to write and test a module
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Testing using RSpec with PDK
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding Puppet Forge
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter does not require any infrastructure to be deployed. All actions
+    can be performed from your developer desktop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is a module and what is in it?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Modules provide us with a way to group code and data, making it easier to share
+    and reuse code that is part of a specific technology implementation. Almost all
+    of your Puppet code will be stored in modules of one kind or another. You should
+    work out the scope of your module to create focused modules with a single clear
+    responsibility. If you were deploying a LAMP or WAMP stack, you would not make
+    a single module that configured all components; instead, you would break it into
+    individual modules, including OS settings, MySQL, and Apache. This allows greater
+    code reuse and reduces the complexity of any individual module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A module is a directory named with similar criteria to a class, so it must begin
+    with a lowercase letter and can only contain lowercase letters, numbers, and underscores.
+    Unlike classes, modules cannot be nested and do not use the `::` symbol. Reserved
+    words and class names should not be used as module names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Modules have a directory structure that allows Puppet to know where various
+    types of code and data will be stored and autoloaded as requested. As discussed
+    in [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185), a scope namespace and file
+    service namespace for that module will be created. The core code and data are
+    stored in the following directories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`data`: Contains module-based data for parameter defaults, which will be covered
+    in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233)*.*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`examples`: Contains examples of how to declare the modules’ classes and defined
+    types.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`files`: Contains static file content that can be placed by Puppet.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`manifests`: Contains all the manifests of the module and directories that
+    provide structure.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`template`: Contains the EPP and ERB template files to be used by Puppet code.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tasks`: Contains tasks for procedural work. This will be covered in [*Chapter
+    12*](B18492_12.xhtml#_idTextAnchor293)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Modules also have what is known as **plugins**, allowing them to distribute
+    various custom Puppet components to the Puppet server or agent, as relevant. Some
+    of these plugins are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lib/facter`: Custom facts written in **Ruby** that are used on the agent'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lib/puppet/functions`: Custom functions written in Ruby that are used by the
+    server'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lib/puppet/type`: Custom resource types that are used on both the server and
+    agent'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lib/puppet/provider`: Custom resource providers written in Puppet that are
+    used on both the server and agent'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`lib/augeaus/lenses`: Custom Augeas lenses that are used on the agent side'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`facts.d`: External facts or static scripts that are used on the agent'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`functions`: Customs functions written in Puppet that are used on the server'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'It is important to note that certain plugin types, such as resource types,
+    are not isolated fully in environments. Environments will be discussed in detail
+    in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272), where we will focus on classification
+    and release management, but for now, note that environments allow isolated code
+    bases to be used by nodes so that they can use different versions of code. This
+    is due to the way Ruby loads the first resource type and makes it global, ignoring
+    any duplicates found. Therefore, it is important to consult the Puppet documentation:
+    [https://puppet.com/docs/puppet/latest/environment_isolation.html#environment_isolation](https://puppet.com/docs/puppet/latest/environment_isolation.html#environment_isolation).
+    You can configure environment isolation as necessary if you use modules containing
+    plugins that cannot be isolated. Puppet Enterprise provides isolation in environments
+    by default.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modules can be used in different ways. While most of this chapter will focus
+    on modules that use Puppet code for configuration, modules can be used to distribute
+    an item or items. An example of this is the PowerShell module in Puppet Forge
+    ([https://forge.puppet.com/modules/puppetlabs/powershell](https://forge.puppet.com/modules/puppetlabs/powershell)),
+    which is used only to distribute a new exec provider using the provider plugin
+    directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Focusing on the `manifests` directory, the manifest files will have the same
+    name as the class name they contain. The major exception to this is the main manifest,
+    which is named `init.pp`, but has the class name of the module. This main manifest
+    is often used as the entry point to the module. As discussed in [*Chapter 6*](B18492_06.xhtml#_idTextAnchor185),
+    a module namespace is created for the module, allowing us to include the module
+    in code by running `include <``module name>`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The classes should be self-contained and small, focusing on one aspect. A common
+    piece of advice on how to identify a class that is too big is when it is too large
+    to view in a single editor screen. With this in mind, one of the most common patterns
+    when starting with modules is to use the main manifest, `init.pp`, as an entry
+    point that takes parameters to be used across the module. After, it calls other
+    classes that are used and sets their ordering. An example of this is using an
+    `install` class to install resources such as packages, a `config` class to add
+    any configuration files or users, and a `service` class to manage the service.
+    The following code shows an example of a main manifest for this pattern:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Considering the available parameters, such as the public API of the module,
+    would allow the module to be flexible; in addition, consistency should be maintained
+    when naming these parameters. Here, we use an approach where parameters are named
+    based on their effect. So, for `exampleapp`, it can be seen that both the package
+    and user take a Boolean to declare if the module is managing them as a resource.
+    A Boolean is used on `service_enable` to decide if the service is enabled on boot,
+    while integers are provided for `user_id` and `package_version`. Two additional
+    integers are then used for configuring the application, setting the Java memory
+    size, and the thread number. These parameters can be accessed using the module
+    namespace and performing a data lookup for the variable at `modulename::variablename`.
+    This is known as automatic parameter lookup and will be covered in detail when
+    we review how Puppet handles data in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Parameters and other aspects of a module can be documented via comments in
+    the header of the code, which can then be generated in different formats using
+    the Puppet Strings gem. Details can be found in the Puppet Strings style guide
+    and on the following web page: [https://puppet.com/docs/puppet/latest/puppet_strings_style.html](https://puppet.com/docs/puppet/latest/puppet_strings_style.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We adopt the approach of using containment and ordering on the classes within
+    the module. This ensures, if requested, that the package is installed, the configuration
+    is added, and the service is then managed or refreshed since each stage depends
+    on the next. The `contain` keyword should not be considered a default to be used
+    instead of `include`; it should only be used when it is this component module
+    style and when the classes will only ever only be used within the main class.
+    In the *Roles and profiles method* section, you will see where containment and
+    ordering like this would be inappropriate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From this, we can see how these subclasses use the parameters from the main
+    manifest. For example, the `install` manifest uses an `if` statement on the `package_managed`
+    variable; if it’s `True`, it installs the version of the `exampleapp` package
+    set by the `package_version` variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the `config` manifest, we can see how the `jmx_heap_size` and `thread_number`
+    variables can be substituted into a template by using the module namespace to
+    access the template stored in the templates folder in the `exampleapp` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `service` class is very similar in style to the `install` class. It uses
+    an `if` statement; if this is `True`, it adds a service of `exampleapp` and sets
+    the `enable` parameter based on the `service_enable` variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: A common module pattern was to use a `params.pp` file to manage default module
+    data. Hiera 5 can now manage module-level data in a more structured way than a
+    manifest file, as will be shown in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233).
+    The `params.pp` file is still commonly seen in code, particularly where the structure
+    of the data is simple and there is little value in changing it to Hiera.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `examples` directory could contain a file called `init.pp`, specifying
+    how the class could be called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The naming of files is not important in the `examples` directory; there could
+    be several different examples to show common selections of module attributes for
+    different setups. For example, a module might show how it can be included with
+    the minimum default values, but also the required attributes for a specific architecture,
+    such as deploying in a cluster setup.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the configuration use case becomes more complex, the other most common approach
+    to the module structure can be seen in the Apache module in the Puppet Forge catalog:
+    [https://forge.puppet.com/modules/puppetlabs/apache](https://forge.puppet.com/modules/puppetlabs/apache).
+    Instead of grouping resources based on simple `package` and `config` classes,
+    the `apache` module breaks down the different components of the application. In
+    this example, the main manifest for Apache performs a default installation of
+    Apache, with a default virtual host and a document root directory, and starts
+    the Apache service. This can be configured by using the relevant module parameters.
+    Here, the Apache service is managed in a separate class, but the resources that
+    would normally have been in the `package` and `config` classes are managed within
+    the Apache main class. There are also various implementation classes, such as
+    `vhosts`, `mod`, and `mpm`, for different `apache` configuration items. This gives
+    the main class a clear purpose of performing the basic installation and configuring
+    the `apache` server so that the implementation classes can focus on specific customizations.
+    For example, the `vhosts` classes are defined types that can be defined for each
+    virtual host the `apache` server requires.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: These examples provide a structure that you can follow for your modules and
+    can be adapted as needed. However, the key lessons to take away are that modules
+    should focus on a single task, only manage their resources (no cross-module dependencies),
+    and be granular and portable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at the directory and file structure of a Puppet module
+    and two common patterns for creating modules. These modules, by themselves, configure
+    focused individual technical implementations. In the next section, we will see
+    how a module’s structure can be used to combine modules to produce technical stacks
+    and, by combining technical stacks and configuration, meet the business requirements
+    customers have for servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – reviewing the apache module
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It would be impractical to print all the key parts of the `apache` module’s
+    code in this book. However, reviewing the code at [https://forge.puppet.com/modules/puppetlabs/apache](https://forge.puppet.com/modules/puppetlabs/apache)
+    and reading the `examples` directory to see how the main class, `apache`, is combined
+    with various classes within the module to configure different components will
+    help you understand how this module pattern can be structured.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Roles and profiles method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous section, the modules we discussed are what are known as component
+    modules since they cover single implementations. These modules are mostly of interest
+    to users directly involved with the technology implementation, such as Unix or
+    Windows administrators, where understanding that specific resources have been
+    applied is the most important aspect of the configuration. But different users
+    are not interested in how a node is configured; instead, they are interested in
+    what it does. An application specialist, for example, would care that, for their
+    application, Tomcat and MySQL were installed, not how it was configured. A project
+    manager would care that they got a server that met a business need but not what
+    technical stacks were used. The project manager may also see each implementation
+    as unique, but there will often be a lot of similarities, such as various technology
+    stacks being used across multiple applications using Apache or Java with variations
+    of settings based on location or environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Without providing some sort of structure for these levels of logic, trying to
+    apply these modules to nodes would require a lot of duplication and complexity
+    of `if` statements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A pattern called roles and profiles uses a modular structure to achieve this.
+    Role and profile are not keywords but just patterns to use within modules and
+    classes. A simple approach can be to have a module called `role` and a module
+    called `profile`, with each class in these modules representing a role or profile.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These roles represent the business need that a customer, such as a project manager,
+    would require, while a profile would reflect a technical stack for an application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When looking at how to apply the role and profiles method to the configuration
+    of pre-existing applications, it’s important to look from the role down to the
+    module to avoid the natural temptation of trying to find the technical solution
+    first without the business logic. This involves breaking things down into components
+    and granularly thinking about what it is and not what it looks like. One trick
+    to identifying roles is often to take hostnames, which generally contain information
+    about the location, environment use, and application. For example, a hostname
+    may look like `fk1ora005prd`, where `fk1` is a data center location, `005` is
+    a numerator, and `prd` is the production environment, leaving `ora` as the Oracle
+    application, which would match the role’s name. So, roles should be business names
+    such as `buildserver`, `proxyserver`, or `ecomwebserver`, while the profile should
+    be the technology stack name, such as Apache, Jenkins, or nginx.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This naming isn’t always perfect and sometimes, some of the terms may simply
+    be the same ones that project managers use for ordering Oracle servers. They may
+    be unaware of the underlying profiles of the Oracle role, which would include
+    an Oracle profile and other relevant profiles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this case, a `role` class should simply call the required profiles with
+    no variables, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In contrast, a `profile` class should contain parameters to customize the module
+    and class declarations to add the required modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233), which deals with Puppet
+    and data, you’ll see how Hiera can model the data that overrides the profile defaults.
+    A server should only have one role; if it needs two roles, then it is in itself
+    a new role, but a role will have multiple profiles. *Figure 8**.1* shows a simple
+    example of using roles, profiles, and modules and how the classes would include
+    one another. With this setup, as we’ll see later in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272),
+    classifying a box is as simple as ensuring the right role is assigned to the node:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.1 – An example of roles, profiles, and modules](img/B18492_08_01.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.1 – An example of roles, profiles, and modules
+  prefs: []
+  type: TYPE_NORMAL
+- en: The framework shown in the preceding figure is all about abstraction, so we
+    decouple the business logic, implementation, and resource management and reduce
+    the node-level complexity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This pattern is not a requirement but provides suggestions on how you can structure
+    code to avoid duplication and provide a model. In this scenario, several adaptations
+    could be considered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using complexity escalation allows us to not create too much structure when
+    we have little code initially. If there are only a couple of resources in a profile,
+    then it may be easier to keep it that way and expand to a module when it becomes
+    more complicated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Depending on your organization’s change management and delivery requirements,
+    it may make sense to have multiple profile or role modules to allow for more granular
+    control and access – for example, `teama_profiles` and `teamb_profiles`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As discussed in [*Chapter 3*](B18492_03.xhtml#_idTextAnchor048), it is generally
+    advised against using inheritance in Puppet code, but it may be worthwhile expanding
+    the namespaces of a `profile` module by grouping manifests in a directory, such
+    as creating an `exampleapp` directory within `profile` and creating `client.pp`
+    and `server.pp` to represent the server and client versions (`profile::exampleapp::server`
+    and `profile::exampleapp::client`, respectively). This could also be done for
+    specific OSs. Before considering this approach, note that this structure is an
+    edge case and carries a lot of risks when using inheritance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If profiles are found to be too rigid to plan for in a changing stack or if
+    adopting heritage servers means that it becomes necessary to drop certain parts
+    of profiles or roles, then using parameters to make the profile more dynamic can
+    allow classes to be defined through the parameter of the profile class, either
+    by Hiera or default values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a simple example, the following code uses `include_classes` with the default
+    values listed in the `exampleapp` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This would allow us to override the `include_classes` array from Hiera or the
+    module data in the profile. This could be made tighter for inclusions by us only
+    allowing classes from a set module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To add more structure to the parameters and make it clear in approval and code
+    review processes, the class parameters could be broken out further. Here, we can
+    add default, mandatory, additional, and knockout arrays, thus providing full flexibility:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: It is possible to mix this pattern even further by, say, limiting multiple namespaces
+    and having lists of class arrays for each namespace. This will be dictated by
+    what approach will give your organization enough flexibility while making it clear
+    what will be affected by the code and who should review it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this method, it may also be useful to define a `noop` flag using a parameter
+    and then noop on resources. You could also do this via the `noop` function from
+    [https://forge.puppet.com/modules/trlinkin/noop](https://forge.puppet.com/modules/trlinkin/noop)
+    to allow modules to be added and put into noop mode until they are accepted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These adjustments to the patterns are more complex and involve reading the Hiera
+    data to understand what a role and profile represent, but it will be up to your
+    organization to decide which approach will work best. While a reduction in variation
+    with rigid roles and profiles is ideal, this can lead to adoption resistance or
+    issues with heritage if there are no appropriate ways to manage it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed the structure of modules that the roles and profiles pattern
+    can create and the contents of such modules, we can see that this is a lot of
+    content to manage manually by creating files and managing various testing tools.
+    The next section looks at how to automate the life cycle of module creation and
+    testing using the PDK.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing and testing a module using the PDK
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The PDK was introduced to ease the effort required to consistently create the
+    directories and files for modules and to also group some commonly used testing
+    and validation tooling. We will be reviewing PDK version 2.7.1, the latest available
+    at the time of writing. PDK installs its own Ruby gems and environment to provide
+    the following tools:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Ruby** **Gem Name** | **Ruby** **Gem Purpose** | **Project Page** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `metadata-json-lint` | Validates the syntax and lints `metadata.json` to
+    style guidelines | [https://github.com/voxpupuli/metadata-json-lint](https://github.com/voxpupuli/metadata-json-lint)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `pdk` | Generates modules and module content with automated testing commands
+    | [https://github.com/puppetlabs/pdk](https://github.com/puppetlabs/pdk) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `puppet-lint` | Lints Puppet manifest code against the Puppet language style
+    guide | [https://github.com/puppetlabs/puppet-lint](https://github.com/puppetlabs/puppet-lint)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `puppet-syntax` | Checks Puppet manifests, templates, and Hiera YAML for
+    correct syntax | [https://github.com/voxpupuli/puppet-syntax](https://github.com/voxpupuli/puppet-syntax)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `puppetlabs_spec_helper` | Provides the tooling necessary to test against
+    different versions of Puppet | [https://github.com/puppetlabs/puppetlabs_spec_helper](https://github.com/puppetlabs/puppetlabs_spec_helper)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `rspec-puppet` | Compiles Puppet code and tests the expected behavior using
+    a Puppet-specific implementation of Ruby RSpec | [https://github.com/puppetlabs/rspec-puppet](https://github.com/puppetlabs/rspec-puppet)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `Rspec-puppet-facts` | Gives a method that provides facts for supported OSs
+    using the output of `facterdb` | [https://github.com/voxpupuli/rspec-puppet-facts](https://github.com/voxpupuli/rspec-puppet-facts)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `facterdb` | Provides example output of facts for various OSs on different
+    Facter versions | [https://github.com/voxpupuli/facterdb](https://github.com/voxpupuli/facterdb)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 8.1 – PDK gem list
+  prefs: []
+  type: TYPE_NORMAL
+- en: The common misconception about the PDK is that it is packaging and installing
+    these tools. What it is actually doing is running a `bundle install` in each module
+    that’s created. After, the PDK cache is saved, making it appear like PDK is packaging
+    the tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Using the gems discussed in *Table 8.1*, the PDK can generate the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modules with complete module skeletons, metadata, and README templates
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Classes, defined types, tasks, custom facts and functions, and Ruby providers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unit test templates for classes and defined types
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The PDK performs linting to check styles and best practices and to run syntax
+    validation against the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `metadata.json` file; see *Table 8.2* for details
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Puppet manifest files (`.pp`) against specific Puppet versions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ruby files (`.rb`) against specific Puppet versions of Ruby
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: EPP and ERB template files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Puppetfile` and `environment.conf`, which provides the module list for an
+    environment and its environment settings, as will be discussed in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: YAML files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The PDK runs RSpec unit tests on modules and classes. This will be discussed
+    in detail in the *Testing with RSpec using the* *PDK* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PDK has build and release commands to make a .`tar` file for uploading to
+    Puppet Forge and the Puppet debugging console.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To create a module, the `pdk new module` command (optionally with the module’s
+    name at the end) is run. Answer the questions regarding the module’s name (if
+    it wasn’t provided, specify your Puppet Forge username, if you have one), who
+    wrote the module, the license the code should fall under, and the OSs that will
+    be supported. This process can be seen in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.2 – pdk new module questions](img/B18492_08_02.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.2 – pdk new module questions
+  prefs: []
+  type: TYPE_NORMAL
+- en: The answers provided for user details and licenses will be offered as defaults
+    in future runs and can be checked by running `pdk get config` and reviewing the
+    `user.module_defaults` settings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `puppet module generate` command, which was used before the introduction
+    of the PDK, was deprecated in Puppet 5 and removed in Puppet 6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the answers have been entered and confirmed, a directory containing the
+    module names will be created. It will contain the following content directories,
+    which were previously discussed in the *What is a module and what is in* *it?*
+    section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`data`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`examples`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`files`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Manifests`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tasks`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`templates`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Using the default built-in template, it then creates the following additional
+    configuration files and directories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **File/Directory Name** | **File/Directory Use** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `appveyor.yml` | Appveyor CI integration configuration file |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `CHANGELOG.md` | A change log that can be maintained |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``devcontainer` | How a container should be configured to test this module
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``fixtures.yml` | Test module dependencies configuration |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `Gemfile` | Ruby gem dependencies |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `Gemfile.lock` | Ruby gem dependencies |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``gitattributes` | Associates attributes and behaviors with file types
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``gitignore` | Files Git should ignore |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``gitlab-ci.yml` | Example configuration for using with GitLab CI |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `metadata.json` |'
+  prefs: []
+  type: TYPE_TB
+- en: Metadata, including questions filled out during creation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| `.``pdkignore` |'
+  prefs: []
+  type: TYPE_TB
+- en: Files to ignore when building a package for Puppet Forge
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| `.``puppet-lint.rc` | Configuration for the `puppet-lint` gem |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `Rakefile` | Ruby task configuration |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `README.md` | A template for a README page for the module |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``rspec` | Configuration defaults for `rspec` for unit testing |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``rubocop.yml` | Settings for Ruby style checking |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `/``spec` | A directory containing files for `rspec` unit testing |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `/``spec/default_facts.yaml` | Default facts available for all tests |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `/``spec/spec_helper.rb` | Entry point script for `rspec` that sets various
+    configurations |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``sync.yml` | A file to customize the PDK template in use |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``vscode` | Configuration for VSCode, such as recommended extensions |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `.``yardopts` | Configuration file for Puppet Strings |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 8.2 – PDK default template files and directories
+  prefs: []
+  type: TYPE_NORMAL
+- en: For a pre-existing module, it is also possible to run `pdk convert` to adapt
+    the module to the template. It will confirm the changes it would make before applying
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The size of the contents of PDK has grown over time and the default template
+    can contain a lot of unused files. It is possible to create a custom template
+    simply by forking from [https://github.com/puppetlabs/pdk-templates](https://github.com/puppetlabs/pdk-templates)
+    and following the README file to adjust the template as required. It can then
+    be used in a module by using `--template-url` on the new module or convert commands.
+    Alternatively, the `.sync.yml` files can be set to be deleted, unmanaged, or have
+    settings changed. The following `.sync.yml` file example would set the `.gitlab-ci.yml`
+    file so that it’s not in the module. It would ensure the `.vscode` directory is
+    not managed by PDK templates, avoiding any future updates. It would also disable
+    legacy facts (global variables of facts, which were covered in [*Chapter 5*](B18492_05.xhtml#_idTextAnchor123)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The full settings that can be adjusted are documented in the PDK template README
+    file: [https://github.com/puppetlabs/pdk-templates/blob/main/README.md](https://github.com/puppetlabs/pdk-templates/blob/main/README.md).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If a configuration change is required across several existing modules, the
+    `modulesync` module can be useful for managing this. It is available on the following
+    web page: [https://github.com/voxpupuli/modulesync](https://github.com/voxpupuli/modulesync).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that the contents of a PDK module and its tooling have been described in
+    detail, we will describe the workflow of developing a module, as shown in *Figure
+    8**.3*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ¶¶¶
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B18492_08_03.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.3 – The PDK workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: As was discussed, by running `pdk new` to create a new module or `pdk convert`
+    on an uncontrolled module, an initial module of PDK content and its settings is
+    established. Using `pdk update`, the configuration of a module can be updated
+    since we can change its settings, provide a new template, or change the PDK version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next step is to add any new content files that are required. This may include
+    a `class`, `defined_type`, fact, function provider, task, or transport and can
+    be done by using the `pdk new` command and the relevant content. This will create
+    a file by using the template for the chosen content and a `rspec` test file. For
+    content that’s not available through PDK, such as external facts or plans, the
+    files and tests must be created manually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the file and test for the content are in place, your code should be added.
+    At regular intervals, the code can be validated and tested via the `pdk validate`
+    command, which checks the linting and syntax parsing. This command can also be
+    used with the `-a` flag, which will attempt to auto-correct any errors. For linting
+    errors, specific checks can be ignored in a section of a file by using inline
+    comments or by surrounding areas of code with comments via `lint:ignore:<rule
+    name>`. The following example shows how a line could be set to ignore the 140-character
+    lint rule. In this case, the section of code would ignore the check for double
+    quotes, which should only be used where both strings and variables are used in
+    variable assignment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: If the check must be ignored in all code, the `.puppet-lint.rc` file could be
+    updated by adding a flag such as `--no-selector_inside_resource-check` to ensure
+    `puppet-lint` does not run the check to ensure selector code is inside a resource.
+    The full list of `puppet-lint` checks can be viewed at [https://github.com/puppetlabs/puppet-lint/tree/gh-pages/checks](https://github.com/puppetlabs/puppet-lint/tree/gh-pages/checks).
+    Note that disabling checks should be avoided as much as possible as this may affect
+    your module scoring or ability to get a module endorsed in Puppet Forge. This
+    drives your code further away from recommended Puppet practices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[http://puppet-lint.com/checks/](http://puppet-lint.com/checks/) is not owned
+    by Puppet and is out of date. Puppet forked the module to [https://github.com/puppetlabs/puppet-lint](https://github.com/puppetlabs/puppet-lint),
+    which is why it is recommended that [https://puppetlabs.github.io/puppet-lint](https://puppetlabs.github.io/puppet-lint)
+    is used instead.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once `pdk validate` is running cleanly, the `pdk test unit` command can be run
+    to perform unit testing. The checks provided by the templates are basic and are
+    meant to check if the code works at all; in the case of Puppet code, it ensures
+    the code will compile. A powerful feature is that checks can be run against specific
+    Puppet or Puppet Enterprise versions by using the `--puppet-version` flag or `--pe-version`
+    – for example, `pdk test unit –pe-version=2019.11` – so that code testing can
+    take place before upgrades. In the next section, you will learn how to expand
+    the `rspec` checks further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet Forge will be discussed in detail at the end of this chapter. Releasing
+    to Puppet Forge is beyond the scope of this book but if the code is to be released
+    for use in Puppet Forge, you can run the `pdk build` command to create a `.tar`
+    file to be uploaded or the `pdk release` command to automate the process of uploading
+    modules to Puppet Forge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to keep `metadata.json` up to date as it will restrict what
+    testing takes place based on Puppet’s supported version and is a key part of the
+    documentation. The format and its options can be viewed at [https://docs.puppet.com/puppet/latest/modules_metadata.html](https://docs.puppet.com/puppet/latest/modules_metadata.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To view all the options available, you can review the full PDK command reference
+    at [https://puppet.com/docs/pdk/2.x/pdk_reference.html](https://puppet.com/docs/pdk/2.x/pdk_reference.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having reviewed how to use the PDK to create and manage modules, as well as
+    its validation and testing capabilities, let’s learn how to perform full unit
+    testing using RSpec.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing with RSpec using the PDK
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To take this initial validation and compilation testing further at the unit
+    test level, RSpec can be used to test the behavior and logic of modules, while
+    ServerSpec can be used to test at the system integration level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RSpec is a Ruby framework for testing Ruby code and is written in a `rspec-puppet`
+    test is an implementation of RSpec, specifically designed for testing Puppet modules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to note that the current project code is available at [https://github.com/puppetlabs/rspec-puppet](https://github.com/puppetlabs/rspec-puppet),
+    forked from [https://github.com/rodjek/rspec-puppet](https://github.com/rodjek/rspec-puppet),
+    with core guides and documentation available at [http://rspec-puppet.com/](http://rspec-puppet.com/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: When users start using RSpec, some may feel that it is just mimicking the Puppet
+    code but in a different language. RSpec runs through the different logic and behavior
+    of your Puppet code and ensures that the correct catalogs and output will be produced
+    in various environments and cases. This protects against regressions when refactoring
+    or upgrading to new Puppet releases. If the RSpec code is becoming a simple mimic
+    of the code in the manifest, then the test scenarios are not being reviewed properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The advantage of this style of unit testing is that it allows you to test code
+    without having to spin up any specific infrastructure or make any changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RSpec tests are contained in Ruby files in a module inside the `spec` directory,
+    with directories containing the tests for different types of code, such as classes
+    in the `spec/classes` directory, and defined types in the `spec/defines` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are ignoring the other possible test directories (the `types`, `type_alias`,
+    and `functions` test directories) as creating them is beyond the scope of this
+    book. However, most of what will be discussed here can apply to these types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RSpec configuration is covered within the PDK and the files are created automatically
+    with the `pdk new` commands. However, they can be added either when converting
+    a module or using the PDK by adding the `--add-tests` flag to the `convert` command,
+    `pdk convert --add-tests`, and with the `pdk new test --unit <name>` command,
+    respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we look at what a defined type and class will get by default from the
+    PDK, we must run the `pdk new class exampleapp` and `pdk new define example_define`
+    commands on the `exampleapp` module to create the main manifest and a defined
+    type called `example_define`. This will result in a file called `spec/classes/exampleapp.rb`
+    with the following contents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Further, `spec/defined/example_define.rb` can be created as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Breaking this down, the first step is to `require spec_helper`, which results
+    in the `spec/spec_helper.rb` file being loaded. Because the `spec` directory is
+    loaded into the path automatically, it only needs to state the title; this configures
+    RSpec, which will be discussed in more detail later in this section. The next
+    part, `describe`, is an RSpec keyword that’s used to describe a group of tests.
+    For both the `exampleapp` and `example_define` tests, the name of the class and
+    defined class are described since there is only one basic group of tests for each.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have used `puppet-rspec` previously, you may have set an additional type
+    definition in the `describe` statement, such as `describe 'exampleapp'`, `:type
+    => :class do`. This is unnecessary due to the folders acting as auto identifiers
+    of the type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A defined type always needs a title and any parameters. Upon using the `let`
+    keyword, a title is set, as well as parameters, which in this case are blank.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both the `exampleapp` and `example_define` classes then perform a loop using
+    the `on_supported_os` function, which is provided by the `rspec-puppet-facts`
+    gem, taking the input from the `metadata.json` file, which contains details regarding
+    the OSs that are supported and producing an array of facts in the `os_facts` variable.
+    This is then passed to another `let`, which assigns these facts to the contents
+    of the `os_facts` array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `it` keyword is known as an `rspec` terms and can be either a single line
+    or encased within a `do` end block. This is a test case and contains an expect
+    statement called `is_expected.to`, which is a verification step of a condition.
+    This condition is expressed via a matcher. In this case, this will compile the
+    Puppet code of the class and defined type and confirm that a catalog will be generated
+    successfully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: We recommend the styling guide available at [https://www.betterspecs.org/](https://www.betterspecs.org/),
+    which is for the general Ruby RSpec style. We will be quoting recommendations
+    from it throughout this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having briefly examined the default compile test, let’s look at each component
+    and how to expand them further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The describe and context keywords
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: One of the big confusions for many Puppet developers who have previously tried
+    to use RSpec is understanding where to use the `describe` keyword and where to
+    use `context`. They seem to be interchangeable, and this is for a very good reason.
+    The `context` keyword is an alias of `describe`, so they are interchangeable,
+    and your use only affects how your code reads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Betterspecs* recommends using `describe` to describe the method being tested.
+    In terms of Puppet RSpec, this was why we saw `describe` with a class name of
+    `exampleapp` and `exampleapp::example_define` as its defined class in the *Testing
+    with RSpec using the* *PDK* section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is recommended that `context` be written in a style of *when*, *with*, or
+    *without* situations, which should make it clear what scenario is being tested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The style recommendation of this book is to write a single `describe` to match
+    the Puppet type, such as `class`, and then `context` to match the scenarios to
+    be tested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The blocks of `describe` and `context` allow the situation being tested to be
+    described and for us to set facts, variables, and parameters. Since they can be
+    nested, it allows inheritance to take place, which will build up more detailed
+    scenarios, or different logical routes to be tried, though care should be taken
+    not to make the cases too hard to read.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The aim should be to test all cases. So, a plan should be made to test valid,
+    edge, and invalid cases, allowing both positive and negative cases to be tested.
+    As a simple example without any code tests or parameters set, the following code
+    for the `exampleapp` class would look at the contexts for each supported OS, based
+    on whether the `install` version is a middle value, a low edge version, or an
+    invalid version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we have the basic structure of the scenarios to test, the next step
+    is to use matchers to test what is produced in the catalog based on `context`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Examples, expectations, and matchers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The sample `it` statements can be either a single line, as demonstrated in
+    the *Testing with RSpec using the PDK* section, or can be broken up over multiple
+    lines when the matcher that’s used is too long to be on a single line. Using `do`
+    and `end`, the same compile example could be expressed as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the general Ruby RSpec implementation, expectations have a broader choice,
+    but in `puppet-rspec`, our expectations will be limited to just using the `is_expected`
+    keyword. However, this can be negated by using `not_to` – for example, `It {`
+    `is_expected.not_to`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The matchers provide a variety of tests for testing various resource types.
+    The matcher syntax is `contain_<resource_type>('<title>').<options>`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the compile matcher, we could be more explicit by adding the `with_all_deps`
+    option to the compile – for example, `it { is_expected.to compile.with_all_deps
+    }`. This would test that all the relationships in the catalog contain resources.
+    Alternatively, we could look for a compile error with the `and_raise_error('error_message')`
+    option, which will contain the message we expect to be thrown as a string – for
+    example, `it { is_expected.to compile.raise_error('lets cause` `failure' }`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main set of matches is based on resource types using a pattern of `contain_<resource_type>('<resource_title>')`
+    – for example,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`it { is_expected.to contain_class(''exampleclass::install'') }` and `it {
+    is_expected.to` `contain_service(''httpd'') }`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Rspec-puppet` does not do class name parsing or lookup, so the matcher will
+    only accept qualified classes without leading colons. So, `install` won’t be found
+    in `exampleclass`, but `exampleclass::install` will. If a resource type contains
+    a `::` symbol, this needs to be converted into a `__` symbol, which will make
+    it `contain_exampleapp__exampletype`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Resource matchers can be further expanded by chaining them using the `with`,
+    `only_with`, and `without` methods. This allows us to check the parameters of
+    resources; `with` ensures the resource in the catalog has the parameters as specified,
+    `only_with` ensures that only the parameters provided have been set and no others,
+    and `without` accepts an array of parameters and ensures those parameters are
+    not set. When using these methods, it is more readable to use an `it do...end`
+    format, as shown in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This can be shortened to only one parameter by following the method syntax
+    for `with` and `only_with`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For `without`, the method accepts an array of parameters that should not be
+    set on the resource:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These methods can be chained together either as the same methods or as a mix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A different kind of matcher for resources is using a `count`, which allows
+    the `have_<resource_type>_count` syntax. For example, to verify if the total number
+    of resources is `5` and the total number of classes is `4`, the following code
+    can be run:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having reviewed how to set examples, it is clear that for the `describe` and
+    `context` keywords, parameters and pre-conditions will need to be set for there
+    to be a testing scenario. For example, if the context is that the install version
+    is 1, then the parameter install version will need to be set to 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parameters and preconditions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the default example for defined types, we explained how the `let` keyword
+    can be used to set specify the title and empty parameters of a test instantiation
+    of a defined type. However, these can also be used for other types, such as parameterized
+    classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To populate parameters, an array of keys and values separated by a `=>` symbol
+    can be supplied in strings with an undefined value declared as `:undef`, which
+    is translated to `undef` when it compiles the test. For example, to set `param1`
+    to the `yup` string and `param2` to `undef`, the following `let` could be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In addition to parameters, preconditions can also be set. So, if the manifest
+    being tested is dependent on another class or variable being in the catalog, this
+    could be added so it will be evaluated before the test class. For example, in
+    the module pattern, we showed that the `config` class needed to be evaluated after
+    the `install` class in the catalog but before the `service` class. This could
+    be done using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An array of strings can also be used if there are multiple conditions. If the
+    test is for a specific node or environment, this can be set as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The node should be a **fully qualified domain** **name** (**FQDN**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relationships
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The relationships of resources can be tested with the `that_requires`, `that_comes_before`,
+    `that_notifies`, and `that_subscribes_to` methods. It is not important if the
+    Puppet code is using a `require` and RSpec is using `that_comes_before` or if
+    the Puppet code is using directional arrows, so long as the variants are logically
+    equivalent to each other since the test is on the catalog.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These methods are chained into the example with the requirement, but there
+    are some differences between how relationships are declared in a Puppet manifest
+    and how they are declared in a `rspec` test: the name should not be quoted, it
+    cannot have multiple resource names under a single type, and if a class is referenced,
+    there should be no leading `::` to mark it as the top scope. As a simple example,
+    a file called `exampleconfig` that requires the `exampleapp` package can be checked
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To check that the `exampleapp` package was before the `exampleapp::service`
+    and `exampleapp::config` classes, an array can be passed. However, note that they
+    cannot be under one class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: An example of a resource with parameters using `it do...end` that notified two
+    files is as follows
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If the test is on something like a defined class that has `require` or `before`
+    as part of its definition, this relationship can be set in parameters. However,
+    the `ref` helper must be used to name the resource it is dependent on, using the
+    `ref(''<type>'',''<title''>)` syntax. For a defined type that requires the `exampleapp`
+    package, the following code would add the relationship via parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Data from Hiera and facts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Data from Hiera and facts have a huge influence on the logic in our code, so
+    it must be able to be supplied and customized to cover the different scenarios
+    to be tested. As was shown in the default examples in the *Testing with RSpec
+    using the PDK* section, the `rspec-puppet-facts` gem checks the `metadata.json`
+    file to find the list of supported OSs. However, `metadata.json` does not have
+    a way to provide architectures, and by default, `rspec-puppet-facts` chooses a
+    default architecture depending on the OS, such as i86PC for Solaris or x86_64
+    for Fedora. If you want to be able to check additional architectures, you can
+    pass hardware models in a comma-separated array. This will be combined with the
+    following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If it only makes sense to test a subsection such as a class that has been specifically
+    made for an OS, then you can pass the relevant details using the `operatingsystem`
+    and `operatingsystemreleases` parameters; this will override `metadata.json`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using the `on_supported_os` method, this can only be set on all choices. If
+    nothing is found, such as i386 on Windows 11, it fails to find it silently. View
+    the `facterdb` module at [https://github.com/voxpupuli/facterdb](https://github.com/voxpupuli/facterdb)
+    to see what is available.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is not mandatory to use `on_supported_os` but without it, by default, there
+    will be no facts. When you need to test data that doesn’t exist in `facterdb`,
+    it is possible to declare the facts using `let(:facts)` and the values you wish.
+    For example, if you were testing what would happen with a theoretical RedHat 10
+    fact set, you would use the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, if additional facts were to be added to the `os_facts` variable
+    in a nested `context`, the `merge` method could be used with the `super` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: For structured facts, these merges can become more difficult. Voxpupli has an
+    `override_facts` helper in [https://github.com/voxpupuli/voxpupuli-test](https://github.com/voxpupuli/voxpupuli-test)
+    that can assist with this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To add facts that can be consumed by the PDK for validation and testing the
+    code, add a `spec/default_module_facts.yml`. This will contain YAML similar to
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `default_facts.yml` file should not be edited as it is managed by the PDK
+    and provides minimal facts for the PDK to run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is possible to add default facts via `.sync.yaml` either by adding a standard
+    code block or by adding `default_facts.yml`, but this is needlessly complicated
+    compared to `default_module_facts.yml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Any facts you provided with `let(:facts)` in a spec will merge on top of default
+    facts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to these facts, three additional variables come from classification
+    and external data sources: node parameters, which are global variables assigned
+    from the classification to a node, trusted facts, which are variables assigned
+    from within a Puppet client certificate, and trusted external facts, which are
+    variables sourced from an external data source by a script. The full implementation
+    of these will be described in detail in [*Chapter 11*](B18492_11.xhtml#_idTextAnchor272)and
+    [*Chapter 14*](B18492_14.xhtml#_idTextAnchor340).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All three types of variables can be added by using a `let` statement in the
+    spec file or by setting them as defaults in `spec_helper`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Trusted facts from Puppet 4.3 onwards will contain trusted fact keys (`certname`,
+    `domain`, and `hostname`) that are populated based on the node name, as set with
+    `:node`. However, trusted external facts and node parameters will be empty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Trusted facts use `trusted_facts`, trusted external data uses `trusted_external_data`,
+    and node parameters use `node_params`. For example, to declare trusted facts and
+    trusted external data, the following `let` statements can be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To set defaults, `.sync.yaml` can add additional lines by passing an array
+    via `spec_overrides`; however, adding a `spec_helper_local.rb` file that contains
+    the necessary lines will be easier than following the YAML syntax. Within a `Rspec.config`
+    block, it is about following the `c.<fact_type> = {<fact/parameters_keys>}` format
+    and using the fact/parameter name with `default_` at the beginning. So, to assign
+    node parameters as defaults, `spec_helper_local.rb` can be updated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, trusted external data can be set like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hiera will be covered in full in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233),
+    but for now, it is adequate to know that Hiera provides a `hiera.yaml` file to
+    help you learn how to look up the data and a configuration file. We have created
+    a `hiera.yaml` definition at `spec/fixtures/hiera/hiera.yaml`, which would typically
+    have a `datadir` defined at `spec/fixtures/hieradata`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This configuration for Hiera can be set in two ways, as documented at [https://github.com/puppetlabs/rspec-puppet](https://github.com/puppetlabs/rspec-puppet).
+    The first option is to use `let` and set the necessary variables, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Lookups can then be performed as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, the following could be added to `spec_helper_local.rb`. Here,
+    automatic lookup of parameters would take place:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Having reviewed how to create tests for individual modules, one of the issues
+    that you’ll quickly find is that various resources, such as functions, are used
+    within modules. These are dependent on the content of other modules. In this next
+    section, you will learn how to use fixtures to make this content available for
+    testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing dependencies with fixtures
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`puppetlabs_spec_helper` can put dependent modules in `spec/fixtures/modules`
+    for when an RSpec test unit is run. The `.fixtures.yml` file can specify `repositories:`
+    for GitHub repository sources and `forge_modules:` for modules from Puppet Forge.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main arguments that are taken are `repo`, which is either the Git repository
+    link or the Puppet Forge module name, `ref` for a Git commit ID, or Forge module
+    version number and `branch`, which is for a Git branch. The `ref` and `branch`
+    arguments can be used together to revise a branch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, an example `.fixtures.yml` containing two Git repositories and two Forge
+    modules would look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: If there are no arguments other than `repo`, it can be shortened to one line,
+    as shown here. If the fixtures file has changed, it is possible to run the `--clean-fixtures`
+    flag with a `pdk test unit` command to ensure all contents are deleted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More flags and options can be used with fixtures, as documented at [https://github.com/puppetlabs/puppetlabs_spec_helper#fixtures-examples](https://github.com/puppetlabs/puppetlabs_spec_helper#fixtures-examples).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Coverage reports
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'It is possible to produce coverage reports by adding the following piece of
+    code to `spec_helper_local.rb`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: This checks whether Puppet resources have been covered and produces a percentage
+    of resources covered and a list of untouched resources. The resource that’s checked
+    must be within the module being tested and not contain any dependencies brought
+    in by fixtures. The resource coverage percentage can also be made into a pass
+    or failure point by adding a percentage pass rate in brackets. For example, by
+    updating the line to `RSpec::Puppet::Coverage.report! (100`), this would ensure
+    every resource (100%) is covered. This can sometimes be a motivator to push for
+    RSpec use and coverage and only allow the resource percentage coverage to be reduced
+    due to any particular issue or exception.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further research and tools for RSpec
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This section has tried to provide you with enough information that you can build
+    meaningful `rspec-puppet` tests with facts data and dependencies. Also, note that
+    normal Ruby code can be used, such as `case` or `if` statements and variables,
+    and that there are many more options for advanced configurations in `spec_helper_local`,
+    as documented at [https://rspec-puppet.com/documentation/configuration/](https://rspec-puppet.com/documentation/configuration/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This book advises against Augeas use, but it is possible to test Augeas in
+    RSpec. Details can be found here: [https://github.com/domcleal/rspec-puppet-augeas](https://github.com/domcleal/rspec-puppet-augeas).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Although it’s beyond the scope of this book, when using custom functions and
+    types, it is necessary to perform stubs and mocks, which can be done via `rspec-mocks`,
+    as documented at [https://github.com/puppetlabs/puppetlabs_spec_helper#mock_with](https://github.com/puppetlabs/puppetlabs_spec_helper#mock_with).
+  prefs: []
+  type: TYPE_NORMAL
+- en: It was mentioned at the start of the *Testing with RSpec using the PDK* section
+    that for large manifests, having to type out all the RSpec for resources can be
+    painful. However, several tools can do this for you. These include [https://github.com/logicminds/puppet-retrospec](https://github.com/logicminds/puppet-retrospec),
+    [https://github.com/enterprisemodules/puppet-catalog_rspec](https://github.com/enterprisemodules/puppet-catalog_rspec),
+    and [https://github.com/alexharv074/create_specs.git](https://github.com/alexharv074/create_specs.git);
+    all of these can be used to generate RSpec from code or catalogs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As with almost everything, it is possible to do all these tasks in YAML instead
+    by using the `rspec-puppet-yaml` gem at [https://rubydoc.info/gems/rspec-puppet-yaml](https://rubydoc.info/gems/rspec-puppet-yaml).
+    However, we would strongly advise against this.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For further research on RSpec, it can be useful to review the core RSpec documentation
+    at [https://rspec.info/documentation/](https://rspec.info/documentation/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Serverspec
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Serverspec is an RSpec implementation that’s designed to test at the server
+    level once configuration management has been deployed. It is a tool that’s independent
+    of Puppet and doesn’t integrate with PDK; it is typically added to a pipelining
+    tool to run and requires you to remotely connect from a server to a test target.
+    Many of the same principles and ideas that we saw in the RSpec apply. The documentation
+    and a tutorial for this can be found at [https://serverspec.org/](https://serverspec.org/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having learned all about how to create and test modules in this chapter, we
+    can now look at how to use Puppet Forge to source pre-written modules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding Puppet Forge
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Puppet Forge provides a rich resource of modules from Puppet, the Puppet community,
+    and third-party vendors to reduce the amount of code your organization must write
+    and maintain. It also allows you to contribute to projects or publish modules,
+    allowing others to contribute to your projects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is important to understand the different types of authors, endorsements,
+    and quality scores available in Puppet Forge to understand who is developing the
+    modules, what you can expect from them, and how to make choices regarding the
+    7,000+ modules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Anyone can register and publish modules. However, the Puppet company itself
+    publishes under the `puppetlabs` username, while the `puppet` username. This confusion
+    originates from Puppet originally being called Puppet Labs. This should not detract
+    from the fact the Vox Pupli community develops to very high standards and works
+    closely with Puppet, with both organizations contributing to one another. Full
+    details about the Vox Pupuli community can be viewed at [https://voxpupuli.org/](https://voxpupuli.org/),
+    including how to contribute and be involved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several other key consultancy contributors, such as `example42`,
+    `enterprisemodules`, `camptocamp`, and `betadots`, who contribute modules and
+    offer services. There are vendor organizations, such as `foreman`, `datadog`,
+    `SIMP`, `cyberark`, and `Elastic`, that provide modules related to their products.
+    Finally, individual contributors such as `saz` and `ghoneycut` have contributed
+    several quality modules. Puppet has a Champions program, highlighting known contributors
+    to Puppet, which can assist in understanding the reliability of module authors:
+    [https://puppet-champions.github.io/profiles.html](https://puppet-champions.github.io/profiles.html).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: The process of releasing modules to Puppet Forge is beyond the scope of this
+    book, but it can be reviewed at [https://puppet.com/docs/puppet/latest/modules_publishing.html](https://puppet.com/docs/puppet/latest/modules_publishing.html)
+    and used along with the `pdk build` and `pdk release` commands, as discussed in
+    the *Writing and testing a module using the* *PDK* section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In terms of understanding how to filter for modules to use while looking at
+    the screen shown in *Figure 8**.4*, which allows us to search for all the modules
+    that are available in Puppet Forge, we have various options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.4 – Puppet Forge search screen](img/B18492_08_04.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.4 – Puppet Forge search screen
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most immediate valuable filter is `metadata.json` file for OS and Puppet
+    version compatibility. The release date, latest release, and number of downloads
+    can be key measures to show if this is a commonly used module and if it is being
+    kept up to date.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Puppet implements an endorsement scheme that’s managed by the **Content and
+    Tooling Team** (**CAT**) with three different types: Partner, Approved, and Supported.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Approved modules pass specific criteria documented at [https://forge.puppet.com/about/approved/criteria](https://forge.puppet.com/about/approved/criteria),
+    which ensure the modules meet usability and quality standards. This can help you
+    when you’re trying to choose a reliable module or allow your team to aim for a
+    standard and submit your modules via [https://github.com/puppetlabs/puppet-approved-modules](https://github.com/puppetlabs/puppet-approved-modules).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supported modules follow the same standards as approved modules but are fully
+    supported by Puppet or a Puppet-approved third-party vendor, allowing Puppet Enterprise
+    customers to raise support cases if issues are experienced. Note that only the
+    latest version of the module is supported, and Puppet Enterprise OS versions have
+    limited windows of support beyond end-of-life dates. The full details can be viewed
+    at [https://forge.puppet.com/about/supported](https://forge.puppet.com/about/supported).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third type of partner is when support and testing are provided but not by
+    Puppet. For this support to be valid, a separate partner licensing scheme might
+    be required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As well as this endorsement approach, a score is put on each Puppet module.
+    Since the mechanism for scoring was last updated, the details haven’t been published
+    in full and a breakdown of the scoring is not visible, but the module quality
+    score is based on code style checks, compatibility tests, and metadata validation.
+    This score gives you an idea of the module’s overall adherence to Puppet code
+    standards upon running `anubis-docker` to evaluate [https://github.com/puppetlabs/anubis-docker](https://github.com/puppetlabs/anubis-docker).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Malware scanning was introduced in 2021 using VirtusTotal. A visible pass or
+    failure of the module is visible on the `puppetlabs` user modules, but this will
+    be extended to Approved, Partner, and all future module releases at a later date.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Modules can be deprecated as new implementations come out or simply because
+    the use case is no longer valid and won’t be supported. These modules will be
+    hidden by default but can be made visible by selecting the **show** **deprecated**
+    option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Premium modules were recently added with the release of the Puppet Comply product
+    but they currently only apply to `cem_windows` and `cem_linux` modules, which
+    can only be used upon purchasing Puppet Comply.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One area that had previously been neglected in Puppet due to its historic development
+    focus on Linux is the Windows platform. Puppet Forge has a collection page ([https://forge.puppet.com/collections/windows](https://forge.puppet.com/collections/windows))
+    that highlights modules designed for Windows, such as the Chocolatey package provider:
+    [https://forge.puppet.com/modules/puppetlabs/chocolatey](https://forge.puppet.com/modules/puppetlabs/chocolatey).
+    Another major development has been the auto-generation of PowerShell `xInternetExplorerHomePage`
+    for setting the home page for Internet Explorer and modules such as `xActiveDirectory`,
+    which is used to deploy and configure Active Directory. `xInternetExplorerHomePage`
+    is simple and has a single resource type called `dsc_xinternetexplorerhomepage`
+    that can be used to set the default home page, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`xActiveDirectory` has various resource types to configure and deploy different
+    aspects of Active Directory.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This has limitations since it is a fully automatic conversion and Puppet has
+    no ownership of the DSC code. This makes testing limited and dependent on the
+    quality of the code and documentation provided by the DSC code owner. You may
+    also find some modules are deprecated in the PowerShell Gallery, so it is worth
+    checking this. Also, note that due to a bug in `minitar`, only the Puppet Enterprise
+    code manager can correctly unpack these modules from Puppet Forge directly. For
+    open source users, refer to the module documentation instructions, which explain
+    how to download the module from a web link to Puppet Forge and unpack the archive
+    manually, ensuring that the module is installed and the DSC code is unpacked fully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are some further blogs and tools to be aware of, which are beyond the
+    scope of this book but would be worth investigating for further information. To
+    keep up to date with Puppet Forge and Puppet-managed modules, the CAT team runs
+    a blog [https://puppetlabs.github.io/content-and-tooling-team/](https://puppetlabs.github.io/content-and-tooling-team/).
+    Puppet Forge also has an API, available at [https://forgeapi.puppet.com/](https://forgeapi.puppet.com/),
+    that allows more programmatic queries to be run, and the `denmark` module, developed
+    by Ben Ford, provides additional scans and checks to assist with reviewing modules:
+    [https://github.com/binford2k/denmark](https://github.com/binford2k/denmark).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Lab – creating a module and testing it
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this lab, you will use the knowledge you’ve gained about module structure,
+    the PDK, and testing to create and test a Grafana module. Then, using what you
+    learned about Puppet Forge, you will explore the Forge site to choose modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using either the code you wrote for [*Chapter 4*](B18492_04.xhtml#_idTextAnchor078)for
+    the combined Grafana, Windows, and Linux class or the example answer at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch04/all_grafana_data_types.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch04/all_grafana_data_types.pp),
+    create a new module called `packt_grafana`, with this Puppet code broken up into
+    appropriate classes following the `init`, `service`, `config`, and `install` pattern
+    (for this number of resources, a single class in the real world would be more
+    appropriate, but this is just for practice). I recommend creating classes with
+    `pdk new class`. Follow [https://puppet.com/docs/puppet/latest/puppet_strings_style.html](https://puppet.com/docs/puppet/latest/puppet_strings_style.html)
+    to ensure classes are fully documented and pass tests.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Expand the default tests provided by the PDK and design the contexts to be covered
+    while considering the parameters that could be passed and the OS choices available.
+    Use the [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch08/.sync.yml](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch08/.sync.yml)
+    file in the module, which will include the gem file for `puppet-catalog_rspec`,
+    and run `pdk update`. To generate some of the RSpec resources automatically, you
+    can add `it` `{` `dump_catalog` `}` to each class spec file (you will need to
+    define some parameters for this to work) and remove the line once you have got
+    the output. Add a coverage test at 100% and ensure your tests achieve this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Using `pdk validate` and `pdk test unit`, correct the errors that can be found
+    in the module, as shown here: [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch08/mistakemodule](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/tree/main/ch08/mistakemodule).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Go to Puppet Forge and decide which module you wish to use for the following
+    tasks:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring SSH on Ubuntu
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installing and configuring IIS
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Configuring the time zone using DSC on a Windows machine (hint: It’s not `xtimezone`;
+    refer to [https://www.powershellgallery.com/](https://www.powershellgallery.com/))'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Install and configure Logstash
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: See suggested answers at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch08/module_choice.txt](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch08/module_choice.txt)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, you learned how modules allow you to group code and data, making
+    it easier to share and reuse code. We discussed that modules should focus on a
+    clear single-use responsibility. We examined the directory structure of a module
+    and highlighted where specific Puppet code and data were stored. A good starter
+    manifest structure was shown, highlighting the main manifest (`init.pp`) that’s
+    used as an entry point, with parameters acting like public APIs to allow the module
+    to be flexible and include the other classes required. We also saw that the `install.pp`,
+    `config.pp`, and `service.pp` classes focused on installation, configuration,
+    and services, respectively. In the case that the application becomes more complex
+    than this, we discussed how a module can use classes and directories for different
+    components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we looked at the PDK as a way to automate how modules are created and
+    group common tooling to help us manage and test Puppet modules. We created a Ruby
+    environment and installed the communities’ most used development tools with configuration
+    files in the module directory. The default template for producing modules was
+    examined, as well as how to customize this by forking on `sync.yaml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After, we looked at the life cycle of development when using various PDK commands
+    to create or convert a module, as well as adding different Puppet types such as
+    classes or defined types, which create unit tests. We looked at the `pdk validate`
+    command as a way to perform linting and syntax validation, as well as to autocorrect
+    where possible with the `-a` flag. The templates created basic RSpec tests to
+    check the compilation of catalogs. The PDK `build` and `release` commands were
+    also mentioned as ways to bundle the PDK for Puppet Forge or to bundle and upload
+    it as one command – `release`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, you learned how to expand RSpec using `describe` and `context` to structure
+    the test cases and expectations and matchers for defining individual tests. You
+    learned that preconditions can be set via `let` statements, allowing dependencies
+    for the class to be created in the test. You also learned how relationships can
+    be defined by chaining the relevant function. You saw how `let` statements can
+    be used to define facts, node data, trusted facts, and trusted external facts
+    in data and that by using the `default_module_facts.yaml` and `spec_helper_local`
+    files, defaults can be set for the module. After this, we covered Hiera, detailing
+    how the configuration file can be set in a spec or via `spec_helper` and how lookups
+    can be performed. For external dependencies, the `fixtures.yml` file was shown
+    to be able to bring in module dependencies from Puppet Forge or local repositories
+    to allow for catalog compilation. Coverage reporting was then added to the local
+    spec helper, allowing unit tests to show what resources were not covered by tests
+    and to put a pass percentage on the test. Then, we looked at some further RSpec
+    tooling and sources, which allow you to generate RSpec code and some checks that
+    are beyond the scope of this book. ServerSpec was then highlighted as a server-level
+    testing framework that uses RSpec. It’s independent of Puppet and beyond the scope
+    of this book, but it’s worth investing in and, ideally, adding to a pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having shown you how to develop and structure your modules, you learned how
+    to source modules from Puppet Forge, understand the different types of module
+    support and endorsement available from Puppet, how scoring and scanning took place
+    on modules, and ways to understand who contributors were and their place in the
+    Puppet community. The Windows collection of modules was mentioned, as well as
+    the PowerShell DSC collection, which provides automated wraparounds for modules
+    in the PowerShell Gallery, allowing the content to be downloaded and used within
+    Puppet code. The CAT team was mentioned as maintainers of Puppet Forge that support
+    content with their blog publishing updates. The Denmark module was then highlighted
+    as an additional way to score modules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you will learn how Puppet handles data and be introduced
+    to Hiera and explore how it layers data into different scopes. We will discuss
+    when best to use Puppet code, variables, and Hiera to store data and how to structure
+    and feed this data to module parameters. We will also cover the correct ways to
+    store data security at rest and in transport, as well as some common issues with
+    using data in Puppet and how to approach them.
+  prefs: []
+  type: TYPE_NORMAL

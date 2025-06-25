@@ -1,0 +1,1619 @@
+- en: '[*Chapter 10*](B17124_10_Final_SK_ePub.xhtml#_idTextAnchor249): Application
+    Integration Services'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: AWS offers a suite of services that enable you to build architectures that enable
+    communication between the different components of your application in a bid to
+    move away from monolith designs. These integration services facilitate design
+    patterns for distributed systems, serverless applications, and decoupled applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ultimately, decoupling your application from traditional all-in-one monolith
+    architectures ensures a reduced impact when making changes. It also facilitates
+    easier upgrades and new features being released faster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will look at several services that offer integration capabilities.
+    These include messaging solutions between application components using a queuing
+    service, notification services, which can be used for **application-to-application**
+    (**A2A**) notifications or **application-to-person** (**A2P**) type notifications,
+    event-driven workflow designs, and coordinating multiple services into serverless
+    workloads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding notification services such as Amazon **Simple Notification Service**
+    (**SNS**)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Decoupling your application architecture with Amazon **Simple Queue Service**
+    (**SQS**) and Amazon MQ
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing event-driven workflows to connect your application data with various
+    AWS services using EventBridge
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Coordinating multiple AWS services into serverless workloads with Amazon Step
+    Functions and Amazon **Simple Workflow Service** (**SWF**)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To complete the exercises in this chapter, you will need access to your AWS
+    Free Tier account, as well as permissions to access the various AWS services.
+    You will also need access to the VPC you built in [*Chapter 6*](B17124_06_Final_SK_ePub.xhtml#_idTextAnchor122),
+    *AWS Networking Services – VPCs, Route53, and CloudFront*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding notification services such as Amazon SNS
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Amazon SNS is a push-based messaging and notification system that can be used
+    to allow one application component to send messages to other application components
+    or directly to end users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS uses a publisher/subscriber model where one application component
+    will act as a publisher of messages and the other application components will
+    consume those messages as subscribers. Amazon SNS allows you to design high throughput,
+    many-to-many messaging between distributed systems, microservices, and event-driven
+    applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at an example. Suppose you want to be notified if any of your IAM
+    users upload an object to a particular Amazon S3 bucket that they have access
+    to. To achieve this, you can configure `s3:ObjectCreated:*` action occurs. This
+    notification can be sent to an **SNS topic** (discussed later), which you subscribe
+    to using your email address. This way, every time your users upload a new object
+    to your S3 bucket, Amazon SNS will send out a notification to you via email. This
+    is an example of A2P messaging using SNS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's look at another example. Suppose you host an S3 bucket that allows end
+    users to upload images in a default format, and you have a requirement to convert
+    those images into multiple formats. To achieve this requirement, you can use Amazon
+    Lambda, which, as we discussed in [*Chapter 7*](B17124_07_Final_SK_ePub.xhtml#_idTextAnchor157),
+    *AWS Compute Services*, is a serverless compute solution that allows you to run
+    code in response to an event or trigger.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this specific example, you can configure your S3 notification service to
+    send a message to an Amazon SNS topic and have the Lambda function subscribe to
+    that topic. The message can include information about the new image that has been
+    uploaded and can trigger your Lambda function to access the image in the bucket,
+    create different formats of the image, and save them in another S3 bucket. This
+    automated process is an example of A2A messaging using SNS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will take a look at a key component of the Amazon SNS services, specifically
+    SNS endpoints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS endpoints
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As we mentioned previously, Amazon SNS is a push-based messaging solution,
+    enabling one or more publishers to push messages to one or more subscribers. With
+    Amazon SNS, your subscribers need to use a supported endpoint type. These endpoints
+    are depicted in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.1 – Amazon SNS subscriber endpoints'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_01.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.1 – Amazon SNS subscriber endpoints
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS A2A endpoints include Amazon SQS, HTTP/S endpoints, AWS Lambda, and
+    Amazon Kinesis Firehose. Data from Amazon Kinesis Firehose can then be offloaded
+    and stored in Amazon S3 buckets, AWS Elasticsearch, and Amazon Redshift, as well
+    as other third-party service providers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS A2P endpoints include email, mobile text messages, and mobile push
+    endpoints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS also ensures high levels of message durability. Messages are stored
+    and replicated on multiple devices across geographically separated servers and
+    data centers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS topics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: At the heart of the Amazon SNS service is the SNS topic feature, which is a
+    logical access point that acts as a communication channel between your publishers
+    and subscribers. Before you can send out messages to your subscribers, you need
+    to create a topic. Your publisher needs to be made aware of which SNS topic to
+    send messages to and your end clients must subscribe to the topic to be able to
+    receive those messages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following diagram, we can see that an application component allows us
+    to upload objects to an Amazon S3 bucket (**1**). Amazon S3 can be set up with
+    an event notification service that pushes out a notification, stating that an
+    upload took place to an Amazon SNS topic. In this diagram, an admin has subscribed
+    to the SNS topic. Any notifications resulting from the objects being uploaded
+    to the S3 bucket are then sent to the admin:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.2 – Example – configuring an SNS notification for an S3 event notification'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_02.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.2 – Example – configuring an SNS notification for an S3 event notification
+  prefs: []
+  type: TYPE_NORMAL
+- en: Your publishers also need permission to be able to publish messages to the topic.
+    In the previous example, where we wanted to send a notification to an administrator
+    every time a new object was uploaded to an S3 bucket, you would also need to create
+    permissions that grant the S3 bucket the ability to send messages to the SNS topic.
+    You can do this by configuring an IAM policy that specifies which bucket can send
+    messages to the topic and attach it directly to the SNS topic as an inline policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Subscribers to your topic will then have messages pushed out to them whenever
+    a new message is published by the publisher. In the case of the preceding example,
+    the publisher is the S3 notification service, and the subscriber is your administrator's
+    email address.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that when you create a topic, you need to assign it a name. This can be
+    up to 256 characters in length and can contain hyphens (-) and underscores (_).
+    Amazon SNS will assign an `sns` – the Region, the AWS account ID, and the topic
+    name. So, for example, an SNS topic called `new-recipe-upload-alert`, created
+    in the London Region, with an AWS account ID of `123456789789` will have an ARN
+    of `arn:aws:sns:eu-west-2:1234567890123789: new-recipe-upload-alert`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will look at the topics you can create on Amazon SNS, which will depend
+    on the application's use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standard and FIFO topics
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: When configuring Amazon SNS, you create a **standard topic** by default. Standard
+    topics are used when the message's delivery order is not going to affect your
+    application in any way and where duplicating messages will not create any issues
+    in your workflow. All supported delivery protocols support standard topics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, you can create **FIFO topics**. These are designed to ensure strict
+    message ordering and prevent message duplication. Note that only the Amazon SQS
+    endpoint (specifically, the Amazon SQS FIFO queue) can subscribe to a FIFO topic.
+    We will discuss the Amazon SQS service later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS Fanout scenario
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: A key feature offered by Amazon SNS is the ability to replicate messages pushed
+    out to an SNS topic across multiple endpoints. This is known as the **Fanout scenario**
+    and it allows parallel asynchronous processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s look at an example. Let''s say that you are a theatre company and that
+    you sell tickets for your various performances. You are required to process online
+    payments from customers and issue them their tickets. At the same time, you are
+    also required to store information on all sales in AWS''s data warehousing solution,
+    which is offered by Amazon Redshift. One way to design this architecture is depicted
+    in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.3 – Example of an Amazon SNS Fanout scenario'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_03.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.3 – Example of an Amazon SNS Fanout scenario
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding diagram, incoming ticket sales are sent to an SNS topic, which
+    then gets replicated to an SQS queue and an Amazon Kinesis Data Firehose stream.
+    Any messages that are sent to the SQS queue are processed by the payment function
+    to complete the sale transaction. Additional queues may be added to the architecture
+    for order fulfillment and customer notification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, the same message is processed by Amazon Kinesis Data Firehose, which feeds
+    the data into an Amazon Redshift cluster. Note that to stream data from Amazon
+    Kinesis Firehose to Redshift, you need to deliver the data into an S3 bucket and
+    then issue an Amazon Redshift `COPY` command to load the data into your Amazon
+    Redshift cluster. We will discuss Amazon Kinesis in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the same time, messages will continue to reside in the S3 bucket, which can
+    be archived using the life cycle management process, as we discussed in [*Chapter
+    5*](B17124_05_Final_SK_ePub.xhtml#_idTextAnchor094), *Amazon Simple Storage Service
+    (Amazon S3)*. This can help address any compliance requirements to store historic
+    information on all ticket sales.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SNS pricing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Amazon SNS is a managed service with no upfront cost. You pay based on usage
+    and this is based on the type of topic that's used; that is, standard topics or
+    FIFO topics. Standard topics are charged based on the number of API requests made
+    per month and the number of deliveries to the various endpoints. For example,
+    mobile push notifications are charged at $0.50 per million notifications after
+    you have exhausted your free tier threshold of 1 million notifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The maximum payload size for your messages is 256 KB. Except for SMS messages,
+    you are billed for every 64 KB chunk as one request. So, a payload size of 256
+    KB is equal to four requests. Furthermore, if you need to send messages that are
+    larger than 256 KB, you can use the Amazon Extended SNS Client Library, which
+    allows you to send payloads via the Amazon S3 service. When you do this, additional
+    Amazon S3 storage costs are incurred.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With regards to FIFO topics, you are charged based on the number of published
+    messages, subscribed messages, and their respective amount of payload data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at the Amazon push-based messaging solution offered
+    by Amazon SNS. Amazon SNS works based on a publisher/subscriber model and enables
+    you to design and architect A2A messaging and A2P messaging. Amazon SNS can help
+    you build integration between different application components, allowing you to
+    design distributed systems, microservices, and serverless architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You also learned about some of the core features of Amazon SNS, including standard
+    and FIFO topics, as well as the Fanout scenario concept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will look at another messaging integration service known
+    as Amazon SQS. Amazon SQS is a pull-based messaging solution and lends itself
+    well to designing decoupled architectures, enabling you to migrate away from monolith
+    application architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Decoupling your application architecture with Amazon SQS and Amazon MQ
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Amazon SQS is another fully managed messaging integration solution that enables
+    you to decouple your application components into distributed systems and facilitate
+    the design and architecture of microservices. One of the primary advantages of
+    using a queuing system such as Amazon SQS is the ability to move away from monolithic
+    application designs. In a monolithic design, where all the components of your
+    applications are dependent on each other and always need to be available to each
+    other, you often suffer from frequent failures and outages. A queueing system
+    such as Amazon SQS can help the different components of your application work
+    independently and queues can hold messages in the form of requests/tasks until
+    capacity becomes available. With asynchronous processing and the ability for different
+    components to scale independently, you benefit from higher levels of availability,
+    where each component can scale as needed without impacting the overall workflow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following diagram, we can see how Amazon SQS can be used to queue messages
+    between various components of your application and achieve a decoupled architecture
+    (also known as loose coupling):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.4 – Amazon SQS use case example'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_04.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.4 – Amazon SQS use case example
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding diagram, a media transcoding example makes use of both the
+    Amazon SNS and Amazon SQS services to convert raw videos uploaded by users into
+    various formats and resolution sizes. In this architecture, we have different
+    auto-scaling groups that are provisioning a fleet of servers, with each fleet
+    responsible for converting the videos into a specific format. Separate queues
+    are created to handle messages destined for the different fleets of servers to
+    process. Here is a quick breakdown of the workflow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Users upload videos via a frontend web server farm that is part of an auto-scaling
+    group designed to scale out and scale in based on demand.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The videos are uploaded to a master bucket.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: At the same time, an SNS notification is sent out to multiple Amazon SQS queues
+    in a fanout configuration (refer to the SNS Fanout scenario discussed earlier
+    in this chapter).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Each SQS queue holds messages for the appropriate app server to pull when capacity
+    is available.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The relevant app servers retrieve the messages from the appropriate SQS queue,
+    which identifies the videos that need to be processed in the master bucket. The
+    app servers then retrieve the raw videos from the master bucket.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The app servers convert the format and resolution of the videos and upload the
+    completed videos in the correct format into the transcode bucket.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Whereas Amazon SNS offers a push-based message notification solution, Amazon
+    SQS is a fully managed pull-based message queue system that will also retain the
+    messages for a short duration (the default is set to 4 days but this can be configured
+    to a maximum duration of 14 days).
+  prefs: []
+  type: TYPE_NORMAL
+- en: This means that if you have backend services that need to process lots of messages
+    in the queue from frontend web requests, you can retain those messages until your
+    backend services can process new messages in the queue. Amazon SQS increases the
+    overall fault tolerance of your application solutions, allowing your decoupled
+    application components to run independently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SQS queue types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Amazon SQS offers two types of queues designed to help address different use
+    cases. These are discussed next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SQS standard queues
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Standard queues support a nearly unlimited number of API calls per second,
+    (`SendMessage`, `ReceiveMessage`, or `DeleteMessage`) and are designed for messages
+    to be delivered at least once. However, this does mean that on an odd occasion,
+    duplicate copies of the message could be delivered. In addition, messages may
+    not be delivered in the order in which they were introduced into the queue. So,
+    your application must be able to cope with messages that are not delivered in
+    the order in which they entered the queue, as well as the occasional duplicate
+    message:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.5 – Amazon SQS standard queue'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_05.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.5 – Amazon SQS standard queue
+  prefs: []
+  type: TYPE_NORMAL
+- en: Standard queues are particularly useful when you need to process vast amounts
+    of transactions per second. However, note that there is a 120,000 quota for the
+    number of inflight messages for a standard queue. A typical example of where you
+    might use standard queues is, for example, when you need to process a high number
+    of credit card validation requests for an e-commerce application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SQS FIFO queues
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**FIFO** stands for **first-in first-out**. FIFO queues are designed to preserve
+    the order of your messages, as well as ensuring only one-time delivery with no
+    duplicates.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: FIFO queues only offer throughput at a rate of 300 transactions per second.
+    This means that they cannot offer unlimited throughput; however, high throughput
+    of messages can be offered by using a process known as batching, which offers
+    support for 3,000 transactions per second, per API method (`SendMessageBatch`,
+    `ReceiveMessage`, or `DeleteMessageBatch`). These 3,000 transactions represent
+    300 API calls, each with a batch of 10 messages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition, as depicted in the following diagram, messages are delivered in
+    the order in which they were introduced into the queue and Amazon SQS will preserve
+    this order:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.6 – Amazon SQS FIFO queue'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_06.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.6 – Amazon SQS FIFO queue
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, FIFO queues are ideal for those applications where the order of events is
+    important, such as when you're making sure that user-entered commands are run
+    in the right order. FIFO queues also ensure no duplicates are created more than
+    once, such as processing payment transactions. However, they are not ideal where
+    exceptional levels of scaling might be required or where you need to process greater
+    than 3,000 transactions per second (with batching).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SQS pricing and security
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To ensure sensitive data is protected, you can encrypt messages using Amazon
+    **Key Management Service** (**KMS**). In terms of pricing, there are no upfront
+    costs. You pay based on the number and content of requests and the interactions
+    with Amazon S3 and AWS KMS. Note that as part of the free tier, you also get the
+    first 1 million requests for free every month.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at another managed messaging solution offered by
+    Amazon SQS. Amazon SQS is a pull-based message queuing solution that allows you
+    to decouple your application components, enabling them to work independently of
+    each other. Messages are stored in either standard or FIFO queues and application
+    components retrieve these messages as required when there is available capacity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will look at Amazon MQ, which is a message broker service
+    designed for Apache ActiveMQ and other message brokers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon MQ
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: A message broker is a piece of software designed to help you facilitate communications
+    between application components to exchange information. Message brokers allow
+    different services to communicate with each other directly, even if those services
+    are written in different languages or run on different platforms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Many organizations have existing message brokering services within their on-premises
+    environments that support their on-premises applications. One such service is
+    **Apache ActiveMQ**, which is probably one of the most popular Java-based message
+    brokers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When clients are looking to migrate their on-premises applications, you must
+    consider where such third-party message brokering services are being consumed.
+    AWS offers a service known as Amazon MQ, which is a fully managed message broker
+    service that provides compatibility with popular message brokers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon recommends using Amazon MQ to migrate applications from existing message
+    brokers where compatibility with APIs such as **JMS** or protocols such as **AMQP
+    0-9-1**, **AMQP 1.0, MQTT**, **OpenWire**, and **STOMP** is required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If, as part of the migration, you are looking to completely rearchitect your
+    application layer, then you may wish to consider Amazon SNS and Amazon SQS instead,
+    as you do not require third-party message brokers. Amazon recommends these services
+    for new applications that can benefit from nearly unlimited scalability and simple
+    APIs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at Amazon MQ, which enables customers to easily migrate
+    to a message broker in the cloud and offers compatibility with existing messaging
+    brokers such as Apache ActiveMQ and RabbitMQ. With Amazon MQ, you reduce your
+    overall operational overhead when provisioning, configuring, and maintaining message
+    brokers that depend on connectivity with APIs such as JMS or protocols such as
+    AMQP 0-9-1, AMQP 1.0, MQTT, OpenWire, and STOMP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will look at event-driven workflow services and the
+    services offered by Amazon to help architect event-driven solutions for your applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designing event-driven application workflows using AWS EventBridge
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Amazon EventBridge is a serverless *event bus service* that allows you to stream
+    real-time events from your applications, SaaS-based services, and AWS services
+    to a variety of targets. These targets can include AWS Lambda, Kinesis, an HTTP/S
+    endpoint, or another event bus service in another account. Amazon EventBridge
+    helps you create application architectures where you need to react and perform
+    some action against those events that are generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Events can be generated when there is a change in the state of a given resource,
+    such as when an EC2 instance changes its state from a running state to a stopped
+    state. Another example of an event is when your auto-scaling group launches or
+    terminates an EC2 instance. Additional functionality, as required by your application
+    architecture, can be created by reacting to such state changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With EventBridge, you set up rules that define matching incoming patterns or
+    events. When an event occurs, as defined by the rule, it can be sent to a target
+    for further processing. For example, an event that resulted in a critical server
+    being stopped (by accident) can be sent to a Lambda function to have it restarted
+    automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: EventBridge can also be configured to trigger events at a defined schedule.
+    For example, if you have a large fleet of EC2 instances that are used to test
+    new applications, and you generally run your tests every weekday from Monday to
+    Friday during normal business hours, then there is no need to have the servers
+    running outside of those business hours. You can set up a scheduled event to trigger
+    a Lambda function that stops the servers at 6 P.M. Monday to Friday and restarts
+    them every weekday at 8 A.M. This ensures that outside of normal business hours,
+    your servers are in the stopped state. If these are on-demand EC2 instances, you
+    do not get charged while those servers remain stopped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon EventBridge is an updated solution from a previous version known as Amazon
+    CloudWatch Events. With CloudWatch Events, you were limited to a default event
+    bus that enabled you to route all AWS events, as well as custom events. However,
+    with the new Amazon EventBridge, you can introduce custom event buses in addition
+    to the default event bus. Custom event buses can be created exclusively for your
+    workloads and enable you to control access to events that are limited to a set
+    of AWS accounts or custom applications. In addition, you can use content-based
+    filtering and advanced rules for routing events. EventBridge can handle more processing,
+    reduce the load on downstream events, and use partner event sources such as Zendesk,
+    PagerDuty, and Datadog.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following diagram, we can see how EventBridge works at a high level.
+    We can see the sources of events, the types of buses that can be used, and the
+    potential targets for those events:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.7 – How EventBridge works'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_07.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.7 – How EventBridge works
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following are the key concepts and components of Amazon EventBridge:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Events**: As mentioned earlier, events represent a change in the state of
+    a given environment or resource. This can be a state change in an application,
+    an AWS resource, or even a SaaS partner service or application.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Rules**: A rule enables you to match an event to a target for processing.
+    You can have a single rule route to a single target or a parallel processing route
+    to multiple targets. There is no ordering of how the rules are processed but you
+    can customize the JSON that''s sent to the target to ensure only data of interest
+    is passed on to the target.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Targets**: A target can process these events and perform some action. Targets
+    include Lambda functions, SNS topics, ECS tasks, and SQS queues. Events are passed
+    on to targets in JSON format.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Event buses**: Event buses can receive events. You have a default bus in
+    your AWS account that is used to receive events from AWS services, but you can
+    also create custom events for your custom applications. Partner event buses can
+    be used to receive events from partner SaaS applications and services, which are
+    then directed to your AWS account.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this section, we looked at Amazon EventBridge, which allows you to stream
+    real-time events from your applications, SaaS-based services, and AWS services
+    to a variety of targets for processing. Targets can include AWS Lambda functions,
+    Kinesis streams, ECS tasks, and SQS queues, among others. In addition, you can
+    configure Amazon EventBridge to handle scheduled events that are triggered on
+    a defined schedule. Amazon EventBridge offers more flexibility and advanced features
+    compared to the previous CloudWatch Events services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will look at task-oriented integration services such
+    as Amazon Step Functions and Amazon SWF.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Coordinating multiple AWS services into serverless workloads with Amazon Step
+    Functions and Amazon SWF
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we'll look at two different AWS services that enable you to
+    design task-based workflows between your application components. The first service
+    we will look at is AWS Step Functions, while the second will be AWS SWF.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AWS Step Functions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Applications tend to have several components that make up individual workflows
+    and processes. Each workflow represents an element of the application that then
+    leads on to the next to provide a complete end-to-end solution. Amazon Step Functions
+    enables you to define these workflows as a series of state machines that contain
+    "states" that make up the workflow. These states make decisions based on input,
+    perform some action, and produce an output to other states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'States can be any of the following types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Success or fail state**: Where the execution stops with a success or failure'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Wait state**: Where the state waits for a timeout period or a scheduled time'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Parallel state**: Where the state performs parallel branches of execution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Map state**: Where the state accesses a list of items such as a list of orders'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Choice state**: Where the state chooses between branches of execution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Task state**: A state that focuses on carrying out a specific task and may
+    call other AWS services, such as Lambda functions, to perform the task'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The state machine coordinates work through the different states and uses the
+    task state to perform the actual work. Steps Functions helps you visualize your
+    workflow as a series of event-driven steps, as well as the state of each step
+    in your workflow to make sure that your application runs in a defined order.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon Step Functions makes use of the **Amazon States Language** (**ASL**).
+    This is a JSON-formatted structured language that helps you define your state
+    machines, including states such as **Task** states, which perform certain actions.
+    ASL is used to define how states transition from one state to the next, as in
+    the case of the **Choice** state, or when you need to stop execution with an error,
+    as in the case of a **Fail** state, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With Step Functions, you can also introduce human interaction, particularly
+    where manual intervention is required. Let''s look at an example of a credit card
+    application process. You are likely to have several steps that form part of the
+    application process. In the following diagram, we can see those steps in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.8 – Example of a credit card application workflow'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_08.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.8 – Example of a credit card application workflow
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding diagram, we have a Step Functions workflow process that illustrates
+    how a potential customer could apply for a new credit card. The initial workflow
+    would involve signing up for a credit card, which would require the customer''s
+    details to be verified. The next step could involve enabling a customer to choose
+    the level of credit required. This workflow may include the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: New customers sign up for a credit card. The initial process involves checking
+    the user's details. Several parallel Lambda functions can be invoked to perform
+    the required verification. For example, in the UK, the customer's name and address
+    could be verified against the electoral roll.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the automatic verification process is successful, then a review is not required,
+    and the next step is invoked. If a review is required, then human intervention
+    may be required to perform additional verification tasks. If the human verification
+    is successful, the next step can be invoked; otherwise, the application can be
+    rejected.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, the customer is offered an auto-approval credit amount. The customer is
+    also given the choice to select a higher credit value, which will be subject to
+    additional reviews. If the customer chooses a credit value that is within the
+    auto-approval credit amount, then the application is automatically approved. If
+    the customer chooses a credit value higher than the auto-approval credit amount,
+    then another human intervention step is required. Here, the credit card company
+    may request additional information such as salary slips to check the customer's
+    credit-worthiness.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If the human intervention is successful, the application is approved; if not,
+    the application will be rejected. There may be additional steps in the workflow
+    for appealing against the rejection decision.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Step Functions enables us to build distributed application solutions and design
+    microservices interactions to provide a complete end-to-end solution. Next, we
+    will look at the different types of workflows you can set up for Step Functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Workflow types
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With Amazon Step Functions, you can configure two types of workflows, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Standard workflow**: These have an exactly once workflow execution and can
+    run for up to 1 year. Standard workflows are ideal if you require human interaction
+    and approval processes as part of your workflow. You are charged on a per-state
+    transition basis, which is each time a step in your execution is completed. Standard
+    workflows also provide access to execution history and visual debugging.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Express workflow**: These have at least once workflow execution but can only
+    run for up to 5 minutes. Express workflows are ideal for automated tasks and high
+    event rate workloads, such as streaming data processing and IoT data ingestion.
+    You are charged based on the number and duration of executions. Express workflows
+    also offer unlimited state transition rates. Finally, all execution history is
+    sent to Amazon CloudWatch.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here is an example of a simple workflow that creates a task timer. In this
+    example, a Step Functions state machine is being configured that implements a
+    **Wait** state and uses a Lambda function to send out an Amazon SNS notification
+    after the waiting period is over. The message that''s sent out by the task is
+    a simple *Hello World* message. The following screenshot shows the workflow and
+    associated JSON:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.9 – AWS Step Functions task timer example'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_09.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.9 – AWS Step Functions task timer example
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we looked at the two types of Step Functions execution types
+    and identified the core difference between the two. Step Functions workflows can
+    run for up to 1 year (when using the standard workflow type), so they are particularly
+    useful for long-running application models that may also require human interaction.
+    An example is a health insurance claim application process, which may require
+    human intervention to verify the hospital bills and treatment that's dispensed
+    to the claimant. In the next section, we will examine another task-oriented application
+    integration service known as Amazon SWF.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon Simple Workflow Service (SWF)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Amazon SWF is another task-oriented application integration service that allows
+    you to coordinate work across distributed components of your application. Such
+    coordination of tasks may involve processes such as managing dependencies, scheduling
+    tasks, and handling the retries and timeouts of tasks to complete the logical
+    workflow for your application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon SWF has a concept where you implement "workers" to complete your tasks.
+    Workers can run either in the cloud across AWS EC2 instances or on the compute
+    services available in your on-premises locations. As part of the logical workflow,
+    Amazon SWF also allows you to incorporate human interaction within the logical
+    distribution of tasks like Amazon Step Functions, as discussed in the previous
+    section. With Amazon SWF, you can store tasks, assign them to workers, track progress,
+    and maintain states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While all of this sounds fairly like Amazon Step Functions, a key difference
+    is that with Amazon SWF, you must write decider programs in any language that
+    gets the latest state of each task from Amazon SWF and uses it to initiate subsequent
+    tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon Step Functions, on the other hand, offers a fully managed service that
+    has a more productive and agile approach to coordinating application components
+    using visual workflows. If you are building new applications on AWS, you should
+    consider using Amazon Step Functions. However, if you require external services
+    to interact with your processes or you need to launch nested processes where a
+    child process needs to return results to a parent process, you should consider
+    using Amazon SWF.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we provided a brief introduction to Amazon SWF. Amazon SWF
+    enables you to coordinate tasks across your distribution application components
+    while offering capabilities such as maintaining their execution state durably
+    and reliably.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 10.1 – Amazon S3 event notification using Amazon SNS
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, you designed, architected, and deployed a complete
+    web application using several AWS services. One such service was the Amazon S3
+    service, where you created a bucket to host your application source code repository.
+    The source code was comprised of multiple files that helped you build your web
+    application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Maintaining this source code is of paramount importance and any changes that
+    are made to the code need to be monitored. There are several best practice strategies
+    you can use to manage your source code, including using DevOps principles. In
+    this exercise, your senior administrator, **Alice**, would like to know whenever
+    a new file (object) gets uploaded to this source code repository, which is stored
+    in the Amazon S3 bucket.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon S3 comes with a feature known as event notifications. This feature enables
+    you to receive notifications when certain events occur in your S3 bucket, such
+    as an object being created or deleted. The service can be configured to send out
+    such notifications to an Amazon SNS topic, which an administrator can subscribe
+    to using an email as the endpoint. Let's configure an Amazon S3 notification to
+    send email alerts to **Alice** whenever a new file is uploaded (that is, created)
+    to the S3 bucket that hosts the source code repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This exercise is divided into four main steps, as described in the following
+    sub-sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 1 – creating an SNS topic and subscribing to the topic
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The first step is to create an SNS topic that will be used as the logical access
+    point that Alice will subscribe to. Messages sent to this topic will then be emailed
+    to Alice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the AWS Management Console, search for `SNS` in the top search box and
+    select the service to be taken to the Amazon SNS dashboard.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: If you have never created an SNS topic before, you should see the Amazon SNS
+    splash screen.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click on the far left-hand menu icon, denoted by the three lines, to expand
+    the sidebar.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, click on the **Topics** link from the menu.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click the **Create topic** button in the right-hand pane of the screen.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: On the **Create topic** page, in the **Details** section, select the **Standard**
+    type under **Type**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Enter a name for the topic; for example, `source-code-changes`. Next, enter
+    a display name for the topic; for example, `Source Code Changes Alert`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Leave all the remaining settings as their default values and click the **Create
+    topic** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once the topic has been created, you will be redirected to the topic page. Make
+    a note of the topic's ARN, as per the following screenshot:![Figure 10.10 – Amazon
+    SNS topic
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_10.jpg)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Figure 10.10 – Amazon SNS topic
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Now that you have created a topic, you can create a subscription for it. We
+    will be using email as the endpoint for notifications, and you can use your email
+    address to receive the notifications.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the bottom pane of the topics page, as per the previous screenshot, you will
+    find a section to create subscriptions. Click on the **Create subscription** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: On the **Create subscription** page, you will note that the topic ARN is already
+    selected. If not, ensure that you paste the topic ARN that you made a note of
+    earlier.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, under **Protocol**, select **Email** from the drop-down list.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the text box under **Endpoint**, provide your email address.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click the **Create subscription** button at the bottom of the page.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You will get a confirmation statement to say that your subscription has been
+    created. However, its status will be set to **Pending confirmation**. AWS will
+    have sent you a confirmation request to your email account. You will need to log
+    into your email account and confirm the subscription to activate it. I have just
+    logged into my email account to do the same, as per the following screenshot of
+    my Gmail account:![Figure 10.11 – Email subscription request for topic subscription
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_11.jpg)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Figure 10.11 – Email subscription request for topic subscription
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Once you confirm your subscription, return to the Amazon SNS dashboard and click
+    on the **Topics** link from the left-hand menu.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now that you have confirmed your subscription to the topic, you can configure
+    an access policy that will grant the Amazon S3 service the permissions to send
+    notifications to the topic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 2 – configuring your SNS topic policy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'For Amazon S3 to send notifications to the SNS topic you just created, you
+    will need to configure an **access policy**. An access policy defines who or what
+    can access your topic and publish messages to it. We have provided a sample policy
+    document in the GitHub repository for this study guide that you will need to amend
+    [https://github.com/PacktPublishing/AWS-Certified-Cloud-Practitioner-Exam-Guide](https://github.com/PacktPublishing/AWS-Certified-Cloud-Practitioner-Exam-Guide).
+    You will need to have the following information before editing the policy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ARN of the SNS topic, which you made a note of earlier.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Amazon ARN of the S3 bucket, which you created in the previous chapter.
+    You can find the bucket ARN by clicking on the **Properties** tab on the bucket
+    details page within your Amazon S3 dashboard.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The AWS account ID (which you can obtain by clicking on your account name in
+    the top right-hand corner of the screen and making a note of the 12-digit number
+    next to **My Account**).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Open the sample access policy document in Notepad or a text editor of your
+    choice, as per the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 10.12 – Sample access policy'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_12.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.12 – Sample access policy
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Replace the values in the policy, as highlighted by the arrows in the preceding
+    screenshot, with the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For `Sid`, change `example-statement-ID` to any relevant information you would
+    like to use; for example, `source-code-change-policy`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For `Resource`, change `SNS-topic-ARN` to the ARN of your topic, making sure
+    to place the ARN in double quotes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For `ArnLike`, change `arn:aws:s3:*:*:bucket-name` to the ARN of your bucket
+    name.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For `StringEquals`, change `bucket-owner-account-id` to your AWS account ID.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Save the file and keep it handy for the next step of steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Navigate back to the Amazon SNS dashboard and from the left-hand menu, click
+    ron **Topics**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click on your SNS topic in the middle pane, which will redirect you to the topic's
+    details page, as per the following screenshot:![Figure 10.13 – SNS topic details
+    page
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_13.jpg)'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Figure 10.13 – SNS topic details page
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Click on the **Access policy** tab in the bottom section of the pane.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You will find a default access policy that allows only the topic owner to publish
+    to the topic.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the top half of the pane, click on the **Edit** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, expand the **Access policy – optional** section.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, highlight and delete the existing policy that is in the JSON editor, and
+    paste in a copy of your amended access policy instead.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, click the **Save changes** button at the bottom of the page.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now that you have set up the SNS topic and an appropriate access policy, it
+    is time to set the Amazon S3 event notification service.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 3 – setting up the Amazon S3 event notification service
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this step, you will configure the event notification service on your Amazon
+    S3 source code bucket, which hosts your application repository to send out alerts
+    every time a new file is uploaded to the bucket:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Navigate to the Amazon S3 dashboard and click on the **Buckets** link from the
+    left-hand menu.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From the right-hand pane, click on the Amazon S3 bucket that you created in
+    the previous chapter to host your source code files.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, click on the **Properties** tab and scroll down until you reach the **Event
+    Notifications** section.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click the **Create event notification** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Enter a name for your event, such as `New files added alert`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In the **Event types** section, tick the box that states **All object create
+    events**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Scroll further down until you reach the **Destination** section.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Select **SNS topic** from the **Destination** options.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Under **Specify SNS topic**, select the SNS topic that you created earlier in
+    *Step 1* from the **SNS topic** drop-down list.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, click the **Save changes** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now that you have configured S3 to send event notifications to your SNS topic,
+    it is time to test the configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Step 4 – testing the configuration
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this step, we will test out the configuration of our Amazon S3 event notification
+    service:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the Amazon S3 dashboard, from the left-hand menu, select **Buckets**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From the right-hand pane, select your Amazon S3 bucket, which will contain the
+    source code files.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, click on the **Upload** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Go ahead and upload any random file you have access to. Alternatively, you can
+    create a text file, save it, and then upload that text file instead. You can either
+    use the **Add files** button to browse for a file on your computer or simply drag
+    and drop a file from another file explorer window into the upload area.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Upload your file to the Amazon S3 bucket by clicking on the **Upload** button
+    at the bottom of the page.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Once the upload has succeeded, click the **Close** button. Your object should
+    be visible in the list of objects in the bucket.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Access your email account once again and check whether you have received a
+    notification from AWS, alerting you to the fact that a new object has been uploaded.
+    Refer to the following screenshot as an example:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 10.14 – Amazon S3 event notification alert email'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '](img/B17124_10_14.jpg)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure 10.14 – Amazon S3 event notification alert email
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, AWS has sent me an email, alerting me to the fact that an object
+    was uploaded (created) in my Amazon S3 bucket. The email contains lots of information,
+    including the time of the event, the alert's name, the bucket in question, the
+    name of the object that was uploaded, as well as its size. As you can appreciate,
+    this can be very useful for auditing purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon S3 event notifications can use other destinations too, such as an SQS
+    queue or a Lambda function. In this exercise, you learned how Amazon SNS can be
+    used to push out notification messages to an email address.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next exercise, you will perform a cleanup to remove any resources that
+    are no longer required from our AWS account.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exercise 10.2 – cleaning up
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this exercise, you will delete the resources that you created in the previous
+    exercise as part of the cleanup process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Navigate back to the Amazon SNS console.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From the left-hand menu, select **Topics**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, from the right-hand pane, select the **source-code-changes** topic. Click
+    the **Delete** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You will be prompted to confirm the delete request with a dialog box. Type `delete
+    me` in the confirmation text box and then click the **Delete** button. The topic
+    will be deleted.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Now that you have deleted the Amazon SNS topic, you can also delete the Amazon
+    S3 bucket as we no longer require it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Navigate to the Amazon S3 console.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From the left-hand menu, click on **Buckets**.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From the right-hand pane, select the bucket that you uploaded your source code
+    to earlier.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You can only delete buckets if they are empty. This means that you have to delete
+    the objects in your bucket first. With the bucket selected, click the **Empty**
+    button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, you will be prompted to confirm that you wish to delete the objects by
+    typing `permanently delete` in the confirmation text box. Then, you can click
+    on the **Delete** button to empty the bucket.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now that the bucket has been emptied, you can delete it.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Click the **Exit** button to go back to the list of buckets. With the bucket
+    still selected, click the **Delete** button. Next, in the confirmation text box,
+    type in the name of the bucket to confirm that you wish to delete it and click
+    the **Delete bucket** button.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Your Amazon S3 bucket will be successfully deleted.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will provide a summary of this chapter and the key concepts that you
+    learned.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we examined the key application integration services that allow
+    you to build highly robust and distributed application solutions. The array of
+    services offered by AWS for application integration enables communication between
+    the decoupled components of your applications, allowing you to move away from
+    a monolithic architecture to one that can be built using microservices. The application
+    integration tools available from AWS also help you design serverless solutions
+    more easily, allowing you to further benefit from cost savings associated with
+    server-based solutions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The various services you learned about in this chapter included Amazon SNS,
+    Amazon SQS, and Amazon MQ, which are message-oriented application integration
+    services. These enable communication between application components, which allows
+    you to build loosely coupled application architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Amazon Step Functions and Amazon SWF are task-oriented application integration
+    services that offer workflows that run for up to 1 year and can incorporate human
+    intervention as part of the workflow process. Amazon Step Functions also helps
+    you coordinate application components using visual workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we looked at Amazon EventBridge, which is a serverless event bus service
+    that makes it easier to build event-driven applications. EventBridge can ingest
+    and process events that are generated by your applications, partner **Software-as-a-Service**
+    (**SaaS**) applications, and other AWS services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will look at a wide range of analytical services that
+    are on offer from AWS that allow you to stream data from a wide range of sources,
+    perform complex queries on ingested data, build data lakes, and build visualization
+    dashboards and reporting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Answer the following questions to test your knowledge of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Which AWS services does Amazon CloudWatch use to send out email alerts to administrators
+    when alarms are triggered and enter the `Alarm` state?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SES
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon CloudTrail
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon Email
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which feature of Amazon CloudWatch enables you to create a visualization of
+    metrics by resource type and service?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: CloudWatch Events
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: CloudWatch Logs
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: CloudWatch Alarms
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: CloudWatch dashboards
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which AWS application integration service can be configured to offer A2P communication
+    using mobile SMS to send out text alerts?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SQS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon Amplify
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon Workspaces
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You need to configure your Amazon SNS topic to push out messages of newly uploaded
+    videos to an Amazon S3 bucket, across three different SQS queues. Each queue is
+    designed to encode the raw video into a different resolution. Which feature of
+    Amazon SNS enables you to push out such notifications in parallel?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS standard topic
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS FIFO topic
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Fanout scenario
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon EventBridge
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which Amazon SQS queue type offers maximum throughput, best-effort ordering,
+    and at least one delivery?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS standard queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS power queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS FIFO queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS LIFO queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which AWS service is designed to help you build a decoupled application architecture
+    where incoming web requests can be held in a queue until a backend application
+    can retrieve and process the request?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SQS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SWF
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon Step Functions
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You are required to configure an SQS queue for your application where the order
+    of messages needs to be preserved for the application to function correctly. Which
+    type of queue do you need to configure?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS standard queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS power queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS FIFO queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: SQS LIFO queue
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To reduce costs, you have been asked to automate the shutdown of a fleet of
+    UAT test servers every weekday at 7 P.M. and then restart them the following weekday
+    at 8 A.M. The servers should remain in the shutdown state at weekends.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which AWS service can help you achieve the preceding requirements?
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Amazon SQS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon Athena
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon EventBridge
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which AWS service enables you to manage application workflows as state machines
+    by breaking them into multiple steps, adding flow logic, and tracking the inputs
+    and outputs between the steps?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon Step Functions
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SQS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SWF
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which AWS service offers an orchestration service to coordinate work across
+    application components that make use of decider programs to determine the latest
+    state of each task and use it to initiate subsequent tasks?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SNS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon EventBridge
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SQS
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Amazon SWF
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL

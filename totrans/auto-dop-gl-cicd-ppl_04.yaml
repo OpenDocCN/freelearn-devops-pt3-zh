@@ -1,0 +1,1340 @@
+- en: '4'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Understanding GitLab’s CI/CD Pipeline Structure
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'By now, you have enough knowledge of Git and GitLab concepts to understand
+    how developers can use those tools within the **Create** stage of the **software
+    development life cycle** (**SDLC**) to create, review, and store code. You’ve
+    also been introduced to some of the problems presented by the **Verify**, **Package**,
+    and **Release** stages that come immediately after the **Create** stage. Now,
+    it’s time to get to the meat (or tofu, if you prefer) of this book: how GitLab’s
+    CI/CD pipelines can help solve those Verify, Package, and Release problems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you’ll learn what **continuous integration** (**CI**) and **continuous
+    delivery** (**CD**) mean, and how they fit into GitLab Flow. You’ll learn how
+    to describe the different parts of a pipeline, including stages and jobs. You’ll
+    see how those parts fit together, and how code flows through them. You’ll be shown
+    how to view the overall status of a pipeline, and the status of the individual
+    stages and jobs that make them up. You’ll learn about the different ways GitLab
+    can trigger pipelines, and why you might want to limit how often your pipelines
+    run. Finally, you’ll learn how to configure a simple Hello World-style pipeline
+    for your Hats for Cats software.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you’re comfortable with these concepts and practices, you will have opened
+    the door to powerful GitLab features that are enabled and configured through pipelines.
+    And when you hit that point, odds are you’ll become a devout and committed GitLab
+    user who can’t imagine going back to other DevOps tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the terms “pipeline”, “CI”, and “CD”
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Parts of a pipeline – stages, jobs, and commands
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Running GitLab CI/CD pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reading GitLab CI/CD pipeline statuses
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuring GitLab CI/CD pipelines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As with the previous chapter, you’ll get the most out of this chapter if you’ve
+    got an account on a GitLab instance (self-managed or **Software-as-a-Service**
+    (**SaaS**)) that you can log in to and use to practice and experiment with the
+    concepts discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the terms pipeline, CI, and CD
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Since much of the power of GitLab comes from configuring CI/CD pipelines to
+    do various things to and with your code, it’s critical to understand what a pipeline
+    even is. So, an obvious place to start a discussion of this topic is to figure
+    out exactly what we mean by pipeline, CI, and CD. We won’t start creating pipelines
+    yet—that will come in a later chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding what a pipeline is
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '*A GitLab CI/CD pipeline is a series of steps that are performed on your files
+    whenever you commit edits to the GitLab-hosted copy of a repository*. A lot is
+    going on in that sentence, so let’s take a more careful look at each part of it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What do we mean by “a series of steps”? You can think of these steps as *tasks
+    that are performed on your files*. For example, you may want to run various tests
+    or scanners on your files to make sure your code is well-written, is free from
+    security vulnerabilities, uses appropriately licensed dependencies, and satisfies
+    all functional or performance requirements. You may also want to package your
+    code into some deployable format, whether that’s a Ruby Gem, installable Red Hat
+    package, Docker image, or any other package type. Of course, you may also need
+    a step that deploys your code into an appropriate environment, whether that be
+    a test environment, a pre-production environment, or your project’s actual production
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What do we mean by “your files”? Technically, a GitLab CI/CD pipeline can perform
+    the steps we just described on any files included in a GitLab project’s repository:
+    source code files, configuration files, README files, and test data files. In
+    short, *you can configure a pipeline to inspect, test, package, deploy, or otherwise
+    manipulate any files in your project*. By far the most common type of files that
+    are targeted by pipeline steps are source code files, but it’s important to remember
+    that you can configure pipelines to perform almost any task on almost any file
+    in a GitLab project’s repository.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why did we specify that pipelines run “whenever you commit edits”? Because in
+    the vast majority of cases, *adding a Git commit is exactly what causes a pipeline
+    to run against your files*. Many of the advantages that GitLab brings to the SDLC
+    can only happen if the pipelines run often, against small collections of file
+    changes. To make this happen, the default behavior for GitLab is to run a complete
+    pipeline every time you commit edited files to the GitLab-hosted copy of your
+    project’s repository. Committing is not the only way to trigger a pipeline, even
+    if it is by far the most common way. Later in this chapter, you’ll learn about
+    starting pipeline runs manually, and also how to prevent a pipeline from running
+    after a commit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, why is it important to specify that pipelines only work on the GitLab-hosted
+    copy of a repository? That’s because pipelines are a GitLab concept, not a Git
+    concept. This means that pipelines can only access files that GitLab knows about,
+    and that means files that are in the copy of your project’s repository that is
+    stored on the GitLab instance. In other words, if you edit files on a local copy
+    of your project’s repository, GitLab cannot see those versions of the files (at
+    least, not until you sync them with GitLab using `git push`), so it can’t run
+    pipelines on those versions of the files. Again: *pipelines can only target the
+    versions of your files that live on your* *GitLab instance.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining one pipeline per project
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Each project defines only one GitLab CI/CD pipeline. However, exactly what happens
+    in that pipeline – the tasks that it includes – might depend on various factors,
+    leading one run of the pipeline to “look different” from other runs of the project’s
+    pipeline. For example, the pipeline that runs against edited source code may include
+    many automated tests and packaging the code into a Docker image, whereas the pipeline
+    that runs against edited documentation may involve spelling checks and deployment
+    to a web server. But it’s still the same pipeline in both cases. It’s just that
+    certain “features” of the single pipeline can be turned on or off, depending on
+    which features make sense for which types of code changes. It’s easy to see two
+    pipeline runs from the same project give wildly different outputs and think that
+    they are two completely different pipelines, but that’s not the case. *Every GitLab
+    project has just one CI/CD pipeline*. It’s just that what that pipeline does can
+    vary from run to run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding different uses of the term “pipeline”
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The term “pipeline” is sometimes used loosely. The most accurate way of thinking
+    about it is to say that a project’s pipeline is just a blueprint or recipe for
+    the series of steps that will be applied to the project’s file. Performing those
+    steps is not technically a pipeline and is instead called a “pipeline run” or
+    “pipeline instance.” But people often refer to individual runs as pipelines. We’ll
+    do the same thing in this chapter: we’ll often use the shorter term “pipeline”
+    when “pipeline run” or “pipeline instance” would technically be more accurate.
+    Whether we’re talking about the blueprint for the pipeline or an individual instance
+    of a pipeline should be clear from the context.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A project can run more than one pipeline instance at a time. If you make two
+    commits just a few seconds apart, and if the pipeline steps take several minutes
+    to complete, then you could have two pipeline instances running at the same time,
+    on the two different commits. Each pipeline run would be performing the same steps
+    but against different versions of your files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing a list of pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: One of the most common things you’ll do when using GitLab to build software
+    is look at a list of running and completed pipeline instances. Following the pattern
+    established in previous chapters, we’ll focus less on how to do this (since the
+    GUI may change and the official GitLab documentation will always have up-to-date
+    instructions) and more on why you may want to do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab’s list of pipelines not only tells you the pass/fail status of all of
+    your pipeline runs, but also lets you know if any pipelines are “stuck” or unable
+    to run for some reason. It shows you which version of the code each pipeline is
+    running against, the commit message for the commit or Git tag that triggered the
+    pipeline, who made the commit or tag, when the pipeline started, and how long
+    it took to run (if it completed).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The list of pipelines also provides a GUI control for canceling a pipeline mid-run.
+    Some complicated pipelines can take several minutes (or possibly even hours) to
+    run, and if you have a limited number of pipeline minutes available to your project,
+    you may want to cancel a pipeline that was triggered by some trivial file change
+    to conserve your minutes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, the list of pipelines also provides GUI controls to rerun any pipeline.
+    You may want to do this if a pipeline failed for what you suspect was an intermittent
+    network problem, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a list of pipelines – both running and completed – for the Hats for
+    Cats project. The table lists pipelines in reverse chronological order, with the
+    most recent pipelines at the top. You can see that two pipeline runs have finished
+    with a “passed” status, one has finished with a “failed” status, and the two most
+    recent pipelines are still running. Don’t worry about the icons in each row that
+    depict the status of the different parts of each pipeline; we’ll go over those
+    later in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.1 – A list of Hats for Cats pipeline runs](img/Figure_4.1_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.1 – A list of Hats for Cats pipeline runs
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ve seen what pipelines are, how the term can be used loosely, how each project
+    has just one pipeline defined, and what sorts of information you can get from
+    a list of pipelines. Now, let’s pull apart the terms CI and CD and look at what
+    they mean when applied to pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CI – finding out if your code is good
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Although every GitLab project defines, at most, one pipeline, almost every
+    pipeline consists of two halves: a CI half and a CD half. The CI portion of a
+    pipeline consists of steps dedicated to answering the question, *Is your* *code
+    good?*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The term **CI** stands for **continuous integration**. This is not just a GitLab
+    term – it’s a standard term whose definition is understood and agreed on by most
+    software companies. You can think of it as the portion of the pipeline that makes
+    sure any file edits you are working on will integrate well with your project’s
+    stable code base. In other words, when you merge your feature or bugfix branch
+    into the default branch, will any new problems crop up? Spotting these problems
+    early on, as you’re working on your code but before you merge it, increases your
+    odds of fixing them easily and cheaply.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CI portion of a pipeline does this by running tests, scans, and other checks
+    on your code whenever you commit it to the GitLab-hosted copy of your project’s
+    Git repository. At least, that’s the default behavior for GitLab pipelines. You
+    can override that behavior so that pipelines don’t run on *every* commit, and
+    there are some good reasons you might want to do that, but we’ll discuss those
+    later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You’ve already seen some references to some of the kinds of tests and scans
+    that are run by a pipeline’s CI-related steps, but as a refresher, here’s a *partial*
+    list of possible CI-focused pipeline steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Functional tests**: Does your software do what it’s supposed to? This category
+    includes the regression tests that **Quality Assurance** (**QA**) teams spend
+    much of their time writing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Security scans**: Does your code introduce any security vulnerabilities?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Code quality scans**: Does your code adhere to best practices for class length,
+    white space usage, and other style-related considerations?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Performance tests**: Does your code meet performance expectations?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**License scanning**: Do all of your code’s dependencies use software licenses
+    that are compatible with your main project’s license?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Fuzz testing**: Can you trigger crashes or unexpected errors in your code
+    by passing it unusually long strings, numbers that are outside the expected ranges,
+    or other strange or extreme data as input?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Because GitLab provides first-class support for these types of checks, they
+    are simple to enable within CI pipelines. But *you can integrate almost any tool,
+    scan, or check into a GitLab pipeline*. We’ll learn how to do this later, but
+    for now, all you need to know is that any tool that can be run from the command
+    line – whether commercial, open source, or home-grown – can be added to a GitLab
+    pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Benefits of CI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: As you can see, one of the big advantages of CI is that it enables the “shifting
+    left” philosophy that we’ve discussed previously. The earlier you run tests, the
+    sooner you find problems. And the sooner you find problems, the less of a burden
+    they are to fix. Shifting as many software development tasks as far left as you
+    can on the timeline pays huge dividends.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The other advantage of CI, especially when combined with GitLab’s transparent
+    “single pane of glass” approach to monitoring your development life cycle, is
+    that it promotes collaboration. For example, when security tests run frequently,
+    that lets the entire team get a handle on the state of the project’s security.
+    Are we adding unanticipated vulnerabilities that we should budget time and people
+    to fix? Do developers need to adjust their coding approach or architecture to
+    reduce the chance of introducing more vulnerabilities when they add new features
+    next month? If the entire team – managers, developers, QA, UX, technical writers,
+    and anyone else involved with the product – can see the state of the project’s
+    security, they can all either help directly or adjust their work in whatever way
+    makes sense to either remediate existing security problems or prevent future security
+    problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This collaboration principle applies not just to security issues, but also to
+    functional problems, performance problems, usability problems, or any other metric
+    by which you measure your software. CI gives everyone on the team an understanding
+    of the state of your software so that everyone can pitch in to help build or fix
+    the software in whatever ways make sense for their roles.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the Phrases CI Pipeline and CD Pipeline
+  prefs: []
+  type: TYPE_NORMAL
+- en: Throughout this book. we’ll sometimes refer to a *CI pipeline* or a *CD pipeline*,
+    but remember that a GitLab project doesn’t have separate CI and CD pipelines –
+    it has just one pipeline that contains some CI-related steps and some CD-related
+    steps. The expressions “CI pipeline” and “CD pipeline” are just shortcuts for
+    the more cumbersome (but more accurate) phrases “CI portion of a project’s single
+    pipeline” and “CD portion of a project’s single pipeline,” respectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CD – finding out where your code should go (and putting it there)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Whereas the term **CI** has a standard definition that all companies use, the
+    term **CD** is more ambiguous. GitLab uses the term to mean either **continuous
+    delivery** or **continuous deployment**. We’ll get to the difference between these
+    two terms later, but both have to do with deciding what environment your code
+    should be deployed to, and then actually performing that deployment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This will make more sense if we talk a little about environments. Most software
+    development teams have several environments set up for deploying code. These environments
+    serve different purposes: some are used for conducting functional tests on your
+    software, some are used for performance tests, and some mimic the production environment
+    so that you can spot and fix any integration errors before they show up in production.
+    And of course, every project will have a production environment that hosts the
+    code that real users interact with.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Software developed with GitLab also uses environments, and the CD portion of
+    a GitLab CI/CD pipeline is responsible for deciding which environment code should
+    be deployed to, and then putting it there. Depending on how you’ve configured
+    your project’s pipeline, the tasks that perform this work look at a variety of
+    factors when deciding where to put your code. The most common factor pipelines
+    use is whether they’re running against a Git branch or a Git tag, and if the former,
+    what the branch’s name is.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Different companies use different naming schemes for their Git branches, but
+    here’s a typical example of how the CD portion of a GitLab pipeline may decide
+    where to deploy a project’s code. Remember that although this is realistic, it’s
+    by no means the only way to configure your CD pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a pipeline runs against a branch with a name such as `add-login-feature`,
+    `fix-password-bug`, or `remediate-cross-site-scripting-vuln`, deploy the code
+    to a **review environment** for testing (more about these in the next section).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a pipeline runs against the `main` branch, deploy that code to the **staging**
+    (sometimes called **pre-production**) environment.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If a pipeline runs against a Git tag in the `production` branch, deploy the
+    code to the `version-1-0` or `version-12-2` to every commit that it intends to
+    deploy to users.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding review environments
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Any non-trivial software project needs at least one test environment. This
+    is a machine that the software can be deployed to as it’s being developed so that
+    the QA team can use the software in a safe, sandboxed place to make sure it satisfies
+    functional requirements. Some teams have additional, specialized test environments
+    dedicated to performance testing, load testing, scalability testing, or other
+    types of testing. GitLab has a special name for all of these test environments:
+    **review environments**. Every non-default Git branch has a review environment
+    dedicated to just that branch. As soon as that branch is merged into the default
+    branch that holds the stable code base, GitLab destroys the no-longer-needed review
+    environment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Review environments are one of the most amazing features of GitLab. You don’t
+    have to set these environments up yourself. Any time you create a branch in the
+    GitLab-hosted copy of your project’s repository, a review environment magically
+    appears, ready for your CI/CD pipeline to deploy to. And when you’re done with
+    your branch and either delete it or merge it into your stable code base, the review
+    environment magically disappears. It’s truly one of GitLab’s very best and most
+    helpful features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuous delivery
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'We’ve already said that one of GitLab’s meanings for the term **CD** is **continuous
+    delivery**. This means that a GitLab CI/CD pipeline will automatically deploy
+    your code to the right environment, based on whatever factors you configure the
+    pipeline to pay attention to. But there’s one important exception: with continuous
+    delivery, GitLab will *not* automatically deploy your code to the production environment.
+    Instead, *it presents a GUI control that asks a human (generally, a release engineer)
+    to manually approve and trigger the deployment to production*. This is a final
+    failsafe that prevents your team from deploying faulty code, or the wrong version
+    of your code, to actual users. This is the most common form of CD for GitLab users.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuous deployment
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The other thing that **CD** can mean is **continuous deployment**. This is
+    the same as continuous delivery, with one exception: it does away with the final,
+    manual failsafe. Continuous deployment sends your code to the production environment
+    completely automatically, just like it deploys code to any other environment.
+    Getting rid of the human element could be seen as risky by some organizations,
+    but if you have a mature, proven, trusted CI portion of your pipeline, you may
+    feel confident that any code that passes through the gauntlet of tests, scans,
+    and other checks is good enough to deploy directly to customers. This can be a
+    good time- saver for companies with a high level of trust in their CI pipeline.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Packaging and deploying code with CD
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A CD pipeline – whether it implements continuous delivery or continuous deployment
+    – sometimes needs to package your project’s code into a deployable form before
+    it can be deployed. We’ll talk about this more concretely later. For now, just
+    know that the CD phase of your pipeline may involve packaging Java code into a
+    WAR or EAR, packaging Ruby code into a Gem, packaging C code into a Docker image,
+    collecting all of your project’s files into a *tarball*, or bundling up your project’s
+    code in whatever form makes the most sense for your project’s language and deployment
+    strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, there are some cases where no packaging is required. Some projects
+    with simple deployment strategies can deploy a collection of loose, unpackaged
+    files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Whether or not your CD pipeline packages your project’s code, it will always
+    need to send your software somewhere. This could take the form of pushing a Docker
+    image to a repository (either public or hosted by Gitlab, as we’ll learn more
+    about later), using a command-line tool to deploy code to an AWS environment,
+    or any of countless other environment-specific deployment techniques. Generally,
+    this is the last task (and sometimes the only task) of the CD part of your project’s
+    pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Benefits of CD
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: To review, the purpose of CD is to “make releases boring.” If your CD pipeline
+    deploys code every time you commit – whether it’s deploying code to a review environment,
+    a staging environment, or the production environment – that helps you release
+    code to customers more frequently, with fewer changes, and less risk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, customers won’t see code that your CD pipeline deploys to a review
+    or staging environment, but by deploying to those environments and testing your
+    software there, your team can feel more confident about releasing the code to
+    production when it makes business sense to do so. These non-production deployments
+    can be thought of as trial runs for the real thing, and can help you send your
+    customers frequent, small releases. This approach lets you get features to your
+    customers sooner, allows customers to provide feedback on those features sooner,
+    and reduces the risk that your deployments will need to be rolled back due to
+    unforeseen problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GitLab Runners
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that you understand the high-level concepts of pipelines, continuous integration,
+    and continuous delivery, it’s time to briefly introduce a new, critically important
+    concept that makes pipelines possible: GitLab Runners.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you’ll learn in the next section, pipelines ultimately boil down to a series
+    of shell commands that are run automatically, with little or no human intervention.
+    This is a crucial concept to grasp when learning about CI/CD pipelines, so we’ll
+    repeat it in different words: a CI/CD pipeline is just a series of commands that
+    are run by a robot, where those commands perform tasks related to building, verifying,
+    and deploying software.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GitLab Runners are the robots that execute those commands. Technically speaking,
+    a GitLab Runner is a small program that is sent commands to execute by the GitLab
+    instance. We’ll discuss the role of GitLab Runners in CI/CD pipelines and explain
+    how to install and configure them – and how to tell if you even need to – in the
+    next chapter. We won’t go into any further detail here, but it’s important to
+    understand that GitLab Runners are where the rubber meets the road for a pipeline:
+    they are what convert your CI/CD configuration code into actual, executing tasks
+    for building, verifying, securing, and deploying your code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To whet your appetite, here’s a quick glimpse into how GitLab Runners fit into
+    the GitLab CI/CD architecture. Think of a pipeline as relying on three components:
+    the CI/CD configuration file that defines the pipeline’s tasks, the GitLab Runner
+    that executes those tasks in some environment, and the GitLab instance that manages
+    and coordinates all aspects of the pipeline and ultimately displays the results
+    of the pipeline’s tasks. You can picture it all fitting together like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.2 – GitLab CI/CD pipeline architectural diagram](img/Figure_4.2_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 – GitLab CI/CD pipeline architectural diagram
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ll learn much more about many aspects of GitLab Runners in the next chapter,
+    but this quick introduction should be sufficient to help you understand the rest
+    of the material in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we can conclude our definitions and discussion of the concepts of
+    pipelines, CI, CD, and GitLab Runners. As you’ve seen, CI/CD pipelines are a series
+    of steps that are automatically performed against the files in your project’s
+    Git repository, any time you edit any of those files. By running these pipelines
+    often, and against small file changes, GitLab makes it easy to find problems early,
+    fix them cheaply, and deploy new code to customers frequently and in a low-risk
+    fashion. Other than taking a little time to churn through, pipelines are pretty
+    much all upside, with no real reason not to run them. They’re a critical part
+    of your GitLab workflow, and a big reason that developing software with GitLab
+    is so much easier and more efficient than developing software without it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s move on to investigate the anatomy of pipelines. What are the components
+    that make up pipelines, how do they fit together, and how does GitLab show you
+    what happens in a pipeline?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parts of a pipeline – stages, jobs, and commands
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: That’s the big picture of what a GitLab CI/CD pipeline is – how the CI portion
+    of a pipeline differs from the CD portion of the same pipeline and why pipelines
+    are such an important part of the SDLC. Let’s zoom in a little and take a look
+    at the structure of a pipeline in more detail. In particular, *how is a pipeline
+    put together from stages* *and jobs?*
+  prefs: []
+  type: TYPE_NORMAL
+- en: Stages
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Every pipeline consists of one or more **stages**. A stage is a collection
+    of pipeline tasks that are thematically related. For example, these are probably
+    the three most commonly used stages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Build**: This stage holds tasks that compile and/or package your source code
+    into a deployable format.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Test**: This stage holds tasks that run automated tests, code quality scans
+    and linters, and possibly security scans.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Deploy**: This stage sends your code to the appropriate environment, depending
+    on what Git branch or Git tag the pipeline is running against (among other possible
+    factors).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These three stages are so commonly used that GitLab adds them to your pipeline
+    by default. You can, of course, override this default setting by adding, removing,
+    or replacing stages. Regardless of what stages you end up with, we recommend that
+    you always define your stages explicitly, even if you’re using the three default
+    stages. This may seem unnecessarily verbose, but we’ve found that it aids readability,
+    assists with troubleshooting, and prevents confusion down the road.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can define as many stages as you want. For exceptionally simple projects,
+    you could even make a stripped-down pipeline with just one stage. You can call
+    them whatever you want, and you can include spaces and several other punctuation
+    symbols in stage names. Because long stage names can sometimes be truncated by
+    GitLab’s GUI, we recommend keeping them as short as you can without sacrificing
+    clarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GitLab has no way of checking that the tasks included within a stage are thematically
+    connected. That’s your responsibility. This means you can create truly horrible,
+    messy stages if you want to. For example, you could run automated regression tests
+    in a stage called *Deploy Documentation*, and you could deploy documentation in
+    a stage called *prepare-test-environment*. How you divide your pipelines into
+    stages, and what tasks you put in each stage, is entirely up to you. This freedom
+    is not without cost, however: it’s considered a best practice to occasionally
+    review your stage structure and refactor it as needed for clarity and consistency.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Viewing stages in the GitLab GUI
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Remember the list of pipeline runs we saw in *Figure 4**.1*? If you flip back
+    to that screenshot, you‘ll notice that each row in the list of pipeline runs includes
+    icons that give the pass/fail status for each stage within the pipeline. Here’s
+    a zoomed-in view of the status of the Build, Test, and Deploy stages in the Hats
+    for Cats pipeline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.3 – Status icons for a pipeline instance’s stages](img/Figure_4.3_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.3 – Status icons for a pipeline instance’s stages
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this pipeline instance, the first two stages passed, and the third stage
+    failed. You can’t see the names of the stages from this view, but if you hover
+    over a stage’s status icon, the stage name will appear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If *all* the stages in the pipeline pass, the pipeline will have an overall
+    status of **passed**. In this case, because the final stage failed, the overall
+    status of the pipeline is **failed**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you need more details about what happened in each stage, click on the status
+    icon at the left of the row for a pipeline instance (in this case, the red **failed**
+    icon). That brings you to a zoomed-in view of the pipeline, which gives you more
+    details about each stage. Here’s what that view looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.4 – Details of three pipeline stages](img/Figure_4.4_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.4 – Details of three pipeline stages
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can see the **Build**, **Test**, and **Deploy** stages depicted as columns,
+    with the tasks that occur within each stage listed within the stage’s column.
+    But what are those tasks exactly? That’s a perfect segue to the next topic: jobs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Jobs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Throughout this chapter, we’ve been talking about the “tasks” that happen within
+    a pipeline. Now, it’s time to introduce you to the formal name for those tasks:
+    GitLab calls them **jobs**. Each job must have a name that describes the task
+    it performs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can think of jobs as the next level down (down from stages, that is) when
+    it comes to the building blocks that make up a GitLab CI/CD pipeline. Each stage
+    contains one or more jobs, and each job is contained by some stage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you look at the preceding screenshot again, you’ll see that the **Build**
+    stage contains a job called **build-job**, the **Test** stage contains a job called
+    **test-job**, and the **Deploy** stage contains a job called **deploy-job**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you may have guessed from these job names, each job typically performs one
+    task. For example, a job may compile all of your Java source code into classes.
+    Another job may reset the data in a test database. Another job may push a Docker
+    image to a registry. But in the same way that GitLab doesn’t validate that your
+    stages contain thematically similar jobs, it also doesn’t validate that your jobs
+    perform the task that the job’s name suggests. In other words, you could make
+    a job called *compile-java* that deletes stray files generated by your automated
+    tests, or a job called *deploy-to-production* that runs a security scanner. So,
+    be careful to name your jobs carefully, and periodically review them to make sure
+    the names are still accurate and readable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another thing that GitLab can’t validate is whether each job performs a single
+    task. This means there’s nothing to prevent you from creating a job called `test`
+    that runs nine different automated test suites, three performance tests, and five
+    security scanners. Of course, that would violate the best practice of having each
+    job perform only one task, so GitLab will let you create jobs that are as broad
+    or narrow in scope as you want.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Commands
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s address a topic we’ve only danced around so far: how exactly does a job
+    perform a task? The answer to this is the final building block in GitLab CI/CD
+    pipelines: **commands**. Each job contains one or more commands that let the job
+    *do* something.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A command contained by a job is, well, the same thing as a command that a human
+    may type into a terminal. It is just that: think of a job as a robot that types
+    a command into a Linux bash shell, a macOS Zsh shell, or Windows PowerShell, just
+    like a real person would. Here are some examples of commands that might be included
+    in a GitLab CI/CD pipeline job:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `javac *.java` command to compile Java classes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `docker build --tag my_app:1.2` command to create a Docker image
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `mvn test` command to use the Maven build tool to trigger automated Java
+    unit tests
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once again, these commands could be typed in by a person or by a GitLab CI/CD
+    pipeline job; the result is the same. If a person used all of the same commands
+    that are included in a pipeline’s jobs, you’d end up with an identical pipeline.
+    The only difference is that the human-run pipeline would be much slower (and possibly
+    more error-prone).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A job can contain as many commands as it needs to perform its task. For example,
+    if a job is in charge of cleaning up an environment by deleting temporary files
+    produced by tests, it may contain three separate commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`rm -``f tmp/`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`rm *.tmp`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`rm -``f /tmp/test_files/`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Instead, you could create three separate jobs called, perhaps, `remove-files-1`,
+    `remove-files-2`, and `remove-files-3`, but since these are all closely related
+    commands that you would always run together, most GitLab users would prefer to
+    include all three commands in a single job.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fitting the pipeline pieces together
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that you’ve been introduced to stages, jobs, and commands, let’s review
+    how they all fit together:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each GitLab CI/CD **pipeline** consists of at least one **stage**. A stage represents
+    a category of task that the pipeline must perform.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each **stage** consists of at least one **job**. A job represents a single task
+    that the pipeline must perform.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each **job** consists of at least one **command**, where a command is exactly
+    what a human would type into a shell to perform a pipeline task.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It’s probably obvious that different projects will likely define very different
+    pipeline stages, jobs, and commands. But if you look at enough project pipelines,
+    you’ll notice certain recurring patterns. As we’ve already mentioned, most pipelines
+    contain at least the **Build**, **Test**, and **Deploy** stages, and the jobs
+    within each of those stages are often pretty similar (at least for projects that
+    use the same languages and build tools). While these core stages and jobs are
+    fairly common, most non-trivial software projects will define plenty of jobs and
+    sometimes stages that are unique to them. Other projects will have similar or
+    identical needs but accomplish them either using different commands or the same
+    commands organized into different jobs and/or stages. Seeing the variety of ways
+    that teams set up their CI/CD pipelines is part of the fun of using GitLab.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running GitLab CI/CD pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Whenever a project’s pipeline runs, *it’s running on some version of that project’s
+    files*. This means that in the CI portion of the pipeline, it runs automated tests
+    and scans on just one version of your files. Then, in the CD portion, it deploys
+    that same version of the files to the appropriate environment. You will also see
+    this described as a pipeline running “against” a version of your project’s files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The point of pipelines is to check the status of your code – and then deploy
+    that code – every time you make changes to it. So, running a project’s pipeline
+    on yesterday’s version of your code may produce one set of results, while running
+    the pipeline against today’s version of the code may generate very different results,
+    even though the pipeline consists of the same stages, jobs, and commands. Between
+    yesterday and today, you may have added new automated tests, introduced new test
+    failures by adding buggy product code, or added a dependency with security vulnerabilities.
+    If any of those are the case, the two pipeline runs would produce different reports
+    about the quality of your code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Branch pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The most common way to run a pipeline is to *commit a change to a branch*.
+    Whenever you do that, GitLab automatically runs a pipeline against whatever version
+    of your project’s files exist in that commit. In the list of pipeline instances,
+    you’ll see an entry for that pipeline instance that shows (among other information)
+    the branch name and the SHA of the most recent commit in the branch. Here’s an
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.5 – Pipelines running against different branches, with different
+    results  (branch names are highlighted)](img/Figure_4.5_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.5 – Pipelines running against different branches, with different results
+    (branch names are highlighted)
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example, the most recent pipeline ran against the **add-login-feature**
+    branch and the second most recent ran against the **fix-password-bug** branch.
+    These branches may contain very different contents inside the same files, or one
+    branch may contain new files that the other branch doesn’t have yet. That explains
+    why the test stage failed in the pipeline that ran against **add-login-feature**
+    but not in the pipeline that ran against **fix-password-bug**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GitLab also lets you manually run a pipeline against any Git branch you want,
+    even if it wasn’t the last branch you committed to. Triggering a pipeline against
+    an arbitrary branch is easy: visit the list of pipelines, click the **Run pipeline**
+    button, select the branch you want the pipeline to run against, and click the
+    next **Run pipeline** button, as shown in the following screenshot. In this example,
+    we are about to run the pipeline against the **add-login-feature** branch, but
+    if we were to expand the drop-down box with the branch’s name, you would see that
+    it lists all the branches that exist in the GitLab-hosted copy of the project’s
+    repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.6 – Manually running a pipeline against a specific branch (the branch’s
+    name and trigger button are highlighted)](img/Figure_4.6_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.6 – Manually running a pipeline against a specific branch (the branch’s
+    name and trigger button are highlighted)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Git tag pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Remember learning in [*Chapter 2*](B18073_02.xhtml#_idTextAnchor035) that you
+    can add a Git tag called `version-3-1` to the commit that you released to customers
+    as version 3.1 of your product? GitLab also lets you run pipelines against arbitrary
+    Git tags such as that one, even if the tag doesn’t point to the last commit on
+    a branch. Just tell GitLab to run a pipeline against any tag using the same manual
+    trigger process that you used to point a pipeline at a specific branch. The dropdown
+    that lists available branches includes entries for all Git tags as well, as shown
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![ Figure 4.7 – Manually running a pipeline against a specific tag (the tag’s
+    name is highlighted)](img/Figure_4.7_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.7 – Manually running a pipeline against a specific tag (the tag’s name
+    is highlighted)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other types of pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'You’ve just seen how to run pipelines against a branch or a Git tag. There
+    are three other types of pipelines that you should be aware of, although they
+    are used less frequently than the branch or tag pipelines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Merge request pipelines** run against the source branch of a merge request,
+    whenever commits are made to that branch.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Merged result pipelines** are special kinds of merge request pipelines. Merged
+    result pipelines run against a *temporary merge* of a merge request’s source branch
+    into its target branch, whenever commits are made to the source branch. Note that
+    this kind of pipeline doesn’t *actually* merge the two branches; it just runs
+    a pipeline against the collection of files that would have resulted if you *had*
+    merged them. This is a great way to make extra sure that your branch will integrate
+    well into your stable code base.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Merge trains** are a special kind of merged result pipeline. Merge trains
+    queue up several merge requests and then perform separate, concurrent merged result
+    pipelines on each merge request in the queue. But instead of performing a temporary
+    merge of just the source and target branches of one merge request, the merge train
+    performs a temporary merge of the source branches from *every merge request that’s
+    ahead of the current merge request in the queue*. This is a good way to make sure
+    that multiple branches will integrate well into a rapidly changing target branch
+    when they are merged.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These alternative pipeline types aren’t used as often as the standard branch
+    and tag pipelines. Because they are conceptually more difficult to understand,
+    and because they require some extra configuration on your part, we’ll refer you
+    to the official GitLab documentation to learn more about whether they might be
+    useful for your projects, and if so, how to get them running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Skipping pipelines
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Even though GitLab’s CI/CD pipelines are amazing, powerful, and an enormous
+    help to anyone who builds software, there are times when it makes more sense *not*
+    to run a pipeline. The following are some examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Teams using the SaaS version of GitLab (that is, the instance hosted on `gitlab.com`)
+    have a limited number of monthly minutes of compute time for running pipelines.
+    If they are running low on minutes, they may want to run pipelines only on the
+    most important commits.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If you make a trivial change that you know won’t affect any of the pipeline
+    tests or scans, and you don’t need it deployed immediately, you may not need a
+    pipeline for that commit. Examples of this situation include adding a comment
+    to your code, lightly editing a README file, or fixing a tiny typo in the GUI’s
+    text.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'When you’re about to make several small commits to the same branch, and you
+    consider all the commits to be low risk, you may want to wait until all the commits
+    are submitted before running a pipeline against all of them. But this should be
+    used sparingly: by increasing the scope of changes, you’re giving up some of the
+    benefits of “shifting left” that GitLab provides.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Fortunately, it’s easy to prevent a commit from triggering a pipeline run.
+    Just include one of these two phrases anywhere within a commit message, and GitLab
+    will make the commit without running a pipeline against it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`[``skip ci]`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`[``ci skip]`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This pipeline pause applies just to a single commit. The next time you commit
+    to that branch without including one of the two skip messages, the pipeline will
+    resume on the new commit (which, of course, will include any edits you made on
+    the pipeline-less commit).
+  prefs: []
+  type: TYPE_NORMAL
+- en: You’ve now seen how pipelines can run against Git branches or Git tags, and
+    you’ve learned about other, more specialized, and less frequently used pipelines
+    that run against temporarily merged branches. You also understand how pipelines
+    can be triggered automatically when you commit edited files, or manually whenever
+    you want to rerun your scans and checks against any version of your code. You
+    even know how to tell GitLab to skip a pipeline for a particular commit, saving
+    time and compute resources. You may not use all of these triggering techniques
+    and pipeline variations in your work, but it’s good to know what options are available
+    when special needs arise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, a pipeline doesn’t do you any good if you can’t find its results
+    or don’t understand what it’s reporting. So, in the next section, we’ll investigate
+    how to view and interpret the information that a completed pipeline provides.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reading GitLab CI/CD pipeline statuses
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Not only does each pipeline instance have a pass/fail status, but each stage
+    within the pipeline instance has a pass/fail status, and each job within any stage
+    has a pass/fail status as well. There are more statuses available than just **passed**
+    or **failed**. Here are some of the most commonly seen values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**running**: The pipeline, stage, or job is in progress.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**pending**: Waiting for resources to become available to start a job.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**skipped**: When an earlier stage fails, all later stages are skipped by default.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**canceled**: Users can cancel any job or pipeline while it’s running.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In *Figure 4**.3*, you saw how the list of pipeline instances shows the status
+    not only of each pipeline instance but also of the stages within each pipeline.
+    In *Figure 4**.4*, you saw how you can zoom in on an individual pipeline instance
+    to see the status of all the jobs within each of the pipeline’s stages. GitLab
+    lets you zoom in even further to see the output of the individual commands that
+    are contained within a job, by clicking on one of the job icons shown in *Figure
+    4**.4*. This view shows you what commands GitLab types into a shell while executing
+    that job, and what output is generated by those commands.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, the following screenshot shows the command and output for a job
+    that runs a series of Python unit tests. You can see from the output that two
+    tests passed and one failed. Normally, we’d add more logic to the job so that
+    it uploads the unit test results, which would let GitLab display those results
+    within its GUI. But for the sake of simplicity, this example omits that step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.8 – Job for running Python unit tests (the job’s command and output
+    are highlighted)](img/Figure_4.8_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.8 – Job for running Python unit tests (the job’s command and output
+    are highlighted)
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are several places within the GUI where GitLab displays the status of
+    pipelines, stages, and jobs. Also, there are several different graphical representations
+    of the project’s pipeline structure and the status of each element within the
+    structure. These icons and diagrams are easy to spot as you navigate around GitLab,
+    and most of them can either be hovered over or clicked on to reveal more information
+    about that element.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far in this chapter, we’ve covered what pipelines are, how they benefit
+    software development teams, how they are structured, how to run them, and how
+    to interpret their results. But you may have noticed that we haven’t explained
+    how to create and configure them yet. That’s a big topic that much of the rest
+    of this book is concerned with. However, we realize you might be getting antsy
+    at this point: now that you know so much about pipelines, you’re probably itching
+    to try them out in your GitLab instance!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Never fear. We’ve found that learning GitLab is easiest if you’re introduced
+    to its features and components multiple times, in different contexts, and with
+    different sets of background knowledge each time. With that in mind, this is a
+    great opportunity to give you a lightning-fast introduction to setting up a simple
+    CI/CD pipeline for Hats for Cats. We’ll go through the material quickly, but don’t
+    worry – you’ll see these concepts again, repeatedly, in future chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuring GitLab CI/CD pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We’ve mentioned that you can configure your project’s CI/CD pipeline to define
+    its stages, jobs, and commands. But how do you do that? All CI/CD pipeline configuration
+    happens within a file called `.gitlab-ci.yml`, which lives in the root of your
+    project’s repository. Look through any public GitLab project, and you’re sure
+    to see a file with that name that determines what happens in that project’s pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Every `.gitlab-ci.yml` file uses a domain-specific language that consists of
+    keywords, values, and some syntactical glue. Some keywords define stages and jobs
+    within those stages. Other keywords configure jobs to do different things within
+    the pipeline. Still, other keywords set variables, specify Docker images for jobs,
+    or affect the overall pipeline in various ways. This domain-specific language
+    is rich enough to let you do just about anything you’d like in your CI/CD pipelines,
+    but not so rich as to be overwhelming (at least, once you’ve had some experience
+    writing and reading these CI/CD configuration files).
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are about 30 keywords available to use in a `.gitlab-ci.yml` file. Rather
+    than trying to memorize the details and configuration options available for each,
+    we recommend that you concentrate on the big picture of what’s possible with CI/CD
+    pipelines, and then learn the nuances of the relevant keywords as needed. The
+    official GitLab documentation is the best source of information on these keywords,
+    especially since they change from time to time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll spend much of the rest of this book demonstrating some of the key CI/CD
+    pipeline tasks you can accomplish with these keywords, so this is a good time
+    to dip your toe into the CI/CD pipeline configuration water by looking at a bare-bones
+    `.gitlab-ci.yml` file. The contents of this file will drive an actual pipeline,
+    albeit a simple one. Let’s walk through it, explaining each line as we go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since `.gitlab-ci.yml` files use the YAML format for structured data, this would
+    be a good time to learn or review the extremely simple YAML syntax. The Wikipedia
+    article on YAML is a good place to find that information. We’ll wait for you here
+    until you feel confident using YAML.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that that’s out of the way, let’s get started. Most CI/CD configuration
+    files begin by defining the pipeline’s stages. If you don’t define any stages,
+    your pipeline will have `build`, `test`, and `deploy` stages by default. If you
+    do define stages, these will replace – not augment – the three default stages.
+    For this simple pipeline, we only need the `build` and `test` stages, so let’s
+    define those explicitly in a new file called `.gitlab-ci.yml` at the root level
+    of the `hats-for-cats` project repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We’re going to have two jobs in this pipeline, with one job in each of the
+    two stages we just defined. Let’s say that this project is Python-based, so both
+    jobs will use Python-related tools. In the next chapter, we’ll explain more about
+    how GitLab Runners can run jobs within Docker containers. For now, all you need
+    to know is that we can specify a Docker image within our CI/CD configuration file
+    for jobs to run within. In this case, both of our jobs will need access to Python
+    tools, so we’ll tell the pipeline to use a Python Docker image for all jobs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our first job will run `mypy`, which is a tool that makes sure Python source
+    code uses the right data types in its functions and variables. This task could
+    reasonably be put in either the `build` or `test` stage, but let’s put it in the
+    `build` stage just so we can have at least one job in that stage. Here’s how we
+    define the job:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since the first word on the first line is not a keyword that GitLab recognizes,
+    GitLab assumes it’s the name of a new job to be defined. This name can contain
+    spaces instead of hyphens if you prefer, but sometimes, that can be harder to
+    parse visually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next line assigns this job to the `build` stage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The third line starts with the `script` keyword, which tells GitLab that we’re
+    about to list the commands for this job. And the following two lines do exactly
+    that: the first runs a command to use the `pip` package manager to install the
+    `mypy` package into the Python Docker container that the job is running in. The
+    second command runs the `mypy` command that was just installed on any files that
+    are in the `src/` directory. If `mypy` finds any problems with how our code uses
+    data types, it will fail this job, which will fail the `build` stage that the
+    job lives in, which, in turn, will fail the entire pipeline instance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s define a job for running automated unit tests:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Since the first line is not a recognized keyword, GitLab knows that this is
+    the name of a new job that we’re defining.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second line assigns the job to the `test` stage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Following the `script` keyword, we define two commands for the job. The first
+    installs the `pytest` package, while the second runs the newly installed `pytest`
+    tool on any unit tests that live in the `test/` directory. Furthermore, it specifies
+    that `pytest` should output the results of the unit tests to a file called `unit_test_results.xml`,
+    which will be in JUnit XML format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The section that begins with the `artifacts` keyword allows GitLab to preserve
+    the unit test results file when the job finishes, instead of throwing it away.
+    In GitLab terminology, any files that are generated by a job and then preserved
+    are called **artifacts**. *It’s important to understand that any files that were
+    generated by a job but not declared to be artifacts are deleted as soon as the
+    job finishes.*
+  prefs: []
+  type: TYPE_NORMAL
+- en: The exact syntax that’s used in this example `artifacts` section isn’t too important
+    because it can easily be looked up in the GitLab documentation when needed, but
+    here, we are telling GitLab that this artifact contains unit test results in the
+    JUnit XML format, which is an industry-standard format that GitLab requires to
+    ingest and display the test results in the **test** tab on the pipeline details
+    page.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The last line in the `artifacts` section tells GitLab to preserve the results
+    file as an artifact, even if the `unit-tests` job fails. The job will have a **failed**
+    status if there are any test failures, but we want to display the test results
+    every time this job runs, even if (or especially if!) there are any test failures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Combining all of the configuration code listed previously, the complete`.gitlab-ci.yml`
+    file looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following screenshot shows the pipeline details page after this pipeline
+    has finished. Don’t worry about the **unit-tests** job’s **failed** status. That’s
+    expected whenever any of the tests that it runs fail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.9 – Details page for the completed pipeline that validates Python
+    data types and runs unit tests](img/Figure_4.9_B18073.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.9 – Details page for the completed pipeline that validates Python data
+    types and runs unit tests
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that you have a good grasp of the purpose and structure of GitLab CI/CD
+    pipelines, let’s review the concepts we covered in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipelines are a series of steps that are performed against code in your project’s
+    Git repository. Each project has just one pipeline, although the various steps
+    that make up a project’s pipeline can be run or suppressed, depending on which
+    Git branch or Git tag the pipeline is running against. The term “pipeline” is
+    sometimes used to mean the overall set of tasks that will be run on a project’s
+    code, while other times, it’s used to mean a single instance or run of that pipeline
+    against a particular version of the repository’s files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CI, or continuous integration, portion of a pipeline answers the question,
+    *is the code good?* It typically consists of some combination of automated tests,
+    security scans, license compliance checks, and code quality checks. The CI steps
+    of a pipeline enable the *shift left* philosophy, which ensures that problems
+    are found when they are still easy and cheap to fix. It also promotes collaboration
+    among all members of the software development team.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CD, or continuous delivery/deployment, portion of a pipeline, answers the
+    question, *which environment should the code be deployed to?* It’s also responsible
+    for actually deploying the code to that environment. The process of packaging
+    up the code into a deployable format can be considered part of the CD portion
+    pipeline as well. The CD steps of a pipeline promote frequent, predictable, low-risk
+    feature and bugfix releases to customers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each project’s pipeline consists of one or more stages, where a stage is a collection
+    of tasks that share a similar theme, such as building, testing, or deploying your
+    code. Each stage consists of one or more jobs, where each job consists of a single
+    unit of work, such as compiling Java classes, running automated unit tests, or
+    packaging your application into a Docker image. Each job consists of one or more
+    commands, which are shell commands that a human would type into a terminal if
+    they were to manually perform the same work as a pipeline job. A pipeline ultimately
+    consists of GitLab automatically typing in a series of terminal commands, recording
+    the output of those jobs, and displaying the results to the user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A pipeline typically runs every time you commit code to your repository, so
+    you always have an up-to-date picture of the state of your code, whether it be
+    on a feature branch, a bugfix branch, or the default branch. Pipelines can run
+    against Git branches or Git tags and can be triggered automatically or manually.
+    More exotic forms of pipelines are available, such as running a pipeline against
+    the code that would result if you were to merge one branch into another.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each pipeline instance has a pass/fail status (or one of several less-common
+    statuses). Each stage within the pipeline also has a pass/fail status, as does
+    each job within the stages. The status of any pipeline, stage, or job can be viewed
+    within the GitLab GUI.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pipelines can perform virtually any tasks that a human typing into a terminal
+    could. Each project configures the tasks that make up its pipeline using a special
+    domain-specific language in a file called `.gitlab-ci.yml`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Much of the rest of this book is dedicated to explaining what sorts of tasks
+    you can configure a pipeline to perform, and what syntax and keywords you can
+    use to do so. But first, we need to introduce you to the tool that performs the
+    work of a pipeline, or that serves as the “robot” that types in the terminal commands
+    defined in your CI/CD pipeline configuration file. In other words, it’s time to
+    learn more about GitLab Runners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Part 2 Automating DevOps Stages with GitLab CI/CD Pipelines
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This part is the core of the book: you will learn how to replace the most common
+    manual steps in the software development life cycle with automated equivalents
+    using GitLab CI/CD pipelines. By the end of this part, you will know how to set
+    up your infrastructure to support pipelines. You will also feel confident about
+    configuring pipelines to perform several critical tasks: verifying your code by
+    running quality scans and functional tests, securing your code and its dependencies
+    by running security scans, packaging your code by automatically running the standard
+    build and packaging tools, and automatically deploying your code to the appropriate
+    environments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This section comprises the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 5*](B18073_05.xhtml#_idTextAnchor110), *Installing and Configuring
+    GitLab Runners*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 6*](B18073_06.xhtml#_idTextAnchor133), *Verifying Your Code*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 7*](B18073_07.xhtml#_idTextAnchor162), *Securing Your Code*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 8*](B18073_08.xhtml#_idTextAnchor205), *Packaging and Deploying Your
+    Code*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

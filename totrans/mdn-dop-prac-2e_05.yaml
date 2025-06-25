@@ -1,0 +1,2056 @@
+- en: '5'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Container Orchestration with Kubernetes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we covered creating and managing container images,
+    where we discussed container images, Dockerfiles, and their directives and components.
+    We also looked at the best practices for writing a Dockerfile and building and
+    managing efficient images. We then looked at flattening Docker images and investigated
+    in detail distroless images to improve container security. Finally, we created
+    a private Docker registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we will deep dive into container orchestration. We will learn how to schedule
+    and run containers using the most popular container orchestrator – Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’re going to cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is Kubernetes, and why do I need it?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kubernetes architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Installing Kubernetes (Minikube and KinD)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding Kubernetes pods
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: For this chapter, we assume you have Docker installed on a Linux machine running
+    `sudo` access. You can follow [*Chapter 3*](B19877_03.xhtml#_idTextAnchor220),
+    *Containerization with Docker*, for more details on how to do that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will also need to clone the following GitHub repository for some exercises:
+    [https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to clone the repository into your home directory,
+    and `cd` into the `ch5` directory to access the required resources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the repository contains files with placeholders, you must replace the `<your_dockerhub_user>`
+    string with your actual Docker Hub user. Use the following commands to substitute
+    the placeholders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: What is Kubernetes, and why do I need it?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'By now, you should understand what containers are and how to build and run
+    containers using Docker. However, how we ran containers using Docker was not optimal
+    from a production standpoint. Let me give you a few considerations to think about:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As portable containers can run on any Docker machine just fine, multiple containers
+    also share server resources to optimize resource consumption. Now, think of a
+    microservices application that comprises hundreds of containers. How will you
+    choose what machine to run the containers on? What if you want to dynamically
+    schedule the containers to another machine based on resource consumption?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Containers provide horizontal scalability as you can create a copy of the container
+    and use a **load balancer** in front of a pool of containers. One way of doing
+    this is to decide upfront and deploy the desired number of containers, but that
+    isn’t optimal resource utilization. What if I tell you that you need to horizontally
+    scale your containers dynamically with traffic – in other words, by creating additional
+    container instances to handle the extra load when there is more traffic and reducing
+    them when there is less?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are container health check reports on the containers’ health. What if
+    the container is unhealthy, and you want to auto-heal it? What would happen if
+    an entire server goes down and you want to schedule all containers running on
+    that server to another?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As containers mostly run within a server and can see each other, how would I
+    ensure that only the required containers can interact with the other, something
+    we usually do with VMs? We cannot compromise on security.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Modern cloud platforms allow us to run autoscaling VMs. How can we utilize that
+    from the perspective of containers? For example, if I need just one VM for my
+    containers during the night and five during the day, how can I ensure that the
+    machines are dynamically allocated when we need them?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How do you manage the networking between multiple containers if they are part
+    of a more comprehensive service mesh?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The answer to all these questions is a container orchestrator, and the most
+    popular and *de facto* standard for that is Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubernetes is an open source container orchestrator. A bunch of Google engineers
+    first developed it and then open sourced it to the **Cloud Native Computing Foundation**
+    (**CNCF**). Since then, the buzz around Kubernetes has not subsided, and for an
+    excellent reason – Kubernetes with containers has changed the technology mindset
+    and how we look at infrastructure entirely. Instead of treating servers as dedicated
+    machines to an application or as part of an application, Kubernetes has allowed
+    visualizing servers as an entity with a container runtime installed. When we treat
+    servers as a standard setup, we can run virtually anything in a cluster of servers.
+    So, you don’t have to plan for **high availability** (**HA**), **disaster recovery**
+    (**DR**), and other operational aspects for every application on your tech stack.
+    Instead, you can cluster all your servers into a single unit – a Kubernetes cluster
+    – and containerize all your applications. You can then offload all container management
+    functions to Kubernetes. You can run Kubernetes on bare-metal servers, VMs, and
+    as a managed service in the cloud through multiple Kubernetes-as-a-Service offerings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Kubernetes solves these problems by providing HA, scalability, and zero downtime
+    out of the box. It essentially performs the following functions to provide them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Provides a centralized control plane for interacting with it**: The API server
+    exposes a list of useful APIs that you can interact with to invoke many Kubernetes
+    functions. It also provides a Kubernetes command line called **kubectl** to interact
+    with the API using simple commands. Having a centralized control plane ensures
+    that you can interact with Kubernetes seamlessly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Interacts with the container runtime to schedule containers**: When we send
+    the request to schedule a container to **kube-apiserver**, Kubernetes decides
+    what server to schedule the container based on various factors and then interacts
+    with the server’s container runtime through the **kubelet** component.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Stores the expected configuration in a key-value data store**: Kubernetes
+    applies the cluster’s anticipated configuration and stores that in a key-value
+    data store – **etcd**. That way, Kubernetes continuously ensures that the containers
+    within the cluster remain in the desired state. If there is any deviation from
+    the expected state, Kubernetes will take every action to bring it back to the
+    desired configuration. That way, Kubernetes ensures that your containers are up
+    and running and healthy.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Provides a network abstraction layer and service discovery**:Kubernetes uses
+    a network abstraction layer to allow communication between your containers. Therefore,
+    every container is allocated a virtual IP, and Kubernetes ensures a container
+    is reachable from another container running on a different server. It provides
+    the necessary networking by using an **overlay network** between the servers.
+    From the container’s perspective, all containers in the cluster behave as if they
+    are running on the same server. Kubernetes also uses a **DNS** to allow communication
+    between containers through a domain name. That way, containers can interact with
+    each other by using a domain name instead of an IP address to ensure that you
+    don’t need to change the configuration if a container is recreated and the IP
+    address changes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Interacts with the cloud provider**: Kubernetes interacts with the cloud
+    provider to commission objects such as **load balancers** and **persistent disks**.
+    So, if you tell Kubernetes that your application needs to persist data and define
+    a **volume**, Kubernetes will automatically request a disk from your cloud provider
+    and mount it to your container wherever it runs. You can also expose your application
+    on an external load balancer by requesting Kubernetes. Kubernetes will interact
+    with your cloud provider to spin up a load balancer and point it to your containers.
+    That way, you can do everything related to containers by merely interacting with
+    your Kubernetes API server.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Kubernetes comprises multiple moving parts that take over each function we’ve
+    discussed. Now, let’s look at the Kubernetes architecture to understand each of
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubernetes architecture
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Kubernetes is made of a cluster of nodes. There are two possible roles for nodes
+    in Kubernetes – **control plane** nodes and **worker** nodes. The control plane
+    nodes control the Kubernetes cluster, scheduling the workloads, listening to requests,
+    and other aspects that help run your workloads and make the cluster function.
+    They typically form the brain of the cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, the worker nodes are the powerhouses of the Kubernetes cluster
+    and provide raw computing for running your container workloads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Kubernetes architecture follows the client-server model via an API server. Any
+    interaction, including internal interactions between components, happens via the
+    Kubernetes API server. Therefore, the Kubernetes API server is known as the brain
+    of the Kubernetes control plane.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are other components of Kubernetes as well, but before we delve into
+    the details, let’s look at the following diagram to understand the high-level
+    Kubernetes architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.1 – Kubernetes cluster architecture](img/B19877_05_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 – Kubernetes cluster architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The control plane comprises the following components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**API server**: As discussed previously, the API server exposes a set of APIs
+    for external and internal actors to interact with Kubernetes. All interactions
+    with Kubernetes happen via the API server, as evident from the preceding diagram.
+    If you visualize the Kubernetes cluster as a ship, the API server is the ship’s
+    captain.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Controller manager**: The controller manager is the ship’s executive officer
+    and is tasked with ensuring that the captain’s orders are followed in the cluster.
+    From a technical perspective, the controller manager reads the current and desired
+    states and takes all actions necessary to move the current state to the desired
+    state. It contains a set of controllers that interact with the Kubernetes components
+    via the API server as and when needed. Some of these are as follows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Node controller**: This watches for when the node goes down and responds
+    by interacting with the **Kube scheduler** via the **Kube API server** to schedule
+    the pods to a healthy node.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Replication controller**: This ensures that the correct amount of container
+    replicas defined by replication controller objects in the cluster exist.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Endpoints controller**: These assist in providing endpoints to your containers
+    via services.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Service account and token controllers**: These create default **accounts**
+    and **tokens** for new **namespaces**.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Cloud controller manager**: This is an optional controller manager that you
+    would run if you run Kubernetes in a public cloud, such as **AWS**, **Azure**,
+    or **GCP**. The cloud controller manager interacts with the cloud provider APIs
+    to provision resources such as **persistent disks** and **load balancers** that
+    you declare in your Kubernetes configuration.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**etcd**: **etcd** is the log book of the ship. That is where all the details
+    about the expected configuration exist. From a technical perspective, this is
+    a key-value store where all the desired Kubernetes configuration is stored. The
+    controller manager refers to the information in this database to action changes
+    in the cluster.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Scheduler**: The schedulers are the boatswain of the ship. They are tasked
+    with supervising the process of loading and unloading containers on the ship.
+    A Kubernetes scheduler schedules containers in a worker node it finds fit after
+    considering the availability of resources to run it, the HA of your application,
+    and other aspects.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**kubelet**: kubelets are the seamen of the ship. They carry out the actual
+    loading and unloading of containers from a ship. From a technical perspective,
+    the kubelet interacts with the underlying container runtime to run containers
+    on the scheduler’s instruction. While most Kubernetes components can run as a
+    container, the kubelet is the only component that runs as a **systemd** service.
+    They usually run on worker nodes, but if you plan to run the control plane components
+    as containers instead, the kubelet will also run on the control plane nodes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**kube-proxy**: **kube-proxy** runs on each worker node and provides the components
+    for your containers to interact with the network components inside and outside
+    your cluster. They are vital components that facilitate Kubernetes networking.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Well, that’s a lot of moving parts, but the good news is that tools are available
+    to set that up for you, and provisioning a Kubernetes cluster is very simple.
+    If you are running on a public cloud, it is only a few clicks away, and you can
+    use your cloud’s web UI or CLI to provision it very quickly. You can use **kubeadm**
+    for the setup if you have an on-premises installation. The steps are well documented
+    and understood and won’t be too much of a hassle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For development and your CI/CD environments, you can use **Minikube** or **Kubernetes
+    in Docker** (**KinD**). While Minikube can run a single-node Kubernetes cluster
+    on your development machine directly by using your machine as the node, it can
+    also run a multi-node cluster by running Kubernetes nodes as containers. KinD,
+    on the other hand, exclusively runs your nodes as containers on both single-node
+    and multi-node configurations. You need a VM with the requisite resources in both
+    cases, and you’ll be good to go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we’ll boot a single-node Kubernetes cluster with Minikube.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Kubernetes (Minikube and KinD)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now, let’s move on and install Kubernetes for your development environment.
+    We will begin with Minikube to get you started quickly and then look into KinD.
+    We will then use KinD for the rest of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing Minikube
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We will install Minikube in the same Linux machine we used to install Docker
+    in [*Chapter 3*](B19877_03.xhtml#_idTextAnchor220), *Containerization with Docker*.
+    So, if you haven’t done that, please go to [*Chapter 3*](B19877_03.xhtml#_idTextAnchor220),
+    *Containerization with Docker*, and follow the instructions provided to set up
+    Docker on your machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will install **kubectl**. As described previously, kubectl is the
+    command-line utility that interacts with the Kubernetes API server. We will use
+    kubectl multiple times in this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To download the latest release of kubectl, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also download a specific version of kubectl. To do so, use the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will stick with the latest release for this chapter. Now, let’s go ahead
+    and make the binary executable and then move it to any directory in your system
+    `PATH`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s check whether kubectl has been successfully installed by running
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since kubectl was installed successfully, you must download the `minikube`
+    binary and then move it to your system path using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s install the packages required by Minikube to function correctly
+    by running the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we can bootstrap a Minikube cluster using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As Minikube is now up and running, we will use the kubectl command-line utility
+    to interact with the Kube API server to manage Kubernetes resources. The kubectl
+    commands have a standard structure and are self-explanatory in most cases. They
+    are structured as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`verb`: The action to perform – for example, `get`, `apply`, `delete`, `list`,
+    `patch`, `run`, and so on'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`resource type`: The Kubernetes resource to manage, such as `node`, `pod`,
+    `deployment`, `service`, and so on'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`resource name`: The name of the resource to manage'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let’s use kubectl to get nodes and check whether our cluster is ready
+    to run our containers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see that it is a single-node Kubernetes cluster running version
+    **v1.26.3**. Kubernetes is now up and running!
+  prefs: []
+  type: TYPE_NORMAL
+- en: This setup is excellent for development machines where developers want to deploy
+    and test a single component they are working on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To stop the Minikube cluster and delete it from the machine, you can use the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we have removed Minikube, let’s look at another exciting tool for creating
+    a multi-node Kubernetes cluster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installing KinD
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'KinD allows you to run a multi-node Kubernetes cluster on a single server that
+    runs Docker. We understand that a multi-node Kubernetes cluster requires multiple
+    machines, but how can we run a multi-node Kubernetes cluster on a single server?
+    The answer is simple: KinD uses a Docker container as a Kubernetes node. So, if
+    we need a four-node Kubernetes cluster, KinD will spin up four containers that
+    behave like four Kubernetes nodes. It is as simple as that.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: While you need Docker to run KinD, KinD internally uses **containerd** as a
+    container runtime instead of Docker. Containerd implements the container runtime
+    interface; therefore, Kubernetes does not require any specialized components,
+    such as **dockershim**, to interact with it. This means that KinD still works
+    with Kubernetes since Docker isn’t supported anymore as a Kubernetes container
+    runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As KinD supports a multi-node Kubernetes cluster, you can use it for your development
+    activities and also in your CI/CD pipelines. In fact, KinD redefines CI/CD pipelines
+    as you don’t require a static Kubernetes environment to test your build. KinD
+    is swift to boot up, which means you can integrate the bootstrapping of the KinD
+    cluster, run and test your container builds within the cluster, and then destroy
+    it all within your CI/CD pipeline. This gives development teams immense power
+    and speed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important
+  prefs: []
+  type: TYPE_NORMAL
+- en: Never use KinD in production. Docker in Docker implementations are not very
+    secure; therefore, KinD clusters should not exist beyond your dev environments
+    and CI/CD pipelines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Bootstrapping KinD is just a few commands away. First, we need to download
+    KinD, make it executable, and then move it to the default `PATH` directory using
+    the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To check whether KinD is installed, we can run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s bootstrap a multi-node KinD cluster. First, we need to create a
+    KinD `config` file. The KinD `config` file is a simple YAML file where you can
+    declare what configuration you want for each node. If we need to bootstrap a single
+    control plane and three worker node clusters, we can add the following configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can also have an HA configuration with multiple control planes using multiple
+    node items with the control plane role. For now, let’s stick with a single control
+    plane, three-worker node configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To bootstrap your KinD cluster with the preceding configuration, run the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With that, our KinD cluster is up and running. Now, let’s list the nodes to
+    see for certain by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see four nodes in the cluster – one control plane and three workers.
+    Now that the cluster is ready, we’ll dive deep into Kubernetes and look at some
+    of the most frequently used Kubernetes resources in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding Kubernetes pods
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Kubernetes pods are the basic building blocks of a Kubernetes application. A
+    pod contains one or more containers, and all containers within a pod are always
+    scheduled in the same host. Usually, there is a single container within a pod,
+    but there are use cases where you need to schedule multiple containers in a single
+    pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It takes a while to digest why Kubernetes started with the concept of pods in
+    the first place instead of using containers, but there are reasons for that, and
+    you will appreciate this as you gain more experience with the tool. For now, let’s
+    look at a simple example of a pod and how to schedule it in Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Running a pod
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We will start by running an NGINX container in a pod using simple imperative
+    commands. We will then look at how we can do this declaratively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access the resources for this section, `cd` into the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To run a pod with a single NGINX container, execute the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To check whether the pod is running, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: And that’s it! As we can see, the pod is now running.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To delete the pod, you can run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `kubectl run` command was the imperative way of creating pods, but there’s
+    another way of interacting with Kubernetes – by using declarative manifests. `docker
+    compose`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always use the declarative method to create Kubernetes resources in staging
+    and production environments. They allow you to store and version your Kubernetes
+    configuration in a source code management tool such as Git and enable GitOps.
+    You can use imperative methods during development because commands have a quicker
+    turnaround than YAML files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at an example pod manifest, `nginx-pod.yaml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s understand the file first. The file contains the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`apiVersion`: This defines the resource version we are trying to define. In
+    this case, as it is a pod and a `v1`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`kind`: This defines the kind of resource we want to create – a pod.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`metadata`: The `metadata` section defines the name and labels surrounding
+    this resource. It helps in uniquely identifying the resource and grouping multiple
+    resources using labels.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec`: This is the main section where we define the actual specifications
+    for the resource.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers`: This section defines one or more containers that form the
+    pod.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.name`: This is the container’s name, which is `nginx-container`
+    in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.image`: This is the container image, which is `nginx` in this
+    case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.imagePullPolicy`: This can be `Always`, `IfNotPresent`, or
+    `Never`. If set to `Always`, Kubernetes always pulls the image from the registry.
+    If set to `IfNotPresent`, Kubernetes pulls the image only if the image is not
+    found on the node where the pod is scheduled. If set to `Never`, Kubernetes will
+    never attempt to pull images from the registry and will rely completely on local
+    images.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources`: This defines the resource requests and limits.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources.limit`: This defines the resource limits. This is
+    the maximum amount of resources that the pod can allocate, and if the resource
+    consumption increases beyond it, the pod is evicted.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources.limit.memory`: This defines the memory limit.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources.limit.cpu`: This defines the CPU limit.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources.requests`: This defines the resource requests. This
+    is the minimum amount of resources the pod would request during scheduling and
+    will not be scheduled on a node that cannot allocate it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources.requests.memory`: This defines the amount of memory
+    to be requested.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.containers.resources.requests.cpu`: This defines the number of CPU cores
+    to be requested.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spec.restartPolicy`: This defines the restart policy of containers – `Always`,
+    `OnFailure`, or `Never`. This is similar to the restart policy on Docker.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are other settings on the pod manifest, but we will explore these as and
+    when we progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Important tips
+  prefs: []
+  type: TYPE_NORMAL
+- en: Set `imagePullPolicy` to `IfNotPresent` unless you have a strong reason for
+    using `Always` or `Never`. This will ensure that your containers boot up quickly
+    and you don’t download images unnecessarily.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Always use resource requests and limits while scheduling pods. These ensure
+    that your pod is scheduled in an appropriate node and does not exhaust any existing
+    resources. You can also apply a default resource policy at the cluster level to
+    ensure that your developers don’t cause any harm if they miss out on this section
+    for some reason.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s apply the manifest using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The pod that we created is entirely out of bounds from the host. It runs within
+    the container network, and by default, Kubernetes does not allow any pod to be
+    exposed to the host network unless we explicitly want to expose it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are two ways to access the pod – using port forwarding with `kubectl port-forward`,
+    or exposing the pod through a `Service` resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using port forwarding
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Before we get into the service side of things, let’s consider using the `port-forward`
+    option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To expose the pod using port forwarding, execute the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The prompt is stuck here. This means it has opened a port forwarding session
+    and is listening on port `8080`. It will automatically forward the request it
+    receives on port `8080` to NGINX port `80`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Open a duplicate Terminal session and `curl` on the preceding address to see
+    what we get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can see that it is working as we get the default NGINX response.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, there are a few things to remember here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we use HTTP `port-forward`, we are forwarding requests from the client
+    machine running `kubectl` to the pod, something similar to what’s shown in the
+    following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.2 – kubectl port-forward](img/B19877_05_2.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 – kubectl port-forward
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you run `kubectl` `port-forward`, the `kubectl` client opens a TCP tunnel
+    via the Kube API server, and the Kube API server then forwards the connection
+    to the correct pod. As the connection between the `kubectl` client and the API
+    server is encrypted, it is a very secure way of accessing your pod, but hold your
+    horses before deciding to use `kubectl` `port-forward` to expose pods to the outside
+    world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are particular use cases for using `kubectl` `port-forward`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For troubleshooting any misbehaving pod.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For accessing an internal Kubernetes service, such as the Kubernetes dashboard
+    – that is, when you don’t want to expose the service to the external world but
+    only allow Kubernetes admins and users to log into the dashboard. It is assumed
+    that only these users will have access to the cluster via `kubectl`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For anything else, you should use `Service` resources to expose your pod, internally
+    or externally. While we will cover the `Service` resource in the next chapter,
+    let’s look at a few operations we can perform with a pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Troubleshooting pods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Similar to how we can browse logs from a container using `docker logs`, we can
+    browse logs from a container within a Kubernetes pod using the `kubectl logs`
+    command. If more than one container runs within the pod, we can specify the container’s
+    name using the `-``c` flag.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access the container logs, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the pod is running a single container, we need not specify the `-c` flag,
+    so instead, you can use the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: There might be instances where you may want to get a shell to a running container
+    and troubleshoot what’s going on within that. We use `docker exec` for that in
+    the Docker world. Similarly, we can use `kubectl exec` for that within Kubernetes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following command to open a shell session with the container:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can even run specific commands without opening a shell session. For example,
+    we can perform the preceding operation with a single line, something like the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`kubectl exec` is an important command that helps us troubleshoot containers.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you modify files or download packages within the container in `exec` mode,
+    they will persist until the current pod is alive. Once the pod is gone, you will
+    lose all changes. Therefore, it isn’t a great way of fixing issues. You should
+    only diagnose problems using `exec`, bake the correct changes in a new image,
+    and then redeploy it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we looked at distroless containers in the previous chapter, they did not
+    allow `exec` into the container for security reasons. There are debug images available
+    for distroless that will enable you to open a shell session for troubleshooting
+    purposes if you wish.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, a container runs as the root user if you don’t specify the user
+    within the Dockerfile while building the image. You can set a `runAsUser` attribute
+    within your pod’s security context if you want to run your pod as a specific user,
+    but this is not ideal. The best practice is to bake the user within the container
+    image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ve discussed troubleshooting running containers, but what if the containers
+    fail to start for some reason?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s try to get the pod and see for ourselves:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Oops! There is some error now, and the status is `ImagePullBackOff`. Well,
+    it seems like there is some issue with the image. While we understand that the
+    issue is with the image, we want to understand the real issue, so for further
+    information on this, we can describe the pod using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, this gives us a wealth of information regarding the pod, and if you look
+    at the `events` section, you will find a specific line that tells us what is wrong
+    with the pod:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, this one is telling us that either the repository does not exist, or the
+    repository exists but it is private, and hence authorization failed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use `kubectl describe` for most Kubernetes resources. It should be the
+    first command you use while troubleshooting issues.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since we know that the image does not exist, let’s change the image to a valid
+    one. We must delete the pod and recreate it with the correct image to do that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To delete the pod, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To recreate the pod, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s get the pod; it should run as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: The pod is now running since we have fixed the image issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, we’ve managed to run containers using pods, but pods are very powerful
+    resources that help you manage containers. Kubernetes pods provide probes to ensure
+    your application’s reliability. We’ll have a look at this in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ensuring pod reliability
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We talked about health checks in [*Chapter 4*](B19877_04.xhtml#_idTextAnchor399),
+    *Creating and Managing Container Images*, and I also mentioned that you should
+    not use them on the Docker level and instead use the ones provided by your container
+    orchestrator. Kubernetes provides three **probes** to monitor your pod’s health
+    – the **startup probe**, **liveness probe**, and **readiness probe**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following diagram depicts all three probes graphically:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.3 – Kubernetes probes](img/B19877_05_3.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.3 – Kubernetes probes
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s look at each one in turn and understand how and when to use them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Startup probe
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: Kubernetes uses **startup probes** to check whether the application has started.
+    You can use startup probes on applications that start slow or those you don’t
+    know how long it might take to start. While the startup probe is active, it disables
+    other probes so that they don’t interfere with its operation. As the application
+    has not started until the startup probe reports it, there is no point in having
+    any other probes active.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Readiness probe
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Readiness probes** ascertain whether a container is ready to serve requests.
+    They differ from startup probes because, unlike the startup probe, which only
+    checks whether the application has started, the readiness probe ensures that the
+    container can begin to process requests. A pod is ready when all the containers
+    of the pod are ready. Readiness probes ensure that no traffic is sent to a pod
+    if the pod is not ready. Therefore, it allows for a better user experience.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Liveness probe
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`restartPolicy` field of your pod to `Always` or `OnFailure`, Kubernetes will
+    restart the container. Therefore, it improves the service’s reliability by detecting
+    deadlocks and ensuring the containers are running instead of just reporting as
+    running.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at an example to understand probes better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Probes in action
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Let’s improve the last manifest and add some probes to create the following
+    `nginx-probe.yaml` manifest file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The manifest file contains all three probes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The startup probe checks whether the `/usr/share/nginx/html/index.html` file
+    exists. It will continue checking it 30 times at an interval of 10 seconds until
+    one of them succeeds. Once it detects the file, the startup probe will stop probing
+    further.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The readiness probe checks whether there is a listener on port `80` and responds
+    with `HTTP 2xx – 3xx on path /`. It waits for 5 seconds initially and then checks
+    the pod every 5 seconds. If it gets a `2xx – 3xx` response, it will report the
+    container as ready and accept requests.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The liveness probe checks whether the pod responds with `HTTP 2xx – 3xx` on
+    `port` `80` and `path /`. It waits for 5 seconds initially and probes the container
+    every 3 seconds. Suppose, during a check, that it finds the pod not responding
+    for `failureThreshold` times (this defaults to `3`). In that case, it will kill
+    the container, and the kubelet will take appropriate action based on the pod’s
+    `restartPolicy` field.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s apply the YAML file and watch the pods come to life by using the following
+    command:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, the pod is quickly ready from the running state. It takes approximately
+    10 seconds for that to happen as the readiness probe kicks in 10 seconds after
+    the pod starts. Then, the liveness probe keeps monitoring the health of the pod.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s do something that will break the liveness check. Imagine someone
+    getting a shell to the container and deleting some important files. How do you
+    think the liveness probe will react? Let’s have a look.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s delete the `/usr/share/nginx/html/index.html` file from the container
+    and then check how the container behaves using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: So, while we watch the pod, the initial delete is only detected after 9 seconds.
+    That’s because of the liveness probe. It tries for 9 seconds, three times `periodSeconds`,
+    since `failureThreshold` defaults to `3`, before declaring the pod as unhealthy
+    and killing the container. No sooner does it kill the container than the kubelet
+    restarts it as the pod’s `restartPolicy` field is set to `Always`. Then, we see
+    the startup and readiness probes kicking in, and soon, the pod gets ready. Therefore,
+    no matter what, your pods are reliable and will work even if a part of your application
+    is faulty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using readiness and liveness probes will help provide a better user experience,
+    as no requests go to pods that are not ready to process any request. If your application
+    does not respond appropriately, it will replace the container. If multiple pods
+    are running to serve the request, your service is exceptionally resilient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we discussed previously, a pod can contain one or more containers. Let’s
+    look at some use cases where you might want multiple containers instead of one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pod multi-container design patterns
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You can run multiple containers in pods in two ways – running a container as
+    an init container or running a container as a helper container to the main container.
+    We’ll explore both approaches in the following subsections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Init containers
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Init containers** are run before the main container is bootstrapped, so you
+    can use them to initialize your container environment before the main container
+    takes over. Here are some examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A directory might require a particular set of ownership or permissions before
+    you want to start your container using the non-root user
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You might want to clone a Git repository before starting the web server
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can add a startup delay
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can generate configuration dynamically, such as for containers that want
+    to dynamically connect to some other pod that it is not aware of during build
+    time but should be during runtime
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use init containers only as a last resort, as they hamper the startup time of
+    your containers. Try to bake the configuration within your container image or
+    customize it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at an example to see init containers in action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access the resources for this section, `cd` into the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s serve the `example.com` website from our `nginx` web server. We will get
+    the `example.com` web page and save it as `index.html` in the `nginx` default
+    HTML directory before starting `nginx`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Access the manifest file, `nginx-init.yaml`, which should contain the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If we look at the `spec` section of the manifest file, we’ll see the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`containers`: This section defines one or more containers that form the pod.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`containers.name`: This is the container’s name, which is `nginx-container`
+    in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`containers.image`: This is the container image, which is `nginx` in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`containers.volumeMounts`: This defines a list of volumes that should be mounted
+    to the container. It is similar to the volumes we read about in [*Chapter 4*](B19877_04.xhtml#_idTextAnchor399),
+    *Creating and Managing* *Container Images*.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`containers.volumeMounts.mountPath`: This defines the path to mount the volume
+    on, which is `/usr/share/nginx/html` in this case. We will share this volume with
+    the init container so that when the init container downloads the `index.html`
+    file from `example.com`, this directory will contain the same file.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`containers.volumeMounts.name`: This is the name of the volume, which is `html-volume`
+    in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers`: This section defines one or more init containers that run
+    before the main containers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers.name`: This is the init container’s name, which is `init-nginx`
+    in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers.image`: This is the init container image, which is `busybox:1.28`
+    in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers.command`: This is the command that the busybox should execute.
+    In this case, `''mkdir -p /usr/share/nginx/html && wget -O /usr/share/nginx/html/index.html`
+    [http://example.com](http://example.com)`''` will download the content of `example.com`
+    to the `/``usr/share/nginx/html` directory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers.volumeMounts`: We will mount the same volume we defined in
+    `nginx-container` on this container. So, anything we save in this volume will
+    automatically appear in `nginx-container`.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers.volumeMounts.mountPath`: This defines the path to mount the
+    volume on, which is `/usr/share/nginx/html` in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`initContainers.volumeMounts.name`: This is the name of the volume, which is
+    `html-volume` in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`volumes`: This section defines one or more volumes associated with the pod’s
+    containers.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`volumes.name`: This is the volume’s name, which is `html-volume` in this case.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`volumes.emptyDir`: This defines an `emptyDir` volume. It is similar to a `tmpfs`
+    volume in Docker. Therefore, it is not persistent and lasts just for the container’s
+    lifetime.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'So, let’s go ahead and apply the manifest and watch the pod come to life using
+    the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: Initially, we can see that the `nginx` pod shows a status of `Init:0/1`. This
+    means that `0` out of `1` init containers have started initializing. After some
+    time, we can see that the pod reports its status, `PodInitializing`, which means
+    that the init containers have started running. The pod reports a running status
+    once the init containers have run successfully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, once the pod starts to run, we can port-forward the container from port
+    `80` to host port `8080` using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Open a duplicate Terminal and try to `curl` the localhost on port `8080` by
+    using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see the example domain response from our web server. This means
+    that the init container worked perfectly fine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you may have understood by now, the life cycle of init containers ends before
+    the primary containers start, and a pod can contain one or more main containers.
+    So, let’s look at a few design patterns we can use in the main container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ambassador pattern
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The `localhost` everywhere.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, there are two approaches you can take:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can change the application code and use config maps and secrets (more on
+    these later) to inject the database connection details into the environment variable.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can keep using the existing code and use a second container as a TCP proxy
+    to the Redis database. The TCP proxy will link with the config map and secrets
+    and contain the Redis database’s connection details.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ambassador pattern helps developers focus on the application without worrying
+    about the configuration details. Consider using it if you want to decouple application
+    development from config management.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second approach solves our problem if we wish to do a like-for-like migration.
+    We can use config maps to define the environment-specific configuration without
+    changing the application code. The following diagram shows this approach:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.4 – The ambassador pattern](img/B19877_05_4.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.4 – The ambassador pattern
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we delve into the technicalities, let’s understand a config map.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Config map
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: A **config map** contains key-value pairs that we can use for various purposes,
+    such as defining environment-specific properties or injecting an external variable
+    at container startup or during runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea of the config map is to decouple the application with configuration
+    and to externalize configuration at a Kubernetes level. It is similar to using
+    a properties file, for example, to define the environment-specific configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following diagram explains this beautifully:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.5 – Config maps](img/B19877_05_5.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.5 – Config maps
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will use `ConfigMap` to define the connection properties of the external
+    Redis database within the ambassador container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example application
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: 'We will use the example application we used in [*Chapter 3*](B19877_03.xhtml#_idTextAnchor220),
+    *Containerization with Docker*, in the *Deploying a sample application with Docker
+    Compose* section. The source code has been replicated into the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can visualize the `app.py` file of the Flask application, the `requirements.txt`
+    file, and the Dockerfile to understand what the application does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s build the container using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s push it to our container registry using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you may have noticed, the `app.py` code defines the cache as `localhost:6379`.
+    We will run an ambassador container on `localhost:6379`. The proxy will tunnel
+    the connection to the `redis` pod running elsewhere.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s create the `redis` pod using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s expose the `redis` pod to the cluster resources via a `Service`
+    resource. This will allow any pod within the cluster to communicate with the `redis`
+    pod using the `redis` hostname. We will discuss Kubernetes `Service` resources
+    in the next chapter in detail:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Cool! Now that the pod and the `Service` resource are up and running, let’s
+    work on the ambassador pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We need to define two config maps first. The first describes the `redis` host
+    and port details, while the second defines the template `nginx.conf` file to work
+    as a reverse proxy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `redis-config-map.yaml` file looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding YAML file defines a config map called `redis-config` that contains
+    `host` and `port` properties. You can have multiple config maps, one for each
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `nginx-config-map.yaml` file looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: This config map injects the `nginx.conf` template as a config map value. This
+    template defines the configuration of our ambassador pod to listen on `localhost:6379`
+    and tunnel the connection to `REDIS_HOST:REDIS_PORT`. As the `REDIS_HOST` and
+    `REDIS_PORT` values are placeholders, we must fill these up with the correct values
+    that we obtained from the `redis-config` config map. To do that, we can mount
+    this file to a volume and then manipulate it. We can use `initContainer` to initialize
+    the proxy with the correct configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s look at the pod configuration manifest, `flask-ambassador.yaml`.
+    There are multiple parts of this YAML file. Let’s look at the `containers` section
+    first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: This section contains a container called `flask-app` that uses the `<your_dockerhub_user>/flask-redis`
+    image that we built in the previous section. The second container is the `nginx-ambassador`
+    container that will act as the proxy to `redis`. Therefore, we have mounted the
+    `/etc/nginx` directory on a volume. This volume is also mounted on the init container
+    to generate the required configuration before `nginx` boots up.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the `initContainers` section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: This section defines a `busybox` container – `init-nginx`. The container needs
+    to generate the `nginx-ambassador` proxy configuration to communicate with Redis;
+    therefore, two environment variables are present. Both environment variables are
+    sourced from the `redis-config` config map. Apart from that, we have also mounted
+    the `nginx.conf` file from the `nginx-config` config map. The `command` section
+    within the init container uses the environment variables to replace placeholders
+    within the `nginx.conf` file, after which we get a TCP proxy to the Redis backend.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `volumes` section defines `nginx-volume` as an `emptyDir` volume, and the
+    `config` volume is mounted from the `nginx.conf` file present in the `nginx-config`
+    config map:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s start applying the YAML files in steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Apply both of the config maps using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s apply the pod configuration using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Get the pod to see whether the configuration is correct by using the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the pod is running successfully now, let’s port-forward `5000` to the localhost
+    for some tests by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, open a duplicate Terminal and try to `curl` on `localhost:5000` using
+    the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, every time we `curl` the application, we get the last visited
+    time on our screen. The ambassador pattern is working.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This was a simple example of the ambassador pattern. There are advanced configurations
+    you can do to add fine-grained control on how your application should interact
+    with the outside world. You can use the ambassador pattern to secure traffic that
+    moves from your containers. It also simplifies application development for your
+    development team as they need not worry about these nuances. In contrast, the
+    operations team can use these containers to manage your environment in a better
+    way without stepping on each other’s toes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the ambassador pattern adds some overhead as you tunnel connections via a
+    proxy, you should only use it if the management benefits outweigh the extra cost
+    you incur because of the ambassador container.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at another multi-container pod pattern – sidecars.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The sidecar pattern
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '**Sidecars** derive their names from motorcycle sidecars. The sidecar does
+    not change the bike’s core functionality and can work perfectly without it. Instead,
+    it adds an extra seat, a functionality that helps you give an additional person
+    a ride. Similarly, sidecars in a pod are helper containers that provide functionalities
+    unrelated to the main container’s core functionality and enhance it instead. Examples
+    include logging and monitoring containers. Keeping a separate container for logging
+    will help decouple the logging responsibilities from your main container, which
+    will help you monitor your application even when the main container goes down
+    for some reason.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It also helps if there is some issue with the logging code, and instead of the
+    entire application going down, only the logging container is impacted. You can
+    also use sidecars to keep helper or related containers together with the main
+    container since we know containers within the pod share the same machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: Only use multi-container pods if two containers are functionally related and
+    work as a unit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can also use sidecars to segregate your application with secrets. For example,
+    if you are running a web application that needs access to specific passwords to
+    operate, it would be best to mount the secrets to a sidecar and let the sidecar
+    provide the passwords to the web application via a link. This is because if someone
+    gains access to your application container’s filesystem, they cannot get hold
+    of your passwords as another container is responsible for sourcing it, as shown
+    in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.6 – The sidecar pattern](img/B19877_05_6.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.6 – The sidecar pattern
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s implement the preceding pattern to understand a sidecar better. We have
+    a Flask application that interacts with a Redis sidecar. We will pre-populate
+    the Redis sidecar with a secret `foobar`, and we will do that by using the Kubernetes
+    secret resource.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Secrets
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: '`base64`-encoded instead of `plaintext`. While `base64` encoding does not make
+    any difference, and it is as bad as `plaintext` from a security standpoint, you
+    should use secrets for sensitive information such as passwords. That is because
+    the Kubernetes community will develop a solution to tighten the security around
+    secrets in future releases. If you use secrets, you will directly benefit from
+    it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tip
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a rule of thumb, always use secrets for confidential data, such as API keys
+    and passwords, and config maps for non-sensitive configuration data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To access the files for this section, go to the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE59]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s move on to the example Flask application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example application
+  prefs:
+  - PREF_H4
+  type: TYPE_NORMAL
+- en: The Flask application queries a Redis sidecar for the secret and sends that
+    as a response. That is not ideal, as you won’t send secrets back as a response,
+    but for this demo, let’s go ahead with that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, first, let’s design our sidecar so that it pre-populates data within the
+    container after it starts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We need to create a secret named `secret` with a value of `foobar`. Now, `base64-`encode
+    the Redis command to set the secret into the cache by running the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE60]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have the `base64`-encoded secret, we can create a `redis-secret.yaml`
+    manifest with the string as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE61]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we need to build the Redis container so that this secret is created at
+    startup. To access the files for this section, go to the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE62]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Create an `entrypoint.sh` file, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE63]'
+  prefs: []
+  type: TYPE_PRE
+- en: The shell script looks for a file, `init.redis`, within the `/redis-master`
+    directory and runs the `redis-cli` command on it. This means the cache will be
+    pre-populated with the values defined in our secret, provided we mount the secret
+    as `/redis-master/init.redis`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we must create a Dockerfile that will use this `entrypoint.sh` script,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE64]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we are ready, we can build and push the code to Docker Hub:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE65]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we are ready with the Redis image, we must build the Flask application
+    image. To access the files for this section, `cd` into the following directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE66]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s look at the `app.py` file first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE67]'
+  prefs: []
+  type: TYPE_PRE
+- en: The code is simple – it gets the secret from the cache and returns that in the
+    response.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also created the same Dockerfile that we did in the previous section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, let’s build and push the container image to Docker Hub:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE68]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that our images are ready, let’s look at the pod manifest, `flask-sidecar.yaml`,
+    which is present in the `~/``modern-devops/ch5/multi-container-pod/sidecar/` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE69]'
+  prefs: []
+  type: TYPE_PRE
+- en: The pod defines two containers – `flask-app` and `redis-sidecar`. The `flask-app`
+    container runs the Flask application that will interact with `redis-sidecar` for
+    the secret. The `redis-sidecar` container has mounted the `secret` volume on `/redis-master`.
+    The pod definition also contains a single volume called `secret`, and the volume
+    points to the `redis-secret` secret and mounts that as a file, `init.redis`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, in the end, we have a file, `/redis-master/init.redis`, and, as we know,
+    the `entrypoint.sh` script looks for this file and runs the `redis-cli` command
+    to pre-populate the Redis cache with the secret data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s apply the secret first using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE70]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we can apply the `flask-sidecar.yaml` file using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE71]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s get the pods using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE72]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the pod is running, it’s time to port-forward it to the host using the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE73]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s open a duplicate Terminal, run the `curl localhost:5000` command,
+    and see what we get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE74]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, we get the secret, `foobar`, in the response. The sidecar is
+    working correctly!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s look at another popular multi-container pod pattern – the adapter
+    pattern.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The adapter pattern
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'As its name suggests, the **adapter pattern** helps change something to fit
+    a standard, such as cell phones and laptop adapters, which convert our main power
+    supply into something our devices can digest. A great example of the adapter pattern
+    is transforming log files so that they fit an enterprise standard and feed your
+    log analytics solution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.7 – The adapter pattern](img/B19877_05_7.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.7 – The adapter pattern
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It helps when you have a heterogeneous solution outputting log files in several
+    formats but a single log analytics solution that only accepts messages in a particular
+    format. There are two ways of doing this: changing the code for outputting log
+    files in a standard format or using an adapter container to execute the transformation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s look at the following scenario to understand it further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have an application that continuously outputs log files without a date at
+    the beginning. Our adapter should read the stream of logs and append the timestamp
+    as soon as a logline is generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this, we will use the following pod manifest, `app-adapter.yaml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE75]'
+  prefs: []
+  type: TYPE_PRE
+- en: The pod contains two containers – the app container, which is a simple Ubuntu
+    container that outputs `This is a log line` every 2 seconds, and the log adapter,
+    which continuously tails the `app.log` file, adds a timestamp at the beginning
+    of the line, and sends the resulting output to `/var/log/out.log`. Both containers
+    share the `/var/log` volume, which is mounted as an `emptyDir` volume on both
+    containers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s apply this manifest using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE76]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s wait a while and check whether the pod is running by using the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE77]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the pod is running, we can now get a shell into the log adapter container
+    by using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE78]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we get into the shell, we can `cd` into the `/var/log` directory and list
+    its contents using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE79]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we can see, we get `app.log` and `out.log` as two files. Now, let’s use the
+    `cat` command to print both of them to see what we get.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, `cat` the `app.log` file using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE80]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see that a series of log lines are being printed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, `cat` the `out.log` file to see what we get using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE81]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see timestamps in front of the log line. This means that the adapter
+    pattern is working correctly. You can then export this log file to your log analytics
+    tool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have reached the end of this critical chapter. We’ve covered enough ground
+    to get you started with Kubernetes and understand and appreciate the best practices
+    surrounding it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We started with Kubernetes and why we need it and then discussed bootstrapping
+    a Kubernetes cluster using Minikube and KinD. Then, we looked at the pod resource
+    and discussed creating and managing pods, troubleshooting them, ensuring your
+    application’s reliability using probes, and multi-container design patterns to
+    appreciate why Kubernetes uses pods in the first place instead of containers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will deep dive into the advanced aspects of Kubernetes
+    by covering controllers, services, ingresses, managing a stateful application,
+    and Kubernetes command-line best practices.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Questions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Answer the following questions to test your knowledge of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All communication with Kubernetes happens via which of the following?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Kubelet
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. API server
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Etcd
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Controller manager
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: E. Scheduler
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following is responsible for ensuring that the cluster is in the
+    desired state?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Kubelet
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. API server
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Etcd
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Controller manager
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: E. Scheduler
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Which of the following is responsible for storing the desired state of the cluster?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Kubelet
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. API server
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Etcd
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Controller manager
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: E. Scheduler
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: A pod can contain more than one container. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: You can use port-forwarding for which of the following use cases? (Choose two)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. For troubleshooting a misbehaving pod
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. For exposing a service to the internet
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. For accessing a system service such as the Kubernetes dashboard
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Using a combination of which two probes can help you ensure that your application
+    is reliable even when your application has some intermittent issues? (Choose two.)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Startup probe
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Liveness probe
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Readiness probe
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: We may use KinD in production. (True/False)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Which of the following multi-container patterns is used as a forward proxy?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A. Ambassador
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: B. Adapter
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: C. Sidecar
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: D. Init containers
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: Answers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Here are the answers to this chapter’s questions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: B
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: D
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'True'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A, C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: B, C
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'False'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

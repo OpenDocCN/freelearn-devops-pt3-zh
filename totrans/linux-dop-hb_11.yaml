@@ -1,0 +1,1700 @@
+- en: '11'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Using Ansible for Configuration as Code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we are going to cover **configuration management** (**CM**),
+    **Configuration as Code** (**CaC**), and our tool of choice for it: Ansible.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: CM systems and CaC
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ansible
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ansible Galaxy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Handling secrets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Ansible Tower and alternatives
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Advanced topics
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: For this chapter, you will need a Linux system that you can access through `ssh`.
+    If your main operating system is Windows, you will need another Linux system to
+    play the role of the control node. As of now, the Ansible project does not support
+    Windows as a control node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CM systems and CaC
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Setting up and maintaining a system other than a hobbyist server (and even
+    those, maybe, too) poses a serious challenge: how do you ensure that the system
+    is installed and configured correctly and according to expectations? When you
+    have to install a new server that is identical in configuration, how do you ensure
+    that? In the past, a way of doing it was documenting the current configuration
+    after the installation process was done. This would be a document describing the
+    hardware, operating system, installed software, created users, and configuration
+    applied. Any person who wanted to recreate it would have to follow steps to achieve
+    the configuration described in the document.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The very next logical step is to write shell scripts that achieve the same
+    goal with one additional improvement over the manual process: the scripts—properly
+    written, tested, and maintained—do not require manual work, except, maybe, the
+    initial system installation. But a properly set up environment would take care
+    even of this.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The scripts, however, also have some defects or deficiencies. One of them is
+    the fact that you need to account in your scripts for unfinished execution. This
+    could happen for various reasons and would leave the system in a partially configured
+    state. Executing the script again would perform all configuration actions from
+    the start, sometimes leading to unexpected results. One way to account for incomplete
+    runs would be to wrap every configuration action in a check, to see whether it
+    had been performed previously. That would lead to the configuration script becoming
+    larger and, eventually, evolving into a library of configuration functions and
+    check functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The task of developing and maintaining such a tool can be daunting and will
+    probably require a whole team. Still, the results are probably worth the effort.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Writing and maintaining documentation that describes the desired state of the
+    system may, at first glance, be simpler and more desirable than the previously
+    mentioned method of automating. The script cannot recover from an incomplete execution.
+    The best it can do is inform the sysop about failure, log the error, and stop
+    gracefully. Manually performed configuration allows the sysop to work around any
+    obstacles and inadequacies in the procedure and edit the document to reflect the
+    current state on the go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Still, a properly developed and tested script turns out to be better. Let us
+    enumerate the reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the script executes without an error, it is guaranteed to perform actions
+    without a mistake. Time and again, it has been proven that a human is the element
+    most prone to errors in IT.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the script exits prematurely, the action of updating it to account for the
+    new requirements is a perfect equivalent to updating the documentation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: People are known to be pretty bad at maintaining documentation. The Holy Grail
+    of programming is self-documenting code, rendering comments unnecessary, thus
+    eliminating the risk of comments being out of sync with the code.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The script can be executed on multiple systems at once, scaling very well, if
+    not infinitely. Humans can perform the configuration of one system at a time with
+    minimal risk of making a mistake.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuration kept in the form of a script or program benefits from typical
+    programming techniques, such as automated testing, dry runs, and static analysis.
+    More so, keeping the code in a repository allows us to easily track a history
+    of changes and integrate it with ticket-tracking tools.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Code is unequivocal, which cannot be said about written language. A document
+    may leave space for interpretation; a script won’t.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Automating configuration lets you move to other, more interesting tasks, leaving
+    the computers to do what they do best—performing repetitive, boring tasks well.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The world of programming and system administration has a tendency to turn small
+    projects into larger ones with a vibrant community of developers and users. It
+    was only a matter of time before CM systems were born. They take the burden of
+    developing and managing portions of the code responsible for configuration actions
+    off your shoulders. The CM system developers write the code, test it, and deem
+    it stable. What you are left with is an action of writing configuration files
+    or directives that tell the system what to do. Most of these systems will be able
+    to cover the most popular platforms, allowing you to describe configuration once
+    and run it with the same expected results on commercial Unix systems, such as
+    AIX or Solaris, as on Linux or Windows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Configuration files for these systems are easily stored in a version control
+    system such as Git. They are easily understandable by a human, which allows for
+    simple review by your colleagues. They can be checked for syntax errors by automated
+    tools and allow you to concentrate on the most important part of the whole endeavor:
+    the configuration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This approach of keeping your configuration as a set of scripts or other data
+    instead of a procedure to be followed manually is known as CaC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The CaC approach is becoming more important as the number of systems to be
+    managed grows and the demand for fast and efficient configuration scales up. In
+    the world of DevOps, it is usual practice to set up tens and hundreds of systems
+    a day: systems for developers, testers, and production systems to manage new levels
+    of demand for the service. Managing it manually would be an impossible task. Well-implemented
+    CaC allows to run this task with a click of a button. Thus, developers and testers
+    can deploy their own systems without bothering sysops. Your task will be to develop,
+    maintain, and test the configuration data.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If there is one thing sure in the world of programming, it is that there’s never
+    going to be only one solution. The same goes for CM tools.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alternatives for Ansible include **SaltStack**, **Chef**, **Puppet**, and **CFEngine**,
+    which is the oldest one; its initial release date was 1993, so it’s 30 years old
+    as of the time of writing this book. In general, those solutions differentiate
+    between each other with a method of enforcing configuration (pull or push) and
+    an approach of describing the system’s state (imperative or declarative).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Imperative** means that we describe the state of the server with commands
+    for the tool to perform. Imperative programming focuses on describing how a given
+    tool operates step by step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Declarative**, on the other hand, means we focus on what the CaC tool should
+    accomplish without specifying all the details of how it should achieve the result.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SaltStack
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**SaltStack** is an open source CM tool that allows for the management of complex
+    IT infrastructure at scale. It enables the automation of routine tasks such as
+    package installation, user management, and software configuration, and is designed
+    to work across a wide range of operating systems and platforms. SaltStack was
+    founded by Thomas Hatch in 2011\. The first release of SaltStack, version 0.8.0,
+    was also made in 2011.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SaltStack works by utilizing a master-slave architecture, where a central salt-master
+    communicates with salt-minions running on remote machines to execute commands
+    and manage configurations. It operates in a pull method of enforcing configuration:
+    minions pull the latest manifest from the master server.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the minion is installed and configured, we can use SaltStack to manage
+    the server’s configuration. Here’s an example `nginx.sls` file that would install
+    and configure `nginx`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, the first line specifies that the `nginx` package should be
+    installed on the target server. The next two lines define the configuration file
+    for a hypothetical website, `example.com`, which is copied to `/etc/nginx/sites-available/yourdomain.tld.conf`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To apply this state file to a server, we would use the `state.apply` command
+    in the SaltStack command-line interface, specifying the name of the state file
+    as the argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: This would send the instructions in the `nginx.sls` file to the salt-minion
+    running on the web server machine, which would execute the necessary steps to
+    ensure that `nginx` is installed and configured correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Chef
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Chef** is a powerful open source CM tool that allows users to automate the
+    deployment and management of infrastructure, applications, and services. It was
+    first released in 2009 by Opscode, which was later acquired by Chef Software Inc.
+    Since then, Chef has been widely adopted by IT professionals and DevOps teams
+    to streamline their workflows and reduce the time and effort required for managing
+    complex systems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Chef works by defining the desired state of an infrastructure in a set of code
+    files, called cookbooks. A **cookbook** is a collection of recipes that describe
+    how to install, configure, and manage a specific piece of software or service.
+    Each recipe contains a series of resources, which are pre-built modules that can
+    perform specific tasks, such as installing a package or configuring a file. Chef
+    uses a declarative approach to CM, meaning that users define what they want the
+    system to look like, and Chef takes care of the details of how to get there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To install `nginx` using Chef, you would first need to create a cookbook that
+    includes a recipe for installing `nginx`. This recipe would use the `package`
+    resource to install the `nginx` package and the `service` resource to ensure that
+    the `nginx` service is running. You could also use other resources, such as `file`,
+    `directory`, or `template`, to configure `nginx`’s settings, depending on your
+    requirements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you had created the cookbook, you would upload it to a Chef server, which
+    acts as a central repository for cookbooks and their associated metadata. You
+    would then use Chef’s command-line tool, called `knife`, to configure the target
+    system to use the cookbook. This involves associating the system with a Chef environment,
+    which defines the set of cookbooks and their versions that should be applied to
+    the system. You would then use the `chef-client` command to run the Chef client
+    on the target system, which will download and apply the necessary cookbooks and
+    recipes to bring the system into the desired state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s an example of installing and configuring `nginx`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This recipe uses three resources, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`package`: This installs the `nginx` package using the default package manager
+    on the system.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`service`: This starts and enables the `nginx` service so that it will automatically
+    start on boot and stay running.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`template`: This creates a configuration file for `nginx` by generating it
+    from a template file. The template file (`nginx-site.erb`) is written in `templates`
+    directory of the cookbook. The `notifies` attribute tells Chef to restart the
+    `nginx` service if the configuration file changes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Once you have created this recipe in a cookbook, you can use the `knife` command
+    to upload the cookbook to a Chef server. You can then use the `chef-client` command
+    to apply the recipe to a target system, which will install and configure `nginx`
+    according to the recipe.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`2.0`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet works by defining the desired state of infrastructure resources in a
+    declarative language, known as the Puppet language. Administrators can define
+    the configuration of servers, applications, and other infrastructure components
+    in Puppet code, which can then be applied consistently across multiple systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet consists of a master server and multiple agent nodes. The master server
+    acts as a central repository for Puppet code and configuration data, while the
+    agent nodes execute the Puppet code and apply the desired state to the system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Puppet has a robust ecosystem of modules, which are pre-written Puppet code
+    that can be used to configure common infrastructure resources. These modules are
+    available in **Puppet Forge**, a public repository of Puppet code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s an example Puppet manifest that installs `nginx` and creates a configuration
+    file similar to what we did with SaltStack and Chef:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once you’ve created a manifest and put it on the Puppet server, it will be picked
+    up by the Puppet agent installed on your server and executed. Communication, the
+    same as in SaltStack, is being secured by the TLS protocol using the same mechanism
+    as the HTTPS servers on the internet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The agent nodes run a Puppet agent process, which connects to the master server
+    over TCP port `8140`. The agent sends a **certificate signing request** (**CSR**)
+    to the server, which the administrator must approve. Once the CSR is approved,
+    the agent is granted access to the server’s Puppet configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the agent runs, it sends a request to the master server for its configuration.
+    The server responds with a catalog of resources that should be applied to the
+    node. The catalog is generated based on the Puppet code and manifests stored on
+    the server, as well as any external data sources or hierarchies that are configured.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The agent then applies the catalog to the node, which involves making any necessary
+    changes to the node’s configuration to ensure it matches the desired state defined
+    in the catalog. This may involve installing packages, updating configuration files,
+    or starting or stopping services.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The agent sends reports back to the server after applying the catalog, which
+    can be used for monitoring and auditing purposes. The server can also use this
+    information to detect changes to the node’s configuration that were not made through
+    Puppet and to take corrective action if necessary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CFEngine
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**CFEngine** is an open source CM system that allows users to automate the
+    deployment, configuration, and maintenance of IT systems. It was founded by Mark
+    Burgess in 1993 and has since become a popular tool for managing large-scale IT
+    infrastructures. CFEngine is known for its powerful and flexible language for
+    describing system configurations and enforcing policies, making it a great choice
+    for complex IT environments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: CFEngine’s first release was in 1994, making it one of the oldest CM tools in
+    existence. Since then, CFEngine has undergone numerous updates and improvements
+    to keep up with changing IT environments and emerging technologies. The latest
+    release of CFEngine, version 3.18, includes features such as improved encryption,
+    enhanced monitoring capabilities, and better support for cloud infrastructure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: CFEngine has gained popularity over the years due to its robust functionality,
+    ease of use, and strong community support. It’s still being used today by many
+    organizations and is actively developed, so it is a safe option to manage the
+    configuration of your servers using this tool.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example CFengine configuration will be presented here. It is, out of necessity,
+    only a snipped and not a complete configuration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this section, we have explained what CaC is and why it is an important tool
+    in the toolbelt of system administrators. We have briefly described the most popular
+    tools available to you. In the next section, we will introduce our tool of choice—Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we are going to introduce you to **Ansible**, our tool of choice
+    when it comes to CaC.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible is a tool written for managing the configuration of systems and devices.
+    It is written in Python and its source code is freely available to anyone for
+    downloading and modification (within the limits of its license, which is Apache
+    License `2.0`). The name “Ansible” comes from Ursula K. Le Guin’s book *Rocannon’s
+    World* and denotes a device that allows instantaneous communication no matter
+    the distance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some interesting characteristics of Ansible are set out here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Modularity**: Ansible is not a monolithic tool. Rather, it’s a core program
+    with each task it knows how to perform written as a separate module—a library,
+    if you will. Since this was the design from the start, it produced a clean API
+    that anyone can use to write their own modules.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Idempotence**: No matter how many times you perform a configuration, the
+    result is always the same. This is one of the most important and fundamental characteristics
+    of Ansible. You don’t have to know which actions have been performed. When you
+    extend the configuration and run the tool again, it is its job to find out the
+    state of the system and only apply new actions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Agentlessness**: Ansible doesn’t install its agent on the configured system.
+    That is not to say it doesn’t need anything at all. To execute the Ansible scripts,
+    the target system will need some means of connecting to it (most often, the SSH
+    server running) and the Python language installed. There are several advantages
+    born from this paradigm, including the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Ansible is not concerned with communication protocol. It uses SSH, but it doesn’t
+    implement it, leaving the details to the operating system, SSH server, and client.
+    An advantage is that you can freely swap one SSH solution with another for whatever
+    reasons, and your Ansible playbooks should work as intended. Also, Ansible doesn’t
+    concern itself with securing the SSH configuration. This leaves developers to
+    concentrate on what the system is really about: configuring your systems.'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Ansible project does not need to develop and maintain separate programs
+    for managed nodes. This not only frees developers from unneeded burdens but also
+    limits the possibility of security exploits being discovered and used against
+    target machines.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In an agent-utilizing solution, if, for any reason, the agent program stops
+    working, there is no way to deliver new configurations to the system. SSH servers
+    are usually very widely used, and the probability of failure is negligible.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using SSH as the communication protocol lowers the risk of a firewall blocking
+    the communication port for the CM system.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`nginx` is installed, the proper configuration entry would look like this:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The main way of working with Ansible is through writing configuration files
+    in a special syntax called YAML. **YAML** is a syntax created specifically for
+    configuration files and is loosely based on Python formatting. Indentations play
+    a significant role in YAML files. YAML’s home page presents a full cheat sheet
+    card ([https://yaml.org/refcard.xhtml](https://yaml.org/refcard.xhtml)) for the
+    syntax. However, the most important parts are presented here, as we will be working
+    mostly with those files in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They are clear text files. This means they can be viewed and edited using the
+    simplest editors such as Notepad, Vim, Emacs, or whatever is your favorite tool
+    for working with text files.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Indentations are used to denote scope. Tabulators are not permitted for indentations
+    and it is customary to use spaces for this purpose.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A new document opens with three hyphens (`-`). One file can have more than one
+    document.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Comments, as in Python, start with a hash (`#`) and continue until the end of
+    the line. The comment must be surrounded by whitespace characters; otherwise,
+    it will be treated as a literal hash (`#`) within a text.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Text (strings) can be unquoted, single-quoted (`'`), or double-quoted (`"`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When a list is specified, each member is denoted by a hyphen (`-`) character.
+    Each item will be on a separate line. If single-line representation is required,
+    the list items can be enclosed in square brackets (`[]`) with entries separated
+    by commas (`,`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Associative arrays are represented by a key-value pair with each key separated
+    from the value by a colon and space. If they have to be presented in one line,
+    the array is enclosed in curly brackets (`{}`) and pairs are separated by commas
+    (`,`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the preceding rules are not very transparent now, don’t panic. We are going
+    to write proper Ansible configuration files, and things will become clear as we
+    go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Ansible divides machines into two groups: the **control node** is the computer
+    that stores configuration directives and will connect to the target machines and
+    configure them. There can be more than one control node. The target machines are
+    called **inventories**. Ansible runs actions against computers in the inventory
+    listed. Inventories are often written in an **initialization** (**INI**) format,
+    which is simple and easy to follow, as explained here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comments start with a semicolon (`;`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sections are named and the names are enclosed in square brackets (`[]`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Configuration directives are stored in pairs, each pair on its own line, with
+    the key and value separated by an equals sign (`=`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will see an example of an inventory file shortly. There is, however, the
+    possibility of having so-called dynamic inventories, which are generated automatically
+    by means of a script or a system with each run of Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main configuration file that we will be interacting with is called a playbook.
+    A **playbook** is an entry point for Ansible. This is where the tool will start
+    the execution. Playbooks can include other files (and this is often done).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Target hosts can be broken down into groups based on custom criteria: operating
+    system, role within organization, physical location—whatever is required. The
+    groups are called **roles**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A single action that is to be performed is called a **task**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basics of using Ansible
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first thing to do is to install Ansible. This is pretty straightforward
+    on all major Linux distributions and can be equally so on macOS. We encourage
+    you to figure out the solution for your chosen operating system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For Debian-based distributions, the following command should suffice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For Fedora Linux distributions, you’d run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To install the latest version of Ansible, however, we recommend using the Python
+    virtual environment and its `pip` tool, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code, we have activated the virtual environment using the
+    `venv python3` module. It will create a special `venv` directory that contains
+    all important files and libraries that allow us to set up a Python virtual environment.
+    Next, we have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code line, we have read a special file that sets the environment
+    by configuring the shell. Next, we have this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code, we have upgraded `pip`, a Python package installer.
+    In the next step, we are going to actually install Ansible, also using `pip`.
+    The output will be shortened for brevity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see in the preceding code, `pip` informs us that Ansible and its
+    dependencies were installed successfully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Either of those ways of installing Ansible will download and install all the
+    packages required to run Ansible on your computer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The simplest command you can run is called ad hoc `ping`. It’s so basic that
+    it is one of the most prevalent first uses of Ansible in tutorials and books.
+    We are not going to deviate from it. The following command tries to connect to
+    a specified host and then prints the result of the trial:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding command, we have told Ansible to run against all hosts in inventory,
+    use the `ping` module (`-m ping`), and use an inventory file named `inventory`
+    (`-i inventory`). If you don’t specify the inventory file, Ansible will try to
+    use `/etc/ansible/hosts`, which is generally a bad idea.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will delve into the inventory file in a moment, a few paragraphs ahead.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A `ping` module (which we can also understand as a `ping` command). It is not,
+    however, the same as the OS `ping` command, which sends a specially crafted network
+    packet to determine whether a host is up. The Ansible `ping` command will also
+    try to log in, to determine whether the credentials are correct.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, Ansible uses the SSH protocol with a private-public key pair. In
+    a normal operation, you don’t want to use password-based authentication, and Ansible
+    will choose a key-based one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible is very good at providing self-explanatory information as a result of
+    the execution. The preceding output tells us that Ansible was able to connect
+    to all nodes in the inventory (there’s only one), `python3` is installed there,
+    and nothing was changed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The inventory file is a simple but powerful tool to list, group, and provide
+    variables for managed nodes. Our example inventory file is pasted as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code is two lines. The first one declares a group of nodes called
+    `www`. The second declares a node called `hostone`. Since this is not a name resolvable
+    by DNS, we have declared its IP address using the `ansible_host` variable. Then,
+    we point to the proper `ssh` key file and declare which username should be used
+    while logging in (`admin`). There are more things we can define in this file.
+    Very detailed information about writing your inventory file can be found in the
+    Ansible project documentation ([https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.xhtml](https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.xhtml)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are unable to cover all aspects of Ansible and dig deeper into most of the
+    features that we are going to use here. Packt Publishing, however, has a very
+    good selection of books on Ansible that you may wish to choose if you want to
+    deepen your knowledge—for example, *Mastering Ansible, Fourth Edition,* by James
+    Freeman and Jesse Keating.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tasks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Tasks lie at the heart of the Ansible configuration. They are exactly that:
+    tasks to be run against managed nodes. Tasks are contained in plays. They can
+    be placed there directly (put into a playbook) or indirectly (included via a role).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s a special type of task called **handles**. This is a task that will
+    be executed only when notified by another task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Roles
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Ansible’s documentation defines **roles** as “*A limited distribution of reusable
+    Ansible content (tasks, handlers, variables, plugins, templates and files) for
+    use inside of a play.*” For our purpose, we can think of them as a mechanism to
+    group parts of the play. A role can be a type of host we are going to run the
+    play against: web server, database server, Kubernetes node, and so on. By breaking
+    down playbooks into roles, we can manage separate required tasks more easily and
+    efficiently. Not to mention the files containing those become more readable, since
+    we limit the number of tasks within and group them by their function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plays and playbooks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Plays** are the context in which tasks are performed. While plays are somewhat
+    of an ephemeral concept, **playbooks** are their physical representations: YAML
+    files in which plays are defined.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s look at an example of a playbook. The following playbook will install
+    `nginx` and `php` packages on a managed node:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first line (three dashes) marks the beginning of a new YAML document. The
+    next line names the whole playbook. Playbook names should be short but descriptive.
+    They are going to end up in logs and debugging information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we inform Ansible that this play should be run against nodes in the inventory
+    placed in the `www` group. We also tell Ansible to use `sudo` when executing the
+    commands. This is required as all distributions that we cover in our guide require
+    root privileges to install and remove packages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we start the `tasks` section. Each task is given a name, the name of the
+    module (command) we are going to use, and the command is given options and arguments.
+    As you can see, the indentation declares the scope. If you are familiar with the
+    Python programming language, this should be intuitive for you.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we run this playbook, let’s use a very useful tool, `ansible-lint`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'I have cut part of the output for brevity, but you can see that the tool printed
+    information about violations of YAML syntax and Ansible best practices. Failures
+    are types of errors that will stop the execution of the playbook. Warnings are
+    just that: the playbook will be executed, but there are some errors that go against
+    best practices. Let’s correct our playbook, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can now run the playbook using the `ansible-playbook` command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding output, we have instructed the `ansible-playbook` command
+    to use an inventory file called `inventory` and run a playbook named `install.yaml`.
+    The output should be self-explanatory: we are informed of the name of the play
+    we run. Then, we see a list of managed nodes that Ansible will try to execute
+    action against. Then, we see tasks and a list of nodes that the tasks succeeded
+    or failed at. The `nginx` task was a success on `hostone`. However, installing
+    `php` failed. Ansible gives us the exact reason for it: there is no `php8` package
+    available for our managed node. Sometimes, a resolution is pretty obvious, but
+    sometimes it requires a bit of digging around. After checking with our distribution,
+    we find out that the actual `php` package available there is `php7.4`. After quickly
+    correcting the offending line, we run the playbook again, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice the change in the output. First, Ansible tells us that `nginx` on `hostone`
+    is okay. This means that Ansible was able to determine that the package was already
+    installed, and it took no action. Then, it told us that the `php7.4` installation
+    was successful (`changed: [hostone]`) on the `hostone` server.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding playbook is short, but we hope it demonstrates the usefulness
+    of the tool. Playbooks are executed in a linear manner, from top to bottom.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There’s one problem with our playbook. While it only installs two packages,
+    you may be worried about maintainability and readability if you need to install
+    tens or hundreds of packages. Having a separate task for each of them is troublesome.
+    There’s a solution. You can create a list of items that a given task will be executed
+    for—something akin to a loop. Let’s edit the `tasks` part of the playbook, as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: We have added two packages to demonstrate a more complete run. Notice the lack
+    of a separate task for `php7.4`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before running this play, it is always a good idea to check it with `ansible-lint`.
+    Here’s how we can do that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, after `ansible-lint` gives us the green light, let’s play this playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assume we want to install a page configuration in `nginx`. Ansible is able
+    to copy files. We can set it to copy `nginx` virtual server configuration, but
+    we only want to restart `nginx` once: at the service setup.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can do it via `notify` and `handlers`. I’ll paste the whole playbook ahead:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice the whole new section related to copying files. We also create a `nginx`.
+    We have shortened it for brevity’s sake and only to demonstrate a principle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The execution of this play yields the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: As soon as you start using Ansible in a real production environment, it becomes
+    obvious that even with the *looping* technique we demonstrated previously, the
+    playbook grows pretty fast and becomes unwieldy. Thankfully, there’s a way to
+    break the playbook into smaller files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the ways to do it is to segregate tasks into roles. As mentioned earlier,
+    a role is a bit of an abstract concept, so the easiest way to think about it is
+    to consider it a group. You group tasks depending on the criteria that are relevant
+    to you. While the criteria are totally up to you, it is pretty common for roles
+    to refer to the type of function a given managed node performs. One managed node
+    can perform more than one function, but it still is probably wise to separate
+    the functions into their own roles. Thus, the HTTP server would be one role, the
+    database server would be another, and the file server would be yet another.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Roles in Ansible have a predetermined directory structure. There are eight standard
+    directories defined, although you only need to create one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code is copied from the Ansible documentation ([https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_reuse_roles.xhtml](https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_reuse_roles.xhtml)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `roles` directory exists on the same level as your playbook. The most common
+    subdirectories you will probably see are `tasks`, `templates`, `files`, `vars`,
+    and `handlers`. Within each subdirectory, Ansible will look for a `main.yml`,
+    `main.yaml`, or `main` file (all of them have to be valid YAML files). Their contents
+    will be automatically available to the playbook. So, how would this work in practice?
+    Within the same directory that our `install.yaml` playbook exists, we will create
+    a `roles` directory. Within this directory, we will create another one: `www`.
+    Inside that one, we will create directories: `tasks`, `files`, and `handlers`.
+    A similar structure will be created with `development` as a role:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `development` role has only tasks subdirectory because we don’t require
+    any additional bells and whistles. Why the development role, though? When you
+    look back at our current playbook, you’ll notice that we mix up installing things
+    for the `www` server and development packages—namely, compilers. It is bad practice,
+    even if they will end up on the same physical server.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Thus, we are going to edit our inventory file so that we have two separate
+    roles:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Both groups contain only one node, which is a bad thing to do overall. We do
+    it only for the purpose of this guide. Don’t install compilers and development
+    software on your HTTP server, especially on the production one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we have to move some stuff around within the playbook. The `install.yml`
+    file will become much shorter, as we can see here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: We actually have two plays in this playbook. One of them is for `www` hosts,
+    and the other is for `development` hosts. After we give the play a name and list
+    host groups that we wish it to run against, we use keyword roles and list actual
+    roles to be used. As you can see, Ansible is going to locate the proper roles
+    automatically, as long as you adhere to the directory structure explained previously.
+    There are ways to include roles directly by specifying their full path, but we’re
+    not going to cover them here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, for the `www` role, we’ll execute the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You should notice several changes from the get-go:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is no `tasks` keyword in this document. This is implicit by the fact that
+    this is the `main.yaml` file within the `tasks` subdirectory.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Indentation has been moved left.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are no handlers here.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We have removed the installation of the `gcc` and `g++` packages.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s now see the handlers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The overall changes are the same, as noted here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have removed the `handlers` keyword
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We have moved the indentation to the left
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let’s see `roles/development/tasks/main.yaml`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is very simple. We may have increased the complexity of the directory structure,
+    but we have gained the simplicity of tasks and plays. The gains are well worth
+    the trade-off, especially when your playbooks grow in size and complexity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are many advantages to using a CaC tool, as outlined here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuration can be linted—that is, checked for syntax errors by automation
+    tools
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It can be applied infinitely with the same outcomes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It can be run on many systems in parallel
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It can be kept in a version control system, such as Git, where the history of
+    changes and comments for them are stored and can be viewed at any time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It can be run by automation tools, removing the need for a human factor besides
+    writing playbooks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this subsection, we have shown how to write simple Ansible playbooks. We
+    have explained what Ansible is and what the building blocks of the configuration
+    scripts are. We have introduced playbooks, roles, and the inventory. There are
+    many more things Ansible can do for you. You can manage devices, filesystems,
+    users, groups, permissions, networking, and so on. The list of all modules Ansible
+    is shipped with out of the box is impressive. You can always check the list at
+    [https://docs.ansible.com/ansible/latest/module_plugin_guide/index.xhtml](https://docs.ansible.com/ansible/latest/module_plugin_guide/index.xhtml).
+    Remember to check the list for your version of Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, now that we’ve covered installing, configuring, and using Ansible to manage
+    your servers (installing software, creating configuration files, and managing
+    services), we are ready to look into Ansible Galaxy: community-developed modules
+    that increase Ansible’s usefulness.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible Galaxy
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Ansible is a powerful automation tool that enables users to configure, deploy,
+    and manage complex IT infrastructures with ease. However, creating and maintaining
+    Ansible playbooks can be time-consuming, especially when working with large-scale
+    environments. Fortunately, Ansible Galaxy exists to help streamline this process
+    by providing a centralized repository of pre-built roles and playbooks that can
+    be easily integrated into an existing Ansible project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Ansible Galaxy** is a community-driven platform that hosts an extensive collection
+    of Ansible roles and playbooks. These roles and playbooks are submitted by users
+    from around the world and are reviewed and curated by Ansible’s maintainers. Ansible
+    Galaxy provides a simple, efficient way to find and use pre-built automation content
+    that can save users time and effort while ensuring quality and consistency.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Ansible Galaxy, users can quickly find, download, and use pre-built roles
+    and playbooks for popular applications, services, and infrastructure components.
+    These pre-built components can help speed up deployment times, ensure best practices
+    are followed, and reduce the likelihood of errors or inconsistencies. Ansible
+    Galaxy can also help users learn from others’ experiences and gain insights into
+    the best practices of their peers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s use one of the Galaxy roles to install the `nginx` web server on our
+    `webserver` role. In order to do that, we will need to install the role from Ansible
+    Galaxy. First, ensure that Ansible is installed on your system by running the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This command will download and install the `nginx` role from Ansible Galaxy.
+    By default, all roles installed are placed in the `~/.ansible/roles` directory.
+    It’s possible to change that by creating a global Ansible configuration file in
+    your home directory: `~/.ansible.cfg`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of a configuration file changing the `roles_path` directory looks
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A good practice is to pin role version numbers and put this version in a YAML
+    file saved in the same Git repository where you will keep your Ansible playbooks.
+    To achieve this, let’s create an `ansible_requirements.yml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To install the role from Ansible Galaxy using that file, you would run the
+    following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the role is installed, it can be used in an Ansible playbook by adding
+    the following line to the playbook:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s an example playbook that uses the `nginx` role from Ansible Galaxy to
+    install and configure `nginx` on a remote server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this playbook, we specify the `webservers` group as the target hosts and
+    use the `nginxinc.nginx` role to install and configure `nginx`. We also define
+    a variable called `nginx_sites` that specifies the configuration for a `nginx`
+    server block that will be created using a Jinja2 template located in the playbook’s
+    `templates` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using Ansible Galaxy and pre-built roles such as `nginxinc.nginx`, users
+    can automate complex tasks quickly and reliably, ensuring consistency and reducing
+    the risk of errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Handling secrets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Protecting secrets such as passwords, tokens, and certificates is crucial in
+    any IT infrastructure. These secrets are the keys to accessing sensitive information
+    and services, and their exposure can lead to severe security breaches. Therefore,
+    it is crucial to keep them safe and secure. Ansible provides several methods for
+    managing secrets, such as Ansible Vault, which allows users to encrypt and decrypt
+    sensitive data using a password or key file. This feature helps to protect secrets
+    and ensures that only authorized users have access to them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Saving secrets in a Git repository or any other public place is a significant
+    security risk. Such repositories are often accessible to multiple users, some
+    of whom may not have the necessary permissions to access sensitive data. Additionally,
+    version control systems such as Git retain the history of changes made to files,
+    making it possible for secrets to be exposed inadvertently. This could happen
+    if a user inadvertently commits secrets to a repository or if a hacker gains access
+    to a repository’s commit history. Therefore, it is vital to discourage saving
+    secrets in public places to reduce the risk of unauthorized access. Instead, Ansible
+    provides secure ways to manage secrets, ensuring that they are encrypted and only
+    accessible to authorized users. By doing so, users can be confident that their
+    secrets are safe and secure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible Vault
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Ansible Vault** is a feature provided by Ansible that enables users to encrypt
+    and decrypt sensitive data, such as passwords, keys, and certificates. The vault
+    creates an encrypted file that can be decrypted only by authorized users, ensuring
+    that sensitive data remains secure. The vault can be used to store secrets in
+    files, variables, or other sources that are used by Ansible.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible Vault uses a variety of encryption methods to secure the secrets stored
+    within it. By default, Ansible Vault uses AES 256 encryption, a widely accepted
+    and secure encryption algorithm. Additionally, Ansible Vault supports other encryption
+    algorithms, such as AES 192 and AES 128, providing flexibility in the encryption
+    strength used to secure secrets. When encrypting data with Ansible Vault, users
+    can choose to encrypt it with a password or with a key file. This ensures that
+    only authorized users who possess the password or key file can decrypt the secrets
+    stored within the vault.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To create a new vault using Ansible Vault, you can use the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will create a new encrypted vault file called `secrets.yml`. You will
+    be prompted to enter a password to encrypt the file. Once you’ve entered the password,
+    the vault file will be created and opened in your default editor. Here’s an example
+    `secrets.yml` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: To edit this secret file, you’ll need to use the `ansible-vault edit secrets.yml`
+    command and type the encryption password afterward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To write an Ansible task that reads the `pgsql_password` secret from the vault,
+    you can use the `ansible.builtin.include_vars` module with the `vault_password_file`
+    parameter. Here is an example task:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this task, we’re using the `include_vars` module to read the variables from
+    the `secrets.yml` vault file. The `vault_password_file` parameter specifies the
+    location of the file containing the password to decrypt the vault. We then assign
+    the value of `secret_pgsql_password` to the `pgsql_password` variable, which can
+    be used elsewhere in the playbook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the `secret_pgsql_password` variable should be defined in the vault.
+    The `secret_` prefix is to indicate that the password was retrieved from the vault.
+    Ansible does not differentiate between regular variables or secret variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When you run this playbook with an increased Ansible debug level, you will
+    notice that the PostgreSQL password is exposed in the debug output. To prevent
+    that, every task dealing with sensitive information can be executed with the `no_log:
+    True` option enabled.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SOPS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Secrets OPerationS** (**SOPS**) is an open source tool developed by Mozilla
+    that allows users to securely store and manage their secrets within various configuration
+    files, including Ansible playbooks. SOPS uses a hybrid encryption approach, which
+    means that it combines symmetric and asymmetric encryption to ensure maximum security.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: SOPS encrypts secrets using a master key, which can be either symmetric or asymmetric.
+    **Symmetric encryption** uses a password or passphrase to encrypt and decrypt
+    secrets, while **asymmetric encryption** uses a pair of keys, one public and one
+    private, to encrypt and decrypt secrets. SOPS encrypts the master key using key
+    wrapping, a technique that encrypts the key with another key. In SOPS, the key
+    that is used for key wrapping is often an AWS **Key Management Service** (**KMS**)
+    key, but it can also be a **Pretty Good Privacy** (**PGP**) key or a Google Cloud
+    KMS key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SOPS integrates seamlessly with Ansible and supports various file formats, including
+    YAML, JSON, and INI. It also supports various cloud providers, including AWS,
+    Google Cloud, and Azure, making it a versatile tool for managing secrets across
+    different environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here’s an example of how to create a SOPS-encrypted YAML file and load its contents
+    into an Ansible playbook using `community.sops.load_vars`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, create a YAML file named `secrets.yaml` with the following content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, use SOPS to encrypt the file using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will create an encrypted version of the `secrets.yaml` file named `secrets.sops.yaml`.
+    It’s safe to remove the `secrets.yaml` plain text file now. The most common mistake
+    is leaving these files behind and committing them to the Git repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, create a new Ansible playbook named `database.yml` with the following
+    content:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this example, we’re using `community.sops.load_vars` to load the `postgresql_password`
+    variable from the encrypted `secrets.sops.yaml` file. The `postgresql_password`
+    variable is then passed to the `postgresql_user` task using the `{{ postgresql_password
+    }}` Jinja2 syntax.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When you run this playbook with Ansible, it will decrypt the `secrets.sops.yaml`
+    file using SOPS and load the `postgresql_password` variable into the `postgresql_password`
+    variable in the playbook. This ensures that the password is not stored in plain
+    text in the playbook, providing an extra layer of security for your sensitive
+    information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'More information about SOPS is available in its official GitHub repository:
+    [https://github.com/mozilla/sops](https://github.com/mozilla/sops).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other solutions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'There are several alternatives to Ansible Vault and SOPS that you can use to
+    manage your sensitive data securely, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**HashiCorp Vault**: An open source tool for securely storing and accessing
+    secrets. It provides a service for secure and centralized storage of secrets,
+    access control, and auditing.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Blackbox**: A command-line utility that encrypts and decrypts files using
+    **GNU Privacy Guard** (**GPG**). It works by creating a separate GPG key for each
+    user or team that needs access to the encrypted data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Keywhiz**: Another open source secrets management system that provides a
+    simple way to store and distribute secrets securely. It includes a web interface
+    for managing secrets and a command-line tool for accessing them.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Azure Key Vault, AWS Secrets Manager, or Google Cloud Secret Manager**: Solutions
+    you might want to consider keeping secrets in when dealing with a cloud environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is, of course, not a complete list of all available options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we introduced Ansible Vault and SOPS as means to handle secrets
+    such as passwords. In the next section, we will be introducing a graphical frontend
+    (GUI) to Ansible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Ansible Tower and alternatives
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Ansible Tower** provides a centralized platform for managing Ansible automation
+    workflows, making it easier for IT teams to collaborate, share knowledge, and
+    maintain their infrastructure. Some of its key features include a web-based interface
+    for managing Ansible playbooks, inventories, and job runs, **role-based access
+    control** (**RBAC**) for managing user permissions, a built-in dashboard for monitoring
+    job status and results, and an API for integrating with other tools and platforms.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It was first released in 2013 by Ansible, Inc. (now part of Red Hat), and has
+    since become one of the most popular tools for automating IT workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since its initial release, Ansible Tower has undergone numerous updates and
+    enhancements, including support for more complex automation workflows, integration
+    with cloud platforms such as AWS and Azure, and improved scalability and performance.
+    Ansible Tower is a commercial product shipped by the Red Hat company. The closest
+    alternative to Ansible Tower is **Ansible** **WorX** (**AWX**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Ansible AWX** is an open source alternative to Ansible Tower, offering many
+    of the same features as Tower but with a greater degree of customization and flexibility.
+    AWX was first released in 2017 and has since become a popular choice for organizations
+    looking to implement Ansible automation at scale without the cost of a commercial
+    license.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the primary differences between Ansible Tower and Ansible AWX is their
+    licensing model. While Ansible Tower requires a commercial license and is sold
+    as part of Red Hat Ansible Automation Platform, Ansible AWX is open source and
+    freely available for download from the Ansible website. This means that organizations
+    can deploy AWX on their own infrastructure and customize it to their specific
+    needs, rather than relying on a pre-built commercial solution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feature-wise, Ansible Tower and Ansible AWX are quite similar, with both platforms
+    offering a web-based interface for managing Ansible playbooks, inventories, and
+    job runs, RBAC for managing user permissions, and a built-in dashboard for monitoring
+    job status and results. However, Ansible Tower does offer some additional features
+    not found in Ansible AWX, such as native integration with Red Hat Ansible Automation
+    Platform, advanced analytics and reporting, and certified modules and collections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another open source alternative to Ansible Tower is **Ansible Semaphore**. Similar
+    to Tower, it is a web-based application designed to simplify the management of
+    Ansible playbooks and projects. It is an open source, free, and easy-to-use alternative
+    to Ansible Tower that allows users to easily automate their infrastructure tasks
+    without the need for extensive coding knowledge. The first release of Ansible
+    Semaphore was in 2016, and since then it has become a popular choice for those
+    who want a simple yet powerful web-based interface for managing their Ansible
+    automation workflows.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can read more about these alternatives on their respective websites:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Ansible** **Tower**: [https://access.redhat.com/products/ansible-tower-red-hat](https://access.redhat.com/products/ansible-tower-red-hat%20)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Ansible** **AWX**: [https://github.com/ansible/awx](https://github.com/ansible/awx)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Ansible** **Semaphore**: [https://www.ansible-semaphore.com/](https://www.ansible-semaphore.com/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Advanced topics
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will show you how to handle advanced Ansible features and
+    techniques for debugging and automatically checking your playbooks for possible
+    errors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Debugging
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In order to debug issues with your Ansible playbook runs, it is often useful
+    to increase the verbosity level to get more detailed output about what Ansible
+    is doing. Ansible has four verbosity levels: `-v`, `-vv`, `-vvv`, and `-vvvv`.
+    The more `v`s you add, the more verbose the output becomes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By default, Ansible runs with `-v`, which provides basic information about the
+    tasks that are executed. However, if you are experiencing issues with your playbook,
+    it may be helpful to increase the verbosity level to get more detailed output.
+    For example, using -`vv` will provide additional information about the playbooks,
+    roles, and tasks that are being executed, while using `-vvv` will also show the
+    tasks that Ansible is skipping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To increase the verbosity level of an Ansible playbook run, simply add one
+    or more `-v` options to the `ansible-playbook` command. Here’s an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will run the playbook with verbose output at the `-vvlevel`. If you need
+    even more verbose output, you can add extra `-v` options. You can see an example
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In addition to using the `-v` options, you can also set the verbosity level
+    in your `ansible.cfg` file by adding the following lines:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: This will set the verbosity level to `-vv` for all `ansible-playbook` commands.
+    You can change the value to `3` or `4` to increase the verbosity level even further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you need to add some custom communication (such as printing a variable) in
+    a verbose mode, you can do it by using the `debug` task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s an example playbook that demonstrates how to print out a variable in
+    `-vv` `debug` mode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this playbook, we define a `my_variable` variable that holds the `"Hello,
+    World!"` string. Then, we use the `debug` module to print out the value of this
+    variable using the `msg` parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `verbosity: 2` line is what enables `debug` mode. This tells Ansible to
+    increase the verbosity level to `-vv`, which will show us the output of the `debug`
+    module.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linting Ansible playbooks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '**Ansible code linting** is the process of analyzing and verifying the syntax
+    and style of Ansible code to ensure that it conforms to best practices and standards.
+    The purpose of linting is to catch potential errors or issues before the code
+    is executed, which can save time and effort in the long run.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most common tool used for Ansible code linting is `ansible-lint`. This is
+    an open source command-line tool that analyzes Ansible playbooks and roles for
+    potential problems and provides suggestions for improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run `ansible-lint` against a sample playbook, you can execute the following
+    command in the terminal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assuming the sample playbook is saved as `sample-playbook.yml` in the current
+    working directory, its content looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the output of `ansible-lint` may vary depending on the version of
+    Ansible and `ansible-lint` being used, as well as the specific rules enabled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an example, the following is the output of running `ansible-lint` against
+    the sample playbook provided:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: The output indicates that the playbook contains trailing whitespace on several
+    lines, which violates the `ELL0011` rule of `ansible-lint`. The warning messages
+    regarding the empty path and version info loading are not critical issues and
+    can be safely ignored.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To fix the trailing whitespace issue, simply remove the extra spaces at the
+    end of each affected line. Once the issues are fixed, you can rerun `ansible-lint`
+    to ensure that there are no further problems with the playbook.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Speeding up SSH connections
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Ansible is an open source automation tool that is widely used to deploy and
+    manage IT infrastructure. One of the key features of Ansible is its ability to
+    use SSH for secure communication with remote servers. However, using SSH for every
+    single task can be time-consuming and can impact performance, especially if you’re
+    dealing with a lot of servers. To address this issue, Ansible supports **SSH multiplexing**,
+    which allows multiple SSH connections to share a single TCP connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SSH multiplexing works by reusing the existing SSH connection rather than creating
+    a new one for every task. When Ansible establishes an SSH connection to a remote
+    server, it opens a TCP socket and creates a control socket for that connection.
+    A **control socket** is a special socket that is used to manage the SSH connection.
+    When another SSH connection is requested to the same host, Ansible checks whether
+    a control socket already exists for that connection. If it does, Ansible reuses
+    the existing control socket and creates a new channel within the same SSH connection
+    for the new task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The benefits of SSH multiplexing are that it saves time and resources by reducing
+    the number of SSH connections that Ansible has to establish. Additionally, it
+    can improve the performance of Ansible by reducing the overhead of creating and
+    tearing down SSH connections for every task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To enable SSH multiplexing in Ansible, you need to configure the `ControlMaster`
+    and `ControlPath` options in the SSH client configuration file. The `ControlMaster`
+    option enables the use of SSH multiplexing, while the `ControlPath` option specifies
+    the location of the control socket. By default, Ansible uses the `~/.ansible/cp`
+    directory to store control sockets. You can also configure the maximum number
+    of SSH connections that can be multiplexed simultaneously by setting the `ControlPersist`
+    option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To customize the SSH multiplexing configuration, you can put SSH options into
+    your default Ansible configuration file placed in `~/.ansible.cfg` by adding the
+    `[ssh_connection]` section, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: Make sure to also create a `~/.ssh/multiplexing` directory after adding this
+    configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `ControlMaster=auto` option creates a master session automatically, and
+    if there is a master session already available, subsequent sessions are automatically
+    multiplexed. Setting `ControlPersist=3600` will leave the master connection open
+    in the background to accept new connections for `3600` seconds (1 hour).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dynamic inventory
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In cloud environments such as AWS, servers can be created and terminated dynamically
+    based on demand. Managing these servers manually can be a daunting task, which
+    is why automation tools such as Ansible are essential. One of the critical features
+    of Ansible that makes it well suited for cloud environments is dynamic inventory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Dynamic inventory** is an Ansible feature that enables the automatic discovery
+    of hosts (servers) and groups (tags) in a cloud environment. In AWS, Ansible can
+    use the **Elastic Compute Cloud** (**EC2**) inventory plugin to query the AWS
+    API to retrieve information about EC2 instances and groups.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To use dynamic inventory in AWS, you need to configure the EC2 inventory plugin
+    in your Ansible configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `amazon.aws.aws_ec2` inventory plugin is an official Ansible plugin that
+    enables dynamic inventory for Amazon EC2 instances. To use this plugin, you need
+    to follow the steps set out next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Depending on which version of Ansible you’re using and whether you’ve installed
+    full Ansible (not only Ansible Core), you might need to use Ansible Galaxy to
+    install an AWS collection plugin, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Install the `boto3` and `botocore` libraries on your Ansible control node.
+    You can install them using the `pip` package manager, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: Create an **Identity and Access Management** (**IAM**) user with the necessary
+    permissions to access EC2 instances and groups. You can create an IAM user using
+    the AWS Management Console or the AWS CLI. Make sure to save the IAM user’s access
+    key and secret access key.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Create an AWS credentials file (`~/.aws/credentials`) on your Ansible control
+    node and add the IAM user’s access key and secret access key, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Create an Ansible inventory file (`inventory.yml`) in your project directory
+    and configure it to use the `amazon.aws.aws_ec2` plugin, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s a brief explanation of the configuration options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`plugin`: Specifies the inventory plugin to use'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`regions`: Specifies the AWS regions to search for instances in'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`filters`: Allows you to filter EC2 instances by tags'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Test the inventory by running the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: This command should output a JSON object that lists all the EC2 instances in
+    the specified regions, grouped by their Ansible tags.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This way, you won’t have to update your inventory file on every Ansible playbook
+    run to make sure you have an up-to-date servers list.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we have presented you with the Ansible CaC tool. We have explained
+    and demonstrated how moving configuration, from tribal knowledge and documents
+    (as well as describing steps required to get your system to a desired state) to
+    tools that can implement said configuration based on a well-defined syntax brings
+    benefits to your organization, such as repeatability, ability to run many configurations
+    in parallel, automated tests, and execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we are going to introduce you to **Infrastructure as**
+    **Code** (**IaC**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '*Mastering Ansible, Fourth Edition* by James Freeman and Jesse Keating'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Ansible Playbook Essentials* by Gourav Shah'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '*Ansible for Real-Life Automation* by Gineesh Madapparambath'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
