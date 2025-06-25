@@ -1,13 +1,17 @@
 - en: 'Chapter 12: Creating Immutable Infrastructure Using Packer'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 第 12 章：使用 Packer 创建不可变基础设施
 - en: Managing compute infrastructure, even in the era of the cloud, is still a challenge.
     With the innovations in containerization, **virtual machines** (**VMs**), and
     serverless computing, developers might believe that compute infrastructure is
     a solved problem.
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使在云计算时代，管理计算基础设施仍然是一个挑战。随着容器化、**虚拟机** (**VMs**) 和无服务器计算的创新，开发人员可能认为计算基础设施已经是一个解决了的问题。
 - en: Nothing could be farther from the truth. For cloud providers or others running
     their own data centers, bare metal machines (the machine's OS not running in virtualization)
     must be managed. This has become more complicated in the era of cloud computing.
@@ -15,1088 +19,1650 @@
     so do cloud customers who want to run fleets of VMs and containers. Container
     orchestration systems such as Kubernetes must still provide container images that
     contain an OS image.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 事实远非如此。对于云服务提供商或其他运营自己的数据中心的公司，裸金属机器（操作系统未在虚拟化中运行）仍然需要管理。在云计算时代，这变得更加复杂。你的服务提供商不仅需要管理其操作系统的发布和修补，云客户在运行大量虚拟机和容器时也需要这样做。像
+    Kubernetes 这样的容器编排系统仍然需要提供包含操作系统镜像的容器镜像。
 - en: In the cloud, just like a physical data center, it is important to force OS
     compliance for all containers and VMs. Allowing anyone to run whatever OS they
     want is the gateway to a security breach. To provide a secure platform for developers,
     you must provide a minimal OS standardized across all deployments.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在云中，就像在物理数据中心一样，强制所有容器和虚拟机遵守操作系统合规性是非常重要的。允许任何人运行任何他们想要的操作系统是安全漏洞的入口。为了为开发人员提供一个安全的平台，你必须提供一个在所有部署中都标准化的最小化操作系统。
 - en: Standardization of an OS across a fleet comes with nothing but upsides and very
     few downsides. Standardizing on an OS image is easiest when your company is small.
     Large companies, including cloud providers that have not done this in the early
     days, have suffered through massive projects to standardize OS images at later
     stages.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 在一个集群中标准化操作系统的使用，不仅带来全是好处，且几乎没有缺点。当你的公司还很小的时候，标准化操作系统镜像是最容易的。对于那些在早期未能做到这一点的大公司，包括云服务提供商，他们经历了大规模的项目来在后期实现操作系统镜像的标准化。
 - en: In this section, we are going to talk about how we can use Packer, a software
     package written in Go by HashiCorp, to manage the creation and patching of VM
     and container images. HashiCorp is the leader in the trend of **Infrastructure
     as Code** (**IaC**) that is moving through the industry.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们将讨论如何使用 Packer，这是由 HashiCorp 编写的一个用 Go 语言开发的软件包，用于管理虚拟机和容器镜像的创建和修补。HashiCorp
+    是推动 **基础设施即代码** (**IaC**) 趋势的行业领导者。
 - en: Packer lets us use YAML and Go to provide a consistent way to build images across
     a multitude of platforms. Be it in VM images, Docker images, or bare metal images,
     Packer can create consistent environments for your workloads to run on.
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer 让我们使用 YAML 和 Go 提供一种一致的方式，在多个平台上构建镜像。无论是虚拟机镜像、Docker 镜像，还是裸金属镜像，Packer
+    都可以为你的工作负载提供一致的运行环境。
 - en: As we write Packer configuration files and use the Packer binary, you will begin
     to see how Packer was written. Many of the interactions Packer defines were written
     using libraries such as `os`/`exec` that we have talked about earlier. Maybe you
     will be writing the next Packer that will sweep through the DevOps community!
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们编写 Packer 配置文件并使用 Packer 二进制文件时，你将开始看到 Packer 的编写方式。Packer 定义的许多交互都是使用我们之前讨论过的
+    `os`/`exec` 等库编写的。也许你将编写下一个在 DevOps 社区中广泛应用的 Packer！
 - en: 'We will cover the following topics in this chapter:'
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将涵盖以下主题：
 - en: Building an Amazon Machine Image
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建亚马逊机器镜像
 - en: Validating images with Goss
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Goss 验证镜像
 - en: Customizing Packer with plugins
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用插件自定义 Packer
 - en: Technical requirements
+  id: totrans-12
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: 'The prerequisites for this chapter are as follows:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章的先决条件如下：
 - en: An AWS account
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 AWS 账户
 - en: An AWS Linux VM running on the AMD64 platform
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 AMD64 平台上运行的 AWS Linux 虚拟机
 - en: An AWS user account with administrator access and access to its secret
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个具有管理员访问权限和访问其秘密的 AWS 用户账户
 - en: Installation of Packer on the AWS Linux VM
+  id: totrans-17
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 AWS Linux 虚拟机上安装 Packer
 - en: Installation of Goss on the AWS Linux VM
+  id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 AWS Linux 虚拟机上安装 Goss
 - en: Access to the book's GitHub repository
+  id: totrans-19
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 访问本书的 GitHub 仓库
 - en: To do the exercises in this chapter requires an AWS account. This will use compute
     time and storage on AWS, which will cost money, though you may be able to use
     an AWS Free Tier account ([https://aws.amazon.com/free/](https://aws.amazon.com/free/)).
     None of the authors at the time of writing are currently affiliated with Amazon.
     There is no financial incentive for us. If anything, it costs us money to develop
     this chapter on AWS.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 完成本章练习需要一个AWS账户。这将使用AWS上的计算时间和存储资源，这会产生费用，尽管你可能能够使用AWS免费套餐账户（[https://aws.amazon.com/free/](https://aws.amazon.com/free/)）。目前写本书时，作者们与Amazon没有任何关系。我们没有任何经济利益。如果有的话，开发本章内容所需的AWS费用由我们自己承担。
 - en: When running Packer, we recommend running on Linux, both for cloud images and
     Docker images. Windows is a special niche for cloud computing and Microsoft provides
     its own sets of tools for handling Windows images. We don't recommend using a
     Mac for running these, as the move to Apple silicon and the interaction with multiple
     tools with varying support can lead to a long debug time. While macOS is POSIX-compliant,
     it still isn't Linux, the main target of these tools.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 在运行Packer时，我们建议在Linux上运行，无论是云镜像还是Docker镜像。Windows是云计算的特殊领域，Microsoft为处理Windows镜像提供了自己的工具集。我们不建议在Mac上运行这些工具，因为转向Apple
+    Silicon及其与多个工具之间的兼容性可能会导致较长的调试时间。虽然macOS是POSIX兼容的，但它仍然不是Linux，而Linux才是这些工具的主要目标。
 - en: Getting an AWS account set up with a Linux VM and setting up user accounts is
     beyond what we can cover in the book. See the AWS documentation for help with
     that. For this exercise, please choose either an Amazon Linux or Ubuntu distribution.
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 设置AWS账户、配置Linux虚拟机和设置用户账户超出了本书的范围。有关帮助，请参阅AWS文档。在本练习中，请选择Amazon Linux或Ubuntu发行版之一。
 - en: 'User setup is done using AWS IAM tools, and the user name can be whatever you
     choose. You will also need to obtain an access key and secret for this user. Do
     not store these in a repository or any place that is publicly accessible, as they
     are equivalent to username/password. The user will need to do the following:'
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 用户设置是使用AWS IAM工具完成的，用户名可以是你选择的任何名称。你还需要为此用户获取访问密钥和密钥对。请勿将这些信息存储在代码仓库或任何公开可访问的地方，因为它们相当于用户名/密码。用户需要执行以下操作：
 - en: Belong to a group with `AdministratorAccess` permissions set.
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 属于一个设置了`AdministratorAccess`权限的组。
 - en: Attach the existing policy, `AmazonSSMAutomationRole`.
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 附加现有的策略`AmazonSSMAutomationRole`。
 - en: 'We recommend a personal account for this exercise, as this access is quite
     extensive. You can also set up a specific set of permissions or use another method
     that isn''t as permissible. Instructions on those methods can be found here: [https://www.packer.io/docs/builders/amazon](https://www.packer.io/docs/builders/amazon).'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们建议为本次练习使用个人账户，因为这个访问权限相当广泛。你也可以设置特定的权限集，或者使用权限不那么开放的其他方法。有关这些方法的说明可以在这里找到：[https://www.packer.io/docs/builders/amazon](https://www.packer.io/docs/builders/amazon)。
 - en: Once you have logged into your VM, you need to install Packer. This is going
     to depend on what Linux version you have.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 登录到你的虚拟机后，你需要安装Packer。这将取决于你使用的Linux版本。
 - en: 'The following is for Amazon Linux:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下内容适用于Amazon Linux：
 - en: '[PRE0]'
+  id: totrans-29
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'The following is for Ubuntu:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下内容适用于Ubuntu：
 - en: '[PRE1]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'For other Linux versions, see the following:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于其他Linux版本，请参见以下内容：
 - en: '[https://learn.hashicorp.com/tutorials/packer/get-started-install-cli](https://learn.hashicorp.com/tutorials/packer/get-started-install-cli).'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://learn.hashicorp.com/tutorials/packer/get-started-install-cli](https://learn.hashicorp.com/tutorials/packer/get-started-install-cli).'
 - en: 'To test Packer is installed, run the following:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 要测试Packer是否安装成功，请运行以下命令：
 - en: '[PRE2]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: This should output the version of Packer you have.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 这应该会输出你所安装的Packer版本。
 - en: 'Once Packer is installed, issue the following commands:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 安装Packer后，执行以下命令：
 - en: '[PRE3]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'These commands do the following:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些命令执行了以下操作：
 - en: Set up a directory called `packer` in your user's home directory
+  id: totrans-40
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在你的用户主目录中设置一个名为`packer`的目录
 - en: Create an `amazon.pkr.hcl` file to store our Packer configuration
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`amazon.pkr.hcl`文件，用于存储我们的Packer配置
 - en: Create a `packer/files` directory
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`packer/files`目录
 - en: Generate an SSH key pair for a user, `agent`, which we will add to the image
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为用户`agent`生成一个SSH密钥对，我们将把它添加到镜像中
 - en: Move the `agent.pem` private key into our `.ssh` directory
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将`agent.pem`私钥移动到我们的`.ssh`目录中
 - en: Copy our system agent from the Git repository
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从Git仓库复制我们的系统代理
 - en: Copy a `systemd` service configuration for the system agent from the Git repository
+  id: totrans-46
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从Git仓库复制一个`systemd`服务配置文件，用于系统代理
 - en: Now that we have the prerequisites out of the way, let's have a look at building
     custom **Ubuntu** images for AWS.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 既然我们已经处理完了先决条件，接下来看看如何为AWS构建自定义**Ubuntu**镜像。
 - en: The code files for this chapter can be downloaded from [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12)
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章的代码文件可以从[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12)下载。
 - en: Building an Amazon Machine Image
+  id: totrans-49
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 构建亚马逊机器镜像
 - en: Packer supports a wide variety of plugins that are used by the program to target
     a specific image format. For our example, we are going to target the **Amazon
     Machine Image** (**AMI**) format.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer支持多种插件，程序使用这些插件来定位特定的镜像格式。对于我们的示例，我们将针对**亚马逊机器镜像**（**AMI**）格式。
 - en: 'There are other build targets for Docker, Azure, Google Cloud, and others.
     You may find a list of other build targets here: [https://www.packer.io/docs/builders/](https://www.packer.io/docs/builders/).'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有其他的构建目标，适用于Docker、Azure、Google Cloud等。你可以在这里找到其他构建目标的列表：[https://www.packer.io/docs/builders/](https://www.packer.io/docs/builders/)。
 - en: For images that are used in cloud environments, Packer plugins generally take
     an existing image that lives on the cloud provider and lets you repackage and
     upload the image to the service.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于用于云环境中的镜像，Packer插件通常会获取一个现有的云提供商镜像，允许你重新打包并将该镜像上传到服务中。
 - en: And, if you need to build multiple images for multiple cloud providers, containers,
     Packer can do simultaneous builds.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你需要为多个云提供商构建多个镜像，Packer可以同时进行多个构建。
 - en: 'For Amazon, there are currently four methods for building an AMI:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于Amazon，目前有四种方法来构建AMI：
 - en: Amazon **Elastic Block Store** (**EBS**) launches a source AMI, provisions it,
     and then repackages it.
+  id: totrans-55
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 亚马逊**弹性块存储**（**EBS**）启动一个源AMI，进行配置，然后重新打包它。
 - en: Amazon instance virtual server, which launches an instance VM, rebundles it,
     and then uploads it to S3 (an Amazon object storage service).
+  id: totrans-56
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 亚马逊实例虚拟服务器，它启动一个实例虚拟机，重新打包它，然后将其上传到S3（一个亚马逊对象存储服务）。
 - en: 'The two other methods are for advanced use cases. As this is an introduction
     to Packer using AWS, we are going to avoid these. However, you can read about
     all these methods here: [https://www.packer.io/docs/builders/amazon](https://www.packer.io/docs/builders/amazon).'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 另外两种方法适用于高级用例。由于这是介绍如何使用AWS的Packer，因此我们将避免使用这些方法。不过，你可以在这里阅读所有这些方法：[https://www.packer.io/docs/builders/amazon](https://www.packer.io/docs/builders/amazon)。
 - en: 'There are two configuration file formats used by Packer:'
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer使用两种配置文件格式：
 - en: '**JavaScript Object Notation** (**JSON**)'
+  id: totrans-59
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**JavaScript 对象表示法**（**JSON**）'
 - en: '**HashiCorp Configuration Language 2** (**HCL 2**)'
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**HashiCorp 配置语言 2**（**HCL 2**）'
 - en: 'As JSON is deprecated, we will be using `HCL2`. This format was created by
     HashiCorp and you can find their Go parser here: [https://github.com/hashicorp/hcl2](https://github.com/hashicorp/hcl2).
     The parser can be useful if you wish to write your own tools around Packer or
     want to support your own configurations in `HCL2`.'
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于JSON已被弃用，我们将使用`HCL2`。此格式由HashiCorp创建，你可以在这里找到他们的Go解析器：[https://github.com/hashicorp/hcl2](https://github.com/hashicorp/hcl2)。如果你希望围绕Packer编写自己的工具，或者想在`HCL2`中支持自己的配置，解析器将非常有用。
 - en: Now, let's create a Packer configuration file that we can use to access the
     Amazon plugin.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们创建一个Packer配置文件，用来访问亚马逊插件。
 - en: Open the file called `amazon.pkr.hcl` in the `packer/` directory we created.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 打开我们创建的`packer/`目录中的`amazon.pkr.hcl`文件。
 - en: 'Add the following:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 添加以下内容：
 - en: '[PRE4]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'This tells Packer the following:'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 这告诉Packer以下内容：
 - en: We require the `amazon` plugin.
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们需要`amazon`插件。
 - en: The version of the plugin we want, which is the latest plugin that must be newer
     than version `0.0.1`.
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们需要的插件版本，即必须比版本`0.0.1`更新的最新插件。
 - en: The `source` location in which to retrieve the plugin.
+  id: totrans-69
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`source`位置，用于获取插件。'
 - en: As we are using a cloud provider, we need to set up the AWS source information.
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们使用的是云提供商，因此需要设置AWS源信息。
 - en: Setting up an AWS source
+  id: totrans-71
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 设置AWS源
 - en: 'We are going to use the **Amazon EBS** build method, as this is the easiest
     method to deploy on AWS. Add the following to the file:'
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将使用**Amazon EBS**构建方法，因为这是在AWS上部署的最简单方法。将以下内容添加到文件中：
 - en: '[PRE5]'
+  id: totrans-73
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'There is some key information here, so we are going to take it one step at
     a time:'
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里有一些关键信息，我们将逐步进行：
 - en: '[PRE6]'
+  id: totrans-75
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'This sets up the source for our base image. As we are using the `amazon` plugin,
     the source will have fields related to that plugin. You can find a complete list
     of fields here: [https://www.packer.io/docs/builders/amazon/ebs](https://www.packer.io/docs/builders/amazon/ebs).'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 这设置了我们基础镜像的源。由于我们使用的是 `amazon` 插件，因此源将包含与该插件相关的字段。你可以在这里找到完整的字段列表：[https://www.packer.io/docs/builders/amazon/ebs](https://www.packer.io/docs/builders/amazon/ebs)。
 - en: This line names our source as having two parts, `amazon-ebs` and `ubuntu`. When
     we refer to this source in our `build` stanza, it will be referred to as `source.amazon-ebs.ubuntu`.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 这一行将我们的源命名为包含两部分，`amazon-ebs` 和 `ubuntu`。当我们在 `build` 块中引用此源时，它将被称为 `source.amazon-ebs.ubuntu`。
 - en: 'Now, we have a few field values:'
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们有几个字段值：
 - en: '`access_key` is the IAM user key to use.'
+  id: totrans-79
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`access_key` 是要使用的 IAM 用户密钥。'
 - en: '`secret_key` is the IAM user''s secret to use.'
+  id: totrans-80
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`secret_key` 是要使用的 IAM 用户的密钥。'
 - en: '`ami_name` is the name of the resulting AMI in the AWS console.'
+  id: totrans-81
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ami_name` 是 AWS 控制台中生成的 AMI 名称。'
 - en: '`instance_type` is the AWS instance type to use to build the AMI.'
+  id: totrans-82
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`instance_type` 是用于构建 AMI 的 AWS 实例类型。'
 - en: '`region` is the AWS region for the build instance to spawn in.'
+  id: totrans-83
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`region` 是构建实例所在的 AWS 区域。'
 - en: '`source_ami_filter` filters the AMI image to find the image to apply.'
+  id: totrans-84
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`source_ami_filter` 用于过滤 AMI 镜像，以找到要应用的镜像。'
 - en: '`filters` contain a way to filter our base AMI image.'
+  id: totrans-85
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`filters` 包含了一种过滤我们基础 AMI 镜像的方法。'
 - en: '`name` gives the name of the AMI image. This can be any matching name returned
     by this API: [https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html).'
+  id: totrans-86
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`name` 给出了 AMI 镜像的名称。它可以是该 API 返回的任何匹配名称：[https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html)。'
 - en: '`root-device-type` specifies we are using `ebs` as our source.'
+  id: totrans-87
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`root-device-type` 指定我们使用 `ebs` 作为我们的源。'
 - en: '`virtualization-type` indicates which of two AMI virtualization technologies
     to use, `hvm` or `pv`. Due to enhancements to `hvm`, is it now the choice to use.'
+  id: totrans-88
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`virtualization-type` 指示使用哪种 AMI 虚拟化技术，`hvm` 或 `pv`。由于 `hvm` 的增强，现在推荐使用它。'
 - en: '`most_recent` indicates to use the most recent image found.'
+  id: totrans-89
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`most_recent` 表示使用找到的最新镜像。'
 - en: '`owners` must list an ID of an owner of the base image AMI we are using. `"099720109477"`
     is a reference to Canonical, the maker of Ubuntu.'
+  id: totrans-90
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`owners` 必须列出我们使用的基础镜像 AMI 所有者的 ID。`"099720109477"` 是对 Canonical（Ubuntu 的制造商）的引用。'
 - en: '`ssh_username` is the user name to SSH into the image with. `ubuntu` is the
     default user.'
+  id: totrans-91
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ssh_username` 是用来通过 SSH 登录镜像的用户名。`ubuntu` 是默认用户名。'
 - en: As alternates to the authentication method here, you can use IAM roles, shared
     credentials, or other methods. However, each of the others is too complicated
     for this book to cover. See the link in the *Technical requirements* section if
     you wish to use another method.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为此处身份验证方法的替代方案，你可以使用 IAM 角色、共享凭证或其他方法。然而，其他方法过于复杂，本书无法涵盖。如果你希望使用其他方法，请参见 *技术要求*
+    部分中的链接。
 - en: '`secret_key` needs to be secured like any password. In production, you will
     want to use IAM roles to avoid using `secret_key` or fetch this from a secure
     password service (AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager)
     and use the environmental variable method to allow Packer to use the key.'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: '`secret_key` 需要像密码一样安全。在生产环境中，你将希望使用 IAM 角色来避免使用 `secret_key`，或者从安全密码服务（如 AWS
+    Secrets Manager、Azure Key Vault 或 GCP Secret Manager）中获取密钥，并使用环境变量方法让 Packer 使用该密钥。'
 - en: Next, we need to define a `build` block to allow us to change the image from
     the base to one customized for us.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们需要定义一个 `build` 块，以允许我们将镜像从基础镜像更改为我们定制的镜像。
 - en: Defining a build block and adding some provisioners
+  id: totrans-95
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 定义一个 build 块并添加一些 provisioners
 - en: Packer defines a `build` block that references the source we defined in the
     previous section and makes the changes we want to that image.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer 定义了一个 `build` 块，引用我们在前一节中定义的源，并对该镜像进行我们想要的更改。
 - en: To do this, Packer uses `provisioner` configurations inside `build`. Provisioners
     let you make changes to an image by using the shell, Ansible, Chef, Puppet, files,
     or other methods.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 为此，Packer 在 `build` 中使用 `provisioner` 配置。Provisioners 让你通过使用 shell、Ansible、Chef、Puppet、文件或其他方法对镜像进行更改。
 - en: 'A full list of provisioners can be found here:'
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在这里找到完整的 provisioners 列表：
 - en: '[https://www.packer.io/docs/provisioners](https://www.packer.io/docs/provisioners).'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://www.packer.io/docs/provisioners](https://www.packer.io/docs/provisioners)。'
 - en: For long-term maintenance of your running infrastructure, Chef or Puppet have
     been the choice for many installations. This allows you to update the fleet without
     having to wait for an instance to be rebooted with the latest image.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于长期维护你的运行基础设施，Chef 或 Puppet 已经是许多安装的选择。这样可以在不等待实例重启的情况下更新整个群集到最新的镜像。
 - en: By integrating it with Packer, you can make sure to apply the latest patches
     to your image during the build process.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过与 Packer 集成，你可以确保在构建过程中应用最新的补丁到你的镜像上。
 - en: While this is certainly helpful, we cannot explore these during this chapter.
     Setting up Chef or Puppet is simply beyond what we can do here. But for long-term
     maintenance, it is worth exploring these provisioners.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管这确实有所帮助，但我们无法在本章中探索这些内容。设置 Chef 或 Puppet 只是超出我们目前能做的范围。但是对于长期维护，值得探索这些配置器。
 - en: 'For our example, we are going to do the following:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为我们的示例，我们将执行以下操作：
 - en: Install the Go 1.17.5 environment.
+  id: totrans-104
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 安装 Go 1.17.5 环境。
 - en: Add a user, `agent`, to the system.
+  id: totrans-105
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 添加一个用户，`agent`，到系统中。
 - en: Copy SSH keys to the system for that user.
+  id: totrans-106
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 复制 SSH 密钥到系统中对应的用户。
 - en: Add our system agent from a previous chapter.
+  id: totrans-107
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 从前面的章节中添加我们的系统代理。
 - en: Set systemd to run the agent from the `agent` user.
+  id: totrans-108
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置 systemd 以 `agent` 用户运行代理。
 - en: Let's start by using the `shell` provisioner to install Go's 1.17.5 version
     using `wget`.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们从使用 `shell` 配置器开始，使用 `wget` 安装 Go 的 1.17.5 版本。
 - en: 'Let''s add the following:'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们添加以下内容：
 - en: '[PRE7]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'Our `build` block contains the following:'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的 `build` 块包含以下内容：
 - en: '`name`, which names this block.'
+  id: totrans-113
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`name`，给这个块命名。'
 - en: '`sources`, which is a list of source blocks to include. This includes the source
     we just defined.'
+  id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`sources`，这是一个包含的源块列表。这包括我们刚刚定义的源。'
 - en: '`provisioner "shell"` says we are going to use the `shell` provisioner, which
     logs in via the shell to do work. You may have multiple provisioner blocks of
     this type or of other types.'
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`provisioner "shell"` 表明我们将使用 `shell` 配置器，通过 shell 登录执行工作。你可以有多个这种类型或其他类型的配置器块。'
 - en: '`inline` sets up commands to be run, one after another, in a shell script.
     This set of shell commands downloads Go version 1.17.5, installs it, tests it,
     and removes the install files.'
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`inline` 设置要在一个 Shell 脚本中依次运行的命令集合。这组 Shell 命令下载 Go 版本 1.17.5，安装它，测试它，并移除安装文件。'
 - en: It should be noted that you could also use `file provisioner`, which we will
     show later, to take a local copy of the file instead of retrieving it with `wget`.
     But, we wanted to show how you can also just use standard Linux tools to pull
     from a trusted repository.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 应注意，你也可以使用 `file provisioner`（稍后我们将展示），从本地复制文件而不是使用 `wget` 检索它。但我们想展示如何仅使用标准的
+    Linux 工具从可信库中拉取。
 - en: 'Next, we will add another provision *inside* the `build` that adds a user to
     the system:'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将在 `build` 中添加另一个配置 *内部* 的提供程序，用于向系统添加一个用户：
 - en: '[PRE8]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'The preceding code block is structured as follows:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 前面的代码块结构如下：
 - en: 'The first `shell` block: Adds a user, `agent`, with a disabled password.'
+  id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第一个 `shell` 块：添加一个名为 `agent` 的用户，禁用密码。
 - en: 'The second `file` block: Copies a local file, `./files/agent.pub`, to `/tmp`,
     as we can''t copy directly to a user other than `ubuntu` using `file provisioner`.'
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第二个 `file` 块：复制一个本地文件 `./files/agent.pub` 到 `/tmp`，因为我们不能直接使用 `file provisioner`
+    将其复制到 `ubuntu` 以外的用户。
 - en: 'The third shell block:'
+  id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 第三个 shell 块：
 - en: Makes our new user's `.ssh` directory.
+  id: totrans-124
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建我们新用户的 `.ssh` 目录。
 - en: Moves the `agent.pub` file out of `/tmp` to `.ssh/authorized_keys`.
+  id: totrans-125
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将 `agent.pub` 文件从 `/tmp` 移到 `.ssh/authorized_keys`。
 - en: Modifies all directories and files to have the right owners and permissions.
+  id: totrans-126
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 修改所有目录和文件以具备正确的所有者和权限。
 - en: 'Now, let''s add provisioners that install our system agent and sets up `systemd`
     to manage it. The following section uses the shell provisioner to install `dbus`,
     which is used to communicate with `systemd`. We set an environmental variable
     that prevents some pesky Debian interactive questions when we install using `apt-get`:'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们添加配置器来安装我们的系统代理并设置 `systemd` 来管理它。以下部分使用 `shell` 配置器安装 `dbus`，它用于与 `systemd`
+    通信。我们设置了一个环境变量，以防止在使用 `apt-get` 安装时出现一些讨厌的 Debian 交互式问题：
 - en: '[PRE9]'
+  id: totrans-128
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'This uses the file provisioner to copy the agent we want to run from our source
     files onto the image at the `/tmp/agent` location:'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用文件配置器将我们想要运行的代理从源文件复制到镜像的 `/tmp/agent` 位置：
 - en: '[PRE10]'
+  id: totrans-130
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'The following section creates a directory in the user agent''s home directory
     called `bin` and moves the agent we copied over in the previous section into it.
     The rest is some necessary permissions and ownership changes:'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来的部分在用户代理的主目录中创建一个名为`bin`的目录，并将我们在前一部分复制过来的代理文件移动到其中。剩下的是一些必要的权限和所有权更改：
 - en: '[PRE11]'
+  id: totrans-132
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'This copies over the `systemd` file from our source directory to our image:'
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将把`systemd`文件从源目录复制到我们的镜像中：
 - en: '[PRE12]'
+  id: totrans-134
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'This last section moves the `agent.service` file to its final location, tells
     `systemd` to enable the service described in `agent.service`, and validates that
     it is active. The `sleep` parameter is used to simply allow the daemon to start
     before it is checked:'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后一部分将`agent.service`文件移动到最终位置，告诉`systemd`启用`agent.service`中描述的服务，并验证它是否处于活动状态。`sleep`参数的作用是允许守护进程在检查之前启动：
 - en: '[PRE13]'
+  id: totrans-136
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'Finally, let''s add the Goss tool, which we will be using in the next section:'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们添加Goss工具，我们将在下一部分中使用它：
 - en: '[PRE14]'
+  id: totrans-138
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: This downloads the latest Goss tool, sets it to be executable, and tests that
     it works.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将下载最新的Goss工具，设置其为可执行，并测试它是否能正常工作。
 - en: Now, let's look at how we could execute a Packer build to create an image.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们看看如何执行Packer构建来创建一个镜像。
 - en: Executing a Packer build
+  id: totrans-141
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 执行Packer构建
 - en: 'There are four stages to doing a Packer build:'
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer构建有四个阶段：
 - en: Initializing Packer to download the plugins
+  id: totrans-143
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 初始化Packer以下载插件
 - en: Validating the build
+  id: totrans-144
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 验证构建
 - en: Formatting the Packer configuration file
+  id: totrans-145
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 格式化Packer配置文件
 - en: Building the image
+  id: totrans-146
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建镜像
 - en: 'The first thing to do is initialize our plugins. To do this, simply type the
     following:'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一步是初始化我们的插件。为此，只需输入以下内容：
 - en: '[PRE15]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Note
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'If you see a message such as `Error: Unsupported block type`, it is likely
     you put the `provisioner` blocks outside the `build` block.'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: '如果你看到类似`Error: Unsupported block type`的消息，很可能是你把`provisioner`块放在了`build`块外面。'
 - en: 'Once the plugins are installed, we need to validate our build:'
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 安装插件后，我们需要验证我们的构建：
 - en: '[PRE16]'
+  id: totrans-152
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: This should yield `The configuration is valid`. If it doesn't, you will need
     to edit the file to fix the errors.
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 这应该会显示`The configuration is valid`。如果没有，你需要编辑文件以修复错误。
 - en: 'At this time, let''s format the Packer template files. This is a concept I''m
     sure HashiCorp borrowed from Go''s `go fmt` command and works in the same way.
     Let''s give it a try with the following:'
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们格式化Packer模板文件。这是我相信HashiCorp借用自Go的`go fmt`命令的概念，工作方式也相同。让我们尝试一下：
 - en: '[PRE17]'
+  id: totrans-155
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'Finally, it''s time to do our build:'
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，是时候进行我们的构建了：
 - en: '[PRE18]'
+  id: totrans-157
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'There will be quite a bit of output here. But if everything is successful,
     you will see something like the following:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里会有相当多的输出。如果一切顺利，你将看到如下信息：
 - en: '[PRE19]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: Note
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: If you see errors about permissions, this will be related to your user account
     setup. See the necessary permissions listed in the earlier part of the chapter.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你看到关于权限的错误，这将与你的用户账户设置有关。请参见本章早些时候列出的必要权限。
 - en: You now have an AMI image available on AWS. You can launch AWS VMs that use
     this image and they will be running our system agent. Feel free to launch a VM
     set to your new AMI and play with the agent. You can access the agent from your
     Linux device using `ssh agent@[host]`, where `[host]` is the IP or DNS entry of
     the host on AWS.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，你已经在AWS上拥有了一个AMI镜像。你可以启动使用该镜像的AWS虚拟机，它们将运行我们的系统代理。随意启动一个VM并设置为你的新AMI，玩玩代理。你可以通过`ssh
+    agent@[host]`从你的Linux设备访问该代理，其中`[host]`是AWS主机的IP或DNS地址。
 - en: Now that we can use Packer to package our images, let's look at Goss for validating
     our image.
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 既然我们可以使用Packer来打包镜像，让我们看看如何使用Goss来验证镜像。
 - en: Validating images with Goss
+  id: totrans-164
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用Goss验证图片
 - en: Goss is a tool for checking server configurations using a spec file written
     in YAML. This way you can test that the server is working as expected. This can
     be from testing access to the server over SSH using expected keys to validating
     that various processes are running.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: Goss是一个用于检查服务器配置的工具，使用的是YAML编写的规格文件。通过这种方式，你可以测试服务器是否按预期工作。这可以是测试通过SSH使用预期密钥访问服务器，也可以是验证各种进程是否正在运行。
 - en: Not only can Goss test your server for compliance, but it can be integrated
     with Packer. That way, we can test that our server is running as expected during
     the provisioning step and before deployment.
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: Goss不仅可以测试你的服务器是否符合要求，它还可以与Packer集成。这样，我们就可以在提供服务的步骤和部署之前，测试服务器是否按预期运行。
 - en: Let's have a look at making a Goss spec file.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看看如何创建一个Goss规格文件。
 - en: Creating a spec file
+  id: totrans-168
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 创建规格文件
 - en: A spec file is a set of instructions that tells Goss what to test for.
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 规格文件是一组指令，告诉Goss需要测试什么。
 - en: There are a couple of ways to make a spec file for Goss. The spec file is used
     by Goss to understand what it needs to test.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 有几种方法可以为 Goss 创建规范文件。规范文件用于告诉 Goss 需要测试什么。
 - en: 'While you could write it by hand, the most efficient way is to use one of two
     Goss commands:'
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然你可以手动编写，但最有效的方法是使用 Goss 的两个命令之一：
 - en: '`goss add`'
+  id: totrans-172
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`goss add`'
 - en: '`goss autoadd`'
+  id: totrans-173
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`goss autoadd`'
 - en: The most efficient way to use Goss is to launch a machine with your custom AMI,
     log in using the `ubuntu` user, and use `autoadd` to generate the YAML file.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 Goss 的最有效方法是启动一个包含自定义 AMI 的机器，使用 `ubuntu` 用户登录，并使用 `autoadd` 生成 YAML 文件。
 - en: 'Once logged onto your AMI instance, let''s run the following:'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 登录到你的 AMI 实例后，让我们运行以下命令：
 - en: '[PRE20]'
+  id: totrans-176
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'This will generate a `process.yaml` file with the following content:'
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将生成一个 `process.yaml` 文件，内容如下：
 - en: '[PRE21]'
+  id: totrans-178
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'This states that we expect the following:'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 这表示我们预期以下内容：
 - en: A system service called `sshd` should be enabled and running via systemd.
+  id: totrans-180
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个名为 `sshd` 的系统服务应该通过 systemd 启用并运行。
 - en: 'The service should be running with user `sshd`:'
+  id: totrans-181
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 服务应该以用户 `sshd` 运行：
 - en: With user ID `110`.
+  id: totrans-182
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用户 ID 为 `110`。
 - en: With group ID `65534`.
+  id: totrans-183
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 组 ID 为 `65534`。
 - en: Belonging to no other groups.
+  id: totrans-184
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 不属于其他任何组。
 - en: The user's home directory should be `/var/run/sshd`.
+  id: totrans-185
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用户的主目录应该是 `/var/run/sshd`。
 - en: The user should have no login shell.
+  id: totrans-186
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用户应该没有登录 shell。
 - en: A process called `sshd` should be running.
+  id: totrans-187
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个名为 `sshd` 的进程应该正在运行。
 - en: 'Let''s add the agent service we deployed:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们添加我们部署的代理服务：
 - en: '[PRE22]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: This will add similar lines inside the YAML file.
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将向 YAML 文件中添加类似的行。
 - en: 'Now, let''s validate the agent location:'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们验证代理位置：
 - en: '[PRE23]'
+  id: totrans-192
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'This will add a section such as the following:'
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将添加如下所示的部分：
 - en: '[PRE24]'
+  id: totrans-194
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'This states the following:'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 这表示以下内容：
 - en: The `/home/agent/bin/agent` file must exist.
+  id: totrans-196
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`/home/agent/bin/agent` 文件必须存在。'
 - en: Must be in mode `0700`.
+  id: totrans-197
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 必须是模式 `0700`。
 - en: Must have a size of `14429561` bytes.
+  id: totrans-198
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 必须有 `14429561` 字节的大小。
 - en: Must be owned by `agent:agent`.
+  id: totrans-199
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 必须由 `agent:agent` 拥有。
 - en: Is a file, versus a directory or `symlink`.
+  id: totrans-200
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 是文件，而不是目录或 `symlink`。
 - en: 'Let''s add another, but being more specific, using `goss add`:'
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们添加另一个，但更具体一些，使用 `goss add`：
 - en: '[PRE25]'
+  id: totrans-202
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: 'Instead of making a guess at what an argument is as `autoadd` does, we had
     to specify it was a file. This renders us the same entry as `autoadd` would. For
     this file, let''s validate the contents of the `authorized_keys` file. To do this,
     we will use a `SHA256` hash. First, we can get the hash by running the following:'
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 与 `autoadd` 自动猜测参数不同，我们必须明确指定它是一个文件。这将生成与 `autoadd` 相同的条目。对于这个文件，我们来验证 `authorized_keys`
+    文件的内容。为此，我们将使用 `SHA256` 哈希。首先，我们可以通过运行以下命令来获取哈希：
 - en: '[PRE26]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: 'This will return the hash of the file. In the `file` entry for `authorized_keys`
     in our YAML file, add the following:'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将返回文件的哈希值。在 YAML 文件中 `authorized_keys` 的 `file` 条目里，添加以下内容：
 - en: '[PRE27]'
+  id: totrans-206
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: Unfortunately, Goss does not have a way to simply add entire directories of
     files or automatically add `SHA256` to the entry. An example of that might be
     to validate that all of Go's 1.17.5 files were present as expected on our image.
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 不幸的是，Goss 没有简单地添加整个目录文件或自动将 `SHA256` 添加到条目的功能。一个例子可能是验证 Go 的 1.17.5 版本的所有文件是否按预期出现在我们的镜像中。
 - en: 'You might be tempted to do something like the following:'
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可能会想尝试如下操作：
 - en: '[PRE28]'
+  id: totrans-209
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: However, this is quite slow because `goss` reads in the YAML file on each run.
     You might be tempted to try to use `xargs -P 0` to speed things up, but it will
     cause other problems.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，这样做速度相当慢，因为 `goss` 每次运行时都会读取 YAML 文件。你可能会想使用 `xargs -P 0` 来加速，但这样会导致其他问题。
 - en: 'If you have a need to include lots of files and SHA256 hashes, you will need
     to write a custom script/program to handle this. Fortunately, we have Go, so it''s
     easy to write something that can do this. And, because Goss is written in Go,
     we can reuse the data structures from the program. You can see an example of a
     tool to do this here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12/goss/allfiles](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12/goss/allfiles).'
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你需要包含大量文件和 SHA256 哈希，你需要编写一个自定义脚本/程序来处理这些内容。幸运的是，我们有 Go，因此编写一个可以做到这一点的程序非常容易。而且因为
+    Goss 是用 Go 编写的，我们可以重用程序中的数据结构。你可以在这里看到一个示例工具：[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12/goss/allfiles](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/12/goss/allfiles)。
 - en: 'You simply can run it against a directory structure (after compiling it) like
     so:'
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以直接针对目录结构（编译后）运行它，如下所示：
 - en: '[PRE29]'
+  id: totrans-213
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: This would output a `goinstall_files.yaml` file that provides a Goss configuration
     to check these files and their SHA256 hashes.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将输出一个 `goinstall_files.yaml` 文件，该文件提供了一个 Goss 配置，用于检查这些文件及其 SHA256 哈希。
 - en: 'Remember when we installed `dbus`? Let''s validate that our `dbus` packages
     are installed:'
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 还记得我们安装了`dbus`吗？让我们验证一下我们的`dbus`包是否已安装：
 - en: '[PRE30]'
+  id: totrans-216
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: This now makes sure that our `dbus` and `dbus-x11` packages are installed. The
     `-g dbus.yaml` file writes this to another file called `dbus.yaml` instead of
     the default `goss.yaml`.
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 这现在确保我们的`dbus`和`dbus-x11`包已安装。`-g dbus.yaml`文件将此写入另一个名为`dbus.yaml`的文件，而不是默认的`goss.yaml`。
 - en: 'We now need to create our `goss.yaml` file that references the other files
     we created. We could have run `goss` without the `-g` option, but this keeps things
     a little more organized. Let''s create our root file:'
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们需要创建一个`goss.yaml`文件，引用我们创建的其他文件。我们本可以在不加`-g`选项的情况下运行`goss`，但这样可以使事情更有条理。让我们创建我们的根文件：
 - en: '[PRE31]'
+  id: totrans-219
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: This creates a `goss.yaml` file that references all our other files.
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 这会创建一个`goss.yaml`文件，该文件引用我们所有的其他文件。
 - en: 'Let''s use it to validate everything:'
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们用它来验证所有内容：
 - en: '[PRE32]'
+  id: totrans-222
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: 'This will output text similar to the following:'
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将输出类似于以下内容的文本：
 - en: '[PRE33]'
+  id: totrans-224
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: Note, yes, it did run in less than a second!
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，是的，它确实在不到一秒钟的时间内运行完成！
 - en: Adding a Packer provisioner
+  id: totrans-226
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 添加Packer预配置器
 - en: It's great that we can verify what we already had, but what we really want is
     to validate every image build. To do this, we can use a custom Packer provisioner
     that Yale University developed.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们能够验证已有的内容很棒，但我们真正想要的是验证每一个镜像构建。为此，我们可以使用耶鲁大学开发的自定义Packer预配置器。
 - en: To do that, we need to get the YAML files off the image and onto our build machine.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了做到这一点，我们需要将YAML文件从镜像中提取并传送到我们的构建机器上。
 - en: 'From the build machine, issue the following commands (replacing things in `[]`):'
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 从构建机器上，执行以下命令（替换`[]`中的内容）：
 - en: '[PRE34]'
+  id: totrans-230
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: You need to replace `[user]` with the username on the build machine and `[ip
     of AMI machine]` with the IP address or DNS entry for the AMI machine you launched.
     You may also need to supply a `-i [location of pem file]` after `scp`.
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 你需要将`[user]`替换为构建机器上的用户名，将`[ip of AMI machine]`替换为你启动的AMI机器的IP地址或DNS条目。你还可能需要在`scp`之后提供`-i
+    [pem文件的位置]`。
 - en: 'As the Goss provisioner is not built in, we need to download the release from
     Yale''s GitHub repository and install it:'
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于Goss预配置器没有内建，我们需要从耶鲁大学的GitHub仓库下载该版本并进行安装：
 - en: '[PRE35]'
+  id: totrans-233
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'With the provisioner installed, we can add the configuration to the `amazon.pkr.hcl`
     file:'
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 安装完预配置器后，我们可以将配置添加到`amazon.pkr.hcl`文件中：
 - en: '[PRE36]'
+  id: totrans-235
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: You can find other `provisioner` settings for Goss at [https://github.com/YaleUniversity/packer-provisioner-goss](https://github.com/YaleUniversity/packer-provisioner-goss).
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在[https://github.com/YaleUniversity/packer-provisioner-goss](https://github.com/YaleUniversity/packer-provisioner-goss)找到更多Goss的`provisioner`设置。
 - en: 'Let''s reformat our Packer file:'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们重新格式化我们的Packer文件：
 - en: '[PRE37]'
+  id: totrans-238
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: 'We cannot build the `packer` image yet, because it would have the same name
     as the image we already have uploaded to AWS. We have two choices: remove the
     AMI image we built earlier from AWS or change the name held in our Packer file
     to the following:'
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还不能构建`packer`镜像，因为它将与我们已上传到AWS的镜像同名。我们有两个选择：从AWS中删除我们之前构建的AMI镜像，或者将我们Packer文件中的名称更改为以下内容：
 - en: '[PRE38]'
+  id: totrans-240
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: Either choice is fine.
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 两种选择都可以。
 - en: 'Now, let''s build our AMI image:'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们构建我们的AMI镜像：
 - en: '[PRE39]'
+  id: totrans-243
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: 'When you run it this time, you should see something similar to the following
     in the output:'
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你这次运行它时，输出中应该会看到类似以下的内容：
 - en: '[PRE40]'
+  id: totrans-245
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: This indicates that the Goss tests ran successfully. If Goss fails, a debug
     output will be downloaded to the local directory.
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 这表示Goss测试成功运行。如果Goss失败，将会下载调试输出到本地目录。
 - en: 'You can find the final version of the Packer file here:'
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在这里找到最终版的Packer文件：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.final.pkr.hcl](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.final.pkr.hcl).'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.final.pkr.hcl](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.final.pkr.hcl)。'
 - en: 'You have now seen how to use the Goss tool to build validations for your images
     and integrate them into Packer. There are more features to explore and you can
     read about them here: [https://github.com/aelsabbahy/goss](https://github.com/aelsabbahy/goss).'
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: 你现在已经看到了如何使用Goss工具为你的镜像构建验证并将其集成到Packer中。还有更多的功能可以探索，你可以在这里阅读：[https://github.com/aelsabbahy/goss](https://github.com/aelsabbahy/goss)。
 - en: Now that we have used Goss as a provisioner, what about writing our own?
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经使用了Goss作为预配置器，那么如何编写我们自己的呢？
 - en: Customizing Packer with plugins
+  id: totrans-251
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用插件自定义Packer
 - en: The built-in provisioners that we used are pretty powerful. By providing shell
     access and file uploads, it is possible to do almost everything inside a Packer
     provisioner.
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们使用的内建提供程序非常强大。通过提供 shell 访问和文件上传，几乎可以在 Packer 提供程序中做任何事情。
 - en: For large builds, this can be quite tedious. And, if the case is something common,
     you might want to simply have your own Go application do the work for you.
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于大规模构建，这可能会非常繁琐。而且，如果这种情况是常见的，您可能想让自己的 Go 应用程序为您完成这项工作。
 - en: 'Packer allows for building plugins that can be used as the following:'
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer 允许构建可以用于以下场景的插件：
 - en: A Packer builder
+  id: totrans-255
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 Packer 构建器
 - en: A Packer provisioner
+  id: totrans-256
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 Packer 提供程序
 - en: A Packer post-processor
+  id: totrans-257
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 Packer 后处理器
 - en: 'Builders are used when you need to interact with the system that will use your
     image: Docker, AWS, GCP, Azure, or others. As this isn''t a common use outside
     cloud providers or companies such as VMware adding support, we will not cover
     this.'
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
+  zh: 构建器在您需要与将使用您图像的系统进行交互时使用：Docker、AWS、GCP、Azure 或其他系统。由于这种用法在云提供商或像 VMware 这样的公司增加支持之外并不常见，因此我们将不做详细介绍。
 - en: Post-processors are normally used to push an image to upload the artifacts generated
     earlier. As this isn't common, we will not cover this.
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: 后处理器通常用于将图像推送到上传之前生成的工件。由于这不是常见的用法，我们将不做详细介绍。
 - en: Provisioners are the most common, as they are part of the build process to output
     an image.
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: 提供程序是最常见的，因为它们是构建过程中输出图像的一部分。
 - en: 'Packer has two ways of writing these plugins:'
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer 有两种编写这些插件的方式：
 - en: Single-plugins
+  id: totrans-262
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 单一插件
 - en: Multi-plugins
+  id: totrans-263
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 多插件
 - en: Single plugins are an older style of writing plugins. The Goss provisioner is
     written in the older style, which is why we installed it manually.
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
+  zh: 单一插件是编写插件的旧方式。Goss 提供程序就是用旧方式编写的，这也是我们手动安装它的原因。
 - en: With the newer style, `packer init` can be used to download the plugin. In addition,
     a plugin can register multiple builders, provisioners, or post-processors in a
     single plugin. This is the recommended way of writing a plugin.
+  id: totrans-265
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用更新的方式，`packer init` 可以用来下载插件。此外，一个插件可以在一个插件中注册多个构建器、提供程序或后处理器。这是编写插件的推荐方式。
 - en: Unfortunately, the official documentation for multi-plugins and doing releases
     that support `packer init` is incomplete at the time of this writing. Following
     the directions will not yield a plugin that can be released using their suggested
     process.
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
+  zh: 不幸的是，截至撰写本文时，关于多插件和支持 `packer init` 的发布的官方文档不完整。按照这些说明操作，无法生成可以通过他们建议的过程发布的插件。
 - en: The instructions included here will fill in the gaps to allow building a multi-plugin
     that users can install using `packer init`.
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里包含的说明将填补空白，允许构建一个多插件，用户可以通过 `packer init` 安装它。
 - en: Let's get into how we can write a custom plugin.
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们来看看如何编写自定义插件。
 - en: Writing your own plugin
+  id: totrans-269
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 编写您自己的插件
 - en: Provisioners are powerful extensions to the Packer application. They allow us
     to customize the application to do whatever we need.
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
+  zh: 提供程序是 Packer 应用程序的强大扩展。它们允许我们自定义应用程序，做任何我们需要的事情。
 - en: We have already seen how a provisioner can execute Goss to validate our builds.
     This allowed us to make sure future builds follow a specification for the image.
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经看到提供程序如何执行 Goss 来验证我们的构建。这使我们能够确保未来的构建遵循图像的规范。
 - en: 'To write a custom `provisioner`, we must implement the following interface:'
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
+  zh: 要编写一个自定义 `provisioner`，我们必须实现以下接口：
 - en: '[PRE41]'
+  id: totrans-273
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: 'The preceding code is described as follows:'
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的代码描述如下：
 - en: '`ConfigSpec()` returns an object that represents your provisioner''s HCL2 spec.
     This will be used by Packer to translate a user''s config to a structured object
     in Go.'
+  id: totrans-275
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`ConfigSpec()` 返回一个表示您提供程序 HCL2 规范的对象。Packer 将使用它将用户的配置转换为 Go 语言中的结构化对象。'
 - en: '`Prepare()` prepares your plugin to run and receives a slice of `interface{}`
     that represents the configuration. Generally, the configuration is passed as a
     single `map[string]interface{}`. `Prepare()` should do preparation operations
@@ -1104,287 +1670,432 @@
     that should cause a failure before even attempting to run. This should have no
     side effects, that is, it should not change any state by creating files, instantiating
     VMs, or any other changes to the system.'
+  id: totrans-276
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Prepare()` 准备您的插件运行，并接收一个 `interface{}` 切片，表示配置。通常，配置作为单个 `map[string]interface{}`
+    传递。`Prepare()` 应该执行诸如从源拉取信息或验证配置等准备工作，应该在尝试运行之前就导致失败。这不应有副作用，也就是说，它不应通过创建文件、实例化虚拟机或对系统进行任何其他更改来改变任何状态。'
 - en: '`Provision()` does the bulk of the work. It receives a `Ui` object that is
     used to communicate to the user and `Communicator` that is used to communicate
     with the running machine. There is a provided `map` that holds values set by the
     builder. However, relying on values there can tie you to a `builder` type.'
+  id: totrans-277
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Provision()`执行大部分工作。它接收一个`Ui`对象，用于与用户进行通信，还有一个`Communicator`对象，用于与正在运行的机器进行通信。提供了一个`map`，其中包含由构建器设置的值。然而，依赖于其中的值可能会将你绑定到一个`builder`类型。'
 - en: For our example provisioner, we are going to pack the Go environment and install
     it on the machine. While Linux distributions will often package the Go environment,
     they are often several releases behind. Earlier, we were able to do this by using
     `file` and `shell` (which can honestly do almost anything), but if you are an
     application provider and you want to make something repeatable for other Packer
     users across multiple platforms, a custom provisioner is the way to go.
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的示例提供程序，我们将打包Go环境并将其安装到机器上。虽然Linux发行版通常会打包Go环境，但它们通常会落后几个版本。之前，我们可以通过使用`file`和`shell`（这些实际上几乎可以做任何事情）来完成，但如果你是应用程序提供商，想要为其他Packer用户在多个平台上实现可重复的操作，那么自定义提供程序是最佳选择。
 - en: Adding our provisioner configuration
+  id: totrans-279
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 添加我们的提供程序配置
 - en: 'To allow the user to configure our plugin, we need to define a configuration.
     Here is the config option we want to support: `Version (string)[optional]`, the
     specific version to download defaults to `latest`.'
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了让用户配置我们的插件，我们需要定义一个配置。我们希望支持的配置选项如下：`Version (string)[optional]`，下载的特定版本默认为`latest`。
 - en: 'We will define this in a subpackage: `internal/config/config.go`.'
+  id: totrans-281
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将在子包中定义这个：`internal/config/config.go`。
 - en: 'In that file, we will add the following:'
+  id: totrans-282
   prefs: []
   type: TYPE_NORMAL
+  zh: 在该文件中，我们将添加以下内容：
 - en: '[PRE42]'
+  id: totrans-283
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'Unfortunately, we now need to be able to read this from an `hcldec.ObjectSpec`
     file. This is complicated, so HashiCorp has created a code generator to do this
     for us. To use this, you must install their `packer-sdc` tool:'
+  id: totrans-284
   prefs: []
   type: TYPE_NORMAL
+  zh: 不幸的是，我们现在需要能够从`hcldec.ObjectSpec`文件中读取这些内容。这比较复杂，因此HashiCorp创建了一个代码生成器来为我们完成这项工作。要使用它，你必须安装他们的`packer-sdc`工具：
 - en: '[PRE43]'
+  id: totrans-285
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: 'To generate the file, we can execute the following from inside `internal/config`:'
+  id: totrans-286
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了生成文件，我们可以在`internal/config`目录中执行以下操作：
 - en: '[PRE44]'
+  id: totrans-287
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: This will output a `config.hcl2spec.go` file that has the code we require. This
     uses the `//go:generate` line defined in the file.
+  id: totrans-288
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将输出一个`config.hcl2spec.go`文件，其中包含我们需要的代码。它使用文件中定义的`//go:generate`行。
 - en: Defining the plugin's configuration specification
+  id: totrans-289
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 定义插件的配置规范
 - en: At the root of our plugin location, let's create a file called `goenv.go`.
+  id: totrans-290
   prefs: []
   type: TYPE_NORMAL
+  zh: 在插件的位置根目录，我们创建一个名为`goenv.go`的文件。
 - en: 'So, let''s start by defining the configuration the user will input:'
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，我们首先定义用户将输入的配置：
 - en: '[PRE45]'
+  id: totrans-292
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: 'This imports the following:'
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将导入以下内容：
 - en: The `config` package we just defined
+  id: totrans-294
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们刚才定义的`config`包
 - en: 'Three packages required to build our plugin:'
+  id: totrans-295
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建我们插件所需的三个包：
 - en: '`packer`'
+  id: totrans-296
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`packer`'
 - en: '`plugin`'
+  id: totrans-297
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`plugin`'
 - en: '`version`'
+  id: totrans-298
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`version`'
 - en: A `packerConfig` package for dealing with HCL2 configs
+  id: totrans-299
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个用于处理HCL2配置的`packerConfig`包
 - en: Note
+  id: totrans-300
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 注意
 - en: The `...` is a stand-in for standard library packages and a few others for brevity.
     You can see them all in the repository version.
+  id: totrans-301
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: '`...`表示标准库包和一些其他包，为了简洁起见省略了它们。你可以在仓库版本中看到它们的全部内容。'
 - en: 'Now, we need to define our provisioner:'
+  id: totrans-302
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要定义我们的提供程序：
 - en: '[PRE46]'
+  id: totrans-303
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: This is going to hold our configuration, some file content, and the Go tarball
     filename. We will implement our `Provisioner` interface on this struct.
+  id: totrans-304
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将保存我们的配置、一部分文件内容以及Go tarball文件名。我们将在这个结构体上实现我们的`Provisioner`接口。
 - en: Now, it's time to add the required methods.
+  id: totrans-305
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，是时候添加所需的方法了。
 - en: Defining the ConfigSpec() function
+  id: totrans-306
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 定义`ConfigSpec()`函数
 - en: '`ConfigSpec()` is defined for internal use by Packer. We simply need to provide
     the spec so that Packer can read in the configuration.'
+  id: totrans-307
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ConfigSpec()`是为Packer的内部使用而定义的。我们只需要提供规格，以便Packer可以读取配置。'
 - en: 'Let''s use `config.hcl2spec.go` we generated a second ago to implement `ConfigSpec()`:'
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们使用之前生成的`config.hcl2spec.go`来实现`ConfigSpec()`：
 - en: '[PRE47]'
+  id: totrans-309
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: This returns `ObjectSpec` that handles reading in our HCL2 config.
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将返回`ObjectSpec`，用于处理读取我们的HCL2配置。
 - en: Now that we have that out of the way, we need to prepare our plugin to be used.
+  id: totrans-311
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在这些工作已经完成，我们需要准备好插件以供使用。
 - en: Defining Prepare()
+  id: totrans-312
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 定义`Prepare()`方法
 - en: Remember that `Prepare()` simply needs to interpret the intermediate representation
     of the HCL2 config and validate the entries. It should not change the state of
     anything.
+  id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: 请记住，`Prepare()`方法仅需要解释HCL2配置的中间表示并验证条目。它不应该改变任何事物的状态。
 - en: 'Here''s what that would look like:'
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是该示例的样子：
 - en: '[PRE48]'
+  id: totrans-315
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: 'This code does the following:'
+  id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行了以下操作：
 - en: Creates our empty config
+  id: totrans-317
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建我们的空配置。
 - en: Decodes the raw config entries into our internal representation
+  id: totrans-318
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将原始配置项解码为我们的内部表示形式。
 - en: Puts defaults into our config if values weren't set
+  id: totrans-319
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果没有设置值，默认值会被放入配置中。
 - en: Validates our config
+  id: totrans-320
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 验证我们的配置。
 - en: We could also use this time to connect to services or any other preparation
     items that are needed. The main thing is not to change any state.
+  id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还可以利用这段时间连接服务或进行任何其他所需的准备工作。最重要的是不要改变任何状态。
 - en: With all the preparation out of the way, it's time for the big finale.
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: 经过所有准备工作后，是时候迎接大结局了。
 - en: Defining Provision()
+  id: totrans-323
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 定义 `Provision()` 方法。
 - en: '`Provision()` is where all the magic happens. Let''s divide this into some
     logical sections:'
+  id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Provision()` 是所有魔法发生的地方。让我们将其分成一些逻辑部分：'
 - en: Fetch our version
+  id: totrans-325
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取我们的版本信息。
 - en: Push a tarball to the image
+  id: totrans-326
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将一个 tarball 推送到镜像中。
 - en: Unpack the tarball
+  id: totrans-327
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 解压 tarball 文件。
 - en: Test our Go tools installation
+  id: totrans-328
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 测试我们的 Go 工具安装情况。
 - en: 'The following code wraps other methods that execute the logical sections in
     the same order:'
+  id: totrans-329
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下代码封装了其他方法，以相同的顺序执行逻辑部分：
 - en: '[PRE49]'
+  id: totrans-330
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'This code calls all our stages (which we will define momentarily) and outputs
     some messages to the UI. The `Ui` interface is defined as follows:'
+  id: totrans-331
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码调用了所有阶段（我们稍后会定义）并将一些消息输出到用户界面。`Ui` 接口定义如下：
 - en: '[PRE50]'
+  id: totrans-332
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: 'Unfortunately, the UI is not well documented in the code or in the documentation.
     Here is a breakdown:'
+  id: totrans-333
   prefs: []
   type: TYPE_NORMAL
+  zh: 不幸的是，UI 在代码或文档中没有很好的记录。以下是详细说明：
 - en: You can use `Ask()` to ask a question of the user and get a response. As a general
     rule, you should avoid this, as it removes automation. Better to make them put
     it in the configuration.
+  id: totrans-334
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 你可以使用 `Ask()` 向用户提问并获得回应。一般来说，应该避免使用这个方法，因为它会破坏自动化流程。最好让用户将其放入配置中。
 - en: '`Say()` and `Message()` both print a string to the screen.'
+  id: totrans-335
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Say()` 和 `Message()` 都是将字符串打印到屏幕上。'
 - en: '`Error()` outputs an error message.'
+  id: totrans-336
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Error()` 输出一条错误信息。'
 - en: '`Machine()` simply outputs a statement into the log generated on the machine
     using `fmt.Printf()` that is prepended by `machine readable:`.'
+  id: totrans-337
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Machine()` 只是通过 `fmt.Printf()` 将一条语句输出到机器生成的日志中，并以 `machine readable:` 为前缀。'
 - en: '`getter.ProgressTracker()` is used by `Communicator` to track download progress.
     You don''t need to worry about it.'
+  id: totrans-338
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`getter.ProgressTracker()` 被 `Communicator` 用来跟踪下载进度，你不需要担心它。'
 - en: 'Now that we have covered the UI, let''s cover `Communicator`:'
+  id: totrans-339
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经涵盖了 UI，接下来讲解 `Communicator`：
 - en: '[PRE51]'
+  id: totrans-340
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: 'Methods in the preceding code block are described as follows:'
+  id: totrans-341
   prefs: []
   type: TYPE_NORMAL
+  zh: 前面代码块中的方法如下所示：
 - en: '`Start()` runs a command on the image. You pass `*RemoteCmd`, which is similar
     to the `Cmd` type we used from `os/exec` in previous chapters.'
+  id: totrans-342
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Start()` 在镜像上运行一个命令。你传递 `*RemoteCmd`，它类似于我们在前面章节中使用的 `os/exec` 中的 `Cmd` 类型。'
 - en: '`Upload()` uploads a file to the machine image.'
+  id: totrans-343
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Upload()` 将文件上传到机器镜像。'
 - en: '`UploadDir()` uploads a local directory recursively to the machine image.'
+  id: totrans-344
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`UploadDir()` 递归地将本地目录上传到机器镜像。'
 - en: '`Download()` downloads a file from the machine image. This allows you to capture
     debugs logs, for example.'
+  id: totrans-345
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Download()` 从机器镜像中下载文件。这允许你捕获调试日志，例如。'
 - en: '`DownloadDir()` downloads a directory recursively from the machine to a local
     destination. You can exclude files.'
+  id: totrans-346
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`DownloadDir()` 从机器递归地下载一个目录到本地目的地。你可以排除某些文件。'
 - en: 'You can see the full interface comments here: [https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer?utm_source=godoc#Communicator](https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer?utm_source=godoc#Communicator).'
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在这里查看完整的接口注释：[https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer?utm_source=godoc#Communicator](https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer?utm_source=godoc#Communicator)。
 - en: 'Let''s look at building our first helper, `p.fetch()`. The following code determines
     what URL to use to download the Go tools. Our tool is targeted at Linux, but we
     support installing versions for multiple platforms. We use Go''s runtime package
@@ -1392,429 +2103,645 @@
     to determine which package to download. The users can specify a particular version
     or `latest`. In the case of `latest`, we query a URL provided by Google that returns
     the latest version of Go. We then use that to construct the URL for download:'
+  id: totrans-348
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下构建第一个助手 `p.fetch()`。以下代码决定了下载 Go 工具使用的 URL。我们的工具面向 Linux，但我们支持为多个平台安装不同版本。我们使用
+    Go 的 runtime 包来确定我们当前运行的架构（386、ARM 或 AMD 64），以此决定下载哪个包。用户可以指定一个特定版本或 `latest`。对于
+    `latest`，我们查询 Google 提供的 URL，该 URL 返回 Go 的最新版本。然后，我们利用这个版本信息构造下载 URL：
 - en: '[PRE52]'
+  id: totrans-349
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: 'This code makes the HTTP request for the Go tarball and then stores that in
     `.content`:'
+  id: totrans-350
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码发起 Go tarball 的 HTTP 请求，并将其存储在 `.content` 中：
 - en: '[PRE53]'
+  id: totrans-351
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: 'Now that we have fetched our Go `tarball` content, let''s push it to the machine:'
+  id: totrans-352
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经获取了Go `tarball`内容，让我们将其推送到机器上：
 - en: '[PRE54]'
+  id: totrans-353
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: The preceding code uploads our content to the image. `Upload()` requires that
     we provide `*os.FileInfo`, but we don't have one because our file does not exist
     on disk. So, we use a trick where we write the content to a file in an in-memory
     filesystem and then retrieve `*os.FileInfo`. This prevents us from writing unnecessary
     files to disk.
+  id: totrans-354
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码将我们的内容上传到镜像中。`Upload()`要求我们提供`*os.FileInfo`，但我们没有一个，因为我们的文件在磁盘上并不存在。所以，我们使用一个技巧，将内容写入内存中的文件系统中，然后获取`*os.FileInfo`。这样，我们就避免了将不必要的文件写入磁盘。
 - en: Note
+  id: totrans-355
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: One of the odd things about `Communicator.Upload()` is that it takes a pointer
     to an `interface (*os.FileInfo)`. This is almost always a mistake by an author.
     Don't do this in your code.
+  id: totrans-356
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Communicator.Upload()`的一个奇怪之处在于它接受一个指向`interface (*os.FileInfo)`的指针。这几乎总是作者的一个错误。不要在你的代码中这样做。'
 - en: 'The next thing needed is to unpack this on the image:'
+  id: totrans-357
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来需要做的是在镜像中解压此内容：
 - en: '[PRE55]'
+  id: totrans-358
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: 'This code does the following:'
+  id: totrans-359
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Defines a command that unwraps our tarball and installs to `/usr/local`
+  id: totrans-360
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义一个命令来解压我们的tarball并安装到`/usr/local`。
 - en: Wraps that command in `*packerRemoteCmd` and captures `STDOUT` and `STDERR`
+  id: totrans-361
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将该命令包装在`*packerRemoteCmd`中并捕获`STDOUT`和`STDERR`。
 - en: 'Runs the command with `Communicator`: If it fails, returns the error and `STDOUT`/`STDERR`
     for debug'
+  id: totrans-362
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`Communicator`运行命令：如果失败，返回错误和`STDOUT`/`STDERR`用于调试。
 - en: 'The last step for `Provisioner` is to test that it installed:'
+  id: totrans-363
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Provisioner`的最后一步是测试它是否已安装：'
 - en: '[PRE56]'
+  id: totrans-364
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: 'This code does the following:'
+  id: totrans-365
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Runs `/usr/local/go/bin/go version` to get the output
+  id: totrans-366
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行`/usr/local/go/bin/go version`来获取输出。
 - en: If it fails, returns the error and `STDOUT`/`STDERR` for debug
+  id: totrans-367
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果失败，返回错误和`STDOUT`/`STDERR`用于调试。
 - en: 'Now, the final part of the plugin to write is `main()`:'
+  id: totrans-368
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，插件的最后部分是编写`main()`：
 - en: '[PRE57]'
+  id: totrans-369
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: 'This code does the following:'
+  id: totrans-370
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码执行以下操作：
 - en: Defines our release version as `"0.0.1"`.
+  id: totrans-371
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将我们的发布版本定义为`"0.0.1"`。
 - en: Defines the release as a `"dev"` version, but you can use anything here. The
     production version should use `""`.
+  id: totrans-372
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将发布定义为`"dev"`版本，但这里可以使用任何名称。生产版本应使用`""`。
 - en: Initializes `pv`, which holds the plugin version information. This is done in
     `init()` simply because the package comments indicate it should be done this way
     instead of in `main()` to cause a panic at the earliest time if a problem exists.
+  id: totrans-373
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 初始化`pv`，它保存插件版本信息。这样做是在`init()`中，因为包注释指出应该这样做，而不是在`main()`中，这样如果存在问题，可以在最早时触发panic。
 - en: 'Makes a new Packer `plugin.Set`:'
+  id: totrans-374
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个新的Packer `plugin.Set`：
 - en: Sets the version information. If not set, all GitHub releases will fail.
+  id: totrans-375
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置版本信息。如果未设置，所有GitHub发布将失败。
 - en: 'Registers our provisioner with the `"goenv"` plugin name:'
+  id: totrans-376
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`"goenv"`插件名称注册我们的配置器：
 - en: Can be used to register other provisioners
+  id: totrans-377
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可用于注册其他配置器。
 - en: Can be used to register a builder, `set.RegisterBuilder()`, and a post processor,
     `set.RegisterPostProcessor()`
+  id: totrans-378
   prefs:
   - PREF_IND
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可用于注册构建器，`set.RegisterBuilder()`，以及后处理器，`set.RegisterPostProcessor()`。
 - en: Runs `Set` we created and exits on any error.
+  id: totrans-379
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 运行我们创建的`Set`并在任何错误时退出。
 - en: We can register with a regular name, which would get appended to the name of
     the plugin. If using `plugin.DEFAULT_NAME`, our provisioner can be referred to
     simply by the plugin's name.
+  id: totrans-380
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以使用常规名称进行注册，这样名称会附加到插件名称上。如果使用`plugin.DEFAULT_NAME`，我们的配置器可以简单地通过插件名称来引用。
 - en: So, if our plugin is named `packer-plugin-goenv`, our plugin can be referred
     to as `goenv`. If we use something other than `plugin.DEFAULT_NAME`, such as `example`,
     our plugin would be referred to as `goenv-example`.
+  id: totrans-381
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，如果我们的插件命名为`packer-plugin-goenv`，我们可以将插件称为`goenv`。如果使用`plugin.DEFAULT_NAME`以外的名称，例如`example`，则我们的插件将被称为`goenv-example`。
 - en: We now have a plugin, but to make it useful we must allow people to initialize
     it. Let's look at how we can release our plugins using GitHub.
+  id: totrans-382
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有了一个插件，但要使其有用，我们必须允许人们初始化它。让我们来看一下如何通过GitHub发布我们的插件。
 - en: Testing Plugins
+  id: totrans-383
   prefs: []
   type: TYPE_NORMAL
+  zh: 测试插件
 - en: In this exercise, we don't go into testing Packer plugins. As of the time of
     publishing, there is no documentation on testing. However, Packer's GoDoc page
     has public types that can mock various types in Packer to help test your plugin.
+  id: totrans-384
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个练习中，我们不讨论测试Packer插件。发布时，尚无相关的测试文档。然而，Packer的GoDoc页面有公开的类型，可以模拟Packer中的各种类型，帮助测试你的插件。
 - en: 'This includes mocking the `Provisioner`, `Ui`, and `Communicator` types to
     allow you to test. You can find these here: [https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer](https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer).'
+  id: totrans-385
   prefs: []
   type: TYPE_NORMAL
+  zh: 这包括模拟`Provisioner`、`Ui`和`Communicator`类型，以便进行测试。你可以在这里找到这些内容：[https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer](https://pkg.go.dev/github.com/hashicorp/packer-plugin-sdk/packer)。
 - en: Releasing a plugin
+  id: totrans-386
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 发布插件
 - en: 'Packer has strict release requirements for allowing the `packer` binary to
     find and use a plugin. To have the plugin downloadable, the following requirements
     must be met:'
+  id: totrans-387
   prefs: []
   type: TYPE_NORMAL
+  zh: Packer对允许`packer`二进制文件查找和使用插件有严格的发布要求。为了使插件可下载，必须满足以下要求：
 - en: Must be released on GitHub; no other source is allowed.
+  id: totrans-388
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 必须在GitHub上发布；不允许使用其他来源。
 - en: Have a repository named `packer-plugin-*`, where `*` is the name of your plugin.
+  id: totrans-389
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 你的仓库名称必须是`packer-plugin-*`，其中`*`是你的插件名称。
 - en: Only use dashes not underscores.
+  id: totrans-390
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 只能使用连字符，而不是下划线。
 - en: Must have a plugin release that includes certain assets we will describe.
+  id: totrans-391
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 必须有一个插件发布，其中包括我们将描述的某些资产。
 - en: 'The official release document can be found here: [https://www.packer.io/docs/plugins/creation#creating-a-github-release](https://www.packer.io/docs/plugins/creation#creating-a-github-release).'
+  id: totrans-392
   prefs: []
   type: TYPE_NORMAL
+  zh: 官方发布文档可以在这里找到：[https://www.packer.io/docs/plugins/creation#creating-a-github-release](https://www.packer.io/docs/plugins/creation#creating-a-github-release)。
 - en: 'HashiCorp also has a 30-minute video showing how to publish release documents
     to Packer''s website here: [https://www.hashicorp.com/resources/publishing-packer-plugins-to-the-masses](https://www.hashicorp.com/resources/publishing-packer-plugins-to-the-masses).'
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: HashiCorp还有一个30分钟的视频，展示如何将发布文档发布到Packer网站，视频链接如下：[https://www.hashicorp.com/resources/publishing-packer-plugins-to-the-masses](https://www.hashicorp.com/resources/publishing-packer-plugins-to-the-masses)。
 - en: 'The first step for generating a release is to create a **GNU Privacy Guard**
     (**GPG**) key to sign releases. The GitHub instructions can be found here (but
     see notes directly underneath first): [https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key).'
+  id: totrans-394
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成发布的第一步是创建一个**GNU隐私保护**（**GPG**）密钥以签署发布版本。GitHub的相关指令可以在这里找到（但请先阅读下面的注意事项）：[https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key)。
 - en: 'Before you follow that document, remember these things while following the
     instructions:'
+  id: totrans-395
   prefs: []
   type: TYPE_NORMAL
+  zh: 在遵循该文档之前，请记住在执行指令时注意以下事项：
 - en: Make sure you add the public key to your GitHub profile.
+  id: totrans-396
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保将公钥添加到你的GitHub个人资料中。
 - en: Do not use `$` or any other symbol in your passphrase, as it will cause issues.
+  id: totrans-397
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 请不要在密码短语中使用`$`或任何其他符号，因为这会导致问题。
 - en: Once that is completed, you need to add the private key to your repository so
     that the GitHub actions we define will be able to sign the releases. You will
     need to go to your GitHub repository's `|` **Secrets**. Click the provided **New
     Repository Secret** button.
+  id: totrans-398
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦完成，你需要将私钥添加到你的仓库中，这样我们定义的GitHub Actions才能签署发布版本。你需要进入GitHub仓库的`|` **Secrets**。点击提供的**New
+    Repository Secret**按钮。
 - en: Choose the name `GPG_PRIVATE_KEY`.
+  id: totrans-399
   prefs: []
   type: TYPE_NORMAL
+  zh: 选择名称`GPG_PRIVATE_KEY`。
 - en: 'In the value section, you will need to paste in your GPG private key that you
     can export with:'
+  id: totrans-400
   prefs: []
   type: TYPE_NORMAL
+  zh: 在值部分，你需要粘贴你的GPG私钥，你可以使用以下命令导出该私钥：
 - en: '[PRE58]'
+  id: totrans-401
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: '`[key ID or email]` is the identity you gave for the key, typically your email
     address.'
+  id: totrans-402
   prefs: []
   type: TYPE_NORMAL
+  zh: '`[key ID或email]`是你为密钥提供的身份，通常是你的电子邮件地址。'
 - en: Now, we need to add the passphrase for your GPG key. You can add this as a secret
     with the name `GPG_PASSPHRASE`. The value should be the passphrase for the GPG
     key.
+  id: totrans-403
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要添加你的GPG密钥的密码短语。你可以将其作为一个名为`GPG_PASSPHRASE`的密钥添加。值应该是GPG密钥的密码短语。
 - en: 'Once that is completed, you will need to download the GoReleaser scaffolding
     HashiCorp provides. You can do that with the following:'
+  id: totrans-404
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦完成，你需要下载HashiCorp提供的GoReleaser脚手架。你可以通过以下方式完成：
 - en: '[PRE59]'
+  id: totrans-405
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: 'Now, we need the GitHub Actions workflow provided by HashiCorp set up in your
     repository. This can be done with the following:'
+  id: totrans-406
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要在你的仓库中设置HashiCorp提供的GitHub Actions工作流。你可以通过以下方式完成：
 - en: '[PRE60]'
+  id: totrans-407
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: 'Finally, we need to download `GNUmakefile`, which is used by the scaffolding.
     Let''s grab it:'
+  id: totrans-408
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们需要下载`GNUmakefile`，这是脚手架使用的文件。我们来下载它：
 - en: '[PRE61]'
+  id: totrans-409
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE61]'
 - en: 'Our plugin only works for Linux systems. The `.goreleaser.yml` file defines
     releases for multiple platforms. You can restrict this by modifying the `builds`
     section of `.goreleaser.yml` to be more restrictive. You can see an example of
     that here: [https://github.com/johnsiilver/packer-plugin-goenv/blob/main/.goreleaser.yml](https://github.com/johnsiilver/packer-plugin-goenv/blob/main/.goreleaser.yml).'
+  id: totrans-410
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的插件仅适用于Linux系统。`.goreleaser.yml`文件定义了多个平台的发布版本。你可以通过修改`.goreleaser.yml`中的`builds`部分来限制它。你可以在这里查看一个示例：[https://github.com/johnsiilver/packer-plugin-goenv/blob/main/.goreleaser.yml](https://github.com/johnsiilver/packer-plugin-goenv/blob/main/.goreleaser.yml)。
 - en: With your code buildable and these files included, you need to commit these
     files to your repository.
+  id: totrans-411
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你的代码可以构建并且这些文件已包含时，你需要将这些文件提交到你的仓库中。
 - en: 'The next step will be to create a release. This needs to be tagged with a semantic
     version, similar to what you set the `ver` variable to in your plugin''s `main`
     file. The slight difference is that while it will be strictly numbers and dots
     in `ver string`, it is prepended with `v` when tagging on GitHub. So `ver = "0.0.1`
     will be a GitHub release with `v0.0.1`. The GitHub documentation on releases can
     be found here: [https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).'
+  id: totrans-412
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一步将是创建一个发布版本。这个版本需要使用语义化版本标记，类似于你在插件的`main`文件中设置的`ver`变量。稍有不同的是，虽然`ver string`中将严格使用数字和点，但在GitHub上标记时会加上`v`。例如，`ver
+    = "0.0.1"`将成为GitHub发布版本`v0.0.1`。GitHub发布的文档可以在此查看：[https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)。
 - en: Once you have created a release, you can view the actions being run by viewing
     the **Actions** tab. This will show the results and detail any problems encountered
     by the actions.
+  id: totrans-413
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦你创建了发布版本，你可以通过查看**Actions**标签来查看正在执行的操作。这将展示结果并详细说明操作过程中遇到的任何问题。
 - en: Using our plugin in a build
+  id: totrans-414
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 在构建中使用我们的插件
 - en: 'To use our plugin in the build, we need to modify the HCL2 configuration. First,
     we need to modify `packer.required_plugins` to require our plugin:'
+  id: totrans-415
   prefs: []
   type: TYPE_NORMAL
+  zh: 要在构建中使用我们的插件，我们需要修改HCL2配置。首先，我们需要修改`packer.required_plugins`以要求我们的插件：
 - en: '[PRE62]'
+  id: totrans-416
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE62]'
 - en: 'This does a few things:'
+  id: totrans-417
   prefs: []
   type: TYPE_NORMAL
+  zh: 这做了几件事：
 - en: 'Creates a new variable, `installGo`, that gives access to all plugins defined
     in our multi-plugin. There is only one: `goenv`.'
+  id: totrans-418
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个新的变量`installGo`，该变量提供访问我们多插件中定义的所有插件的权限。这里只有一个插件：`goenv`。
 - en: Sets the version to use to be greater or equal to version `0.0.1`.
+  id: totrans-419
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置使用的版本必须大于或等于`0.0.1`。
 - en: Gives the source of the plugin. You will notice that the path is missing `packer-plugin-`.
     As that is standard for every plugin, they remove the need to type it.
+  id: totrans-420
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供插件的源路径。你会注意到路径中没有`packer-plugin-`，因为这是每个插件的标准命名，它们移除了这个部分的输入。
 - en: Note
+  id: totrans-421
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'You will see that the source is different than our location for the code. This
     is because we wanted to have a copy of the code in our normal location, but Packer
     requires a plugin to have its own repository. The code is located at both locations.
     You may view this copy of the code at: [https://github.com/johnsiilver/packer-plugin-goenv](https://github.com/johnsiilver/packer-plugin-goenv).'
+  id: totrans-422
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 你会发现源地址与我们代码的位置不同。这是因为我们希望将代码保留在常规位置，但Packer要求插件必须有自己的仓库。代码在这两个位置都有。你可以在这里查看代码副本：[https://github.com/johnsiilver/packer-plugin-goenv](https://github.com/johnsiilver/packer-plugin-goenv)。
 - en: 'Now, we need to remove the `shell` section under `build.provisioner` that installs
     Go. Replace it with the following:'
+  id: totrans-423
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要删除`build.provisioner`下安装Go的`shell`部分，并用以下内容替换：
 - en: '[PRE63]'
+  id: totrans-424
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE63]'
 - en: Finally, you will need to update the AMI name to something new to store this
     under.
+  id: totrans-425
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，你需要更新AMI名称，以便将其存储到新的位置。
 - en: 'As an alternative, you may also download the modified HCL2 file here: [https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.goenv.pkr.hcl](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.goenv.pkr.hcl).'
+  id: totrans-426
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为替代方案，你也可以在此下载修改后的HCL2文件：[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.goenv.pkr.hcl](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/12/packer/amazon.goenv.pkr.hcl)。
 - en: 'In the terminal, format the file and download our plugin with the following:'
+  id: totrans-427
   prefs: []
   type: TYPE_NORMAL
+  zh: 在终端中，格式化文件并使用以下命令下载我们的插件：
 - en: '[PRE64]'
+  id: totrans-428
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE64]'
 - en: 'This should cause our plugin to download with output text similar to this:'
+  id: totrans-429
   prefs: []
   type: TYPE_NORMAL
+  zh: 这应该会导致我们的插件下载，并输出类似于以下内容的文本：
 - en: '[PRE65]'
+  id: totrans-430
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE65]'
 - en: 'We can finally build our image with the following:'
+  id: totrans-431
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们最终可以通过以下命令构建我们的镜像：
 - en: '[PRE66]'
+  id: totrans-432
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE66]'
 - en: 'If successful, you should see the following in the Packer output:'
+  id: totrans-433
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果成功，您应该在 Packer 输出中看到以下内容：
 - en: '[PRE67]'
+  id: totrans-434
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE67]'
 - en: This plugin has been pre-tested. Let's have a look at what you can do if the
     plugin fails.
+  id: totrans-435
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个插件已经过预先测试。让我们来看看如果插件失败，您可以做些什么。
 - en: Debugging a Packer plugin
+  id: totrans-436
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 调试 Packer 插件
 - en: When `packer build .` fails, you may or may not receive relevant information
     in the UI output. This will depend on whether the problem was a panic or an error.
+  id: totrans-437
   prefs: []
   type: TYPE_NORMAL
+  zh: 当`packer build .`失败时，您可能会在 UI 输出中获得或没有获得相关信息。这取决于问题是恐慌（panic）还是错误（error）。
 - en: Panics return an `Unexpected EOF` message because the plugin crashed and the
     Packer application only knows that it didn't receive an RPC message on the Unix
     socket.
+  id: totrans-438
   prefs: []
   type: TYPE_NORMAL
+  zh: 恐慌会返回一个`Unexpected EOF`消息，因为插件崩溃，而 Packer 应用程序只知道它没有在 Unix 套接字上接收到 RPC 消息。
 - en: 'We can get Packer to help us out by providing this option when we run:'
+  id: totrans-439
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以通过运行时提供这个选项来请求 Packer 帮助我们：
 - en: '[PRE68]'
+  id: totrans-440
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE68]'
 - en: This will output a `crash.log` file if the build crashes. It also uses `press
     enter` between each step before continuing and allows only a single `packer` build
     to run at a time.
+  id: totrans-441
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果构建崩溃，它将输出一个`crash.log`文件。它还会在每一步之间使用`press enter`，并且一次只允许运行一个`packer`构建。
 - en: You may see other files show up, as some plugins (such as Goss) detect the `debug`
     option and output debug configuration files and logs.
+  id: totrans-442
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可能会看到其他文件出现，因为一些插件（如 Goss）检测到`debug`选项并输出调试配置文件和日志。
 - en: 'You may also want to turn on logging for any log messages you or other plugins
     write. This can be done by setting a few environmental variables:'
+  id: totrans-443
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可能还想启用日志记录，以便记录您或其他插件写入的日志消息。这可以通过设置几个环境变量来完成：
 - en: '[PRE69]'
+  id: totrans-444
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE69]'
 - en: This takes care of most debugging needs. However, sometimes the debug information
     required is part of the system logs and not the plugin itself. In those cases,
     you may want to use the communicator's `Download()` or `DownloadDir()` methods
     to retrieve files when you detect an error.
+  id: totrans-445
   prefs: []
   type: TYPE_NORMAL
+  zh: 这解决了大多数调试需求。然而，有时所需的调试信息是系统日志的一部分，而不是插件本身。在这种情况下，您可能希望在检测到错误时使用通信器的`Download()`或`DownloadDir()`方法来检索文件。
 - en: 'For more debugging information, the official debugging documentation is here:
     [https://www.packer.io/docs/debugging](https://www.packer.io/docs/debugging).'
+  id: totrans-446
   prefs: []
   type: TYPE_NORMAL
+  zh: 获取更多调试信息，请访问官方调试文档：[https://www.packer.io/docs/debugging](https://www.packer.io/docs/debugging)。
 - en: In this section, we have detailed the building of a Packer multi-plugin, shown
     how to set up the plugin in GitHub to be used with `packer init`, and updated
     our Packer configuration to use the plugin. In addition, we have discussed the
     basics of debugging Packer plugins.
+  id: totrans-447
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们详细介绍了如何构建一个 Packer 多插件，展示了如何在 GitHub 上设置插件以与`packer init`一起使用，并更新了我们的
+    Packer 配置以使用该插件。此外，我们还讨论了调试 Packer 插件的基础知识。
 - en: Summary
+  id: totrans-448
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 摘要
 - en: This chapter has taught you the basics of using Packer to build a machine image,
     using Amazon AWS as the target. We have covered the most important plugins Packer
     offers to customize an AMI. We then built a custom image that installed multiple
     packages with the `apt` tool, downloaded and installed other tools, set up directories
     and users, and finally, set up a system agent to run with systemd.
+  id: totrans-449
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章教会了您使用 Packer 构建机器镜像的基础知识，以 Amazon AWS 为目标。我们介绍了 Packer 提供的最重要插件，以自定义 AMI。然后，我们构建了一个自定义镜像，通过
+    `apt` 工具安装了多个软件包，下载并安装了其他工具，设置了目录和用户，最后设置了一个系统代理来与 systemd 一起运行。
 - en: We have covered how to use the Goss tool to validate your images and how to
     integrate Goss into Packer using a plugin developed at Yale.
+  id: totrans-450
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经介绍了如何使用 Goss 工具验证您的镜像，以及如何通过耶鲁大学开发的插件将 Goss 集成到 Packer 中。
 - en: Finally, we have shown you how to create your own plugins to extend the capabilities
     of Packer.
+  id: totrans-451
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，我们展示了如何创建您自己的插件，以扩展 Packer 的功能。
 - en: Now, it is time to talk about IaC and how another of HashiCorp's tools has taken
     the DevOps world by storm. Let's talk about Terraform.
+  id: totrans-452
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，是时候谈谈 IaC 以及 HashiCorp 的另一个工具如何在 DevOps 世界中掀起风潮了。我们来谈谈 Terraform。
