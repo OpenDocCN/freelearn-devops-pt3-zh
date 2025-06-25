@@ -1,11 +1,15 @@
 - en: '11'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '11'
 - en: Classification and Release Management
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 分类与发布管理
 - en: The focus of this chapter will be on how Puppet deploys code and classifies
     this code to servers. Environments will be examined first, showing how this creates
     isolated groups of servers with particular versions of modules. We will discuss
@@ -17,111 +21,163 @@
     service** for Puppet Enterprise will be discussed, showing how it builds on top
     of these solutions using its own ENC script and the additional feature of node
     groups in the web console.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章的重点将是 Puppet 如何部署代码，并将这些代码分类到服务器上。首先将讨论环境，展示如何创建具有特定模块版本的服务器隔离组。我们将讨论如何提供静态和临时环境。我们将展示现代
+    Puppet 如何使用基于目录的环境，将环境代码放在特定位置，如 `site.pp` 主清单文件或一组清单文件，并通过这些节点定义中的 Hiera 查找，或者通过主服务器运行的
+    **外部节点分类器** (**ENC**) 脚本来实现。还将讨论 Puppet Enterprise 中 **分类服务** 的实现，展示如何在这些解决方案的基础上构建，使用其自身的
+    ENC 脚本，并增加了在 Web 控制台中使用节点组的额外功能。
 - en: The Puppet agent run will be looked at in detail to show the steps involved
     and how data is loaded, cached, and refreshed when a catalog is compiled.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 将详细查看 Puppet 代理的运行，展示其中的步骤，以及在编译目录时，数据是如何加载、缓存和刷新。
 - en: It will then be shown how to use the control repo structure with Puppetfiles
     to manage modules to deploy code into environments using `r10k` or `g10k`, with
     a discussion of various methods to synchronize code depending on the configuration
     of the local infrastructure. The PE-specific implementation, `r10k`, will then
     be discussed.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，将展示如何使用控制库结构和 Puppetfiles 管理模块，以便使用 `r10k` 或 `g10k` 将代码部署到环境中，并讨论根据本地基础设施的配置使用不同方法来同步代码。然后将讨论特定于
+    PE 的实现 `r10k`。
 - en: Having reviewed the technical structures for classification and release management,
     focus will then be put on the challenges and limitations of using this with regulated
     processes and multiple teams.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在审视了分类与发布管理的技术结构后，将重点放在使用这些技术与受监管流程和多个团队合作时面临的挑战与局限性。
 - en: 'In this chapter, we’re going to cover the following main topics:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将涵盖以下主要内容：
 - en: Puppet environments
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Puppet 环境
 - en: Understanding node classification
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 理解节点分类
 - en: Puppet runs
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Puppet 运行
 - en: Managing and deploying Puppet code
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 管理和部署 Puppet 代码
 - en: Lab—classifying and deploying code
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实验—分类与部署代码
 - en: Technical requirements
+  id: totrans-12
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: 'Clone the control repo from [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
     to your `controlrepo-chapter11` GitHub account and update the following files
     in this repo:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 从 [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)
+    克隆控制库到你的 `controlrepo-chapter11` GitHub 账户，并更新此库中的以下文件：
 - en: '`Puppetfile` with [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/Puppetfile).'
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Puppetfile` 和 [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/Puppetfile](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/Puppetfile)。'
 - en: 'Build a standard cluster with three clients by downloading the `params.json`
     file from [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/params.json)and
     updating it with the location of your control repo and your SSH key for the control
     repo. Then, run the following command from your `pecdm` directory:'
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过下载 [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/params.json](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/params.json)
+    中的 `params.json` 文件并更新其内容，指定你的控制库位置和控制库的 SSH 密钥，来构建一个包含三个客户端的标准集群。然后，从你的 `pecdm`
+    目录运行以下命令：
 - en: '[PRE0]'
+  id: totrans-16
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: Puppet environments
+  id: totrans-17
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Puppet 环境
 - en: Puppet environments are a way to define specific versions of modules, manifests,
     and data to be used for groups of servers. Unfortunately, *environment* is a general
     technology term used for other purposes in organizations, and can easily be confused.
     The best advice would be to always say **Puppet code environment** if used in
     discussions outside of a purely Puppet context. This prevents a Puppet environment
     being associated directly with anything else.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet环境是一种定义用于服务器组的特定版本模块、清单和数据的方法。不幸的是，*环境*是一个在组织中用于其他目的的通用技术术语，很容易造成混淆。最好的建议是在讨论Puppet之外的内容时，始终使用**Puppet代码环境**，以防止Puppet环境与其他任何东西直接关联。
 - en: Modern Puppet environments are dynamic directory-based, which means the Puppet
     server—or, in the case of `puppet apply`, the client—will look for the assigned
     environment to exist within a directory. Several variables set the location of
     related directories, including the `environments` directory itself, and we strongly
     recommend leaving all these settings at default to avoid confusion and issues.
     We will now look at the levels of code directories and paths within an environment.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 现代Puppet环境是基于目录的动态环境，这意味着Puppet服务器——或者在`puppet apply`的情况下，客户端——将查找分配的环境是否存在于一个目录中。多个变量设置了相关目录的位置，包括`environments`目录本身，我们强烈建议将所有这些设置保持为默认值，以避免混淆和问题。接下来我们将了解环境中的代码目录和路径的层级。
 - en: Environment directories and paths
+  id: totrans-20
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 环境目录和路径
 - en: The first level is the code and data directory set by the `codedir` variable
     in `puppet.conf`, defaulting to `/etc/puppetlabs/code` for Unix and `%PROGRAMDATA%\PuppetLabs\code`
     for Windows (this is normally `C:\ProgramData\PuppetLabs\code`). Puppet Server
     does not use the `codedir` setting in `puppet.conf` and uses `jruby-puppet.master-code-dir`
     in `puppetserver.conf`, so both would need to be set if changed.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一层是由`puppet.conf`中的`codedir`变量设置的代码和数据目录，默认值为Unix上的`/etc/puppetlabs/code`，Windows上的`%PROGRAMDATA%\PuppetLabs\code`（通常为`C:\ProgramData\PuppetLabs\code`）。Puppet
+    Server不使用`puppet.conf`中的`codedir`设置，而是使用`puppetserver.conf`中的`jruby-puppet.master-code-dir`，因此如果更改了这两个设置，都需要进行配置。
 - en: Note
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: Prior to `Puppet 3.3`, environments were declared in the `puppet.conf` file
     and each environment had to be declared in a section with `modulepath` and `manifests`
     variables set. This is still technically possible in Puppet today if `codedir`
     was not set but there is no reason to implement this approach.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`Puppet 3.3`之前，环境是通过`puppet.conf`文件声明的，每个环境都必须在一个包含`modulepath`和`manifests`变量的节中声明。今天的Puppet仍然可以技术性地实现这一点，如果没有设置`codedir`，但没有理由采用这种方式。
 - en: The code and data directory contains two directories. First, there is a module
     directory to provide global user modules included in the default `basemodulepath`
     variable in `puppet.conf`. This `basemodulepath` variable by default contains
@@ -129,90 +185,133 @@
     on Windows. The extra directory for Unix is used by the PE Server installation
     to place modules used to configure PE. These modules are prefixed with `pe` to
     avoid confusion with any modules that are already in use in environments.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 代码和数据目录包含两个目录。首先，有一个模块目录，用于提供在`puppet.conf`中默认的`basemodulepath`变量中包含的全局用户模块。默认情况下，`basemodulepath`变量在Unix上包含`$codedir/modules:/opt/puppetlabs/puppet/modules`，在Windows上包含`$codedir\modules`。Unix上的额外目录由PE
+    Server安装使用，用于放置用于配置PE的模块。这些模块以`pe`为前缀，以避免与环境中已经使用的任何模块混淆。
 - en: The second directory is an environment directory; by the default setting of
     `environmentpath` in `puppet.conf`, this is `$codedir/environments` and is where
     environments will be viewed.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二个目录是环境目录；根据`puppet.conf`中`environmentpath`的默认设置，它是`$codedir/environments`，并且是查看环境的地方。
 - en: NOTE
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: The `codedir` directory is used to contain global Hiera data and configuration
     and, by default, `hiera_config` settings. If it finds a `$codedir/hiera.yaml`
     file, it will override the default `$confdir/hiera.yaml` file, which is now standard,
     as discussed in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233).
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: '`codedir`目录用于包含全局Hiera数据和配置，并且默认使用`hiera_config`设置。如果找到`$codedir/hiera.yaml`文件，它将覆盖默认的`$confdir/hiera.yaml`文件，这个文件现在是标准的，正如在[*第9章*](B18492_09.xhtml#_idTextAnchor233)中讨论的那样。'
 - en: 'Within the `environments` directory, each environment to be created will have
     a directory that can have a name containing lowercase letters, numbers, and underscores.
     Each environment directory can contain the following:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`environments`目录中，要创建的每个环境都会有一个包含小写字母、数字和下划线的名称的目录。每个环境目录可以包含以下内容：
 - en: Puppet modules in directories specified by `$modulepath`
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在`$modulepath`指定的目录中的Puppet模块
 - en: Hiera data configured in a `hiera.yaml` file in the directory
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 目录中`hiera.yaml`文件中配置的Hiera数据
 - en: Classification data in a manifest or set of manifests in a directory specified
     by `$manifest`
+  id: totrans-31
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`$manifest`指定的目录中清单或一组清单中的分类数据'
 - en: Environment configuration data in an `environment.conf` file in the directory
+  id: totrans-32
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 目录中的`environment.conf`文件中的环境配置数据
 - en: Having reviewed the directories and paths of environments, we will now look
     at the environment configuration files in more detail.
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 在回顾了环境的目录和路径之后，我们将更详细地查看环境配置文件。
 - en: Environment configuration files
+  id: totrans-34
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 环境配置文件
 - en: Environment configuration data can be set in an `environment.conf` file within
     the `environment` directory; this file has an INI-style format like `puppet.conf`
     but with no sections.
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在`environment`目录中的`environment.conf`文件中设置环境配置数据；该文件具有类似于`puppet.conf`的INI格式，但没有节（sections）。
 - en: By default, if the `modulepath` environment variable is not set in `environment.conf`,
     it will be set to `$environmentpath/$environment/modules:$basemodulepath`.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，如果`modulepath`环境变量没有在`environment.conf`中设置，它将被设置为`$environmentpath/$environment/modules:$basemodulepath`。
 - en: 'So, in Unix-based systems, by default this will be the following:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，在基于Unix的系统中，默认情况下将是以下内容：
 - en: '[PRE1]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'In Windows systems, it will be this:'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 在Windows系统中，它将是这样的：
 - en: '[PRE2]'
+  id: totrans-40
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Remember to use a semicolon (`;`) to separate Windows directories in a list
     and a colon (`:`) for Unix systems.
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 请记得使用分号（`;`）分隔Windows系统中的目录列表，使用冒号（`:`）分隔Unix系统中的目录列表。
 - en: In the *Managing and deploying Puppet code* section, we will discuss how the
     modules are deployed into this directory and how to list the contents of each
     directory in `modulepath`.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 在*管理和部署Puppet代码*部分，我们将讨论如何将模块部署到该目录中，并如何列出`modulepath`中每个目录的内容。
 - en: Note
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: Never set a `modulepath` variable to read from another environment directory.
     In the *Puppet runs* section, we will discuss the potentially inconsistent effects
     of environment data being cached and refreshed.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 永远不要将`modulepath`变量设置为从另一个环境目录读取。在*Puppet运行*部分，我们将讨论环境数据被缓存和刷新时可能带来的不一致效果。
 - en: The `manifest` variable can be a single manifest file or a directory containing
     multiple manifests that will be read in alphabetical order. Puppet will see this
     variable as containing a directory if the path ends with a forward slash (`/`)
@@ -224,62 +323,86 @@
     `manifest` setting from `puppet.conf`. In the next section, we will go into further
     detail about how node definitions and Hiera lookups can be used to classify servers
     in this environment with these manifests.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
+  zh: '`manifest`变量可以是单个清单文件，也可以是包含多个清单的目录，这些清单将按字母顺序读取。如果路径以正斜杠（`/`）或句点（`.`）结尾，Puppet会将此变量视为包含目录，并能识别它是一个目录。如果`environment.conf`中没有设置，默认值将是`$environmentpath/$environment/manifests`目录，对于基于Unix的系统，这个路径为`/etc/puppetlabs/code/environments/$environment/manifests`，对于基于Windows的系统，这个路径为`C:/ProgramData/PuppetLabs/code/environments/$environment/manifests`。目录环境将永远不会使用`puppet.conf`中的全局`manifest`设置。在下一节中，我们将更详细地讨论如何使用节点定义和Hiera查找来对这些清单进行服务器分类。'
 - en: The `environment_timeout` variable states how long Puppet Server will cache
     a particular environment, overriding what is set. Puppet advises not to set this
     in `environment.conf`, only using the global version in `puppet.conf`, and to
     only use `0` or `unlimited`. The role of caching will be discussed further in
     the *Puppet runs* section of this chapter.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: '`environment_timeout`变量表示Puppet Server将缓存特定环境的时间，并覆盖设置的值。Puppet建议不要在`environment.conf`中设置此项，只使用`puppet.conf`中的全局版本，并且只使用`0`或`unlimited`。缓存的作用将在本章的*Puppet运行*部分进一步讨论。'
 - en: 'The `config_version` variable can set a script to run once the catalog has
     compiled and return the output as part of the logging. If not set by default,
     a script will return the time the catalog was compiled in the Unix epoch format
     (the number of seconds that have elapsed since January 1, 1970 midnight UTC/GMT).
     For the default epoch script, the output will appear as follows:'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: '`config_version`变量可以设置一个脚本，在目录编译后运行，并将输出作为日志的一部分返回。如果默认没有设置，脚本将返回目录编译时的时间，格式为Unix纪元（自1970年1月1日午夜UTC/GMT以来经过的秒数）。对于默认的纪元脚本，输出将如下所示：'
 - en: '[PRE3]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: A more useful example will be shown when using Git-based deployment solutions
     in the *Managing and deploying Puppet* *code* section.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 在*管理和部署Puppet* *代码*部分中将展示一个更有用的示例，当使用基于Git的部署解决方案时。
 - en: Note
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: '`environment.conf` and the `config_version` script can use the `basemodulepath`,
     `environment`, and `codedir` global variables.'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: '`environment.conf`和`config_version`脚本可以使用`basemodulepath`、`environment`和`codedir`全局变量。'
 - en: Now that we have reviewed the configuration of environments, it is useful to
     understand how we can validate the configuration and the types of environments
     deployed.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经审查了环境配置，了解如何验证配置以及部署的环境类型是非常有用的。
 - en: Environment validation and deployment
+  id: totrans-53
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 环境验证和部署
 - en: 'The settings discussed in `puppet.conf` and `environment.conf` can be checked
     by using the `puppet config print` command, deploying the `--environment` flag
     to look at a particular environment and `--section` for a particular section in
     `puppet.conf`. For example, to check the `codedir` variable in `puppet.conf` and
     the `modulepath` variable in the production environment, the following commands
     could be run:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以使用`puppet config print`命令检查在`puppet.conf`和`environment.conf`中讨论的设置，通过部署`--environment`标志查看特定环境，使用`--section`查看`puppet.conf`中的特定部分。例如，要检查`puppet.conf`中的`codedir`变量和生产环境中的`modulepath`变量，可以运行以下命令：
 - en: '[PRE4]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: By default, Puppet Server will create a production environment but a Puppet
     client running `apply` will not. For both scenarios, production is the default
     environment Puppet will run from. In the next section of this chapter, we will
     show how servers get classified into other environments.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，Puppet Server会创建一个生产环境，但运行`apply`的Puppet客户端不会。对于这两种情况，生产环境是Puppet默认运行的环境。在本章的下一部分，我们将展示服务器如何被分类到其他环境中。
 - en: 'There are three environmental strategies: permanent, temporary, and organizational
     silos. Permanent environments are long-lived and the environment naming typically
     matches the server’s use, such as if the server is a product or development server.
@@ -288,132 +411,189 @@
     divided infrastructure where different teams such as Windows and Linux teams own
     different servers and have different environments. These strategies can be mixed
     together as required to meet your organization’s approach.'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 有三种环境策略：永久性、临时性和组织隔离。永久性环境通常是长期存在的，环境命名通常与服务器的用途相匹配，例如服务器是产品服务器还是开发服务器。临时性环境是在进行变更测试后推广之前可以使用的环境，而组织隔离环境则反映了分割的基础设施，其中不同团队（如Windows和Linux团队）拥有不同的服务器并且有不同的环境。这些策略可以根据需要结合使用，以满足组织的需求。
 - en: Now that we’ve learned about Puppet code environments, we will see how to classify
     clients based on their use in an environment and set of modules from that environment.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 既然我们已经了解了Puppet代码环境，接下来我们将学习如何根据环境中的使用情况以及该环境中的模块集合来分类客户端。
 - en: Understanding node classification
+  id: totrans-59
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 理解节点分类
 - en: Classification of a node involves finding which environment a node should use,
     which classes should be applied to a node, and which parameters should be applied
     to a node. The ideal scenario is to have a single role class applied to a host,
     but the business logic can be more complicated. This applies to both agent runs
     to the Puppet Server and `puppet` `apply` runs.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 节点的分类涉及确定一个节点应该使用哪个环境，应该应用哪些类，以及应该应用哪些参数。理想的情况是为一个主机应用单一的角色类，但业务逻辑可能更复杂。这适用于Puppet
+    Server上的代理运行和`puppet` `apply`运行。
 - en: Having defined what node classification is, we will now look at the methods
     that can be used for classification, taking node definitions first as the simplest
     approach.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 在定义了什么是节点分类之后，我们将看看可以用于分类的方法，首先介绍节点定义作为最简单的方法。
 - en: Node definitions
+  id: totrans-62
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 节点定义
 - en: The most basic method of node classification is using a `puppet.conf` will be
     used. The node name will be the same as the `certname` setting from `puppet.conf`,
     which by default is the node’s **fully qualified domain** **name** (**FQDN**).
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 节点分类的最基本方法是使用`puppet.conf`，其中节点名称与`puppet.conf`中的`certname`设置相同，默认为节点的**完全限定域名**
+    (**FQDN**)。
 - en: 'The syntax of a node definition is set out here:'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 节点定义的语法在这里设置：
 - en: The `node` keyword
+  id: totrans-65
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`node`关键字'
 - en: A node name as a quoted string, `default`
+  id: totrans-66
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个作为字符串的节点名称，`default`
 - en: 'A mixture of the following Puppet code items within curly braces (`{}`):'
+  id: totrans-67
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 以下Puppet代码项的混合，位于花括号（`{}`）内：
 - en: Class declarations
+  id: totrans-68
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 类别声明
 - en: Variables
+  id: totrans-69
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 变量
 - en: Resource declarations
+  id: totrans-70
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 资源声明
 - en: Collectors
+  id: totrans-71
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 收集器
 - en: Conditional statements
+  id: totrans-72
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 条件语句
 - en: Chaining relationships
+  id: totrans-73
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 链接关系
 - en: Functions
+  id: totrans-74
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 函数
 - en: It is recommended to keep node definitions down to a minimum and only use class
     declarations and variables. If any manifest contains a node definition, then the
     node definitions must match all nodes, or compilation for nodes that do not match
     will fail. This is normally made safe by ensuring there is a default definition
     even if the default definition contains no code.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 建议将节点定义控制在最低限度，并仅使用类声明和变量。如果任何清单包含节点定义，则节点定义必须匹配所有节点，否则与不匹配的节点的编译将失败。通常通过确保存在默认定义，即使默认定义不包含任何代码，也能确保安全。
 - en: 'A node will only match one node definition, and this is prioritized by the
     following:'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个节点将只匹配一个节点定义，并按以下优先级进行排序：
 - en: An exact name match
+  id: totrans-77
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 完全匹配的名称
 - en: A regex match (multiple regex matches are unpredictable, and only one will be
     used)
+  id: totrans-78
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 正则表达式匹配（多个正则表达式匹配是不可预测的，只有一个会被使用）
 - en: '`default` (the keyword that nodes will match if they have failed to match any
     other definition)'
+  id: totrans-79
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`default`（如果节点未能匹配任何其他定义，节点将匹配此关键字）'
 - en: Note
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: A prioritization step before `default` would look for any partial matches of
     the hostname if `strict_hostname_checking` were set to `false` in the `puppet.conf`
     primary server. To avoid this insecure matching, it is set to `true` by default
     in Puppet 5.5.19 + and 6.13.0+, and in Puppet 7 onward was removed as an option.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 在`default`之前的优先级步骤会查找主机名的部分匹配，如果`puppet.conf`主服务器中的`strict_hostname_checking`设置为`false`。为了避免这种不安全的匹配，Puppet
+    5.5.19+ 和 6.13.0+ 默认设置为`true`，在Puppet 7及之后的版本中，已删除该选项。
 - en: 'For example, the following code will classify `server1.exampleapp.com` to the
     `role::oracle` class and `server2.exampleapp.com` and `server3.exampleapp.com`
     to the `role::apache` class. Any other servers that end with `exampleapp.com`
     will be classified to `role::example_common_windows` or `role::example_common_linux`
     depending on the OS family, such as `server5.exampleapp.com`, and any other node
     will be classified to `role::common`, such as `server1.anotherapp.com`:'
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，以下代码将把`server1.exampleapp.com`分类到`role::oracle`类别，将`server2.exampleapp.com`和`server3.exampleapp.com`分类到`role::apache`类别。其他以`exampleapp.com`结尾的服务器将根据操作系统系列分类为`role::example_common_windows`或`role::example_common_linux`，例如`server5.exampleapp.com`，其他节点将被分类为`role::common`，例如`server1.anotherapp.com`：
 - en: '[PRE5]'
+  id: totrans-83
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'It is a default to have a `site.pp` file in a `manifest` directory to keep
     things simple, but multiple manifests in this directory can contain node definitions
     that could be used to organize the files based on organization, use case, or ownership.
@@ -421,115 +601,174 @@
     way of keeping node definitions simple is to use a default definition that looks
     at the certificate of the node to have a `pp_role` extension that contains the
     name of the role, as shown in this code example:'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，`manifest`目录中会有一个`site.pp`文件，以保持简单，但该目录中的多个清单可以包含节点定义，这些定义可以根据组织、用例或所有权来组织文件。显然，拥有大量节点定义并不适用；保持节点定义简洁的推荐方法是使用一个默认定义，该定义查看节点的证书以具有一个`pp_role`扩展名，包含角色名称，如此代码示例所示：
 - en: '[PRE6]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: Using the `getvar` function to avoid issues with hosts without certificates
     and the `defined` function to confirm the declared role is visible in the environment,
     it will include the role declared in the certificate.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`getvar`函数来避免没有证书的主机出现问题，并使用`defined`函数确认声明的角色在环境中可见，它将包括证书中声明的角色。
 - en: Any code applied outside of the node definitions will apply to all nodes, but
     setting uncontrolled global defaults like this is not a recommended approach.
     In the previous code block, role classes were used, but any class could be included
     for exceptions.
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 任何在节点定义外应用的代码将适用于所有节点，但像这样设置不受控的全局默认值并不是推荐的做法。在之前的代码块中，使用了角色类，但也可以为例外包含任何类。
 - en: A local `puppet apply` call will not look for manifests in the `manifest` variable
     setting from `puppet.conf` but is expected to do what is passed on the command
     line either via the `–e` flag or by passing a specific manifest file.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 本地的 `puppet apply` 调用将不会查找 `puppet.conf` 中的 `manifest` 变量设置，而是会根据命令行传递的内容进行操作，可以通过
+    `–e` 标志或传递特定的清单文件来实现。
 - en: Having looked at the code-driven approach of node classification, we will now
     look at how Hiera data can be used to classify nodes.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 在查看了基于代码的节点分类方法后，我们现在将查看如何使用 Hiera 数据来对节点进行分类。
 - en: Classifying nodes with Hiera
+  id: totrans-90
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用 Hiera 进行节点分类
 - en: A more data-driven approach can be made in the default node definitions with
     Hiera arrays using the `lookup` function. While the `lookup` function could be
     used outside of the node definition, we recommend avoiding this to ensure, if
     any other node definition were specifically added for a node, it would have the
     expected result of only applying the node definition and not a less predictable
     mix.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以使用 Hiera 数组和 `lookup` 函数在默认节点定义中采取更具数据驱动的方法。虽然 `lookup` 函数可以在节点定义外使用，但我们建议避免这样做，以确保如果为节点特别添加了其他节点定义，它只会应用该节点定义，而不是更难预测的混合结果。
 - en: 'The first step would be, as we saw in [*Chapter 9*](B18492_09.xhtml#_idTextAnchor233),
     to ensure an appropriate Hiera hierarchy is in place for each environment, assuming
     a simple hierarchy of node, OS, and defaults in the `hiera.yaml` environment,
     as shown here:'
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一步是，如我们在 [*第9章*](B18492_09.xhtml#_idTextAnchor233) 中看到的，确保每个环境中有适当的 Hiera 层次结构，假设在
+    `hiera.yaml` 环境中有一个简单的层次结构，包括节点、操作系统和默认设置，如此处所示：
 - en: '[PRE7]'
+  id: totrans-93
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'We could then add a lookup within a `default` node definition:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们可以在 `default` 节点定义中添加查找：
 - en: '[PRE8]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: While it would seem more appropriate to call the variable `class`, this is not
     possible due to `class` being a reserved word.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然将变量命名为 `class` 看起来更合适，但由于 `class` 是一个保留字，因此无法这样做。
 - en: 'Data in the environment-level Hiera could then be added to a `common.yaml`
     file to ensure that by default, servers get the `core` role:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 环境级别的 Hiera 数据可以添加到 `common.yaml` 文件中，以确保默认情况下服务器获得 `core` 角色：
 - en: '[PRE9]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'Then, we create an `os/RedHat.yaml` file in the data file containing the following
     code:'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，在数据文件中创建一个 `os/RedHat.yaml` 文件，包含以下代码：
 - en: '[PRE10]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'This would ensure all servers from the Red Hat family such as CentOS would
     get assigned the `role::core::redhat` class. To assign a particular role to a
     server, we create a `node/exampleapp.example.com.yaml` file, containing the following
     code:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将确保所有来自红帽家族的服务器，如 CentOS，将被分配到 `role::core::redhat` 类。要将特定角色分配给服务器，我们创建一个 `node/exampleapp.example.com.yaml`
+    文件，包含以下代码：
 - en: '[PRE11]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: This would assign the `role::docker` class to the `exampleapp.example.com` node.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将把 `role::docker` 类分配给 `exampleapp.example.com` 节点。
 - en: 'To allow exceptions and a more complex combination setup, hashes instead of
     arrays could be used, changing the lookup in `site.pp` from a unique to a deep
     merge strategy and the data from an array to a hash:'
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了允许例外和更复杂的组合设置，可以使用哈希而不是数组，将 `site.pp` 中的查找策略从唯一查找改为深度合并策略，并将数据从数组改为哈希：
 - en: '[PRE12]'
+  id: totrans-105
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'In this case, we could use keys within Hiera that are only visible in Hiera
     to take over the role construct and use profiles directly, setting a `common.yaml`
     file to ensure the default classification gets a core profile and a security profile:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况下，我们可以使用仅在 Hiera 中可见的键，接管角色构建并直接使用配置文件，设置一个 `common.yaml` 文件以确保默认分类获得核心配置和安全配置文件：
 - en: '[PRE13]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'Then, for a specific server `exampleapp.example.com`, the `security_profile`
     variable could be set in `node/exampleapp.example.com.yaml`:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，对于特定的服务器 `exampleapp.example.com`，可以在 `node/exampleapp.example.com.yaml`
+    中设置 `security_profile` 变量：
 - en: '[PRE14]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: This would override the security profile key and result in `exampleapp.example.com`
     being classified as `profile::security::legacy` and `profile::core`.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将覆盖安全配置文件键，并导致 `exampleapp.example.com` 被分类为 `profile::security::legacy` 和
+    `profile::core`。
 - en: 'More complex Hiera-based key lookups could be constructed to look up based
     on Facter values, but since this is not a recommended approach in this book, enough
     detail has been shown to understand how Hiera can be used. It is worth seeing
@@ -537,19 +776,29 @@
     by example42 that uses the Hiera approach and can be used to have a preset and
     staged way of including modules in the Linux case. Including the `psick` class
     and simply setting the Hiera keys with hashes would be enough to classify a host:'
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以构建更复杂的基于 Hiera 的键查找来基于 Facter 值查找，但由于这在本书中不推荐使用，因此已展示足够的细节来理解 Hiera 的使用方法。值得一提的是，example42
+    的 `psick` 模块 [https://forge.puppet.com/modules/example42/psick](https://forge.puppet.com/modules/example42/psick)
+    使用了 Hiera 方法，并且可以用于在 Linux 环境中以预设和分阶段的方式包含模块。只需包含 `psick` 类并简单地通过哈希设置 Hiera 键，就足以对主机进行分类：
 - en: '[PRE15]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Having reviewed the code and data approaches for classification in detail, we
     will now cover the more advanced approach of using ENC scripts.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 在详细审查了分类的代码和数据方法后，我们将介绍使用 ENC 脚本的更高级方法。
 - en: ENC scripts
+  id: totrans-114
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: ENC 脚本
 - en: An ENC is a script that the Puppet Server or a `puppet apply` call can run.
     The requirements of the script are to take an argument of the `certname` of the
     client and return either a nonzero return code for unknown nodes or a YAML output
@@ -557,127 +806,193 @@
     this ENC, it is possible to access various external data source references such
     as PuppetDB or internal data sources of your organization. It is not important
     which language the ENC is written in.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: ENC 是一个脚本，Puppet Server 或 `puppet apply` 调用可以运行该脚本。该脚本的要求是接收客户端的 `certname`
+    参数，并返回一个非零的返回码（表示未知节点）或包含类、参数和环境的 YAML 输出，用于目录编译。在这个 ENC 内部，可以访问各种外部数据源引用，例如 PuppetDB
+    或你组织的内部数据源。重要的是 ENC 使用的编程语言，而不是它用什么语言编写。
 - en: 'An example output would look like this:'
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个示例输出如下所示：
 - en: '[PRE16]'
+  id: totrans-117
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: In this example, it can be seen the server will have the `role::core::windows`
     class applied and the `sqlserver_instance` class with associated parameters, a
     list of parameters that will be global variables in the catalog, and an environment
     of **user acceptance** **testing** (**UAT**).
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个示例中，可以看到服务器将应用 `role::core::windows` 类，并且会使用 `sqlserver_instance` 类及其相关参数，这些参数将作为目录中的全局变量，并且环境为**用户验收**
+    **测试**（**UAT**）。
 - en: It would normally be better to pass class parameters via Hiera data but this
     is just to demonstrate what is possible in the ENC output.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 通常最好通过 Hiera 数据传递类参数，但这只是为了演示在 ENC 输出中可以实现的内容。
 - en: 'To configure the use of ENC scripts, two variables must be set in `puppet.conf`:
     first, `node_terminus`, which defaults to `plain`, to only use the manifests to
     define classification. Setting `node_terminus` to `exec` causes the second variable,
     `e``xternal_nodes`, to be checked, which should be set to the location of a script.
     For example, the Foreman project uses an ENC that is defined in `puppet.conf`
     by its configuration module as follows:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 要配置 ENC 脚本的使用，必须在 `puppet.conf` 中设置两个变量：首先是 `node_terminus`，默认值为 `plain`，只使用清单来定义分类。将
+    `node_terminus` 设置为 `exec` 后，第二个变量 `external_nodes` 将被检查，这应该设置为脚本的位置。例如，Foreman
+    项目使用一个在其配置模块中定义的 ENC，如下所示：
 - en: '[PRE17]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'The contents of the script can be seen here: [https://github.com/theforeman/puppet-puppetserver_foreman/blob/master/files/enc.rb](https://github.com/theforeman/puppet-puppetserver_foreman/blob/master/files/enc.rb).'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 脚本的内容可以在这里查看：[https://github.com/theforeman/puppet-puppetserver_foreman/blob/master/files/enc.rb](https://github.com/theforeman/puppet-puppetserver_foreman/blob/master/files/enc.rb)。
 - en: The configuration module for placing this script can be found at [https://forge.puppet.com/modules/theforeman/puppetserver_foreman](https://forge.puppet.com/modules/theforeman/puppetserver_foreman).
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 用于放置此脚本的配置模块可以在 [https://forge.puppet.com/modules/theforeman/puppetserver_foreman](https://forge.puppet.com/modules/theforeman/puppetserver_foreman)
+    找到。
 - en: Developing ENCs is beyond the scope of this book, and it would be advisable
     to avoid the complexities involved in accessing external data this way as it can
     be expensive to access.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 开发 ENC 脚本超出了本书的范围，建议避免通过这种方式访问外部数据，因为访问可能会很昂贵。
 - en: We have covered how ENC scripts work, but PE uses its own type of ENC script
     with additional features.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经介绍了 ENC 脚本的工作原理，但 PE 使用自己类型的 ENC 脚本，并具有额外的功能。
 - en: PE classifier
+  id: totrans-126
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: PE 分类器
 - en: PE provides its own ENC classifier that accesses the classification service
     API, which is a Clojure app, and stores node group information in the **PostgreSQL**
     classification database.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: PE 提供了自己的 ENC 分类器，访问分类服务 API，这是一个 Clojure 应用程序，并将节点组信息存储在 **PostgreSQL** 分类数据库中。
 - en: This is configured by setting `node_terminus = classifier` in `puppet.conf`
     by the installer and should not be changed as it will not be supported.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过在 `puppet.conf` 中设置 `node_terminus = classifier` 来进行配置，安装程序已设置该项，并且不应更改，因为更改后将不受支持。
 - en: Note
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: '`node_terminus` for PE used to be called `console` on PE 4 and previous versions.'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: '`node_terminus` 在 PE 中曾在 PE 4 及之前版本中被称为 `console`。'
 - en: 'The node groups come in two types: environment and classification. The environment
     groups are used to assign environments to nodes, while the classification nodes
     are intended for assigning classes and adding parameters and variables. The node
     groups can be viewed and configured from the PE web console in the **Node** **groups**
     section.'
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 节点组有两种类型：环境组和分类组。环境组用于将环境分配给节点，而分类节点用于分配类并添加参数和变量。可以在 PE Web 控制台的 **节点** **组**
+    部分查看和配置节点组。
 - en: All node groups can contain rules to define based on facts or by directly naming
     servers to be contained by a node group. They can contain any classes with any
     defined class parameters that will be classified to these matching nodes, parameters
     known as configuration data that act like Hiera data, acting as overrides and
     taking precedence over Hiera, and variables that are declared as global variables
     for the group.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 所有节点组都可以包含规则，这些规则可以基于事实或通过直接命名要包含在节点组中的服务器来定义。它们可以包含任何带有任何定义的类参数的类，这些参数会被分类到这些匹配的节点中，这些参数被称为配置数据，像
+    Hiera 数据一样充当覆盖项，并优先于 Hiera，以及作为全局变量为组声明的变量。
 - en: Note
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'Older versions of PE did not enable configuration data by default and a section
     in `/etc/puppetlabs/puppet/hiera.yaml` had to be added:'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 较旧版本的 PE 默认不启用配置数据，必须在 `/etc/puppetlabs/puppet/hiera.yaml` 中添加一个部分：
 - en: '`hierarchy: - name: "Classifier Configuration Data"` `data_hash: classifier_data`'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: '`hierarchy: - name: "分类器配置数据"` `data_hash: classifier_data`'
 - en: 'By default, as pictured in *Figure 11**.1*, PE will have an **All Nodes** node
     group as a containing parent node group for all configurations, and beneath that
     split out to **All Environments**, an environment group acting as a parent group
     for all declared environment groups, and **PE Infrastructure**, a classification
     group used for configuring the PE architecture:'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，如*图 11.1*所示，PE 将拥有一个 **所有节点** 节点组，作为所有配置的父节点组，并在其下分为 **所有环境**，一个作为所有声明的环境组的父组的环境组，以及
+    **PE 基础架构**，一个用于配置 PE 架构的分类组：
 - en: '![Figure 11.1 – PE default node groups](img/B18492_11_01.jpg)'
+  id: totrans-137
   prefs: []
   type: TYPE_IMG
+  zh: '![图 11.1 – PE 默认节点组](img/B18492_11_01.jpg)'
 - en: Figure 11.1 – PE default node groups
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.1 – PE 默认节点组
 - en: The environment groups are marked in *Figure 11**.1* as `trusted.extensions.pp_environment`
     fact in a rule to match production or development into groups of the same name
     and ensure the named environment is assigned. If `trusted.extensions.pp_environment`
     is not set, the `pp_enviroment` trusted fact prevents the server from being moved
     to another environment without regenerating the server certificates, which will
     require access to both the client and primary server. The `puppet agent –``t --environment=myfeaturebranch`.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 环境组在*图 11.1*中被标记为 `trusted.extensions.pp_environment` 事实，在规则中将生产或开发环境匹配到同名的组，并确保分配相应的环境。如果没有设置
+    `trusted.extensions.pp_environment`，`pp_enviroment` 受信事实将防止服务器被移动到另一个环境，而无需重新生成服务器证书，这将需要访问客户端和主服务器。命令为
+    `puppet agent –``t --environment=myfeaturebranch`。
 - en: Approaches to the development and deployment of environments will be discussed
     further in the *Managing and deploying Puppet code* section, but it may prove
     necessary to have more environment levels between production and development,
     in which case the recommended approach would be to create a node group of that
     environment name under all environments and create a rule matching `trusted.extensions.pp_environment`
     with your set environment name.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 环境的开发和部署方法将在*管理和部署 Puppet 代码*部分进一步讨论，但可能需要在生产和开发之间增加更多环境层级，在这种情况下，推荐的做法是在所有环境下创建一个该环境名称的节点组，并创建一个规则，匹配
+    `trusted.extensions.pp_environment` 和您设置的环境名称。
 - en: Environment groups should be kept simple, so avoid assigning any class parameters
     or variables.
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 环境组应保持简单，因此避免分配任何类参数或变量。
 - en: When classification groups are nested, they inherit the definition from their
     parent group. When creating a group structure, it will make sense to start with
     a general layer of configuration and narrow it down to classification groups that
@@ -685,16 +1000,20 @@
     apply to all Puppet infrastructure hosts, and then have specific services and
     functions such as a compiler or PuppetDB, which will be configured only on a subset
     of nodes.
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 当分类组嵌套时，它们会继承父组的定义。在创建组结构时，从一般的配置层开始，然后将其细化到更具体的分类组是有意义的。例如，可以看到`puppet_master_host`被设置，这适用于所有Puppet基础设施主机，然后设置特定的服务和功能，如编译器或PuppetDB，这将仅在部分节点上配置。
 - en: It can be confusing because this inheritance applies to rules as well, so if
     the parent rule has already set a rule limiting nodes, the child node groups’
     rules will be combined with the parent node group. This also applies to the pinning
     of nodes; you cannot just ignore rules and pin any server visible to the primary
     server. It is also important to note if the child node group contains no rules,
     it will not apply classification, even that inherited from a parent group.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可能会引起混淆，因为这种继承也适用于规则，因此，如果父规则已经设置了限制节点的规则，子节点组的规则将与父节点组的规则结合使用。这同样适用于节点的固定；您不能忽略规则并将任何可见于主服务器的服务器固定住。还需要注意的是，如果子节点组没有规则，它将不会应用分类，即使是从父组继承的分类。
 - en: Further confusion can arise from the purpose of the environment variable in
     classification node groups; this does not define where the assigned classes will
     run from but, in fact, tells the node group the environment in which to look for
@@ -703,53 +1022,70 @@
     development environment before being promoted to production, so it can often be
     the case that it makes the most sense for application node groups to use the lowest
     level of environment to have full visibility of classes.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于分类节点组中环境变量的目的，可能会引起进一步的混淆；这并不是定义分配的类将从哪里运行，而是告诉节点组在哪个环境中查找可用的类名。如果节点组在开发和生产节点之间共享，并且新的类最初在开发环境中引入，然后再推广到生产环境，那么这可能会导致问题，因此通常情况下，应用节点组使用最低级别的环境来全面查看类名是最有意义的。
 - en: To keep things simple, it is recommended to use straightforward classification
     roles that are kept as children of all nodes and simply have rules matching `trusted.extensions.pp_role`
     to a specific class role name, and then assign that role class to the classification
     role group.
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了简化操作，建议使用直接的分类角色，这些角色作为所有节点的子角色，并仅通过将`trusted.extensions.pp_role`匹配到特定的类角色名称来设置规则，然后将该角色类分配给分类角色组。
 - en: 'To automate the creation of node groups, the `node_manager` module ([https://forge.puppet.com/modules/WhatsARanjit/node_manager](https://forge.puppet.com/modules/WhatsARanjit/node_manager))
     can be used to manage them through Puppet code, which is how the `peadm` module
     itself configures Puppet node group information. For example, `peadm` ensures
     that nodes with the `puppet/puppetdb-database` trusted extension are assigned
     to the **PE Database** node group with the following code:'
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了自动化节点组的创建，可以使用`node_manager`模块（[https://forge.puppet.com/modules/WhatsARanjit/node_manager](https://forge.puppet.com/modules/WhatsARanjit/node_manager)）通过Puppet代码管理它们，这也是`peadm`模块本身配置Puppet节点组信息的方式。例如，`peadm`确保带有`puppet/puppetdb-database`可信扩展的节点被分配到**PE数据库**节点组，代码如下：
 - en: '[PRE18]'
+  id: totrans-147
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: Note
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: The `node manager` module has the `purge_behavior` setting, which, if set to
     `none` for resources, ensures only the specific changes you wish to make are applied
     to node groups. By default this is set to `all`, removing any settings you have
     not declared.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: '`node manager`模块有一个`purge_behavior`设置，如果将资源的该设置为`none`，则确保仅应用您希望对节点组进行的特定更改。默认情况下，这个设置为`all`，会移除您未声明的任何设置。'
 - en: 'Alternatively, the APIs can be used to perform backups and restores of node
     group data, saving to a file with `/classifier-api/v1/groups` and restoring with
     `/classifier-api/v1/import-hierarchy`. `Peadm` implements backup and restore classification
     tasks using these APIs: [https://github.com/puppetlabs/puppetlabs-peadm/tree/main/tasks](https://github.com/puppetlabs/puppetlabs-peadm/tree/main/tasks).'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
 - en: Since PE version 2019.2, a `$pe_node_groups` top-scope variable that returns
     all node groups is available.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: A further method to use external data to add classes with the **Puppet Data
     Service** (**PDS**) will be shown in [*Chapter 13*](B18492_13.xhtml#_idTextAnchor321).
     But having reviewed the various methods of classification, we will now discuss
     best-practice approaches to classifying nodes.
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: Recommended approach
+  id: totrans-154
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -758,6 +1094,7 @@
     has taken place. It would be best practice to choose one option if possible or
     at least to be clear on the purpose of each mechanism, such as node definition
     to match roles based on certificate and Hiera to match node exceptions.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: 'Presuming classification has not already been chosen by your organization or
@@ -768,6 +1105,7 @@
     against the environment to be used for PE. This is what Puppet Support expects
     and is the built model, but it limits the use of any variables or configuration
     data within the Hiera data setup.'
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
 - en: The other mechanisms in sections *Node definitions* and *Classifying nodes with
@@ -778,98 +1116,133 @@
     and too many variations of servers are being produced. When we maintain tight
     standards with minimal exceptions, servers can be disposed of and rebuilt easily,
     reducing operational complexity and the cognitive load of support teams.
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: Now that you have understood how servers are classified to an environment and
     to classes, we will show how different data is loaded and cached during Puppet
     runs.
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: Puppet runs
+  id: totrans-159
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: In this section, the steps of a Puppet run and classification will be detailed.
     For the case of Puppet runs, a `puppet apply` command should be considered as
     the equivalent of a Puppet server and client on the same node.
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: 'When a catalog request is made by a client, four things are sent to the server:'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
 - en: The node name
+  id: totrans-162
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The node’s certificate (not sent for `apply`)
+  id: totrans-163
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Facts
+  id: totrans-164
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The requested environment
+  id: totrans-165
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 请求的环境
 - en: The node name is the `certname`, and along with the requested environment is
     embedded in the API request made—for example, `/puppet/v3/catalog/exampleserver.example.com?environment=uat`.
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 节点名称是 `certname`，并与请求的环境一起嵌入到 API 请求中——例如，`/puppet/v3/catalog/exampleserver.example.com?environment=uat`。
 - en: The certificate can contain extensions, which will be turned into trusted facts.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 证书可以包含扩展，这些扩展将被转化为可信的事实。
 - en: After the server receives the agent data, it asks the configured node terminus
     for a node object. In the case of `plain`, this will be blank, or for `exec` or
     `classifier`, YAML output will be returned containing classes, parameters, and
     environment.
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 服务器接收到代理数据后，向配置的节点终端请求节点对象。在 `plain` 的情况下，这将是空白的；对于 `exec` 或 `classifier`，将返回包含类、参数和环境的
+    YAML 输出。
 - en: By default, `puppet.conf` sets `strict-environment-mode` to `false`, and this
     returned environment will override the agent request; if it is set to `true`,
     the catalog compilation will fail. The `agent_specified_environment` fact will
     appear if the agent specified an environment on the Puppet run.
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，`puppet.conf` 将 `strict-environment-mode` 设置为 `false`，并且返回的环境将覆盖代理请求；如果设置为
+    `true`，则目录编译将失败。如果代理在 Puppet 执行过程中指定了环境，`agent_specified_environment` 事实将会出现。
 - en: The variables will then be set from the facts as both top-scope variables and
     the `$facts` hash, extensions in the certificate as trusted facts in the `$trusted`
     hash, and parameters returned from the node terminus as top-scope variables.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 变量将根据事实设置，既作为顶级作用域变量，也作为 `$facts` 哈希中的变量，将证书中的扩展作为 `$trusted` 哈希中的可信事实，以及从节点终端返回的参数作为顶级作用域变量。
 - en: The main manifest will then be evaluated, looking for it to be defined by the
     environment configuration first and then the client’s `puppet.conf` file if it
     is unset. If any node definitions exist, Puppet will attempt to match the `certname`
     and fail compilation if it does not.
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 主清单将被评估，首先查看它是否由环境配置定义，如果未设置，则由客户端的 `puppet.conf` 文件定义。如果存在任何节点定义，Puppet 将尝试匹配
+    `certname`，如果匹配失败，则编译将失败。
 - en: Any resources outside of the node definition are evaluated and added to the
     catalog and any classes. As was noted in the *Node definitions* section, it is
     not recommended to declare anything outside of node definitions. The matching
     node definition will then evaluate the code, overriding any top-scope variables
     with variables declared in the node definition, adding resources to the catalog,
     and loading and declaring classes in the node definition.
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 任何在节点定义之外的资源都会被评估并添加到目录中以及任何类中。如 *节点定义* 部分所述，不建议在节点定义之外声明任何内容。匹配的节点定义将评估代码，覆盖节点定义中声明的任何顶级作用域变量，将资源添加到目录，并加载并声明节点定义中的类。
 - en: Puppet will then load the manifest containing classes declared in the main manifest
     using the `modulepath` variable configured for the environment. As a class is
     loaded, the code is evaluated and resources are added to the catalog, and any
     classes declared within them will be loaded and evaluated.
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 然后将加载包含在主清单中声明的类，使用为该环境配置的 `modulepath` 变量。每当加载一个类时，代码会被评估，资源会被添加到目录中，任何在其中声明的类也会被加载并评估。
 - en: Puppet then loads and evaluates the classes that were returned from the node
     object.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 然后加载并评估从节点对象返回的类。
 - en: Having seen how Puppet classifies nodes and how agent runs process these classification
     methods, it is now time to see how the environments are managed and deployed to
     the primary server to make the right versions of code available to the nodes.
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 在了解了 Puppet 如何分类节点以及代理如何处理这些分类方法后，现在是时候查看如何管理和部署环境到主服务器，以便将正确版本的代码提供给节点。
 - en: Managing and deploying Puppet code
+  id: totrans-176
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 管理和部署 Puppet 代码
 - en: By default, just creating the folders and dropping module contents into place
     combined with the `puppet module install` command to automate pulling from the
     Forge API is enough to make modules visible in environments and to allow them
@@ -877,31 +1250,47 @@
     approach that we recommend as it centralizes the deployment of modules and environments,
     most likely making a single team a gatekeeper. We will see that control repos
     provide more flexible control.
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 默认情况下，只需创建文件夹并将模块内容放置到适当位置，再结合 `puppet module install` 命令从 Forge API 自动拉取，就足以使模块在环境中可见，并允许它们被打包到包管理中以创建版本。但我们并不推荐这种方法，因为它将模块和环境的部署集中化，很可能使得单个团队成为
+    gatekeeper。我们将看到控制库提供了更灵活的控制。
 - en: The most common approach is to use a Git repository known as a control repo.
     Puppet provides a template for this repository at [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo).
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 最常见的方法是使用一个名为控制仓库的 Git 仓库。Puppet 提供了这个仓库的模板，地址为 [https://github.com/puppetlabs/control-repo](https://github.com/puppetlabs/control-repo)。
 - en: Note
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'The Puppet Forge author example42 provides its own templated control repo for
     use with its integrations and pre-designed implementation approaches: [https://github.com/example42/psick](https://github.com/example42/psick).'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet Forge 作者 example42 提供了其自己的模板化控制仓库，用于与其集成和预设计的实现方法：[https://github.com/example42/psick](https://github.com/example42/psick)。
 - en: 'Puppet’s control repo template contains many of the directories and files discussed
     in the first section of the chapter, along with Hiera data and some additional
     files specific to module deployment. *Figure 11**.2* shows the contents of the
     Puppet control repo:'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet 的控制仓库模板包含了本章第一部分中讨论的许多目录和文件，以及 Hiera 数据和一些特定于模块部署的附加文件。*图 11.2* 显示了 Puppet
+    控制仓库的内容：
 - en: '![Figure 11.2 – File structure of the Puppet control repo template](img/B18492_11_02.jpg)'
+  id: totrans-182
   prefs: []
   type: TYPE_IMG
+  zh: '![图 11.2 – Puppet 控制仓库模板的文件结构](img/B18492_11_02.jpg)'
 - en: Figure 11.2 – File structure of the Puppet control repo template
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.2 – Puppet 控制仓库模板的文件结构
 - en: In the first section of this chapter, *Puppet environments*, we discussed many
     files and directories, with `environment.conf`, config version scripts, and the
     `manifests` directory for classification. Also visible is the Hiera configuration
@@ -913,84 +1302,114 @@
     to see in the config version script at [https://github.com/puppetlabs/control-repo/blob/production/scripts/config_version.sh](https://github.com/puppetlabs/control-repo/blob/production/scripts/config_version.sh)
     how it will add Git revision control information about the environment to the
     run. The part that we have not reviewed is the Puppetfile file.
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章的第一部分，*Puppet 环境*，我们讨论了许多文件和目录，其中包括 `environment.conf`、配置版本脚本以及用于分类的 `manifests`
+    目录。还可以看到 `hiera.yaml` 中的 Hiera 配置以及数据目录，显示了一个简单的初始节点的两层结构，用于匹配特定节点名称和公共数据，作为不匹配节点的默认设置。`site-modules`
+    目录旨在展示临时计划和任务如何作为该控制仓库的一部分部署，并可能为角色和配置文件提供存放位置。`scripts` 目录也值得查看，以了解在 [https://github.com/puppetlabs/control-repo/blob/production/scripts/config_version.sh](https://github.com/puppetlabs/control-repo/blob/production/scripts/config_version.sh)
+    中的配置版本脚本如何将有关环境的 Git 修订控制信息添加到执行中。我们尚未审查的部分是 Puppetfile 文件。
 - en: The Puppetfile file is a Ruby-based `moduledir` as a variable or the `installpath`
     parameter on a particular module. We do not recommend this as good practice as
     it can be confusing to users unfamiliar with your environment and, if set to be
     outside the environment directory, can affect caching and make the environment
     inconsistent. This will be discussed later in this section.
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppetfile 文件是基于 Ruby 的 `moduledir` 作为变量，或某个模块的 `installpath` 参数。我们不推荐这样做，因为这可能会让不熟悉你环境的用户感到困惑，并且如果设置在环境目录之外，可能会影响缓存，导致环境不一致。本节稍后会讨论这一点。
 - en: 'Puppetfile module declarations at their simplest level contain the following:'
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppetfile 模块声明的最简单形式包含以下内容：
 - en: '`mod` keyword'
+  id: totrans-187
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`mod` 关键字'
 - en: A name in single quotes
+  id: totrans-188
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 单引号中的名称
 - en: Optionally a comma, then a version number or the `:``latest` keyword
+  id: totrans-189
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可选地跟一个逗号，再加上版本号或 `:` `latest` 关键字
 - en: 'For example, the following code block assumes Puppet Forge as the source and
     installs the latest version of `dsc-octopusdsc` if the module is not present,
     but will not result in the module being updated:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，以下代码块假设 Puppet Forge 作为源，并在模块不存在时安装 `dsc-octopusdsc` 的最新版本，但不会导致模块被更新：
 - en: '[PRE19]'
+  id: totrans-191
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: This piece of code will install `puppetlabs-chocolatey` to the fixed version
     6.2.0 and will install `puppetlabs-stdlib` and keep updating it to the latest
     version. It is important to note this will not result in Puppet Forge dependencies
     being installed—this must be managed within the Puppetfile manually. Looking at
     module documentation on the Puppet Forge you will see example code on how to add
     the modules to Puppetfiles.
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: 'To access modules within other Git repositories, the `git` option and the HTTP
     address to the repository should be given. These can then be paired with one of
     the following options to clone a specific version of the Git repository:'
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
 - en: '`ref`, with a reference to a tag, a commit, or a branch'
+  id: totrans-194
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`tag`, with a specific tag'
+  id: totrans-195
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`commit`, with a specific commit reference'
+  id: totrans-196
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`branch`, with the name of a branch or the `:control_branch` keyword (which
     will automatically look up the control repo’s branch name)'
+  id: totrans-197
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`default_branch`, a branch to use if all the preceding options fail'
+  id: totrans-198
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'The following code demonstrates how the `git` options in the preceding list
     can be mixed and matched:'
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-200
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: This code block takes `examplemodule1` at `tag` version `v.0.1` and `examplemodule2`
     at `commit` version `68a140bd096a55019b3d5c8c347436b318779161` from the same Git
     organization. For `anothermodule`, if a branch with the same name as the environment
     that we are trying to deploy exists, it will use that; otherwise, it will clone
     at the `main` branch.
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
 - en: In air-gapped environments where access to the Puppet Forge API is limited or
@@ -1002,6 +1421,7 @@
     to your own Git repository copy. This ensures the commit history is maintained
     and on a regular basis, you can simply clone the code again and add new commits
     to your own local repository.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
 - en: Regardless of how Forge modules are downloaded, if they are not coming directly
@@ -1011,77 +1431,111 @@
     version upgrades that are harder to test. Following the **Content and Tooling**
     (**CAT**) team at [https://puppetlabs.github.io/content-and-tooling-team/blog/](https://puppetlabs.github.io/content-and-tooling-team/blog/)
     can help keep track of module releases.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
 - en: JFrog Artifactory users can use a Puppet Forge plugin to synchronize and host
     modules internally, as documented at [https://www.jfrog.com/confluence/display/JFROG/Puppet+Repositories](https://www.jfrog.com/confluence/display/JFROG/Puppet+Repositories).
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: With this structure to manage several environments, it is simply a case of creating
     branches on the Git repository, with each branch representing an environment that
     can have its own independent content to be deployed.
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用这种结构来管理多个环境时，只需在Git仓库中创建分支，每个分支代表一个环境，且每个环境可以有其独立的内容进行部署。
 - en: To manage deployment, the standard system used for `r10k`, and the system used
     for `r10k` but has further integrations for PE.
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 管理部署的标准系统是`r10k`，它还为PE提供了更多的集成功能。
 - en: The installation instructions for `r10k` are straightforward and available direct
     from the repository at [https://forge.puppet.com/modules/puppet/r10k](https://forge.puppet.com/modules/puppet/r10k).
     Instructions to configure Code Manager in PE either in node groups or via Hiera
     are available at [https://puppet.com/docs/pe/2021.7/code_mgr_config.html](https://puppet.com/docs/pe/2021.7/code_mgr_config.html).
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: '`r10k`的安装说明简单明了，并且可以直接从[https://forge.puppet.com/modules/puppet/r10k](https://forge.puppet.com/modules/puppet/r10k)的仓库中获取。配置PE中Code
+    Manager的说明可以通过节点组或通过Hiera提供，详细信息请参见[https://puppet.com/docs/pe/2021.7/code_mgr_config.html](https://puppet.com/docs/pe/2021.7/code_mgr_config.html)。'
 - en: In both cases, as part of these instructions, an SSH key will be generated to
     allow for communication between `r10k` and any Git repositories you have declared.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这两种情况下，作为这些说明的一部分，将生成一个SSH密钥，用于`r10k`与任何你已声明的Git仓库之间的通信。
 - en: An alternative option for Puppet Open Source is to use `g10k` `(`[https://forge.puppet.com/modules/landcareresearch/g10k](https://forge.puppet.com/modules/landcareresearch/g10k)),
     which is a rewrite of `r10k` in **Go** and has substantial performance improvements.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet开源的另一个替代选项是使用`g10k` (`[https://forge.puppet.com/modules/landcareresearch/g10k](https://forge.puppet.com/modules/landcareresearch/g10k))，它是`r10k`在**Go**语言中的重写，并且在性能上有显著的提升。
 - en: Note
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: You can still use `r10k` directly in PE, but this is not an approach Puppet
     will provide support for.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 你仍然可以在PE中直接使用`r10k`，但这是Puppet不提供支持的做法。
 - en: For open source Puppet, having configured and deployed `r10k`, it is then possible
     to run a `sudo -H -u puppet r10k deploy production` command to deploy a specific
     branch or leave off an environment name to deploy all available environments.
     A Webhook can also be configured using the Sinatra server, as detailed in the
     `r10k` instructions at [https://forge.puppet.com/modules/puppet/r10k/readme#webhook-support](https://forge.puppet.com/modules/puppet/r10k/readme#webhook-support).
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于开源Puppet，在配置并部署`r10k`之后，可以运行`sudo -H -u puppet r10k deploy production`命令来部署特定的分支，或者省略环境名称以部署所有可用的环境。还可以使用Sinatra服务器配置Webhook，详细信息请参见`r10k`的说明，[https://forge.puppet.com/modules/puppet/r10k/readme#webhook-support](https://forge.puppet.com/modules/puppet/r10k/readme#webhook-support)。
 - en: 'For PE, Puppet Code Manager is a `/code-manager` API using a token generated
     in the PE `puppet code deploy` command. For example, the following code will generate
     a token for the currently logged-in user for the next 2 hours and then deploy
     in the production environment:'
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于PE，Puppet Code Manager是一个使用在PE `puppet code deploy`命令中生成的令牌的`/code-manager`
+    API。例如，下面的代码将为当前登录用户生成一个令牌，该令牌在接下来的2小时内有效，然后在生产环境中进行部署：
 - en: '[PRE21]'
+  id: totrans-215
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: In either version, to see the deployed modules you can use `puppet module --list`,
     which will also show any dependency issues.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这两种版本中，要查看已部署的模块，可以使用`puppet module --list`，该命令还会显示任何依赖问题。
 - en: Note
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: 'Puppet Code Manager uses `r10k` underneath. To get more detailed debugging
     information, the following command can be run, which is used for deploying in
     production:'
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: Puppet Code Manager在底层使用`r10k`。为了获得更详细的调试信息，可以运行以下命令，该命令用于在生产环境中进行部署：
 - en: '`runuser -u pe-puppet -- /opt/puppetlabs/puppet/bin/r10k -c /opt/puppetlabs/server/data/code-manager/r10k.yaml
     deploy environment production --puppetfile --``verbose debug2`'
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: '`runuser -u pe-puppet -- /opt/puppetlabs/puppet/bin/r10k -c /opt/puppetlabs/server/data/code-manager/r10k.yaml
+    deploy environment production --puppetfile --``verbose debug2`'
 - en: For these deployments, it is important to understand caching that can take place.
     All Puppet code is read and parsed when the environment is loaded—as is the `hiera.yaml`
     file—and it is not re-read until the environment cache is expired, or the JRuby
@@ -1092,6 +1546,7 @@
     that if environments have module paths that look into other environments, a deployment
     would result in it only seeing the Hiera and template updates. This is why it
     is strongly recommended to avoid this approach.
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
 - en: 'When using compilers to synchronize code, open source Puppet,\ has various
@@ -1100,16 +1555,20 @@
     the primary server to compilers, or using a read-only **network file share** (**NFS**)
     from the primary to all compilers. This choice will be entirely down to what is
     best for your organization in terms of network configuration and security standards.'
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
 - en: 'On PE, Code Manager has a specific implementation using the file sync client
     and server, as shown in *Figure 11**.3*:'
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
 - en: '![Figure 11.3 – Puppet Code Manager architecture](img/B18492_11_03.jpg)'
+  id: totrans-223
   prefs: []
   type: TYPE_IMG
 - en: Figure 11.3 – Puppet Code Manager architecture
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
 - en: A code deployment request will come in a request with an RBAC token either via
@@ -1124,6 +1583,7 @@
     once reserved, the files will be synced into the environment directory, and the
     JRuby instances released. This does mean code deployments can be impactful on
     performance.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
 - en: If lockless code deployment is enabled, symbolic links or symlinks are used
@@ -1133,14 +1593,17 @@
     because more environments will be deployed at once but ensures catalogs can continue
     to run since they will use the directory the symlink had when they started to
     run. To enable lockless code deploys, follow the instructions at [https://puppet.com/docs/pe/2021.7/lockless-code-deploys.html](https://puppet.com/docs/pe/2021.7/lockless-code-deploys.html).
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
 - en: Now that we understand how Puppet deploys code to environments, we will look
     at workflows that can be used to manage the promotion of module code through those
     environments.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
 - en: Creating a workflow
+  id: totrans-228
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1152,22 +1615,27 @@
     and then promoted through environments by merging the changes from one branch
     to the next, running the code on servers, and confirming expected results. For
     example, the steps involved in such as process may include the following:'
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
 - en: Creating a feature branch of the control repo and updating the `module1` tag
     version from 1.1 to 1.2
+  id: totrans-230
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merging the feature branch with the development branch and deploying development
+  id: totrans-231
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merging the development branch with the UAT branch and deploying UAT
+  id: totrans-232
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merging UAT with production and deploying production
+  id: totrans-233
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1177,6 +1645,7 @@
     requirement of a gatekeeper such as the Puppet platform team to manage changes
     to the Puppetfile control repo and manage the schedule of when code deployments
     are made.
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
 - en: If this approach is taken, it is advisable to have multiple control repos using
@@ -1184,6 +1653,7 @@
     different sets of modules, such as Windows and Linux, or want to have isolation
     and protection around the control repo and have separate ownership of code and
     servers but want to share infrastructure.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: 'The second approach is to have all modules in the Puppetfile in the control
@@ -1192,27 +1662,33 @@
     The management of versions will be on the modules themselves, with code changes
     pushed to the main branch from temporary feature branches before being merged
     into each static environment branch. Here’s an example:'
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
 - en: Create a feature branch on `module1` and control repo testing code changes
+  id: totrans-237
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merge the feature branch of `module1` with `main`
+  id: totrans-238
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merge changes of the module branch from main to development, then deploy and
     test
+  id: totrans-239
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merge changes of the module branch from development to UAT, then deploy and
     test
+  id: totrans-240
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Merge changes of the module branch from UAT to production, then deploy and test
+  id: totrans-241
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1222,111 +1698,133 @@
     to make this easier, but various tools exist, such as Jenkins or GitHub, with
     which you can ensure the pre-commit hook checks and testing we discussed in [*Chapter
     8*](B18492_08.xhtml#_idTextAnchor212)are performed before a PR can be completed.
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
 - en: Note
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
 - en: Some excellent sources of existing pre-commit hooks to copy into place can be
     found at [https://pre-commit.com/hooks.html](https://pre-commit.com/hooks.html),
     [https://github.com/pre-commit/pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks),
     and [https://github.com/mattiasgeniar/puppet-pre-commit-hook](https://github.com/mattiasgeniar/puppet-pre-commit-hook).
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
 - en: Lab – classifying and deploying code
+  id: totrans-245
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'In this lab, complete the following tasks:'
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
 - en: Create a node definition that assigns the `motd` module to any node with `node`
     in the certname in the `manifest/site.pp` file of the production environment
+  id: totrans-247
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The `motd` module is already in the `Puppetfile` file in the production control
     repo
+  id: totrans-248
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: The defaults for `motd` should be fine using `include motd`
+  id: totrans-249
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: See an example solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/default.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/default.pp)
+  id: totrans-250
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Create a node definition to assign the `icinga2` module to all Windows nodes
     that get created
+  id: totrans-251
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The `icinga2` module is already in the `Puppetfile` file in the production control
     repo
+  id: totrans-252
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: The defaults for `icigna2` should be fine using `include incigna2`
+  id: totrans-253
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Windows nodes will always contain `windows-node` in the `certname`
+  id: totrans-254
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: To deploy on the PE web console, run the `peadm code_manager` task from the
     `'deploy production'` action string
+  id: totrans-255
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: See an example solution at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/node.pp](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/node.pp)
+  id: totrans-256
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Create and deploy a development environment, adding the `docker` module:'
+  id: totrans-257
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: On the GitHub web page, go to your control repo and select the arrow next to
     the production branch, and type `development`
+  id: totrans-258
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Click the text generated below, which should say `create branch: development`
     `from ''production''`'
+  id: totrans-259
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Add the line `mod 'puppetlabs-docker'`, latest to `Puppetfile`, making sure
     you are on the development branch
+  id: totrans-260
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: On the PE web console, run the `peadm code_manager` task from the task menu,
     entering the `'deploy development'` action string
+  id: totrans-261
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Create a node group for a role that includes Docker pinning one of your nodes
     to it and development, then promote the development branch to production and deploy:'
+  id: totrans-262
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Create a node group called `docker` by selecting `apply docker`
+  id: totrans-263
   prefs:
   - PREF_IND
   - PREF_UL
@@ -1334,17 +1832,20 @@
 - en: See sample solutions at [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group1.png](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group1.png),
     [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group2.png](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group2.png),
     and [https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group3.png](https://github.com/PacktPublishing/Puppet-8-for-DevOps-Engineers/blob/main/ch11/docker_group3.png)
+  id: totrans-264
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-265
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: In this chapter, we discussed how Puppet environments can be used to manage
     specific versions of modules, classification, and data to apply to groups of Puppet
     clients. The directory structure and variables to configure this was reviewed.
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
 - en: The options to classify servers into environments and to assign classes and
@@ -1355,6 +1856,7 @@
     shown to build on the ENC approach with its own ENC script used in conjunction
     with node groups to store data on how to classify servers into environments and
     assign classes.
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
 - en: It was highlighted that the various methods could be used together but the recommended
@@ -1362,11 +1864,13 @@
     definition to look for `pp_role` trusted facts to classify and to put the environment
     setting in `puppet.conf`, while for PE, it was recommended to use 1-to-1 matching
     of node groups with `pp_role` and `pp_environment` trusted facts.
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
 - en: It was then shown how a Puppet catalog request sends data to the Puppet server
     and how classification files and scripts are used to generate catalogs highlighting
     how different types of Puppet resources are cached.
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
 - en: The methods of deploying environments were then shown, using a Git-based Puppet
@@ -1374,6 +1878,7 @@
     branch representing a particular environment. The Puppetfile was shown as a way
     to list which modules should be deployed to an environment, specifying the version
     and location of the module.
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
 - en: It was then discussed how `r10k` and the PE Code Manager implementation on top
@@ -1381,6 +1886,7 @@
     various approaches to keep code deployed on all infrastructure, which would depend
     on local infrastructure and standards. For PE, it was shown that Code Manager
     contained **File sync**, which kept code synchronized.
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
 - en: Workflow approaches were then viewed, showing the more gated and traditional
@@ -1391,11 +1897,13 @@
     environment-named branches, allowing teams to work and deploy independently. Highlighting
     the idea in either of these systems is to use a proper pipelining tool with Webhooks
     to automate deployment.
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
 - en: Having focused on Puppet infrastructure and language for stateful configuration
     management in this chapter, the next chapter will look at Bolt and orchestrator
     to show how procedural tasks can be run either using Bolt as an independent tool
     or through the PE infrastructure via the PE orchestrator.
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
