@@ -1,34 +1,48 @@
 - en: 'Chapter 16: Designing for Chaos'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 第16章：为混乱而设计
 - en: Writing software that works in perfect conditions is easy. It would be nice
     if you never had to worry about network latency, service timeouts, storage outages,
     misbehaving applications, users sending bad arguments, security issues, or any
     of the real-life scenarios we find ourselves in.
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 编写在完美条件下工作的程序是容易的。如果你永远不需要担心网络延迟、服务超时、存储故障、应用程序行为异常、用户发送错误参数、安全问题，或者我们在现实生活中遇到的任何其他场景，那就好了。
 - en: 'In my experience, things tend to fail in the following three ways:'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据我的经验，故障通常有以下三种方式：
 - en: Immediately
+  id: totrans-3
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 立即
 - en: Gradually
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 渐进地
 - en: Spectacularly
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 壮观地
 - en: '**Immediately** is usually the result of a change to application code that
     causes a service to die on startup or when receiving traffic to an endpoint. Most
     development test environments or canary rollouts catch these before any real problems
     occur in production. This type is generally trivial to fix and prevent.'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: '**立即**通常是应用代码发生变化，导致服务在启动时或接收到请求时崩溃的结果。大多数开发测试环境或金丝雀发布能够在生产中发生任何实际问题之前捕捉到这些。这种类型的问题通常很容易修复和预防。'
 - en: '**Gradually** is usually the result of some type of memory leak, thread/goroutine
     leak, or ignoring design limitations. These problems build up over time and begin
     causing problems that result in services crashing or growth in latency at unacceptable
@@ -37,8 +51,10 @@
     of intense work to resolve. Some rare versions of this have what I call a cliff
     failure: gradual growth hits a limitation that cannot be overcome by throwing
     more resources at the problem. That type of problem belongs to our next category.'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: '**渐进性**通常是由于某种类型的内存泄漏、线程/协程泄漏，或忽视设计限制。这些问题随着时间的推移积累，开始引发问题，导致服务崩溃或延迟增长到无法接受的水平。很多时候，一旦问题被识别出来，这些问题可以在金丝雀发布过程中轻松解决。对于设计问题，修复可能需要几个月的密集工作来解决。某些罕见版本的这种问题，会出现我所称之为“悬崖故障”：渐进性增长遇到一个无法通过增加更多资源来克服的限制。这类问题属于下一个类别。'
 - en: That category is **spectacularly**. This is when you find a problem in production
     that is causing mass failures when a few moments ago everything was working fine.
     Cellphones everywhere start pinging alerts, dashboards go red, dogs and cats start
@@ -47,153 +63,216 @@
     a type of query that crashes your service. These outages cause mass panic, test
     your ability to communicate across teams efficiently, and are the ones that show
     up in news articles.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 那种类别是**壮观的**。这就是你在生产环境中发现一个问题，导致大规模故障，而几分钟前一切都正常工作。手机到处响起警报，仪表盘变红，狗和猫开始一起生活——大规模的恐慌！这可能是一个有缺陷的服务上线，压垮了你的网络，依赖的缓存服务崩溃，或是某种查询导致你的服务崩溃。这些停机造成大规模恐慌，考验你在团队之间有效沟通的能力，且通常会出现在新闻报道中。
 - en: This chapter will focus on designing infrastructure tooling to survive chaos.
     The most spectacular failures of major cloud companies have often been the results
     of infrastructure tooling, from **Google Site Reliability Engineering** (**Google
     SRE**) erasing all the disks at their cluster satellites to **Amazon Web Services**
     (**AWS**) overwhelming their network with infrastructure tool **remote procedure
     calls** (**RPCs**).
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将重点讨论如何设计能够应对混乱的基础设施工具。大型云公司最壮观的故障往往是基础设施工具的结果，从**Google站点可靠性工程**（**Google
+    SRE**）擦除他们集群卫星上的所有磁盘，到**亚马逊云服务**（**AWS**）用基础设施工具**远程过程调用**（**RPCs**）压垮其网络。
 - en: In this chapter, we will look at safe ways for **first responders** (**FRs**)
     to stop automation, how to write idempotent workflow tools, packages for incremental
     backoffs of failed RPCs, providing pacing limiters for rollouts, and much more.
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将探讨**第一响应者**（**FRs**）如何停止自动化的安全方法，如何编写幂等的工作流工具，失败的RPC的增量回退包，推出时的节奏限制器等内容。
 - en: To do this, we will be introducing concepts and packages that will be built
     into a generic workflow system that you can use to further your education. The
     system will be able to take requests to do some type of work, will validate the
     parameters are correct, validate the request against a set of policies, and then
     execute that work.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 为此，我们将介绍一些概念和包，这些包将构建到一个通用的工作流系统中，供你进一步学习使用。该系统能够接受请求来执行某种工作，验证参数是否正确，按照一组策略验证请求，然后执行该工作。
 - en: In this model, clients (which can be **command-line interface** (**CLI**) applications
     or services) detail work to be done via a protocol buffer and send it to the server.
     The workflow system does all the actual work.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 在此模型中，客户端（可以是**命令行界面**（**CLI**）应用程序或服务）通过协议缓冲区详细描述要执行的工作，并将其发送到服务器。工作流系统执行所有实际工作。
 - en: 'We are going to cover the following main topics in this chapter:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将涵盖以下主要主题：
 - en: Using overload prevention mechanisms
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用过载防护机制
 - en: Using rate limiters to prevent runaway workflows
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用速率限制器防止工作流失控
 - en: Building workflows that are repeatable and never lost
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建可重复且不会丢失的工作流
 - en: Using policies to restrict tools
+  id: totrans-17
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用策略限制工具
 - en: Building systems with an emergency stop
+  id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建具有紧急停止功能的系统
 - en: Technical requirements
+  id: totrans-19
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: 'This chapter has the same requirements as previous chapters, only adding the
     need to access the following GitHub repository: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow).'
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章有与前几章相同的要求，只是增加了访问以下 GitHub 仓库的需求：[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow)。
 - en: With that said, let's jump into our first chapter on using overload prevention
     mechanisms to keep our network and services healthy when problems occur.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 话虽如此，让我们进入第一章，讨论如何使用过载防护机制，在出现问题时保持网络和服务的健康。
 - en: Using overload prevention mechanisms
+  id: totrans-22
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用过载防护机制
 - en: When you have a small set of services, misbehaving applications generally cause
     small problems. This is because there is usually an overabundance of network capacity
     to absorb badly behaving applications within a data center, and with a small set
     of services, it is usually intuitive to figure out what would cause the issue.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你拥有一小组服务时，应用程序异常通常只会造成小问题。这是因为数据中心内通常有过剩的网络容量来吸收异常行为的应用程序，并且在服务数量较少的情况下，通常可以直观地找出问题的根源。
 - en: When you have a large number of applications running, your network and your
     machines are usually oversubscribed. **Oversubscribed** means that your network
     and systems cannot handle all your applications running at 100%. Oversubscription
     is common in networks or clusters to control costs. This works because, at any
     given time, most applications ebb and flow with network traffic, **central processing
     unit** (**CPU**), and memory.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你运行大量应用程序时，通常网络和机器会出现超载现象。**超载**意味着你的网络和系统无法处理所有应用程序在 100% 运行的情况。超载在网络或集群中非常常见，用来控制成本。之所以可行，是因为在任何给定时刻，大多数应用程序的流量、**中央处理单元**（**CPU**）和内存都会随着网络流量的波动而波动。
 - en: An application that suddenly experiences some type of bug can go into **retry
     loops** that quickly overwhelm a service. In addition, if some catastrophic event
     occurs that takes a service offline, trying to bring the application back online
     can cause the service to go down as it is overwhelmed by requests that are queuing
     on all clients.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果应用程序突然遇到某种类型的错误，可能会进入**重试循环**，迅速使服务崩溃。此外，如果发生了某种灾难性事件，导致服务下线，尝试将应用程序重新上线可能会因为所有客户端的请求排队而导致服务崩溃。
 - en: Worse is what can happen to the network. If the network becomes overwhelmed
     or when cloud devices have their **queries per second** (**QPS**) exceeded, other
     applications can have their traffic adversely affected. This can mask the true
     cause of your problems.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 更糟糕的是网络可能发生的情况。如果网络被压垮，或者云设备的**每秒查询数**（**QPS**）被超出，其他应用程序的流量可能会受到负面影响。这可能掩盖问题的真正原因。
 - en: 'There are several ways of preventing these types of problems, with the two
     most common being the following:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 防止这些类型问题的方式有几种，最常见的两种方法如下：
 - en: Circuit breakers
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 电路断路器
 - en: Backoff implementations
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 回退实现
 - en: 'Each of these prevention mechanisms has the same idea: when failures occur,
     prevent retries from overwhelming the service.'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些预防机制的思路是相同的：当发生故障时，防止重试请求压垮服务。
 - en: Infrastructure services are often an overlooked use case for these prevention
     mechanisms. Many times, we concentrate on our public services, but infrastructure
     services are just as important. If that service is critical and becomes overwhelmed,
     it can be difficult to restore it without manually touching other services to
     reduce load.
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 基础设施服务通常是这些防护机制的一个被忽视的应用场景。我们很多时候关注的是公共服务，但基础设施服务同样重要。如果该服务是关键服务且被压垮，恢复它可能非常困难，除非手动调整其他服务以减轻负载。
 - en: 'Let''s have a look at one of the more popular methods: the **circuit breaker**.'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下其中一种更流行的方法：**断路器**。
 - en: Case study – AWS client requests overwhelm the network
+  id: totrans-33
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 案例研究 – AWS 客户请求压垮了网络
 - en: AWS had an outage that affected AWS customers across the world when a misbehaving
     application began sending too much traffic across a network boundary between their
     customer network and their core network where AWS critical services live. This
     was restricted to their `us-east-1` region, but the effects were felt by their
     customers in multiple locations.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 当一个行为不当的应用开始在客户网络与其核心网络之间的网络边界上发送过多流量时，AWS 发生了全球性故障，影响了全球的 AWS 客户。虽然这次故障仅限于其`us-east-1`区域，但多个地点的客户都受到了影响。
 - en: 'The problem was twofold, comprising the following factors:'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 问题有两个方面，包含以下因素：
 - en: A misbehaving application sending too many requests.
+  id: totrans-36
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个行为不当的应用发送了过多的请求。
 - en: Their clients didn't back off on failure.
+  id: totrans-37
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它们的客户端在故障时没有退避。
 - en: It is the second issue that caused the long failure. AWS had been doing the
     right thing in having a standard client for RPCs that invoked incrementing backoffs
     when requests failed. However, for some reason, the client library did not perform
     as expected in this case.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 正是第二个问题导致了长时间的故障。AWS 在使用标准客户端进行 RPC 时做得是正确的，当请求失败时，会进行递增的退避。然而，由于某种原因，在这个案例中，客户端库没有按预期表现。
 - en: This means that instead of the load reducing itself as the endpoints became
     overwhelmed, they went into some type of infinite loop that kept increasing the
     load on the affected systems and overwhelmed their network cross-connects. This
@@ -201,1579 +280,2316 @@
     seeing the problem. The result was they had to try reducing their network load
     by scaling back application traffic while trying to not affect the customer services
     that were still working—a feat I would not envy.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 这意味着，当终端被压垮时，负载并没有自我减少，而是进入了某种类型的无限循环，持续增加受影响系统的负载并压垮了它们的网络交叉连接。这种交叉连接的压垮禁用了它们的监控，并使得他们无法看到问题的根源。结果是，他们不得不通过缩减应用流量来尝试减少网络负载，同时尽量不影响仍在正常工作的客户服务——这是一项我不愿意面对的任务。
 - en: 'This case points to how important it is to prevent application retries when
     failures occur. To read more on this from Amazon, see the following web page:
     [https://aws.amazon.com/message/12721/](https://aws.amazon.com/message/12721/).'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个案例突显了在故障发生时防止应用重试的重要性。如需阅读更多关于此方面的内容，请访问以下网页：[https://aws.amazon.com/message/12721/](https://aws.amazon.com/message/12721/)。
 - en: Using circuit breakers
+  id: totrans-41
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用断路器
 - en: Circuit breakers work by wrapping RPC calls within a client that will automatically
     fail any attempt once a threshold is reached. All calls then simply return a failure
     without actually making any attempt for some amount of time.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 断路器的工作原理是将 RPC 调用包装在一个客户端中，一旦达到阈值，任何尝试都会自动失败。然后，所有的调用都会返回失败，而不会实际尝试，持续一段时间。
 - en: 'Circuit breakers have three modes, as follows:'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 断路器有三种模式，如下：
 - en: Closed
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 闭合
 - en: Open
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 打开
 - en: Half-open
+  id: totrans-46
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 半开
 - en: A circuit breaker is in a **closed** state when everything is working. This
     is the normal state.
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 当一切正常时，断路器处于**闭合**状态。这是正常状态。
 - en: A circuit breaker is in an **open** state after some amount of failures trip
     the breaker. When in this state, all requests are automatically failed without
     trying to send the message. This period lasts for some amount of time. It is suggested
     that this time be some set period and some randomness to prevent spontaneous synchronization.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 当一些故障导致断路器跳闸时，断路器处于**打开**状态。在此状态下，所有请求都会自动失败，而无需尝试发送消息。此状态持续一段时间。建议这段时间设置为一定的时长，并加入一些随机性，以防止自发的同步。
 - en: A circuit breaker moves into a **half-open** state after some time in the open
     state. Once in the half-open state, some number of requests that are requested
     are actually tried. If some threshold of success is passed, the circuit breaker
     moves back into the **closed** state. If not, the circuit breaker moves into the
     **open** state again.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 断路器在处于打开状态一段时间后，会进入**半开**状态。一旦进入半开状态，部分请求会被实际尝试。如果超过某个成功阈值，断路器会重新进入**闭合**状态。如果没有，断路器会再次进入**打开**状态。
 - en: You can find several different circuit-breaker implementations for Go, but one
     of the most popular was developed at Sony, called **gobreaker** ([https://github.com/sony/gobreaker](https://github.com/sony/gobreaker)).
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以找到几种不同的 Go 语言断路器实现，但其中一个最受欢迎的是索尼开发的，叫做**gobreaker**（[https://github.com/sony/gobreaker](https://github.com/sony/gobreaker)）。
 - en: 'Let''s look at how we might use it to limit retries for **HTTP** queries, as
     follows:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下如何使用它来限制**HTTP**查询的重试，如下所示：
 - en: '[PRE0]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'The preceding code defines the following:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的代码定义了以下内容：
 - en: 'An HTTP type that holds both of these:'
+  id: totrans-54
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一种包含这两者的HTTP类型：
 - en: An `http.Client` for making HTTP requests
+  id: totrans-55
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于发送HTTP请求的`http.Client`
 - en: A circuit breaker for HTTP requests
+  id: totrans-56
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个用于HTTP请求的断路器
 - en: 'A `New()` constructor for our `HTTP` type. It creates a circuit breaker with
     settings that enforces the following:'
+  id: totrans-57
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为我们的`HTTP`类型创建一个`New()`构造函数。它创建一个断路器，带有强制执行以下内容的设置：
 - en: Allows one request at a time when in the half-open state
+  id: totrans-58
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在半开放状态时每次允许一个请求
 - en: Has a 30-second period where we are half-open after being in a closed state
+  id: totrans-59
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在关闭状态后，我们将进入一个30秒的半开放状态
 - en: Has a closed state that lasts 10 seconds
+  id: totrans-60
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 有一个持续10秒的关闭状态
 - en: Enters the closed state if we have five consecutive failures
+  id: totrans-61
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果连续五次失败，则进入关闭状态
 - en: 'A `Get()` method on `HTTP` that does the following:'
+  id: totrans-62
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`HTTP`上的`Get()`方法执行以下操作：'
 - en: Checks that `*http.Request` has a timeout define
+  id: totrans-63
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检查`*http.Request`是否定义了超时
 - en: Calls the circuit breaker on our `client.Do()` method
+  id: totrans-64
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 调用我们`client.Do()`方法上的断路器
 - en: Converts the returned `interface{}` to the underlying `*http.Response`
+  id: totrans-65
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将返回的`interface{}`转换为底层的`*http.Response`
 - en: This code gives us a robust HTTP client wrapped with a circuit breaker. A better
     version of this might pass in the settings to the constructor, but I wanted it
     to be packed neatly for the example.
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码给我们提供了一个强大的HTTP客户端，包装了一个断路器。这个更好的版本可能会将设置传递给构造函数，但我希望它为示例打包得更加简洁。
 - en: 'If you''d like to see a demo of the circuit breaker in action, you can see
     it here:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你想看到断路器实际运行的演示，可以在这里看到：
 - en: '[https://go.dev/play/p/qpG_l3OE-bu](https://go.dev/play/p/qpG_l3OE-bu)'
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://go.dev/play/p/qpG_l3OE-bu](https://go.dev/play/p/qpG_l3OE-bu)'
 - en: Using backoff implementations
+  id: totrans-69
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用回退实现
 - en: A **backoff implementation** wraps RPCs with a client that will retry with a
     pause between attempts. These pauses get longer and longer until they reach some
     maximum value.
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: '**回退实现**包装了RPC客户端，客户端将在尝试之间进行重试，并且每次重试之间都会有一段暂停时间。这些暂停时间会越来越长，直到达到某个最大值。'
 - en: Backoff implementations can have a wide range of methods for calculating the
     time period. We will concentrate on exponential backoff in this chapter.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 回退实现可以有多种计算时间段的方法。在本章中，我们将集中讨论指数回退。
 - en: Exponential backoff simply adds delays to each attempt that increases exponentially
     as failures mount. As with circuit breakers, there are many packages offering
     backoff implementations. For this example, we will use [https://pkg.go.dev/github.com/cenk/backoff](https://pkg.go.dev/github.com/cenk/backoff),
     which is an implementation of Google's HTTP backoff library for Java.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 指数回退简单地在每次尝试中增加延迟，这些延迟会随着失败次数的增加而指数增长。与断路器一样，有许多包提供回退实现。在这个例子中，我们将使用[https://pkg.go.dev/github.com/cenk/backoff](https://pkg.go.dev/github.com/cenk/backoff)，这是谷歌HTTP回退库的一个实现，适用于Java。
 - en: This backoff implementation offers many important features that Google has found
     useful over years of studying service failures. One of the most important features
     in the library is adding random values to sleep times between retries. This prevents
     multiple clients from syncing their retry attempts.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个回退实现提供了许多谷歌在多年研究服务失败中发现有用的重要特性。库中最重要的特性之一是向重试之间的睡眠时间添加随机值，这可以防止多个客户端同步它们的重试操作。
 - en: Other important features include the ability to honor context cancellations
     and supply maximum retry attempts.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 其他重要特性包括能够尊重上下文取消操作并提供最大重试次数。
 - en: 'Let''s look at how we might use it to limit retries for HTTP queries, as follows:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下如何使用它来限制HTTP查询的重试，如下所示：
 - en: '[PRE1]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'The preceding code defines the following:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的代码定义了以下内容：
 - en: 'An HTTP type that holds both of these:'
+  id: totrans-78
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一种包含这两者的HTTP类型：
 - en: An `http.Client` for making HTTP requests
+  id: totrans-79
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于发送HTTP请求的`http.Client`
 - en: An exponential backoff for HTTP requests
+  id: totrans-80
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个用于HTTP请求的指数回退
 - en: A `New()` constructor for our `HTTP` type
+  id: totrans-81
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为我们的`HTTP`类型创建一个`New()`构造函数
 - en: A `Get()` method on `HTTP`
+  id: totrans-82
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`HTTP`上的`Get()`方法'
 - en: 'It also does the following:'
+  id: totrans-83
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它还做了以下事情：
 - en: Creates a `func()` error that attempts our request called `op`
+  id: totrans-84
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`func()`错误，尝试我们的请求，名为`op`
 - en: Runs `op` with retries and exponential delays
+  id: totrans-85
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 以重试和指数延迟的方式运行`op`
 - en: Creates an exponential backoff with default values
+  id: totrans-86
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个具有默认值的指数回退
 - en: Wraps that backoff in `BackOffContext` to honor our context deadline
+  id: totrans-87
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将该回退包装在`BackOffContext`中，以尊重我们的上下文截止时间
 - en: 'For a list of the default values for `ExponentialBackoff`, see the following
     web page:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于`ExponentialBackoff`的默认值列表，请参见以下网页：
 - en: '[https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff](https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff)'
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff](https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff)'
 - en: 'If you''d like to see a demo of this backoff in action, you can see it here:'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你想看到这个退避机制的实际演示，你可以在这里查看：
 - en: '[https://go.dev/play/p/30tetefu9t0](https://go.dev/play/p/30tetefu9t0)'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://go.dev/play/p/30tetefu9t0](https://go.dev/play/p/30tetefu9t0)'
 - en: Combining circuit breakers with backoff
+  id: totrans-92
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 将电路断路器与退避机制结合
 - en: When choosing a prevention implementation, another option is to combine a circuit
     breaker with backoff for a more robust implementation.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 在选择预防实现时，另一种选择是将电路断路器与退避机制结合起来，以实现更强大的实现。
 - en: A backoff implementation can be set to have a maximum time in which retries
     are occurring. Wrapping that inside a circuit breaker to make any set of failed
     attempts to trigger our circuit breaker not only potentially reduces our load
     by slowing our requests, but we can also stop these attempts with our circuit
     breaker.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 退避实现可以设置最大重试时间。将其封装在电路断路器内，使一组失败的尝试触发我们的电路断路器，不仅可以通过减缓请求来潜在地减少我们的负载，还可以通过电路断路器停止这些尝试。
 - en: 'If you would like to see an implementation combining both, you can go to the
     following web page:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你想看到一个结合这两者的实现，你可以访问以下网页：
 - en: '[https://go.dev/play/p/gERsR7fvDck](https://go.dev/play/p/gERsR7fvDck)'
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://go.dev/play/p/gERsR7fvDck](https://go.dev/play/p/gERsR7fvDck)'
 - en: In this section, we have discussed the need to have mechanisms to prevent overwhelming
     your network and services. We have discussed an AWS outage that was partially
     due to the failure of such mechanisms. You were introduced to the circuit-breaker
     and backoff mechanisms to prevent these types of failures. Finally, we have shown
     two popular packages for implementing these mechanisms with examples.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们讨论了防止网络和服务过载的机制的必要性。我们还讨论了一个AWS宕机事件，部分原因是由于这些机制的失败。你已了解了电路断路器和退避机制，以防止此类故障的发生。最后，我们展示了两个常用的包来实现这些机制，并附带了示例。
 - en: 'In our workflow engine, we will be implementing these prevention mechanisms
     for our **Google RPC** (**gRPC**) client to prevent issues talking to our server.
     You can see that here:'
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的工作流引擎中，我们将为**Google RPC**（**gRPC**）客户端实现这些预防机制，以防止与服务器通信时出现问题。你可以在这里看到：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go)'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go)'
 - en: In our next section, we will be looking at preventing workflows from executing
     too fast using rate limiters. It is important to enforce both pacing for workflows'
     actions and to prevent too many workflows of a type from executing at the same
     time.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的下一节中，我们将研究如何使用限流器防止工作流执行得太快。为工作流的操作强制执行节奏，并防止同一类型的工作流同时执行过多，这是非常重要的。
 - en: Using rate limiters to prevent runaway workflows
+  id: totrans-101
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用限流器来防止失控的工作流
 - en: '**DevOps engineers** can be responsible for a service that is made up of dozens
     of microservices. These microservices can then number in the dozens to the tens
     of thousands of instances running in data centers around the globe. Once a service
     consists of more than a couple of instances, some form of rate control needs to
     exist to prevent bad rollouts or configuration changes from causing mass destruction.'
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: '**DevOps工程师**可能负责由数十个微服务组成的服务。这些微服务可能会在全球的数据中心中运行成千上万个实例。一旦一个服务包含多个实例，就需要某种形式的速率控制，以防止不良的发布或配置更改导致大规模破坏。'
 - en: Some type of a **rate limiter** for work with forced pause intervals is critical
     to prevent runaway infrastructure changes.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 一种**限流器**，用于带有强制暂停间隔的工作，对于防止失控的基础设施变更至关重要。
 - en: Rate limiting is easy to implement, but the scope of the rate limiter is going
     to depend on what your workflows are doing. For services, you may only want one
     type of change to happen at a time or only affect some number of instances at
     a time.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 限流容易实现，但限流器的作用范围将取决于你的工作流所做的事情。对于服务，你可能希望一次只发生一种类型的变化，或者一次只影响一些实例。
 - en: The first type of rate limiting would prevent multiple instances of a workflow
     type from running at a time; for example, you might only want one satellite disk
     erasure to occur at a time.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一种速率限制方式是防止同一类型的工作流同时运行。例如，你可能希望每次只能进行一个卫星磁盘擦除操作。
 - en: The second is to limit the number of devices, services, and so on that can be
     affected concurrently; for example, you might only want to allow two routers in
     a region to be taken out for a firmware upgrade.
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二种方式是限制能够同时受影响的设备、服务等的数量。例如，你可能只希望允许同一区域中的两个路由器进行固件升级。
 - en: For rate limiters to be effective, having a single system that executes actions
     for a set of services can greatly streamline these efforts. This allows centralized
     enforcement of policies such as rate limiting.
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了使速率限制器有效，拥有一个执行一组服务操作的单一系统可以大大简化这些工作。这使得可以集中执行速率限制等政策。
 - en: Let's look at the simplest implementation of a rate limiter in Go using channels.
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看看Go中使用通道实现的最简单速率限制器。
 - en: Case study – Google satellite disk erase
+  id: totrans-109
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 案例研究——谷歌卫星磁盘擦除
 - en: In the early days, Google did not own all the data center space it does today—we
     were in a lot of rented space with a large number of machines. In some places,
     however, this was prohibitively expensive. To speed up connectivity in these places,
     we would rent small spaces that could have cache machines, terminate HTTP connections
     and backhaul the traffic to a data center. We called these **satellites**.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 在早期，谷歌并不拥有如今所有的数据中心空间——我们租用了大量空间并使用了大量机器。然而在一些地方，这样的成本非常高。为了加速这些地方的连接速度，我们会租用小型空间，这些地方可以放置缓存机器，终止HTTP连接并将流量回传到数据中心。我们称这些地方为**卫星**。
 - en: Google has an automated process for the decommissioning of machines. One part
     of this is called disk erase, whereby the machines have their disks wiped.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 谷歌有一个自动化的机器退役流程，其中一部分就是磁盘擦除，机器的磁盘会被清空。
 - en: The software was written to grab a list of machines for a satellite and filter
     out other machines. Unfortunately, if you run it twice on a satellite, the filter
     is not applied, and your list of machines is all machines in every satellite.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 该软件是用来获取卫星机器列表并过滤掉其他机器的。不幸的是，如果你在一个卫星上运行它两次，过滤器将不会生效，你的机器列表将会包含每个卫星中的所有机器。
 - en: Disk erase was very efficient, putting all machines in all satellites in disk
     erase at once before anything could be done.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 磁盘擦除非常高效，在所有卫星中的所有机器都被同时加入磁盘擦除队列，直到操作完成。
 - en: For a more detailed breakdown, you can read [https://sre.google/workbook/postmortem-culture/](https://sre.google/workbook/postmortem-culture/),
     where several **Site Reliability Engineers** (**SREs**) have provided more detail
     in the context of postmortems.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你需要更详细的分析，可以阅读[https://sre.google/workbook/postmortem-culture/](https://sre.google/workbook/postmortem-culture/)，在那里，几位**站点可靠性工程师**(**SREs**)提供了更多关于事后分析的细节。
 - en: We can look at the filtering part of the code and discuss bad design, but there
     will always be badly written tools with bad inputs. Even if you currently have
     a good culture for code reviews, things slip by. During times of hypergrowth with
     new engineers, these types of problems can rear their ugly heads.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以查看代码中的过滤部分并讨论糟糕的设计，但总会有编写不良的工具和错误的输入。即使你当前有一个良好的代码审查文化，也总会有疏漏。在工程师快速增长的时期，这类问题可能会露出丑陋的面目。
 - en: Some tools that are known to be dangerous in the hands of a small group of experienced
     engineers can be used quite safely, but new engineers without experience or ones
     lacking proper fear can quickly devastate your infrastructure.
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 一些在少数经验丰富的工程师手中已知的危险工具，在新工程师手中可能会很安全使用，但没有经验的工程师或缺乏适当警觉的工程师，可能会迅速摧毁你的基础设施。
 - en: In this case and many other cases, centralized execution with rate limiting
     and other mandatory safety mechanisms allow new people to write tools that may
     be dangerous but limited in their blast radius.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这种情况以及许多其他情况下，集中执行并配合速率限制和其他强制性安全机制，可以让新手编写可能危险但影响范围有限的工具。
 - en: Channel-based rate limiter
+  id: totrans-118
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 基于通道的速率限制器
 - en: 'A **channel-based rate limiter** is useful when a single program is handling
     the automation. In that case, you can make a limiter that is based on the size
     of a channel. Let''s make a limiter that allows only a fixed number of items to
     be worked on at a time, as follows:'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: '**基于通道的速率限制器**在一个程序处理自动化任务时非常有用。在这种情况下，你可以创建一个基于通道大小的限制器。让我们来实现一个只允许在同一时间处理固定数量项目的限制器，如下所示：'
 - en: '[PRE2]'
+  id: totrans-120
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: We now have something that can limit the number of items that can be worked
     on.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有了一个可以限制可处理项目数量的工具。
 - en: 'Let''s define a simple type that represents some action to be executed, as
     follows:'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义一个简单的类型，表示要执行的某些操作，如下所示：
 - en: '[PRE3]'
+  id: totrans-123
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'This defines a `Job` that can do the following:'
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 这定义了一个可以执行以下操作的`Job`：
 - en: Validate a `pb.Job` definition passed to us
+  id: totrans-125
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 验证传递给我们的`pb.Job`定义
 - en: Run the job with that definition
+  id: totrans-126
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用该定义运行任务
 - en: 'Here is a very simplistic example of executing a set of jobs contained in something
     called a block, which is just a holder of a slice of jobs:'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个非常简单的示例，展示了如何执行一组包含在名为“块”的容器中的任务，块只是一个`Job`切片的容器：
 - en: '[PRE4]'
+  id: totrans-128
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'In the preceding code snippet, the following happens:'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上面的代码片段中，发生了以下事情：
 - en: We loop through a slice of `Block` inside the `work.Blocks` variable.
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们循环遍历`work.Blocks`变量中的`Block`切片。
 - en: We loop through a slice of `Jobs` in the `block.Jobs` variable.
+  id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们循环遍历`block.Jobs`变量中的`Jobs`切片。
 - en: If we already have `req.limit` items running, `limit <- struct{}{}` will block.
+  id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果我们已经有`req.limit`个项目在运行，`limit <- struct{}{}`将会阻塞。
 - en: It executes our job concurrently.
+  id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它并发执行我们的任务。
 - en: When our goroutine ends, we remove an item from our `workLimit` queue.
+  id: totrans-134
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 当我们的goroutine结束时，我们从`workLimit`队列中移除一个项目。
 - en: We wait for all goroutines to end.
+  id: totrans-135
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们等待所有goroutine结束。
 - en: This code prevents more than `req.limit` items from happening at a time. If
     this were a server, you could make `limit` a variable shared by all users and
     prevent more than three items of work from occurring for all work that was happening
     in your system. Alternatively, you could have different limiters for different
     classes of work.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码防止同时处理超过`req.limit`个项目。如果这是一个服务器，你可以将`limit`设为所有用户共享的变量，并防止系统中同时发生超过三个项目的工作。或者，你可以为不同类别的工作设置不同的限制器。
 - en: 'A note about that `job := job` part. This is creating a shadowed variable of
     `job`. This prevents the `job` variable from being changed inside our goroutine
     when the loop and the goroutine are running in parallel by making a copy of the
     variable in the same scope as the goroutine. This is a common concurrency bug
     for new Go developers, sometimes called the **for loop gotcha**. Here is a playground
     you can use to work through why this is necessary: [https://go.dev/play/p/O9DcUIKuGBv](https://go.dev/play/p/O9DcUIKuGBv).'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于`job := job`部分的说明。它正在创建一个`job`的遮蔽变量。这可以防止`job`变量在goroutine内被更改，避免在循环和goroutine并行运行时修改原变量，而是将变量的副本放在goroutine相同作用域内。这是Go新手常见的并发错误，通常被称为**for循环陷阱**。这是一个你可以使用的游乐场，用来理解为什么这是必要的：[https://go.dev/play/p/O9DcUIKuGBv](https://go.dev/play/p/O9DcUIKuGBv)。
 - en: 'We have completed the following example in the playground that you can play
     around with to explore these concepts:'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已在游乐场完成了以下示例，您可以在其中操作以探索这些概念：
 - en: '[https://go.dev/play/p/aYoCTEFvRBI](https://go.dev/play/p/aYoCTEFvRBI)'
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://go.dev/play/p/aYoCTEFvRBI](https://go.dev/play/p/aYoCTEFvRBI)'
 - en: 'You can see a channel-based rate limiter in action in the workflow service
     inside `runJobs()` here:'
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在`runJobs()`方法中的工作流服务中看到基于通道的速率限制器的实际应用：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
 - en: Token-bucket rate limiter
+  id: totrans-142
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 令牌桶速率限制器
 - en: '**Token buckets** are normally used to provide burstable traffic management
     for services. There are several types of token buckets, the most popular being
     the standard token bucket and the leaky token bucket.'
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: '**令牌桶**通常用于为服务提供可突发的流量管理。令牌桶有几种类型，最常见的是标准令牌桶和泄漏令牌桶。'
 - en: These are not normally deployed for an infrastructure tool, as clients tend
     to be internal and more predictable than external-facing services, but a useful
     type of a token bucket can be used to provide pacing. A standard token bucket
     simply holds some fixed set of tokens, and those tokens are refilled at some interval.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些通常不用于基础设施工具的部署，因为客户端通常是内部的，且比面向外部的服务更可预测，但一种有用的令牌桶类型可以用于提供速率控制。标准令牌桶只是保存一些固定的令牌集，这些令牌会在某个时间间隔后重新填充。
 - en: 'Here''s a sample one:'
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个示例：
 - en: '[PRE5]'
+  id: totrans-146
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'This preceding code snippet does the following:'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 上面的代码片段执行了以下操作：
 - en: Defines a `bucket` type that holds our tokens
+  id: totrans-148
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义一个`bucket`类型来保存我们的令牌
 - en: 'Has `newBucket()`, which creates a new `bucket` instance with the following
     attributes:'
+  id: totrans-149
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 有`newBucket()`，它创建一个带有以下属性的新`bucket`实例：
 - en: '`size`, which is the total amount of tokens that can be stored'
+  id: totrans-150
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`size`，即可以存储的令牌总数'
 - en: '`incr`, which is how many tokens are added at a time'
+  id: totrans-151
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`incr`，即每次添加的令牌数量'
 - en: '`interval`, which is how often to add to the bucket'
+  id: totrans-152
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`interval`，即向桶中添加的时间间隔'
 - en: 'It also does the following:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 它还执行以下操作：
 - en: Starts a goroutine that will fill the bucket at intervals
+  id: totrans-154
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 启动一个 goroutine，以间隔填充桶
 - en: Will only fill to the max `size` value
+  id: totrans-155
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 只会填充到最大`size`值
 - en: 'Defines `token()`, which retrieves a token:'
+  id: totrans-156
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义了`token()`，它用来获取一个令牌：
 - en: If no tokens are available, we wait for one.
+  id: totrans-157
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果没有可用的令牌，我们将等待一个。
 - en: If a `Context` is canceled, we return an error.
+  id: totrans-158
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`Context`被取消，我们将返回一个错误。
 - en: This is a fairly robust implementation of a standard token bucket. You may be
     able to achieve a faster implementation using the `atomic` package, but it will
     be more complex to do so.
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个相当稳健的标准令牌桶实现。你可能能使用`atomic`包实现一个更快速的版本，但这样做会更复杂。
 - en: 'An implementation with input checking and the ability to stop a goroutine created
     with `newBucket()` can be found here:'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个带有输入检查并且能够停止通过`newBucket()`创建的goroutine的实现可以在这里找到：
 - en: '[https://go.dev/play/p/6Dihz2lUH-P](https://go.dev/play/p/6Dihz2lUH-P)'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://go.dev/play/p/6Dihz2lUH-P](https://go.dev/play/p/6Dihz2lUH-P)'
 - en: If we want, we could use a token bucket to only allow execution at some rate
     we define. This can be used inside a job to limit how fast an individual action
     can happen or to only allow so many instances of a workflow to happen within some
     time period. We will use it in our next section to limit when a particular workflow
     is allowed to happen.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果需要，我们可以使用令牌桶来限制执行的速率，只允许按照我们定义的速率执行。这可以用于限制某个操作的执行速度，或者在某段时间内仅允许一定数量的工作流实例发生。我们将在下一节中使用它来限制某个特定工作流的执行时机。
 - en: 'Our generic workflow system has a token bucket package here:'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的通用工作流系统在这里有一个令牌桶包：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go)'
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go)'
 - en: In this section, we looked at how rate limiters can be used to prevent runaway
     workflows. We talked about Google's satellite disk erase as a case study on this
     type of event. We showed how channel-based rate limiters can be implemented to
     control concurrent operations. We talked about how a token bucket could be used
     to rate-limit a number of executions within a certain time period.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一节中，我们探讨了如何使用速率限制器来防止工作流失控。我们以谷歌的卫星磁盘擦除为案例研究，讨论了这一类事件。我们展示了如何实现基于通道的速率限制器，以控制并发操作。我们还讨论了如何使用令牌桶来限制一定时间内的执行次数。
 - en: This section is also laying the foundation of how executing actions, defined
     as a job, will work in the workflow system example we are building.
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节还为我们构建的工作流系统示例中，定义为作业的操作执行奠定了基础。
 - en: Now that we have some ideas on how we can rate-limit actions, let's look at
     how we can develop repeatable workflows that cannot be lost by a client.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们有了一些关于如何限制操作速率的思路，接下来我们来看看如何开发可重复且不会被客户端丢失的工作流。
 - en: Building workflows that are repeatable and never lost
+  id: totrans-168
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 构建可重复且永不丢失的工作流
 - en: As DevOps engineers, we write tooling all the time. In small shops, many times,
     these are sets of scripts. In large shops, these are complicated systems.
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为 DevOps 工程师，我们经常编写工具。在小型公司中，很多时候这些工具是脚本集合。而在大型公司中，这些工具通常是复杂的系统。
 - en: As you may have gleaned from the introduction, I believe that tool execution
     should always occur in a centralized service, regardless of scale. A basic service
     is easy to write, and you can expand and replace it as new needs arise.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如你从前言中可能已经看出来的那样，我认为工具的执行应该始终发生在一个集中式的服务中，无论规模大小。一个基础服务很容易编写，你可以随着新需求的出现进行扩展和替换。
 - en: 'But to make a workflow service work, two key concepts must be true of the workflows
     you create, as follows:'
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，要使工作流服务正常工作，你创建的工作流必须满足以下两个关键概念：
 - en: They must be repeatable.
+  id: totrans-172
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它们必须是可重复的。
 - en: They cannot be lost.
+  id: totrans-173
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它们不能丢失。
 - en: The first concept is that running a workflow more than once on the same infrastructure
     should produce the same result. We called this **idempotency**, borrowing the
     computer science term.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一个概念是，在相同基础设施上运行工作流多次应该产生相同的结果。我们称之为**幂等性**，借用了计算机科学中的术语。
 - en: The second is that a workflow cannot be lost. If a tool creates a workflow to
     be executed by a system and the tool dies, the tool must be able to know that
     the workflow is running and resume watching it.
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二点是，工作流不能丢失。如果一个工具创建了一个要由系统执行的工作流，而该工具崩溃了，那么该工具必须能够知道工作流正在运行并恢复监控。
 - en: Building idempotent workflows
+  id: totrans-176
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 构建幂等工作流
 - en: '**Idempotency** is a concept that if you make a call with the same parameters
     multiple times, you receive the same result. This is an important concept for
     writing certain types of software.'
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: '**幂等性**是一个概念，如果你使用相同的参数多次调用，你将得到相同的结果。这是编写某些类型的软件时非常重要的概念。'
 - en: 'In infrastructure, we modify this definition slightly: an idempotent action
     is one that, if repeated with the same parameters and without changes to the infrastructure
     outside of this call, will return the same result.'
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 在基础设施中，我们稍微修改了这个定义：幂等操作是指如果使用相同的参数重复执行，并且在此调用之外的基础设施没有变化，它将返回相同的结果。
 - en: Idempotency is key to making workflows that can be recovered when your workflow
     system goes down. Simple workflow systems can just repeat the entire workflow.
     More complicated systems can restart from where they left off.
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 幂等性是使工作流在工作流系统崩溃时仍能恢复的关键。简单的工作流系统可以直接重复整个工作流。更复杂的系统可以从中断的位置重新启动。
 - en: 'Many times, developers don''t think deeply about idempotency. For example,
     let''s look at a simple operation to copy some content to a file. Here is a naive
     implementation:'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 许多时候，开发人员没有深入考虑幂等性。例如，让我们来看一个简单的操作，将一些内容复制到一个文件。这里是一个简单的实现：
 - en: '[PRE6]'
+  id: totrans-181
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'The preceding code contains the following:'
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码包含以下内容：
 - en: A `content` argument that represents content for a file
+  id: totrans-183
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个表示文件内容的`content`参数
 - en: A `p` argument, which is the path to the file
+  id: totrans-184
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个`p`参数，表示文件的路径
 - en: 'It also does the following:'
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 它还执行以下操作：
 - en: Writes `content` to file at `p`
+  id: totrans-186
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将`content`写入路径为`p`的文件
 - en: This initially appears to be idempotent. If our workflow was killed after `CopyToFile()`
     was called but before `io.WriteFile()` was called, we could repeat this operation,
     and it initially looks as though if we called this twice, we would still get the
     same result.
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 这看起来最初是幂等的。如果我们的工作流在调用`CopyToFile()`之后但在调用`io.WriteFile()`之前被杀死，我们可以重复这个操作，最初看起来如果我们调用两次，我们仍然会得到相同的结果。
 - en: But what if the file didn't exist and we created it but did not have permissions
     to edit an existing file? If our program died before recording the result of `io.WriteFile()`
     but after the change has occurred, a repeat of this action would report an error,
     and because the infrastructure did not change, the action is not idempotent.
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是如果文件不存在，我们创建了它，但是没有权限编辑现有文件呢？如果我们的程序在记录`io.WriteFile()`的结果之前崩溃了，但在更改已经发生之后，重复此操作会报告错误，因为基础设施没有发生变化，因此该操作不是幂等的。
 - en: 'Let''s modify this to make it idempotent, as follows:'
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们修改这个代码，使其具备幂等性，如下所示：
 - en: '[PRE7]'
+  id: totrans-190
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'This code checks if the file exists and then does the following:'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码检查文件是否存在，然后执行以下操作：
 - en: If it exists and it already has the content, it doesn't do anything.
+  id: totrans-192
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果文件已存在并且已有内容，它不做任何操作。
 - en: If it doesn't, it writes the content.
+  id: totrans-193
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果没有，它会写入内容。
 - en: This uses the standard library's `sha256` package to calculate checksum hashes
     to validate if the content is the same.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使用标准库的`sha256`包来计算校验和哈希值，以验证内容是否相同。
 - en: The key to providing idempotency is often simply checking if the work is already
     done.
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 提供幂等性的关键通常只是检查工作是否已经完成。
 - en: This leads us to a concept called three-way handshakes. This concept can be
     used in actions to provide idempotency when you need to talk to other systems
     via RPC. We will discuss how to use this concept in terms of executing workflows,
     but this can also be used in idempotent actions that talk to other services.
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 这引出了一个叫做三次握手的概念。这个概念可以在需要通过RPC与其他系统交互时提供幂等性。我们将讨论如何在执行工作流时使用这一概念，但它也可以用于与其他服务交互的幂等操作。
 - en: Using three-way handshakes to prevent workflow loss
+  id: totrans-197
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用三次握手防止工作流丢失
 - en: When we write an application that talks to a workflow service, it is important
     that the application never loses track of workflows that are running on our service.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们编写一个与工作流服务交互的应用程序时，重要的是该应用程序永远不能失去对我们服务上运行的工作流的追踪。
 - en: 'The three-way handshake is a name I borrowed from **Transmission Control Protocol**
     (**TCP**). TCP has a handshake that establishes a socket between two machines.
     It consists of the following:'
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: 三次握手是我从**传输控制协议**（**TCP**）借用的名称。TCP有一个握手过程，用来在两台机器之间建立一个套接字。它包括以下内容：
 - en: '**SYNchonize** (**SYN**), a request to open a connection'
+  id: totrans-200
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**SYNchonize**（**SYN**），请求打开连接'
 - en: '**ACKnowledge** (**ACK**), an acknowledgment of the request'
+  id: totrans-201
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**ACKnowledge**（**ACK**），对请求的确认'
 - en: SYN-ACK, an acknowledgment of the ACK
+  id: totrans-202
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: SYN-ACK，对ACK的确认
 - en: When a client sends a request to execute a workflow, we never want the workflow
     service to execute a workflow that the client doesn't know exists due to a crash
     of the client.
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 当客户端发送请求执行工作流时，我们不希望工作流服务执行一个客户端因为崩溃而不知道存在的工作流。
 - en: This can happen because the client program crashes or the machine the client
     is running on fails. If we sent a workflow and the service began executing after
     a single RPC, the client could crash after sending the RPC but before receiving
     an **identifier** (**ID**) for the workflow.
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种情况可能发生在客户端程序崩溃或客户端运行的机器发生故障时。如果我们发送了一个工作流，并且服务在一个单一RPC后开始执行，客户端可能在发送RPC后但在收到工作流**标识符**（**ID**）之前崩溃。
 - en: This would lead to a scenario where when the client was restarted, it did not
     know the workflow service was already running the workflow, and it might send
     another workflow that did the same thing.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 这将导致一种情况，当客户端重启时，它不知道工作流服务已经在运行该工作流，并且可能会发送另一个工作流，执行相同的操作。
 - en: 'To avoid that, instead of a single RPC to execute a workflow, a workflow should
     have a three-way handshake to do the following:'
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了避免这种情况，工作流应有一个三次握手，而不是单个RPC来执行工作流，三次握手的过程包括以下内容：
 - en: Send the workflow to the service
+  id: totrans-207
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 将工作流发送到服务
 - en: Receive the workflow ID
+  id: totrans-208
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 接收工作流ID
 - en: Send a request to execute the workflow with its ID to the service
+  id: totrans-209
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 向服务发送请求，执行带有ID的工作流
 - en: This allows the client to record the ID of the workflow before it executes.
     If the client crashes before recording the ID, the service simply has a non-running
     workflow record. If the client dies after the service begins execution, when the
     client restarts, it can check the status of the workflow. If it is running, it
     can simply monitor it. If it isn't running, it can request it to execute again.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 这允许客户端在执行之前记录工作流的ID。如果客户端在记录ID之前崩溃，服务将只拥有一个未运行的工作流记录。如果客户端在服务开始执行后崩溃，当客户端重启时，它可以检查工作流的状态。如果正在运行，它可以简单地监控。如果没有运行，它可以请求再次执行。
 - en: 'For our workflow service, let''s create a service definition that supports
     our three-way handshake using gRPC, as follows:'
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的工作流服务，让我们创建一个支持三次握手的服务定义，使用gRPC，如下所示：
 - en: '[PRE8]'
+  id: totrans-212
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'This defines a service with the following calls:'
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 这定义了一个包含以下调用的服务：
 - en: '`Submit` submits a `WorkReq` message that describes the work to be done.'
+  id: totrans-214
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Submit`提交一个描述待处理工作的`WorkReq`消息。'
 - en: '`Exec` executes a `WorkReq` previously sent to the server with `Submit`.'
+  id: totrans-215
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Exec`执行之前通过`Submit`发送到服务器的`WorkReq`。'
 - en: '`Status` retrieves the status of a `WorkReq`.'
+  id: totrans-216
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Status`检索`WorkReq`的状态。'
 - en: The content of the messages for these service calls will be discussed in detail
     in the next section, but the key to this is that on `Submit()`, `WorkResp` will
     return an ID, but the workflow will not execute. When `Exec()` is called, we will
     send the ID we received from our `Submit()` call, and our `Status()` call allows
     us to check the status of any workflow.
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些服务调用的消息内容将在下一节中详细讨论，但关键是，在`Submit()`时，`WorkResp`将返回一个ID，但工作流不会执行。当调用`Exec()`时，我们将发送从`Submit()`调用中收到的ID，而`Status()`调用让我们能够检查任何工作流的状态。
 - en: We now have the basic definition of a workflow service that includes a three-way
     handshake to prevent any loss of workflows by our clients.
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有了工作流服务的基本定义，包括一个三次握手，防止我们的客户端丢失任何工作流。
 - en: In this section, we have covered the basics of repeatable workflows that cannot
     be lost by our clients. We covered idempotency and how this leads to repeatable
     workflows. We have also shown how a three-way handshake allows us to prevent a
     running workflow from becoming *lost*.
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们已经涵盖了不可丢失的可重复工作流的基础知识。我们讲解了幂等性以及它如何导致可重复的工作流。我们还展示了三次握手如何帮助我们防止正在运行的工作流变得*丢失*。
 - en: We have also defined service calls that we will use in the workflow system we
     are building.
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还定义了将在我们构建的工作流系统中使用的服务调用。
 - en: Now, we want to look at how tools can understand the **scope of work** (**SOW**)
     being executed to provide protection against runaway tooling. To do this, let's
     explore building a policy engine.
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们希望了解工具如何理解正在执行的**工作范围**（**SOW**），以提供防止工具失控的保护。为此，让我们探索构建一个策略引擎。
 - en: Using policies to restrict tools
+  id: totrans-222
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用策略来限制工具
 - en: Rate limiting is great for preventing a bad tool run from wiping out a service
     when all items of work are equal. But not all items of work are equal, as some
     machine services are more important and fragile than others (such as your service's
     database systems). Also, machines or services may need to be put into logical
     groupings that can only happen in some limited amount. These could be broken up
     by sites, geographical areas, and so on.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 限速对于防止一个坏的工具运行摧毁一个服务很有效，尤其是当所有工作项相等时。但并非所有工作项都是相等的，因为一些机器服务比其他服务更为重要和脆弱（例如，服务的数据库系统）。此外，机器或服务可能需要按逻辑分组，只能在某些有限的数量中进行。可以按站点、地理区域等进行划分。
 - en: This logic is generally specific to some set of work items. This bundling, which
     we will call a SOW, can be quite complex.
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 该逻辑通常是特定于某一组工作项的。这种打包，我们称之为SOW，可能会非常复杂。
 - en: To safely do work, you must understand your scope. This might be how you can
     safely update database schemas for a particular service or how many route reflectors
     in a network region can be modified at a time.
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 要安全地执行工作，必须理解你的工作范围。这可能是如何安全地更新特定服务的数据库架构，或一个网络区域中一次可以修改多少个路由反射器。
 - en: To implement safety around a SOW, we will introduce the idea of policies. Policies
     will be used to check a set of work that is entering into the system for compliance.
     If it is not compliant, it will be rejected.
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了在SOW（工作说明书）中实现安全性，我们将引入策略的概念。策略将用于检查进入系统的一组工作是否符合合规性要求。如果不符合，它将被拒绝。
 - en: 'As an example, we will look at handling disk erasures similar to Google''s
     disk erase case study. Here are some protections we will add:'
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 例如，我们将查看类似于谷歌磁盘擦除案例的磁盘擦除处理。这里是我们将添加的一些保护措施：
 - en: Only allow a single satellite disk erasure to happen every hour
+  id: totrans-228
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每小时只允许进行一次卫星磁盘擦除
 - en: Rate-limit so that we can only erase five machines at a time
+  id: totrans-229
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 限速，以便我们一次只能擦除五台机器
 - en: Must pause for 1 minute after each five-machine erasure
+  id: totrans-230
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每执行五台机器的擦除后，必须暂停1分钟
 - en: To be able to make a policy engine, we must have a common way to define what
     kind of work will be executed, in what order, and with what concurrency.
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了能够构建一个策略引擎，我们必须有一种通用的方式来定义将要执行的工作类型、执行顺序以及并发度。
 - en: We also want the tool engineers to only define the work to be done and submit
     it to a separate service that executes it. This allows for the centralization
     of control.
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还希望工具工程师仅定义要执行的工作，并将其提交给一个单独的服务来执行。这样可以实现控制的集中化。
 - en: Let's define the service that could do that in gRPC.
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义一个可以在gRPC中执行的服务。
 - en: Defining a gRPC workflow service
+  id: totrans-234
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 定义gRPC工作流服务
 - en: 'In the previous section, we talked about a service definition that defines
     our three-way handshake. Let''s look at the arguments to those calls to see what
     our clients will send the workflow service, as follows:'
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前面的章节中，我们讨论了一个定义三次握手的服务定义。让我们看看这些调用的参数，以了解我们的客户端将向工作流服务发送什么，如下所示：
 - en: '[PRE9]'
+  id: totrans-236
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'These messages are used to define the work that a client wants the server to
     execute and contain the following attributes:'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些消息用于定义客户端希望服务器执行的工作，并包含以下属性：
 - en: '`WorkReq` message contains the name of the work and all `Block` messages that
     make up a workflow.'
+  id: totrans-238
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`WorkReq`消息包含工作名称和组成工作流的所有`Block`消息。'
 - en: 'The `Block` message describes a body of work in the workflow; each `Block`
     executes one at a time and has the following attributes:'
+  id: totrans-239
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Block`消息描述工作流中的一项工作；每个`Block`一次执行一个，并具有以下属性：'
 - en: Has a set of `Job` messages that describe the work to be done
+  id: totrans-240
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 有一组`Job`消息，描述要执行的工作
 - en: At what concurrency to execute the work described by the `Job` messages
+  id: totrans-241
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行`Job`消息描述的工作的并发度
 - en: The Job message describes the server's Job type on the server to call and with
     which arguments.
+  id: totrans-242
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Job`消息描述服务器上的工作类型，调用时使用的参数。'
 - en: 'The `WorkResp` message returns the ID that refers to this `WorkReq`:'
+  id: totrans-243
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`WorkResp`消息返回与该`WorkReq`相关的ID：'
 - en: Uses `UUIDv1` IDs that encapsulate time into the ID so we know when it was submitted
     to the system
+  id: totrans-244
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用`UUIDv1` ID，封装时间信息到ID中，以便我们知道它何时提交到系统
 - en: Uses that time mechanic to prevent execution if the `Exec()` `RPC` is not called
     in by some expiration time
+  id: totrans-245
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用时间机制防止在某个过期时间之前没有调用`Exec()` `RPC`时执行
 - en: '`Exec` messages provide the ID you want to execute, as illustrated here:'
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Exec`消息提供你要执行的ID，如下所示：'
 - en: '[PRE10]'
+  id: totrans-247
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: 'There are more messages and `enums` to allow for a `Status` call. You can find
     the complete protocol buffer definition here:'
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: 有更多的消息和`enums`，以允许进行`Status`调用。你可以在这里找到完整的协议缓冲区定义：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto)'
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto)'
 - en: Now that we have messages to describe the work to be done, let's look at creating
     a policy engine.
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们有了描述待处理工作的消息，让我们来看一下如何创建策略引擎。
 - en: Creating a policy engine
+  id: totrans-251
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 创建策略引擎
 - en: A policy checks our work to make sure some parameter is allowed. In our case,
     these parameters are inside a `pb.WorkReq` instance. We want policies to be generic
     so that they can be reused against multiple types of work described by a `pb.WorkReq`.
     Once defined, we will have a `policy.json` file that defines which policies are
     applied against a specifically named `pb.WorkReq`.
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 策略会检查我们的工作，以确保某些参数是被允许的。在我们的案例中，这些参数位于`pb.WorkReq`实例内部。我们希望策略是通用的，这样它们就可以在多个由`pb.WorkReq`描述的工作类型中重用。定义完成后，我们将有一个`policy.json`文件，定义哪些策略应用于特定命名的`pb.WorkReq`。
 - en: 'To make this work, each policy will need to receive the settings for the policy
     that should be applied to a specific workflow. Let''s define two interfaces that
     describe a policy and its settings, as follows:'
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了实现这一点，每个策略都需要接收应应用于特定工作流的策略设置。让我们定义两个接口来描述策略及其设置，如下所示：
 - en: '[PRE11]'
+  id: totrans-254
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: '`Settings` will always be implemented as some struct. Its `Validate()` method
     will be used to validate that the fields for that struct are set to valid values.'
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Settings`将始终作为某种结构体实现。它的`Validate()`方法将用于验证该结构体的字段是否设置为有效值。'
 - en: '`Policy` runs our implementation against a `pb.WorkReq` with the settings provided.'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Policy`根据提供的设置运行我们的实现，作用于`pb.WorkReq`。'
 - en: 'Each `WorkReq` that is submitted will have a list of policies to apply. This
     is defined as follows:'
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
+  zh: 提交的每个`WorkReq`都将有一个要应用的策略列表。这个列表定义如下：
 - en: '[PRE12]'
+  id: totrans-258
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '`Name` is the name of the policy to invoke. `Settings` are the settings for
     that invocation.'
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
+  zh: '`Name`是要调用的策略的名称。`Settings`是该调用的设置。'
 - en: 'The configuration file will detail a set of `PolicyArgs` arguments to run.
     Each policy will need to be registered in the system. We are going to skip the
     registration method for policies, but this is where the policies are registered:'
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
+  zh: 配置文件将详细列出一组`PolicyArgs`参数以供执行。每个策略都需要在系统中注册。我们将跳过策略注册方法的部分，但这就是策略注册的位置：
 - en: '[PRE13]'
+  id: totrans-261
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'When a `pb.WorkReq` enters the system, we want to invoke those policies concurrently
     against that `pb.WorkReq`. Let''s have a look at how that would work here:'
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
+  zh: 当`pb.WorkReq`进入系统时，我们希望同时对该`pb.WorkReq`调用这些策略。让我们看看这是如何工作的：
 - en: '[PRE14]'
+  id: totrans-263
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'This preceding code defines the following:'
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码定义了以下内容：
 - en: If the configuration for a `pb.WorkReq` has no policies, return.
+  id: totrans-265
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`pb.WorkReq`的配置没有策略，则返回。
 - en: Create a `Context` object so that we can cancel policies being run on an error.
+  id: totrans-266
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`Context`对象，以便在出现错误时取消正在运行的策略。
 - en: Clone our `pb.WorkReq` so that it cannot be changed by a `Policy`.
+  id: totrans-267
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 克隆我们的`pb.WorkReq`，使其无法被`Policy`更改。
 - en: Make sure each `Policy` that is named actually exists.
+  id: totrans-268
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保每个被命名的`Policy`实际存在。
 - en: Run all our policies with the settings that we were given.
+  id: totrans-269
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用我们所提供的设置运行所有策略。
 - en: If there is an error in any of them, record it and cancel all running policies.
+  id: totrans-270
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果其中任何一个出现错误，记录该错误并取消所有正在运行的策略。
 - en: Make sure the copy of `pb.WorkReq` is the same as what was submitted.
+  id: totrans-271
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确保`pb.WorkReq`的副本与提交的内容相同。
 - en: 'We now have the main parts of a policy engine. The full engine can be found
     here:'
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在已经具备了策略引擎的主要部分。完整的引擎可以在这里找到：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go)'
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go)'
 - en: 'The `Reader` type that is used to read our `policy.json` file where we define
     policies is detailed here:'
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
+  zh: 用于读取我们`policy.json`文件的`Reader`类型，在这里进行了详细描述：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go)'
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go)'
 - en: Let's look at writing a policy to be used by our engine.
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下编写一个策略，以便我们引擎使用。
 - en: Writing a policy
+  id: totrans-277
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 编写策略
 - en: One of the most basic policies that you can define against a workflow is to
     limit which job types are allowed in that workflow.
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在工作流中定义的最基本策略之一是限制该工作流中允许的作业类型。
 - en: This prevents some new type of work from being introduced into a workflow where
     no one has thought about policies that need to be applied to that `Job`.
+  id: totrans-279
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可以防止在工作流中引入某些新类型的工作，而这些工作没有考虑到需要应用于该`Job`的策略。
 - en: For our first `Policy` implementation, let's write one that checks our `pb.WorkReq`
     to allow only `Job` types we have defined in our policy configuration. If we receive
     an unexpected `Job`, we reject the `pb.WorkReq`.
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的第一个`Policy`实现，让我们编写一个检查`pb.WorkReq`的策略，只允许我们在策略配置中定义的`Job`类型。如果接收到一个未预料的`Job`，我们将拒绝该`pb.WorkReq`。
 - en: 'Let''s define the settings for our `Policy`, as follows:'
+  id: totrans-281
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们为我们的`Policy`定义设置，具体如下：
 - en: '[PRE15]'
+  id: totrans-282
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'This preceding code contains the following:'
+  id: totrans-283
   prefs: []
   type: TYPE_NORMAL
+  zh: 以上代码包含以下内容：
 - en: Our specific `Settings` that implement `policy.Settings`
+  id: totrans-284
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们特定的`Settings`，实现了`policy.Settings`
 - en: '`AllowedJobs`, which are the names of the jobs we allow'
+  id: totrans-285
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`AllowedJobs`，即我们允许的作业名称'
 - en: A `Validate()` method that validates the listed `Jobs` exist
+  id: totrans-286
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个`Validate()`方法，用于验证列出的`Jobs`是否存在
 - en: An `allowed()` method that checks a given name against what we allow
+  id: totrans-287
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个`allowed()`方法，用于检查给定的名称是否符合我们允许的内容
 - en: It also uses our `jobs` package to do these checks
+  id: totrans-288
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它还使用我们的`jobs`包来执行这些检查
 - en: With these settings, a user can define a policy for any workflow in our configuration
     file that defines which `Job` types are allowed.
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过这些设置，用户可以在我们的配置文件中为任何工作流定义一个策略，指定允许哪些`Job`类型。
 - en: 'Let''s define a type that implements the `Policy` interface as follows:'
+  id: totrans-290
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义一个实现`Policy`接口的类型，具体如下：
 - en: '[PRE16]'
+  id: totrans-291
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'This preceding code does the following:'
+  id: totrans-292
   prefs: []
   type: TYPE_NORMAL
+  zh: 以上代码执行以下操作：
 - en: Defines our policy, which implements the `policy.Policy` interface
+  id: totrans-293
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义我们的策略，实施`policy.Policy`接口
 - en: Defines a `New()` constructor
+  id: totrans-294
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义了一个`New()`构造函数
 - en: Implements the `policy.Policy.Run()` method
+  id: totrans-295
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现了`policy.Policy.Run()`方法
 - en: Validates the `policy.Settings` value passed are the `Settings` for this `Policy`
+  id: totrans-296
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 验证传入的`policy.Settings`值是否是此`Policy`的`Settings`
 - en: Loops through all our `req.Blocks` and gets our `Job` instances
+  id: totrans-297
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 遍历所有`req.Blocks`并获取我们的`Job`实例
 - en: Checks each `Job` has an allowed name
+  id: totrans-298
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 检查每个`Job`是否具有允许的名称
 - en: 'We now have a policy we can apply to restrict `Job` types in a `pb.WorkReq`.
     This is how we could apply that in our configuration file to a workflow that does
     satellite disk erasures:'
+  id: totrans-299
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有一个可以应用的策略，限制`pb.WorkReq`中的`Job`类型。我们可以在配置文件中将其应用于执行卫星磁盘擦除的工作流，如下所示：
 - en: '[PRE17]'
+  id: totrans-300
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'This policy has the following attributes:'
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL
+  zh: 该策略具有以下属性：
 - en: Is applied only to workflows called `"SatelliteDiskErase"`
+  id: totrans-302
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 仅应用于名为`"SatelliteDiskErase"`的工作流
 - en: Has a single policy applied, `"restrictJobTypes"`, which we defined
+  id: totrans-303
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 应用了一条单一策略，`"restrictJobTypes"`，这是我们定义的
 - en: 'Allows only `Job` types called one of the following:'
+  id: totrans-304
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 只允许以下名称之一的`Job`类型：
 - en: '`"validateDecom"`'
+  id: totrans-305
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`"validateDecom"`'
 - en: '`"diskErase"`'
+  id: totrans-306
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`"diskErase"`'
 - en: '`"sleep"`'
+  id: totrans-307
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`"sleep"`'
 - en: '`"getTokenFromBucket"`'
+  id: totrans-308
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`"getTokenFromBucket"`'
 - en: 'You can see the full `Policy` implementation here:'
+  id: totrans-309
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在此查看完整的`Policy`实现：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go)'
+  id: totrans-310
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go)'
 - en: 'You can find other policies we have defined in directories here:'
+  id: totrans-311
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在以下目录中找到我们定义的其他策略：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register)'
+  id: totrans-312
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register)'
 - en: 'You can see the policy configuration currently defined here:'
+  id: totrans-313
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在此处查看当前定义的策略配置：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go)'
+  id: totrans-314
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go)'
 - en: Cautions on policy engines
+  id: totrans-315
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 关于策略引擎的警告
 - en: Before we move on, I would like to provide a word of caution.
+  id: totrans-316
   prefs: []
   type: TYPE_NORMAL
+  zh: 在继续之前，我想提醒一句警告。
 - en: 'Simplicity is the key to sustainable software. I define sustainable software
     as having the following attributes:'
+  id: totrans-317
   prefs: []
   type: TYPE_NORMAL
+  zh: 简单性是可持续软件的关键。我定义的可持续软件具有以下特征：
 - en: Easy to debug
+  id: totrans-318
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 容易调试
 - en: Users can understand how to use it in a few hours at most
+  id: totrans-319
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用户最多可以在几个小时内理解如何使用它
 - en: Policy engines can be amazingly effective in preventing major problems, acting
     as a secondary check on sanity to some set of actions. As with security, it should
     provide substantial benefits while only introducing a small burden.
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 策略引擎在防止重大问题方面可能非常有效，充当对一组操作的理智性进行的二次检查。与安全性一样，它应该在仅引入少量负担的同时，提供显著的好处。
 - en: Policy engines are easy to overdevelop, with the lofty goal of 100% protection
     while introducing a large amount of complexity and burden. Often, I will see policy
     engines that are not tightly coupled to a single workflow system. Instead, engineers
     will design a generic system that tries to deal with multiple tooling systems.
+  id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 策略引擎容易被过度开发，带着100%保护的崇高目标，同时引入大量的复杂性和负担。通常，我会看到那些没有紧密结合单一工作流系统的策略引擎。相反，工程师们会设计一个通用系统，试图应对多个工具系统。
 - en: If your policy statements start to look like a programming language (`if` statements,
     loops, functions), you are moving toward complexity. As policy engines become
     generic, they become complex to deal with. If you need policy enforcement in multiple
     places, this is another warning sign.
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你的策略语句开始像编程语言（`if`语句、循环、函数）那样，说明你正朝着复杂性迈进。随着策略引擎变得通用，它们变得更复杂，难以处理。如果你在多个地方需要策略强制执行，这也是另一个警告信号。
 - en: Not all workflows can achieve safety with generic policies. When you have a
     complex workflow, feel free to design a policy that does deep checks for a single
     workflow. Keep your `if` statements, loops, and functions in your code, not your
     configuration.
+  id: totrans-323
   prefs: []
   type: TYPE_NORMAL
+  zh: 并非所有工作流都能通过通用策略实现安全。当你拥有复杂的工作流时，可以自由设计一个为单个工作流做深度检查的策略。将你的`if`语句、循环和函数放在代码中，而不是配置中。
 - en: I've seen engineers write lots of overcomplicated safety systems. Focus on providing
     guard rails that are easy to write and update while covering 80% of cases, not
     100% of cases. With the division between software that creates a set of actions
     to run and a service that validates those actions against policies, you are unlikely
     to have a *disk-erase* type of event in the future, and importantly, you will
     be able to maintain velocity.
+  id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: 我见过工程师编写大量过于复杂的安全系统。专注于提供易于编写和更新的保护机制，覆盖80%的情况，而不是100%的情况。通过将创建执行操作的程序和验证这些操作是否符合策略的服务分离，你将不太可能在未来发生*磁盘擦除*类型的事件，更重要的是，你将能够保持开发速度。
 - en: In this section, we have discussed what an SOW would be. To allow our workflow
     service to understand an SOW, to enforce it, we have designed a policy engine
     and created our first policy that can be applied to workflows submitted to our
     system.
+  id: totrans-325
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本节中，我们讨论了什么是SOW。为了让我们的工作流服务理解SOW并强制执行它，我们设计了一个策略引擎，并创建了第一个可以应用于提交给我们系统的工作流的策略。
 - en: Even with policies, something is going to go wrong. This could simply be a confluence
     of events that makes a normally safe operation unsafe. To be able to respond quickly
     to these types of events, let's look at introducing emergency-stop capabilities.
+  id: totrans-326
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使有策略，还是会出错。这可能只是一些事件的巧合，导致一个通常安全的操作变得不安全。为了能够快速响应这些类型的事件，让我们来看看如何引入紧急停止功能。
 - en: Building systems with an emergency stop
+  id: totrans-327
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 构建具有紧急停止功能的系统
 - en: Systems are going to run amok. This is a simple truth that you need to come
     to terms with early in infrastructure tooling development.
+  id: totrans-328
   prefs: []
   type: TYPE_NORMAL
+  zh: 系统将会失控。这是你在基础设施工具开发初期就需要接受的一个简单事实。
 - en: When you are a small company, there is usually a very small group of people
     who understand the systems well and watch over any changes to handle problems.
     If those people are good, they can quickly respond to a problem. Usually, these
     people are the developers of the software.
+  id: totrans-329
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你是一个小公司时，通常只有一小部分人非常了解系统，并监督任何更改以处理问题。如果这些人足够优秀，他们可以迅速响应问题。通常，这些人是软件的开发者。
 - en: As companies start to grow, jobs begin to become more specialized. The larger
     the company, the more specialized the jobs. As that happens, the first responders
     to major issues don't have the access or knowledge to deal with these problems.
+  id: totrans-330
   prefs: []
   type: TYPE_NORMAL
+  zh: 随着公司规模的增长，工作开始变得更加专业化。公司越大，工作越专业化。当这种情况发生时，处理重大问题的第一响应者通常没有足够的访问权限或知识来处理这些问题。
 - en: This can create a critical gap between recognition of a major problem and stopping
     the problem from getting worse.
+  id: totrans-331
   prefs: []
   type: TYPE_NORMAL
+  zh: 这可能会在识别到重大问题和阻止问题恶化之间创建一个关键的时间差。
 - en: This is where the ability to allow first responders to stop changes comes into
     play. We call this an emergency-stop ability.
+  id: totrans-332
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是允许紧急响应人员停止更改的功能所在。我们称之为紧急停止功能。
 - en: Understanding emergency stops
+  id: totrans-333
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 理解紧急停止
 - en: There are multiple ways to build an emergency-stop system, but the basics are
     the same. The software will check some data store that contains the name of the
     workflow you are executing and what the emergency-stop state is.
+  id: totrans-334
   prefs: []
   type: TYPE_NORMAL
+  zh: 构建紧急停止系统有多种方式，但基本原理相同。软件将检查一个包含正在执行的工作流名称以及紧急停止状态的数据存储。
 - en: 'The most simplistic version of an emergency-stop system has two modes, as follows:'
+  id: totrans-335
   prefs: []
   type: TYPE_NORMAL
+  zh: 紧急停止系统的最简单版本有两种模式，如下所示：
 - en: '`Go`'
+  id: totrans-336
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Go`'
 - en: '`Stop`'
+  id: totrans-337
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Stop`'
 - en: The software that does any type of work would need to reference the system at
     intervals. If it cannot find itself listed or the system indicates it is in a
     `Stop` state, the software terminates, or if it is an execution system, it terminates
     that workflow.
+  id: totrans-338
   prefs: []
   type: TYPE_NORMAL
+  zh: 执行任何工作类型的软件需要定期引用该系统。如果它找不到自己列出，或者系统表明处于`Stop`状态，则软件终止，或者如果是执行系统，则终止该工作流。
 - en: More complicated versions of this might contain site information so that all
     tooling running at a site is stopped, or it might include other states such as
     `Pause`. These are more complicated to implement, so we will stick to this more
     simplistic form here.
+  id: totrans-339
   prefs: []
   type: TYPE_NORMAL
+  zh: 更复杂的版本可能包含站点信息，以便停止在站点上运行的所有工具，或者它可能包括其他状态，如`Pause`。这些实现起来更复杂，因此我们在这里将坚持使用这种简单形式。
 - en: Let's look at what an implementation of this might look like.
+  id: totrans-340
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们看看实现可能是什么样子。
 - en: Building an emergency-stop package
+  id: totrans-341
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 构建一个紧急停止包
 - en: The first thing we need to do is define what the data format will look like.
     For this exercise, we will make it `etcd`. And while I'm using JSON here, this
     could be a single table in a database or a protocol buffer.
+  id: totrans-342
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们首先需要定义数据格式的样子。对于这个练习，我们将使用`etcd`。虽然我这里使用的是JSON，但它也可以是数据库中的一个表格或协议缓冲区。
 - en: 'Let''s define the status our workflows can have, as follows:'
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义工作流可能具有的状态，如下所示：
 - en: '[PRE18]'
+  id: totrans-344
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'This defines a few statuses, as follows:'
+  id: totrans-345
   prefs: []
   type: TYPE_NORMAL
+  zh: 这定义了几个状态，如下所示：
 - en: '`Unknown`, which means that the status was not set'
+  id: totrans-346
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Unknown`，表示状态未设置'
 - en: '`Go`, which indicates the workflow can be executed'
+  id: totrans-347
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Go`，表示工作流可以执行'
 - en: '`Stop`, which indicates the workflow should stop'
+  id: totrans-348
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Stop`，表示工作流应停止'
 - en: It is key to know that any status that is not `Go` is considered `Stop`.
+  id: totrans-349
   prefs: []
   type: TYPE_NORMAL
+  zh: 关键是要知道，任何不是`Go`的状态都被视为`Stop`。
 - en: 'Now, let''s define an emergency stop entry that can be converted to and from
     JSON, as follows:'
+  id: totrans-350
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们定义一个可以转换为JSON并从JSON转换的紧急停止入口，如下所示：
 - en: '[PRE19]'
+  id: totrans-351
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'This has the following fields:'
+  id: totrans-352
   prefs: []
   type: TYPE_NORMAL
+  zh: 它包含以下字段：
 - en: '`Name`, which is a unique name for a workflow'
+  id: totrans-353
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Name`，表示工作流的唯一名称'
 - en: '`Status`, which details the emergency-stop status for this workflow'
+  id: totrans-354
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`Status`，表示此工作流的紧急停止状态'
 - en: Another key to an emergency-stop package is that every workflow must have an
     entry. If a check is made for an entry that is not named, it is treated as being
     set to `Stop`.
+  id: totrans-355
   prefs: []
   type: TYPE_NORMAL
+  zh: 紧急停止包的另一个关键点是，每个工作流必须有一个入口。如果检查到一个没有命名的入口，它会被视为设置为`Stop`。
 - en: 'Now, we need to validate an entry. Here''s how to go about this:'
+  id: totrans-356
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要验证一个入口。以下是处理方法：
 - en: '[PRE20]'
+  id: totrans-357
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'The preceding code does the following:'
+  id: totrans-358
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码执行以下操作：
 - en: Removes any spaces around a workflow name.
+  id: totrans-359
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 移除工作流名称周围的任何空格。
 - en: If the `Name` value is empty, it is an error.
+  id: totrans-360
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`Name`值为空，则表示错误。
 - en: If the `Status` value is not `Go` or `Stop`, it is an error.
+  id: totrans-361
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果`Status`值既不是`Go`也不是`Stop`，则表示错误。
 - en: We treat these errors as simply being that the rule doesn't exist. If a rule
     doesn't exist, then a workflow is considered in a `Stop` state.
+  id: totrans-362
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将这些错误视为规则不存在的错误。如果规则不存在，则工作流被认为处于`Stop`状态。
 - en: We now need something that reads this emergency-stop file at intervals or receives
     notifications on changes. If a service cannot reach the datastore holding our
     emergency-stop information after some small amount of time, it should report a
     `Stop` state.
+  id: totrans-363
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在需要某些东西，以便定期读取此紧急停止文件或接收变化的通知。如果服务在短时间内无法访问保存我们紧急停止信息的数据存储，它应该报告`Stop`状态。
 - en: 'Let''s make a `Reader` type that accesses our emergency-stop data, as follows:'
+  id: totrans-364
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义一个`Reader`类型，用于访问我们的紧急停止数据，如下所示：
 - en: '[PRE21]'
+  id: totrans-365
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'The preceding code does the following:'
+  id: totrans-366
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码执行以下操作：
 - en: Provides a `Data` variable that is the single access point for our `Reader`
     type
+  id: totrans-367
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供一个`Data`变量，这是我们`Reader`类型的唯一访问点
 - en: Provides an `init()` function that accesses our emergency-stop data on program
     start
+  id: totrans-368
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供一个`init()`函数，在程序启动时访问我们的紧急停止数据。
 - en: Provides a `Reader` type that allows us to read our emergency-stop states
+  id: totrans-369
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供了一个`Reader`类型，允许我们读取紧急停止状态。
 - en: Provides a `Subscribe()` function that returns status changes for a workflow
     and a `Cancel()` function that is called when you no longer want to subscribe
+  id: totrans-370
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供了一个`Subscribe()`函数，返回工作流的状态变化，以及一个`Cancel()`函数，当你不再想订阅时调用。
 - en: Provides a `Status()` function that returns the status once
+  id: totrans-371
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供一个`Status()`函数，返回一次性状态。
 - en: Provides `newReader`, which is our `Reader` constructor
+  id: totrans-372
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 提供了`newReader`，这是我们的`Reader`构造函数。
 - en: 'The full code is not provided here but can be located at the following link:'
+  id: totrans-373
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里没有提供完整代码，但可以在以下链接找到：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go)'
+  id: totrans-374
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go)'
 - en: We only allow emergency-stop information to be accessed through `Data`, which
     is acting as a singleton. This prevents multiple instances from polling for the
     same data. I prefer having the singleton accessed through a variable to make it
     clear that a single instance exists.
+  id: totrans-375
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们只允许通过`Data`访问紧急停止信息，它充当单例模式。这防止了多个实例同时轮询相同的数据。我更喜欢通过变量访问单例，以清楚表明只有一个实例存在。
 - en: We now have a package that can tell us our emergency-stop states. Let's look
     at how we can use this to cancel something.
+  id: totrans-376
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在有一个包，可以告诉我们紧急停止状态。让我们看看如何使用它来取消某些操作。
 - en: Using the emergency-stop package
+  id: totrans-377
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 使用紧急停止包。
 - en: 'Now that we have a package that can read our emergency-stop data, let''s show
     how we can use it, as follows:'
+  id: totrans-378
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们有了一个可以读取紧急停止数据的包，让我们展示如何使用它，如下所示：
 - en: '[PRE22]'
+  id: totrans-379
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'This preceding code does the following:'
+  id: totrans-380
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码执行了以下操作：
 - en: Creates a `Job` that executes some action we want to perform.
+  id: totrans-381
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个`Job`，执行我们想要执行的某个操作。
 - en: Creates a `Work` type that executes some set of `Jobs`.
+  id: totrans-382
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建了一个`Work`类型，执行一组`Jobs`。
 - en: Defines `Exec()`, which executes all `Jobs`.
+  id: totrans-383
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 定义了`Exec()`，它执行所有的`Jobs`。
 - en: Subscribes to emergency stop with a given workflow name.
+  id: totrans-384
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用给定的工作流名称订阅紧急停止。
 - en: If we don't start in the `Go` state, it returns an error.
+  id: totrans-385
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果我们没有从`Go`状态开始，它会返回一个错误。
 - en: Executes a goroutine that calls `cancel()` if we receive a `Stop Status` type.
+  id: totrans-386
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行一个goroutine，如果我们收到`Stop Status`类型，它会调用`cancel()`。
 - en: Executes the Job instances held in work `.jobs`.
+  id: totrans-387
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 执行保存在工作`.jobs`中的Job实例。
 - en: This is a simple example that uses a `context.Context` object to stop any `Job`
     that is executing when `cancel()` is called on our `context.Context` object. If
     we receive a state change with an emergency stop (which is always `Stop`), we
     call `cancel()`.
+  id: totrans-388
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个简单的示例，使用`context.Context`对象来停止在调用`cancel()`时正在执行的任何`Job`。如果我们收到紧急停止状态变化（始终为`Stop`），我们会调用`cancel()`。
 - en: 'A more complete example of using the `es` package can be found in these two
     files:'
+  id: totrans-389
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用`es`包的更完整示例可以在这两个文件中找到：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go)'
+  id: totrans-390
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go)'
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
+  id: totrans-391
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
 - en: 'An example `es.json` file that stores emergency-stop data can be found here:'
+  id: totrans-392
   prefs: []
   type: TYPE_NORMAL
+  zh: 一个示例的`es.json`文件，存储了紧急停止数据，可以在这里找到：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json)'
+  id: totrans-393
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json)'
 - en: 'You can see this integrated into our workflow system as part of our `Work.Run()`
     method at the following link:'
+  id: totrans-394
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在以下链接看到它作为我们`Work.Run()`方法的一部分，集成到我们的工作流系统中：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
+  id: totrans-395
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go)'
 - en: Case study – Google's network backbone emergency stop
+  id: totrans-396
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 案例研究 – 谷歌的网络骨干紧急停止
 - en: During an early postmortem for a network tooling problem, it was identified
     that on-call engineers responding to some major event needed a way to stop automations.
     At the time, we had a lot of small tools that could be executing against the network
     at any given time. An on-call engineer, recognizing a problem, had no good way
     of stopping other engineers from executing work or stopping a runaway program.
+  id: totrans-397
   prefs: []
   type: TYPE_NORMAL
+  zh: 在一次网络工具问题的早期事后分析中，发现负责处理重大事件的值班工程师需要一种停止自动化操作的方式。当时，我们有许多小工具可能会在任何时候与网络执行操作。值班工程师发现问题时，并没有合适的方式来阻止其他工程师执行工作或停止一个失控的程序。
 - en: The first emergency-stop package was created from this postmortem and integrated
     into existing tooling. This worked by taking the tool's subscriber name and matching
     it against the **regular expressions** (**regexes**) contained in an emergency-stop
     file. This check would occur anytime the file changed or at the start of the execution
     of the tool.
+  id: totrans-398
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一个紧急停止包是通过这次事后分析创建的，并集成到现有的工具中。其工作原理是获取工具的订阅者名称，并将其与紧急停止文件中包含的**正则表达式**（**regexes**）进行匹配。每当文件发生更改或工具执行开始时，都会进行此检查。
 - en: This was used to stop several automations that were causing problems from growing
     out of control. However, the implementation was flawed for an organization growing
     at our rate.
+  id: totrans-399
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个方法曾被用来停止几项自动化任务，避免了问题的蔓延。然而，这种实现方式对于我们这种快速增长的组织来说存在缺陷。
 - en: First, it required that every tool developer integrate the emergency-stop package.
     As more teams outside the initial core team developed tools, they wouldn't know
     this was a requirement. This led to rogue tooling. And as Google developed its
     own network gear, tooling development spanned departments that didn't coordinate
     in many respects. This meant that many tools never had an emergency stop integrated
     or it was done in a separate system.
+  id: totrans-400
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，它要求每个工具开发人员都集成紧急停止包。当更多的团队在初始核心团队之外开发工具时，他们可能并不知道这是一个必需的要求。这导致了不受控的工具开发。而随着谷歌开发自己的网络设备，工具开发跨越了多个部门，这些部门在许多方面并没有协调。这意味着许多工具从未集成紧急停止，或者是在一个独立的系统中完成的。
 - en: Even when an emergency stop was integrated into a tool, it was sometimes a flawed
     implementation that didn't work. Every integration relied on an engineer doing
     the right thing.
+  id: totrans-401
   prefs: []
   type: TYPE_NORMAL
+  zh: 即使在工具中集成了紧急停止，有时这种实现也存在缺陷，无法正常工作。每次集成都依赖工程师正确执行操作。
 - en: Finally, an emergency stop had an assumption of a `Go` state. So, if there was
     no rule listed that matched your subscriber ID, it was assumed it was in a `Go`
     state. This meant that many times, you had to just stop everything or had to dig
     through code to figure out a subscriber ID so that you could re-enable everything
     but the problem tool.
+  id: totrans-402
   prefs: []
   type: TYPE_NORMAL
+  zh: 最终，紧急停止系统有一个默认的`Go`状态。因此，如果没有规则与您的订阅者 ID 匹配，则假定其处于`Go`状态。这意味着许多时候，您只能停止所有操作，或者必须翻阅代码找出订阅者
+    ID，以便重新启用除了问题工具之外的所有内容。
 - en: To solve these problems in our backbone, we centralized executions of our backbone
     work into a central system. This provided us with a single, well-tested emergency-stop
     implementation, and after a long audit, we switched the emergency-stop package
     to stop anything that didn't match a rule.
+  id: totrans-403
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了解决我们网络骨干中的这些问题，我们将骨干工作的执行集中到一个中央系统中。这为我们提供了一个单一且经过充分测试的紧急停止实现，经过长时间的审计后，我们将紧急停止包切换为停止任何不符合规则的操作。
 - en: This provided our first responders the ability to stop backbone automation and
     tools during any major problem. If we found a problem tool, we could allow everything
     else to run except that tool until proper fixes were made.
+  id: totrans-404
   prefs: []
   type: TYPE_NORMAL
+  zh: 这为我们的应急响应人员提供了在发生重大问题时停止骨干自动化和工具的能力。如果我们发现有问题的工具，我们可以允许其他所有工具继续运行，直到对该工具进行适当修复。
 - en: In this section, you have learned what an emergency-stop system is, why it is
     important, how to implement a basic one, and finally, how to integrate an emergency-stop
     package into tooling.
+  id: totrans-405
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一部分中，你已经学习了什么是紧急停止系统，为什么它很重要，如何实现一个基础的系统，以及如何将紧急停止包集成到工具中。
 - en: Summary
+  id: totrans-406
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: This chapter has provided a basic understanding of how to write tooling that
     provides safety in the face of chaos. We have shown you how circuit breakers or
     exponential backoff can save your network and services from overload when unexpected
@@ -1784,13 +2600,19 @@
     workflow recovery. And finally, we have conveyed how an emergency-stop system
     can be utilized by first responders by quickly limit damage to automation systems
     while investigating a problem.
+  id: totrans-407
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章提供了如何编写在面对混乱时能够提供安全保障的工具的基本理解。我们展示了如何通过断路器或指数退避技术，在发生意外问题时避免网络和服务的过载。我们展示了如何通过速率限制自动化，在响应者还未作出反应前防止工作流失控。你已经了解了通过集中式策略引擎进行工具作用域管理，如何在不加重开发者负担的情况下提供第二层安全保障。我们学习了幂等性工作流的重要性，以便实现工作流的恢复。最后，我们介绍了如何通过紧急停机系统，帮助首批响应者在调查问题时，快速限制自动化系统的损害。
 - en: 'At this time, if you haven''t played with the workflow system that we have
     been developing, you should explore the code and play with the examples. The `README.md`
     file will help you get started. You can find this at the following link:'
+  id: totrans-408
   prefs: []
   type: TYPE_NORMAL
+  zh: 此时，如果你还没有玩过我们一直在开发的工作流系统，应该去探索代码并尝试示例。`README.md` 文件将帮助你入门。你可以通过以下链接找到它：
 - en: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md)'
+  id: totrans-409
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md](https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md)'
