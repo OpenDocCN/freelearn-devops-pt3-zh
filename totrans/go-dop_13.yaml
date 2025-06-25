@@ -1,983 +1,1491 @@
 - en: 'Chapter 11: Using ChatOps to Increase Efficiency'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 第11章：使用 ChatOps 提高效率
 - en: As DevOps engineers, we often work as part of a team of engineers that help
     manage a network, service infrastructure, and public-facing services. This means
     there are a lot of moving parts and communication that needs to occur, especially
     in an emergency.
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 作为 DevOps 工程师，我们通常是一个由工程师组成的团队的一部分，帮助管理网络、服务基础设施以及面向公众的服务。这意味着需要协调大量活动和沟通，特别是在紧急情况下。
 - en: ChatOps provides teams with a central interface to tooling to ask questions
     about current states and to interact with other DevOps tools while recording those
     interactions for posterity. This can improve feedback loops and real-time communication
     between teams and help manage incidents effectively.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: ChatOps 为团队提供了一个集中式的工具界面，可以询问当前状态并与其他 DevOps 工具互动，同时记录这些互动以备后续查看。这可以改善反馈循环和团队间的实时沟通，帮助有效管理事故。
 - en: One of our colleagues, Sarah Murphy, has a saying – *Don't talk to the bus driver*.
     As a release engineer for Facebook in the early days, she was responsible for
     releasing Facebook across their data centers. This was a high-stress and detail-oriented
     job that required her complete attention. Many of the engineers wanted to know
     if their feature or patch was being included in the current release and, of course,
     asked the release engineer.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的同事 Sarah Murphy 有一句话——*不要和公交司机说话*。作为 Facebook 早期的发布工程师，她负责在其数据中心发布 Facebook。这是一项高压且注重细节的工作，需要她全神贯注。许多工程师想知道他们的功能或补丁是否包含在当前发布中，当然，他们都会问发布工程师。
 - en: As any engineer who does high-impact rollouts will tell you, you need to focus.
     Having hundreds of engineers ping you about the status of their particular patch
     is not ideal. This is where ChatOps comes into play. Instrumenting ChatOps can
     allow a central place where questions about rollout status and what revision is
     in a release can stave off those hundreds of questions. It certainly did for Sarah.
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如任何做过高影响力发布的工程师所说，你需要专注。成百上千的工程师关于他们特定补丁的状态向你询问并不是理想的情况。这时，ChatOps 就派上了用场。通过实现
+    ChatOps，可以提供一个集中式平台，在这个平台上，关于发布状态以及当前版本的更新情况可以减少那些成百上千的问题。对 Sarah 来说，这确实起到了作用。
 - en: In this chapter, we will dive into how to build a ChatOps bot for Slack. We
     will show how we can use that bot to ask the status of a service. We will show
     how we can use a bot to get deployment information. And finally, we will show
     how we can use the bot to deploy our software.
+  id: totrans-5
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将深入讨论如何为 Slack 构建 ChatOps 机器人。我们将展示如何使用该机器人查询服务状态。我们还将展示如何使用机器人获取部署信息。最后，我们将展示如何使用机器人来部署我们的软件。
 - en: 'We will cover the following topics in this chapter:'
+  id: totrans-6
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将涵盖以下内容：
 - en: Environment architecture
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 环境架构
 - en: Using an Ops service
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 Ops 服务
 - en: Building a basic chatbot
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建一个基本的聊天机器人
 - en: Creating event handlers
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建事件处理程序
 - en: Creating our Slack application
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建我们的 Slack 应用
 - en: Technical requirements
+  id: totrans-12
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: 'The following are the prerequisites for this chapter:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章的前提条件如下：
 - en: 'A Slack user account: Create a Slack user if you do not have one by following
     the instructions here: [https://slack.com/get-started#/createnew](https://slack.com/get-started#/createnew).'
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 Slack 用户账户：如果你没有 Slack 账户，可以按照这里的说明创建：[https://slack.com/get-started#/createnew](https://slack.com/get-started#/createnew)。
 - en: 'A Slack workspace to experiment: Instructions for creating a Slack workspace
     can be found here: [https://slack.com/help/articles/206845317-Create-a-Slack-workspace](https://slack.com/help/articles/206845317-Create-a-Slack-workspace).'
+  id: totrans-15
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 Slack 工作区用于实验：创建 Slack 工作区的说明请参考：[https://slack.com/help/articles/206845317-Create-a-Slack-workspace](https://slack.com/help/articles/206845317-Create-a-Slack-workspace)。
 - en: Creation of a Slack application.
+  id: totrans-16
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 创建一个 Slack 应用。
 - en: It is highly suggested that you use a workspace you control instead of using
     a corporate one. That process requires approval by admins for your corporate Slack.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 强烈建议你使用自己控制的工作区，而不是公司工作区。公司工作区的设置需要管理员批准。
 - en: You will also need to create a Slack application, but this is covered in a later
     section.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 你还需要创建一个 Slack 应用，但这将在后面的章节中介绍。
 - en: The code files for this chapter can be downloaded from [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11)
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章的代码文件可以从[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11)下载
 - en: Environment architecture
+  id: totrans-20
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 环境架构
 - en: Our example ChatOps program will need to interact with several services to provide
     information to users.
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的示例 ChatOps 程序需要与多个服务进行交互，以便向用户提供信息。
 - en: 'To enable this, we have built a more robust version of the `Petstore` application
     that we built in our previous chapters. This version does the following:'
+  id: totrans-22
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了实现这一点，我们构建了一个更强大的版本的 `Petstore` 应用程序，这是我们在之前章节中构建的版本。这个版本具有以下功能：
 - en: Implements **create, read, update and delete** (**CRUD**).
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现 **创建、读取、更新和删除** (**CRUD**)。
 - en: Is gRPC based.
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 基于 gRPC。
 - en: Has deeper Open Telemetry tracing that flows through RPC calls and records events.
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 具有更深入的 Open Telemetry 跟踪，这些跟踪通过 RPC 调用流动并记录事件。
 - en: Deeper metrics that can be used to inform Prometheus alarms.
+  id: totrans-26
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 可以用于告警的更深层度指标，供 Prometheus 使用。
 - en: Replaces logging with tracing events.
+  id: totrans-27
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用跟踪事件替代日志记录。
 - en: All errors are automatically added to traces.
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 所有错误都会自动添加到跟踪中。
 - en: Traces can be turned on by a client.
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 客户端可以启用跟踪。
 - en: Traces are sampled by default but can be changed via an RPC.
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 跟踪默认会被采样，但可以通过 RPC 更改。
 - en: 'You can find this new Petstore here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/petstore](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/petstore).
     There is a `README` file that details the architecture if you want to dive into
     the details, but you do not need to for this chapter.'
+  id: totrans-31
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在这里找到这个新的 Petstore：[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/petstore](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/petstore)。如果你想深入了解架构，可以查看
+    `README` 文件，但本章并不需要你深入了解。
 - en: Our new Petstore is more capable and will allow us to show some of the power
     ChatOps can provide by combining our other lessons from this chapter.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的新 Petstore 功能更强大，将通过结合本章的其他课程，展示 ChatOps 能提供的一些强大功能。
 - en: 'The following is what our service architecture would look like:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是我们的服务架构示意图：
 - en: '![Figure 11.1 – ChatOps and Petstore architecture'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.1 – ChatOps 和 Petstore 架构'
 - en: '](img/B17626_11_001.jpg)'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_001.jpg)'
 - en: Figure 11.1 – ChatOps and Petstore architecture
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.1 – ChatOps 和 Petstore 架构
 - en: Attribution
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 归属
 - en: Poodle dog vector created by `gstudioimagen` - [www.freepik.com](http://www.freepik.com)
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 由 `gstudioimagen` 创建的贵宾犬矢量图 - [www.freepik.com](http://www.freepik.com)
 - en: 'Gophers by Egon Elbe: [github.com/egonelbre/gophers](http://github.com/egonelbre/gophers)'
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: Gophers by Egon Elbe：[github.com/egonelbre/gophers](http://github.com/egonelbre/gophers)
 - en: 'There are two services we will concentrate on creating here:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将专注于创建的两个服务是：
 - en: '**Ops service**: The Ops service does the real work, such as talking to Jaeger,
     Prometheus, running jobs, or anything else that is needed. This allows us to have
     multiple ChatOps services running in parallel (which might be needed if your company
     migrates from Slack to Microsoft Teams, for example).'
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**Ops 服务**：Ops 服务完成实际工作，如与 Jaeger、Prometheus 交互，运行作业，或执行其他必要任务。这使得我们能够并行运行多个
+    ChatOps 服务（例如，如果你的公司从 Slack 迁移到 Microsoft Teams，可能就需要这样）。'
 - en: This architecture has the benefit of allowing other teams to write tools using
     these functions in any language they choose.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种架构的好处是，允许其他团队使用任何他们选择的编程语言编写工具，利用这些功能。
 - en: '`slack-go` package, which can be found at [https://github.com/slack-go/slack](https://github.com/slack-go/slack).'
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`slack-go` 包，可以在 [https://github.com/slack-go/slack](https://github.com/slack-go/slack)
+    找到。'
 - en: Let's jump into the basic details of the Ops service.
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们深入了解 Ops 服务的基本细节。
 - en: Using an Ops service
+  id: totrans-45
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用 Ops 服务
 - en: We are not going to go into complete detail about this service, as we have covered
     how gRPC works in previous chapters. As this service just makes gRPC or REST calls
     to other services, let's talk about the calls that need to be implemented.
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们不会对该服务进行详细讲解，因为我们在前几章已经涵盖了 gRPC 的工作原理。由于该服务只是向其他服务发起 gRPC 或 REST 调用，因此让我们讨论一下需要实现的调用。
 - en: 'The protocol buffer service definition is as follows:'
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 协议缓冲服务定义如下：
 - en: '[PRE0]'
+  id: totrans-48
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: For our example service, these RPCs are targeted at a single deployed instance,
     but in a production environment, this would work on multiple entities that exist
     on a site.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的示例服务，这些 RPC 目标是单一部署实例，但在生产环境中，这将作用于站点上存在的多个实体。
 - en: 'This allows users to get some information quickly, such as the following:'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 这使得用户能够快速获取一些信息，例如：
 - en: See the traces we have in a certain time period, and the ability to filter by
     tags (such as `error`).
+  id: totrans-51
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 查看我们在特定时间段内的跟踪，并可以通过标签（如 `error`）进行过滤。
 - en: Retrieve basic trace data and the Jaeger URL of a trace given a trace ID.
+  id: totrans-52
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 根据跟踪 ID 检索基本跟踪数据和 Jaeger 跟踪的 URL。
 - en: Change the sampling type and rate for traces in the service.
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 更改服务中跟踪的采样类型和速率。
 - en: Tell us what version has been deployed according to Prometheus.
+  id: totrans-54
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 根据 Prometheus，告诉我们部署了哪个版本。
 - en: Display any alerts that Prometheus shows are firing.
+  id: totrans-55
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 显示 Prometheus 显示的任何触发的警报。
 - en: 'You can read the code on how this is implemented here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/ops](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/ops).'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以在这里查看如何实现这段代码：[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/ops](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/ops)。
 - en: We include a `README` file that goes over the basic architecture, but it is
     your standard gRPC service that makes calls using gRPC to the Petstore service/Jaeger
     and REST calls to Prometheus.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们包括了一个 `README` 文件，介绍了基本架构，但它是您的标准 gRPC 服务，通过 gRPC 调用 Petstore 服务/Jaeger，并通过
+    REST 调用 Prometheus。
 - en: Now, let's jump into something new, writing the basic Slack bot.
+  id: totrans-58
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们开始编写一个新的基础 Slack 机器人。
 - en: Building a basic chatbot
+  id: totrans-59
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 构建一个基础的聊天机器人
 - en: Go has a few clients that can interact with popular chat services such as Slack,
     either as a general Slack client or as a ChatOps-focused bot.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: Go 有一些客户端，可以与流行的聊天服务（如 Slack）进行交互，既可以作为通用 Slack 客户端，也可以作为专注于 ChatOps 的机器人。
 - en: We have found that it is best to have an architecture that separates the bot
     from the operations that you want to perform. This allows other tooling in other
     languages to access the capabilities.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们发现，最好采用一种将机器人与您想要执行的操作分开的架构。这使得其他语言的工具也能够访问这些功能。
 - en: By keeping the chatbot separate, you can focus on a single type of chat service
     and use all its features, instead of only features shared by each chat service
     client.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过将聊天机器人与其他部分分离，您可以专注于单一类型的聊天服务，并使用它的所有功能，而不是仅使用每个聊天服务客户端共享的功能。
 - en: For this reason, we will use the `slack-go` package to interact with Slack.
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，我们将使用 `slack-go` 包与 Slack 进行交互。
 - en: Our bot will be basic, simply listening to when someone mentions our bot in
     a message. This is called an `AppMention` event. Slack supports other events and
     has events specifically for commands that you can install. In our case, we just
     want to answer whenever we are mentioned, but `slack-go` has many other capabilities
     we will not explore.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的机器人将非常基础，只需监听是否有人在消息中提到我们的机器人。这被称为 `AppMention` 事件。Slack 支持其他事件，并且有专门针对命令的事件，您可以安装它们。在我们的例子中，我们只希望在有人提到我们的机器人时作出回应，但
+    `slack-go` 还有许多其他功能我们不会在此探讨。
 - en: 'Let''s create a package called `bot` and add some imports:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们创建一个名为 `bot` 的包并添加一些导入：
 - en: '[PRE1]'
+  id: totrans-66
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Details on our third-party package are as follows:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的第三方包的详细信息如下：
 - en: '`slack` is what is used to build a basic client.'
+  id: totrans-68
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`slack` 是用来构建基础客户端的。'
 - en: '`slackevents` details the various events we can receive.'
+  id: totrans-69
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`slackevents` 详细说明了我们可以接收到的各种事件。'
 - en: '`socketmode` provides a method of connecting to Slack from a bot that is behind
     a firewall.'
+  id: totrans-70
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`socketmode` 提供了一种从防火墙后的机器人连接到 Slack 的方法。'
 - en: 'Let''s create a type that can handle an event we receive:'
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们创建一个类型来处理我们接收到的事件：
 - en: '[PRE2]'
+  id: totrans-72
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: '`HandleFunc` receives a message that can be used to write to channels and get
     information about the message that was received.'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: '`HandleFunc` 接收一条消息，可以用于向频道发送消息并获取关于接收到的消息的信息。'
 - en: We have also defined a register type that is used to register a `HandleFunc`
     with a `HandleFunc`.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还定义了一个注册类型，用于将 `HandleFunc` 注册到 `HandleFunc`。
 - en: 'Let''s define the `Message` type:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义 `Message` 类型：
 - en: '[PRE3]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: This contains information about the Slack user who sent the message, information
     about the `AppMention` event, and the cleaned-up text that the user sent (removes
     the `@User` text and leading/trailing spaces).
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 这包含了发送消息的 Slack 用户的信息、`AppMention` 事件的信息以及用户发送的清理后的文本（去除 `@User` 文本以及前后空格）。
 - en: 'Now, let''s define our `Bot` type and its constructor:'
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们定义我们的 `Bot` 类型及其构造函数：
 - en: '[PRE4]'
+  id: totrans-79
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: This code contains our clients that will be used to interact with Slack, a context
     for canceling our bot's goroutines, `defaultHandler` for handling the case where
     no regex matches happen, and a list of registrations that we check on any message
     receipt.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码包含了我们将用于与 Slack 交互的客户端、用于取消我们机器人 goroutine 的上下文、`defaultHandler` 用于处理没有匹配正则表达式的情况，以及我们在接收任何消息时检查的注册列表。
 - en: 'We now need some methods to start and stop our bot:'
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们需要一些方法来启动和停止我们的机器人：
 - en: '[PRE5]'
+  id: totrans-82
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: This simply starts our event loop and calls `RunContext` to listen to our event
     stream. We cancel our bot using the supplied `context.Bot`. `Start()` blocks until
     `Stop()` is called.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 这只是启动我们的事件循环，并调用 `RunContext` 来监听我们的事件流。我们使用提供的 `context.Bot` 来取消我们的机器人。`Start()`
+    会阻塞，直到调用 `Stop()`。
 - en: 'Our next method will allow us to register our regexes and their handlers:'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的下一个方法将允许我们注册我们的正则表达式及其处理程序：
 - en: '[PRE6]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: In this code, if we don't supply a regex, then `HandleFunc` is used as the default
     handler when no regexes match. You can only have one default handler. When the
     bot checks a message, it matches regexes in the order they are added; the first
     match wins.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这段代码中，如果我们没有提供正则表达式，则`HandleFunc`作为默认处理程序，在没有匹配正则表达式时使用。你只能拥有一个默认处理程序。当机器人检查消息时，它会按添加顺序匹配正则表达式，第一个匹配的胜出。
 - en: 'Now, let''s look at our event loop:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们来看看我们的事件循环：
 - en: '[PRE7]'
+  id: totrans-88
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'Here, we pull events off the `socketmode` client. We switch on the type of
     event. For our purposes, we are only interested in two types of events:'
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们从`socketmode`客户端中提取事件。我们根据事件类型进行切换。对于我们的目的，我们只关心两种类型的事件：
 - en: Error connecting to the WebSocket
+  id: totrans-90
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 连接WebSocket时出错
 - en: An `EventTypeEventsAPI` event
+  id: totrans-91
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`EventTypeEventsAPI`事件'
 - en: An `EventTypeEventsAPI` type is an interface that we turn into its concrete
     type, `slackevents.EventsAPIEvent`. We acknowledge receipt of the event and send
     the event to be handled by a method called `appMentioned()`.
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: '`EventTypeEventsAPI`类型是一个接口，我们将其转换为具体类型`slackevents.EventsAPIEvent`。我们确认接收到事件，并将事件发送到由`appMentioned()`方法处理。'
 - en: 'There are other events you might be interested in. You can find a list of the
     official events supported by Slack here: [https://api.slack.com/events](https://api.slack.com/events).'
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 还有其他你可能感兴趣的事件。你可以在这里找到Slack支持的官方事件列表：[https://api.slack.com/events](https://api.slack.com/events)。
 - en: 'The Go package event support may be slightly different and can be found here:
     [https://pkg.go.dev/github.com/slack-go/slack/slackevents#pkg-constants](https://pkg.go.dev/github.com/slack-go/slack/slackevents#pkg-constants).'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: Go包事件支持可能会略有不同，可以在这里找到：[https://pkg.go.dev/github.com/slack-go/slack/slackevents#pkg-constants](https://pkg.go.dev/github.com/slack-go/slack/slackevents#pkg-constants)。
 - en: 'Now, let''s build `appMentioned()`:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们构建`appMentioned()`：
 - en: '[PRE8]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: Slack events are events wrapped inside events, so it takes a little decoding
     to get to the information you need. This code looks at the event data type and
     uses that information to know what type to decode.
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: Slack事件是嵌套在事件中的事件，因此需要进行一些解码才能获取到你需要的信息。这个代码查看事件数据类型，并利用这些信息来确定解码的类型。
 - en: For `appMentioned()`, this should always be `slackevents.CallbackEvent`, which
     decodes its `.Data` field into a `*slackevents.EventsAPICallbackEvent` type.
+  id: totrans-98
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于`appMentioned()`，它应该始终是`slackevents.CallbackEvent`，该类型将其`.Data`字段解码为`*slackevents.EventsAPICallbackEvent`类型。
 - en: That has `.InnerEvent`, which can decode into a few other event types. We are
     only interested if it decodes to `*slackevents.AppMentionEvent`.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 它有`.InnerEvent`，可以解码成其他几种事件类型。我们只关心它是否解码为`*slackevents.AppMentionEvent`。
 - en: If it does, we call another internal method called `makeMsg()` that returns
     the message type we defined earlier. We are going to skip the `makeMsg()` implementation,
     as it has some deep JSON data conversions that, due to the nature of JSON, are
     a little convoluted and uninteresting. You can just lift it from the linked code.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果是这样，我们调用另一个内部方法`makeMsg()`，该方法返回我们之前定义的消息类型。我们将跳过`makeMsg()`的实现，因为它涉及一些复杂的JSON数据转换，JSON的特性使得它有点繁琐且无趣。你可以直接从链接的代码中提取它。
 - en: We then loop through our regexes looking for a match. If we find one, we call
     `HandleFunc` on that message and stop processing. If we don't find a match, we
     call `defaultHandler`, if it exists.
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们通过正则表达式循环查找匹配项。如果找到匹配项，我们在该消息上调用`HandleFunc`并停止处理。如果没有找到匹配项，则调用`defaultHandler`，如果存在的话。
 - en: Now, we have a bot that can listen for when it is mentioned in a message and
     dispatch the message to a handler. Let's tie that into making some calls to our
     Ops service.
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们有了一个可以监听何时在消息中提到它的机器人，并将消息分发到处理程序。让我们将其与调用Ops服务结合起来。
 - en: Creating event handlers
+  id: totrans-103
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 创建事件处理程序
 - en: The `HandleFunc` type we defined in the last sections handles the core of our
     functionality. This is also where we decide on how we want to turn a bunch of
     text into a command to run.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在上一部分定义的`HandleFunc`类型处理了我们功能的核心。这也是我们决定如何将一堆文本转换为要运行的命令的地方。
 - en: 'There are a few ways to interpret raw text:'
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 有几种方法可以解释原始文本：
 - en: Regexes via the `regexp` package
+  id: totrans-106
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过`regexp`包使用正则表达式
 - en: String manipulation via the `strings` package
+  id: totrans-107
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过`strings`包进行字符串操作
 - en: Designing or using a lexer and parser
+  id: totrans-108
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设计或使用词法分析器和解析器
 - en: Regexes and string manipulation are the fastest ways for an application of this
     type where we have single lines of text.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 正则表达式和字符串操作是这种类型的应用程序中最快的方式，因为我们处理的是单行文本。
 - en: 'Lexers and parsers are great when you need to deal with complex inputs or multi-line
     text and cannot afford mistakes. This is the method that compilers use to read
     your textual code into instructions that eventually lead to a compiled binary.
     Rob Pike has a great talk on writing one in Go that you can view here: [https://www.youtube.com/watch?v=HxaD_trXwRE](https://www.youtube.com/watch?v=HxaD_trXwRE).
     The downside is that they are tedious to build and hard to train new people on.
     If you need to watch that video a few times to get the concept, you are not alone.'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你需要处理复杂的输入或多行文本，并且不能容忍错误时，词法分析器和语法分析器非常有用。这是编译器用来将你的文本代码读入指令并最终生成编译二进制文件的方法。Rob
+    Pike 有一个很棒的关于在 Go 中编写词法分析器和语法分析器的讲座，你可以在这里观看：[https://www.youtube.com/watch?v=HxaD_trXwRE](https://www.youtube.com/watch?v=HxaD_trXwRE)。缺点是它们很繁琐且难以训练新人员。如果你需要看几遍这个视频才能理解概念，你并不孤单。
 - en: Case Study – Regexes versus Lexer and Parser
+  id: totrans-111
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 案例研究——正则表达式与词法分析器和语法分析器
 - en: One of the biggest jobs for network automation is getting information out of
     different devices made by different vendors. Some vendors provide information
     via the **Simple Network Management Protocol** (**SNMP**), but for many types
     of information or debugging, you have to go to the CLI to get information.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 网络自动化的最大挑战之一是从不同厂商制造的不同设备中获取信息。有些厂商通过**简单网络管理协议**（**SNMP**）提供信息，但对于许多类型的信息或调试，你必须通过
+    CLI 来获取数据。
 - en: On newer platforms, this can come in the form of JSON or XML. Many platforms
     don't have structured output, and sometimes, the XML is so badly formed that it
     is easier to use unstructured data.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 在较新的平台上，这可能以 JSON 或 XML 的形式出现。许多平台没有结构化的输出，有时 XML 格式错误到无法使用结构化数据时，反而更容易使用非结构化数据。
 - en: At Google, we started with writing tools that used regexes. Regexes were buried
     in every individual tool, which lead to multiple implementations of data wrangling
     for the same data. This was a huge waste of effort and introduced different bugs
     to different tools.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 Google，我们从使用正则表达式（regexes）的写作工具开始。正则表达式被埋在每一个单独的工具中，导致了对相同数据进行多次数据处理的实现。这是巨大的工作浪费，并且给不同的工具引入了不同的
+    bug。
 - en: Router output can be complex, so eventually, a special regex engine was made
     to deal with these complex multi-line regexes and a central repository was created
     where command output regexes could be found.
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 路由器的输出可能很复杂，因此最终开发了一个专门的正则表达式引擎来处理这些复杂的多行正则表达式，并创建了一个中央存储库，在那里可以找到命令输出的正则表达式。
 - en: Unfortunately, we were trying to use a tool that wasn't suited for the job.
     That package was so complex that it required its own debugger for development.
     More importantly, it would fail silently, inputting zero values in fields when
     a vendor would change the output slightly on new OS releases. This caused a few
     not-so-minor issues in production.
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 不幸的是，我们当时在尝试使用一个不适合此任务的工具。那个包非常复杂，开发时需要自己的调试器。更重要的是，它会在没有任何提示的情况下失败，当厂商在新的操作系统版本中稍微改变输出时，它会在字段中输入零值。这在生产中导致了一些不小的问题。
 - en: We eventually moved to a lexer and parser that would always detect when the
     output was not as expected. We didn't want it to be quite as complex as a full
     lexer and parser, so we wrote a package that allowed very limited regex usage
     and validation of many of the data fields.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们最终转向了一个词法分析器和语法分析器，它可以始终检测到输出是否与预期不符。我们不希望它像一个完整的词法分析器和语法分析器那样复杂，所以我们编写了一个包，允许非常有限的正则表达式使用，并验证许多数据字段。
 - en: There is a certain amount of love/hate for that package when you have to interpret
     new data with it. The great thing is it doesn't fail silently on changes, it is
     lightning fast, requires minimal effort to update, and uses minimal memory.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 当你必须使用这个包来解释新的数据时，大家对它有一定的爱恨情仇。最棒的地方是它不会在变更时静默失败，执行速度飞快，更新需要的工作量很小，并且内存占用极少。
 - en: 'But it does take a while to get your brain around the concepts and it takes
     a lot longer to write the matches. There is a public version I recreated after
     I left Google called the Half-Pike that you can find here: [https://github.com/johnsiilver/halfpike](https://github.com/johnsiilver/halfpike).'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 但要真正理解这些概念需要一些时间，并且编写匹配项需要更长的时间。我在离开 Google 后重新制作了一个公开版本，名为 Half-Pike，你可以在这里找到：[https://github.com/johnsiilver/halfpike](https://github.com/johnsiilver/halfpike)。
 - en: 'For our first handler, we want to return a list of traces to the user. The
     main command is `list` `traces` followed by optional arguments. For options, we
     want the following:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于我们的第一个处理器，我们想要返回一个追踪列表给用户。主要命令是 `list` `traces`，后面跟可选参数。对于选项，我们需要以下内容：
 - en: '`operation=<operation name>`'
+  id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`operation=<operation name>`'
 - en: '`start=<mm/dd/yyyy-hh:mm>`'
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`start=<mm/dd/yyyy-hh:mm>`'
 - en: '`end=<mm/dd/yyyy-hh:mm, now>`'
+  id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`end=<mm/dd/yyyy-hh:mm, now>`'
 - en: '`limit=<number of items>`'
+  id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`limit=<number of items>`'
 - en: '`tags=<[tag1,tag2]>`'
+  id: totrans-125
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`tags=<[tag1,tag2]>`'
 - en: These options allow us to limit what traces we see. Maybe we only want to see
     traces for some certain period and only want the ones we tagged with `error`.
     This allows us to do filtered diagnostics.
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些选项允许我们限制查看的追踪范围。也许我们只想查看某个特定时期的追踪，并且只想看到我们标记为`error`的追踪。这让我们能够进行筛选的诊断。
 - en: 'A quick example of using this command would be as follows:'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用这个命令的一个简单示例如下：
 - en: '[PRE9]'
+  id: totrans-128
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'All of our handlers will be talking to the Ops service via gRPC. We will create
     a type that can hold all the `HandlFunc` types we define and the clients they
     will need to access our Ops service and Slack:'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的所有处理程序将通过 gRPC 与 Ops 服务进行通信。我们将创建一个类型，能够保存我们定义的所有`HandleFunc`类型及它们需要的客户端来访问我们的
+    Ops 服务和 Slack：
 - en: '[PRE10]'
+  id: totrans-130
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: This defines our basic type that will hold a single client to our Ops service.
     We will attach methods that implement the `HandleFunc` type. It also defines a
     `write()` method for writing text back to the user in Slack.
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 这定义了我们的基本类型，它将保存单个客户端与我们的 Ops 服务。我们将附加实现`HandleFunc`类型的方法。它还定义了一个`write()`方法，用于将文本写回到
+    Slack 用户端。
 - en: 'Now, we need to define a package level variable for the regex we need to tease
     apart our options. We define it at the package level so that we only need to compile
     it once:'
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要定义一个包级变量，用于正则表达式，它帮助我们解析选项。我们在包级别定义它，这样我们只需编译一次：
 - en: '[PRE11]'
+  id: totrans-133
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: You can see how our regex matches a key/value pair separated by `=`. The `opt`
     type is meant to hold our option key and value once we tease it apart with the
     regex.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以看到我们的正则表达式如何匹配一个以`=`分隔的键值对。`opt`类型用于在我们用正则表达式解析后保存我们的选项键和值。
 - en: 'Now for the handler that lists the traces we specify with our filters:'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在是处理程序，它列出我们通过过滤器指定的追踪：
 - en: '[PRE12]'
+  id: totrans-136
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: '`ListTraces` implements the `HandleFunc` type we created earlier. We split
     the list traces text from `Message.Text` that the user sent and remove any excess
     space at the beginning or end using `strings.TrimSpace()`. We then use our regex
     to create all our options.'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ListTraces`实现了我们之前创建的`HandleFunc`类型。我们从用户发送的`Message.Text`中分割出列表追踪文本，并使用`strings.TrimSpace()`去除前后多余的空格。然后，我们使用正则表达式创建所有的选项。'
 - en: 'Now, we need to process those options so we can send them to the Ops server:'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们需要处理这些选项，以便将它们发送到 Ops 服务器：
 - en: '[PRE13]'
+  id: totrans-139
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: This code loops through the options we teased from the command and appends call
     options for sending to the Ops service. If there are any errors, we write to Slack
     to let them know there was a problem.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码循环遍历我们从命令中解析出的选项，并附加调用选项以发送给 Ops 服务。如果有任何错误，我们会写入 Slack，通知他们出现了问题。
 - en: 'Finally, let''s make our gRPC call to the Ops service:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们调用 gRPC 来请求 Ops 服务：
 - en: '[PRE14]'
+  id: totrans-142
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: This code uses our Ops service client to get a list of traces with the options
     that we passed. We use an ASCII table writing package ([github.com/olekukonko/tablewriter](http://github.com/olekukonko/tablewriter))
     to write out our traces table.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码使用我们的 Ops 服务客户端获取带有我们传递选项的追踪列表。我们使用一个 ASCII 表格写入包（[github.com/olekukonko/tablewriter](http://github.com/olekukonko/tablewriter)）来输出我们的追踪表格。
 - en: 'But how do users know what commands they can send? This is handled by providing
     a help handler for the bot. We will create a map that will hold our various help
     messages and another variable that will hold a list of all commands in alphabetical
     order:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 但用户如何知道他们可以发送哪些命令呢？这是通过为机器人提供帮助处理程序来解决的。我们将创建一个映射，存储我们各种帮助消息，以及另一个变量，存储所有命令的字母顺序列表：
 - en: '[PRE15]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: Our help text is indexed in our `help` map. `init()` sets up a complete list
     of commands in `cmdList` during program initialization.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的帮助文本索引保存在我们的`help`映射中。`init()`在程序初始化时设置一个完整的命令列表`cmdList`。
 - en: 'Now, let''s use those commands in a handler that provides help text if a user
     passed `help` to our bot:'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们在一个处理程序中使用这些命令，如果用户向我们的机器人传递了`help`，则提供帮助文本：
 - en: '[PRE16]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: This code receives as input the command they want help with and outputs the
     help text if it exists. If they don't pass a command, it simply prints the list
     of commands we support.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码接收用户请求帮助的命令作为输入，并在存在帮助文本时输出。如果用户没有传递命令，它将简单地打印我们支持的命令列表。
 - en: 'If we don''t have a handler to handle a particular command (maybe they misspelled
     the command), we need a handler as the last resort:'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们没有处理特定命令的处理程序（可能是他们拼写错误了命令），我们需要一个作为最后手段的处理程序：
 - en: '[PRE17]'
+  id: totrans-151
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: This simply informs the user that we don't know what they want, as it is not
     something we support.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 这只是通知用户我们不知道他们想要什么，因为这是我们不支持的内容。
 - en: 'We have a minimum set of handlers, but we still need to have a way to register
     it with the bot:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经有了最基本的处理器集，但仍然需要一种方式将其与机器人注册：
 - en: '[PRE18]'
+  id: totrans-154
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: This takes in a bot and registers our three handlers with regexes that will
     are used to determine which handler to use.
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 这会接收一个机器人并注册我们三个使用正则表达式的处理器，用于确定应该使用哪个处理器。
 - en: 'Now, it''s time for our `main()` function:'
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，到了我们`main()`函数的时间：
 - en: '[PRE19]'
+  id: totrans-157
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'This creates our Ops object and registers any `HandleFunc` types we created
     with our bot. You can find the full code for the ChatOps bot here: [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/).'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 这会创建我们的Ops对象，并注册我们与机器人创建的任何`HandleFunc`类型。你可以在这里找到ChatOps机器人的完整代码：[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/)。
 - en: Now that we've seen the foundation of writing our bot, let’s setup our Slack
     application and run our example code.
+  id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经了解了编写机器人代码的基础，接下来设置我们的Slack应用并运行示例代码。
 - en: Creating our Slack application
+  id: totrans-160
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 创建我们的Slack应用
 - en: 'For the bot to interact with Slack, we need to set up a Slack application:'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了让机器人与Slack进行交互，我们需要设置一个Slack应用：
 - en: Navigate to [https://api.slack.com/apps](https://api.slack.com/apps) on your
     browser.
+  id: totrans-162
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在浏览器中访问[https://api.slack.com/apps](https://api.slack.com/apps)。
 - en: 'Here, you will need to click on the following button:'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，你需要点击以下按钮：
 - en: '![Figure 11.2 – Create New App button'
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.2 – 创建新应用按钮'
 - en: '](img/B17626_11_002.jpg)'
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_002.jpg)'
 - en: Figure 11.2 – Create New App button
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.2 – 创建新应用按钮
 - en: 'You will then be presented with the following dialog box:'
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 系统接着会显示以下对话框：
 - en: '![Figure 11.3 – Create an app options'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.3 – 创建应用选项'
 - en: '](img/B17626_11_003.jpg)'
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_003.jpg)'
 - en: Figure 11.3 – Create an app options
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.3 – 创建应用选项
 - en: 'Choose the **From an app manifest** option. This will present the following:'
+  id: totrans-171
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择**从应用清单创建**选项。系统将展示以下内容：
 - en: '![Figure 11.4 – Choosing a workspace'
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.4 – 选择工作区'
 - en: '](img/B17626_11_004.jpg)'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_004.jpg)'
 - en: Figure 11.4 – Choosing a workspace
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.4 – 选择工作区
 - en: Choose the workspace you created at the beginning of this section and then press
     **Create App**. Click the **Next** button.
+  id: totrans-175
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 选择你在本节开始时创建的工作区，然后点击**创建应用**。点击**下一步**按钮。
 - en: 'Copy the text from the file present at [https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/slack.manifest](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/slack.manifest)
     and paste it onto the screen that is shown as follows as YAML:'
+  id: totrans-176
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 从[https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/slack.manifest](https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/slack.manifest)的文件中复制文本，并将其粘贴到以下显示的页面中，格式为YAML：
 - en: '![Figure 11.5 – App manifest configuration'
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.5 – 应用清单配置'
 - en: '](img/B17626_11_005.jpg)'
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_005.jpg)'
 - en: Figure 11.5 – App manifest configuration
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.5 – 应用清单配置
 - en: The text you see in the preceding figure should be replaced with the text from
     the file. Click the **Next** button.
+  id: totrans-180
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 你在前面的图中看到的文本应替换为文件中的文本。点击**下一步**按钮。
 - en: 'You will be presented with a summary of the bots permissions, shown as follows:'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 系统会显示一个关于机器人权限的摘要，如下所示：
 - en: '![Figure 11.6 – Bot creation summary'
+  id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.6 – 机器人创建摘要'
 - en: '](img/B17626_11_006.jpg)'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_006.jpg)'
 - en: Figure 11.6 – Bot creation summary
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.6 – 机器人创建摘要
 - en: Click the **Create** button.
+  id: totrans-185
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 点击**创建**按钮。
 - en: 'This will move you to a page that is called **Basic Information**. Scroll down
     the page until you get to **App-Level Tokens**, as can be seen in the following
     figure:'
+  id: totrans-186
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 这将带你进入一个名为**基本信息**的页面。向下滚动页面，直到看到**应用级令牌**，如下图所示：
 - en: '![Figure 11.7 – App-level token list'
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.7 – 应用级令牌列表'
 - en: '](img/B17626_11_007.jpg)'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_007.jpg)'
 - en: Figure 11.7 – App-level token list
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.7 – 应用级令牌列表
 - en: 'Click the **Generate Token and Scopes** button. This will lead you to the following
     dialog box:'
+  id: totrans-190
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 点击**生成令牌和作用域**按钮。这将引导你进入以下对话框：
 - en: '![Figure 11.8 – App token creation'
+  id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.8 – 应用令牌创建'
 - en: '](img/B17626_11_008.jpg)'
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_008.jpg)'
 - en: Figure 11.8 – App token creation
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.8 – 应用令牌创建
 - en: Set the token name to `petstore-bot`.
+  id: totrans-194
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将令牌名称设置为`petstore-bot`。
 - en: Provide these scopes in the `connections:write` and `authorizations:read`. Now,
     click **Generate**.
+  id: totrans-195
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在`connections:write`和`authorizations:read`中提供这些作用域。现在，点击**生成**。
 - en: On the next screen, you will receive an app-level token. You will need to hit
     the **Copy** button and put the token somewhere for the time being.
+  id: totrans-196
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在下一个页面，你将获得一个应用级令牌。你需要点击**复制**按钮，并将令牌暂时保存到某个地方。
 - en: '![Figure 11.9 – App token information'
+  id: totrans-197
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.9 – 应用令牌信息'
 - en: '](img/B17626_11_009.jpg)'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_009.jpg)'
 - en: Figure 11.9 – App token information
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.9 – 应用令牌信息
 - en: In a production environment, you want to put this in some type of secure key
     store, such as Azure Key Vault or AWS Key Management Service. You will need to
     put it in a file called the `.env` file that you should never check into a repository.
     We will cover making this file in the *Running the applications* section.
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 在生产环境中，你应该将其存储在某种类型的安全密钥库中，如Azure Key Vault或AWS Key Management Service。你需要将其放入一个名为`.env`的文件中，并且绝不能将此文件提交到代码库中。我们将在*运行应用程序*部分中介绍如何制作此文件。
 - en: Note
+  id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: The key here is for a bot that was deleted right after this screenshot.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里的密钥是一个在截图之后被删除的机器人密钥。
 - en: Click the **Done** button.
+  id: totrans-203
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 点击**完成**按钮。
 - en: 'In the left menu pane, choose **OAuth and Permissions**. On the screen that
     looks like the following, click **Install to Workspace**:'
+  id: totrans-204
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在左侧菜单栏中，选择**OAuth 和权限**。在下面显示的屏幕中，点击**安装到工作区**：
 - en: '![Figure 11.10 – Install tokens in your workspace'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.10 – 在你的工作区安装令牌]'
 - en: '](img/B17626_11_010.jpg)'
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_010.jpg)'
 - en: Figure 11.10 – Install tokens in your workspace
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.10 – 在你的工作区安装令牌
 - en: There is a dialog box that asks for a channel to post as an app. Choose any
     channel you like and hit **Allow**.
+  id: totrans-208
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 会弹出一个对话框，询问要将应用发布到哪个频道。选择你喜欢的任何频道并点击**允许**。
 - en: You are now back to **OAuth and Permissions**, but you will see your bot's **auth
     token** listed. Hit the **Copy** button and store this where you stored the app
     token from earlier.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 你现在回到**OAuth 和权限**页面，但你会看到你的机器人**身份验证令牌**已列出。点击**复制**按钮，并将其存储在你之前存储应用令牌的位置。
 - en: Running the applications
+  id: totrans-210
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 运行应用程序
 - en: 'Here, we are going to use Docker Compose to turn up our Open Telemetry services,
     Jaeger, Prometheus, and our Petstore application. Once those are running we will
     use Go to compile and run our ChatOps service that implements the chatbot connected
     to Slack:'
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们将使用Docker Compose启动我们的Open Telemetry服务、Jaeger、Prometheus和我们的Petstore应用程序。启动这些服务后，我们将使用Go编译并运行实现与Slack连接的聊天机器人服务（ChatOps）：
 - en: In the `Go-for-DevOps` repository ([https://github.com/PacktPublishing/Go-for-DevOps/](https://github.com/PacktPublishing/Go-for-DevOps/)),
     go to the `chapter/11` directory.
+  id: totrans-212
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 在`Go-for-DevOps`代码库（[https://github.com/PacktPublishing/Go-for-DevOps/](https://github.com/PacktPublishing/Go-for-DevOps/)）中，进入`chapter/11`目录。
 - en: 'Turn up the Docker containers:'
+  id: totrans-213
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 启动Docker容器：
 - en: '[PRE20]'
+  id: totrans-214
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: Once the environment is running, change to the `chapter/11/chatops` directory.
+  id: totrans-215
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 一旦环境启动，切换到`chapter/11/chatops`目录。
 - en: 'You will need to create a `.env` file in this directory that contains the following:'
+  id: totrans-216
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 你需要在此目录中创建一个`.env`文件，其中包含以下内容：
 - en: '[PRE21]'
+  id: totrans-217
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: These were generated when we set up the Slack app.
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些是我们在设置Slack应用程序时生成的。
 - en: 'Run the ChatOps server with the following command:'
+  id: totrans-219
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用以下命令运行ChatOps服务器：
 - en: '[PRE22]'
+  id: totrans-220
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'You should be able to see the following message printed to standard output:'
+  id: totrans-221
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 你应该能够看到以下消息输出到标准输出：
 - en: '[PRE23]'
+  id: totrans-222
   prefs:
   - PREF_IND
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: In the background, there is a demonstration client that is adding pets to the
     pet store and doing searches for pets (some searches will cause errors). The service
     is set to Float sampling, so not every call will generate a trace.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 在后台，有一个演示客户端正在向宠物商店添加宠物并进行宠物搜索（某些搜索可能会导致错误）。服务设置为浮动采样，因此并非每次调用都会生成跟踪。
 - en: 'In another terminal, you can interact with the pet store by using the CLI application.
     This will let you add your own pets, delete pets, and search for pets with a filter.
     That client can be found here: `chapter/11/petstore/client/cli/petstore`. You
     can find instructions on its use by running the following:'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 在另一个终端中，你可以通过使用CLI应用程序与宠物商店进行交互。这将允许你添加宠物、删除宠物以及使用过滤器搜索宠物。该客户端可以在以下路径找到：`chapter/11/petstore/client/cli/petstore`。你可以通过运行以下命令找到使用说明：
 - en: '[PRE24]'
+  id: totrans-225
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: Traces can be observed at `http://127.0.0.1:16686/search`.
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在`http://127.0.0.1:16686/search`观察到跟踪。
 - en: Prometheus metrics can be queried at `http://127.0.0.1:9090/graph`.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 可以在`http://127.0.0.1:9090/graph`查询Prometheus指标。
 - en: To interact with our ChatOps bot, you need to open Slack and add the bot to
     a channel. You can do this simply by doing a `@PetStore` mention in a channel.
     Slack will ask if you would like to add the bot to the channel.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 要与我们的ChatOps机器人进行交互，你需要打开Slack并将机器人添加到一个频道中。你可以通过在频道中提到`@PetStore`来做到这一点。Slack会询问你是否希望将机器人添加到频道中。
 - en: 'Once that happens, you can try out various operations. Start by asking the
     bot for help, as follows:'
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦发生这种情况，你可以尝试各种操作。首先，可以向机器人请求帮助，操作如下：
 - en: '![Figure 11.11 – Basic help command output'
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.11 – 基本帮助命令输出]'
 - en: '](img/B17626_11_011.jpg)'
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_011.jpg)'
 - en: Figure 11.11 – Basic help command output
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.11 – 基本帮助命令输出
 - en: 'Let''s ask for some help on how we can list some traces:'
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们请求一些帮助，看看如何列出一些跟踪：
 - en: '![Figure 11.12 – Help output for the list traces command'
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.12 – 列出跟踪命令的帮助输出'
 - en: '](img/B17626_11_012.jpg)'
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_012.jpg)'
 - en: Figure 11.12 – Help output for the list traces command
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.12 – 列出跟踪命令的帮助输出
 - en: 'How about we ask the system to give us five recent traces:'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
+  zh: 那我们不妨请求系统给我们五个最近的追踪记录：
 - en: '![Figure 11.13 – Output from a command to list the last five traces'
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.13 – 列出最后五个追踪记录的命令输出'
 - en: '](img/B17626_11_013.jpg)'
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_013.jpg)'
 - en: Figure 11.13 – Output from a command to list the last five traces
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.13 – 列出最后五个追踪记录的命令输出
 - en: 'We can also ask about a particular trace:'
+  id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们也可以查询某个特定的追踪记录：
 - en: '![Figure 11.14 – Output showing a specific trace''s data'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: '![图 11.14 – 显示特定追踪数据的输出'
 - en: '](img/B17626_11_014.jpg)'
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
+  zh: '](img/B17626_11_014.jpg)'
 - en: Figure 11.14 – Output showing a specific trace's data
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 11.14 – 显示特定追踪数据的输出
 - en: Note
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: You cannot directly paste a trace ID copied from list traces. This is because
     those are hyperlinks; you need to remove the rich text from an ID if you want
     to directly paste it for `show trace`.
+  id: totrans-246
   prefs: []
   type: TYPE_NORMAL
+  zh: 你不能直接粘贴从列出跟踪中复制的追踪 ID。因为这些是超链接；如果你想直接粘贴到 `show trace` 中，需要移除 ID 中的富文本。
 - en: There are more options for you to play with in the bot. Give them a try.
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 机器人还有更多选项供你玩耍。试试看吧。
 - en: This ChatOps application is just the tip of the iceberg. You can make the ChatOps
     application more powerful than the one we have here. You can have it display graphs,
     grab profile information from a `pprof` dump from the service and give you a link
@@ -987,17 +1495,25 @@
     to people who are on call by having the Ops service send messages to the ChatOps
     service, and the use of ChatOps increases observability of what your service is
     doing and what operations are being done against the service.
+  id: totrans-248
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个 ChatOps 应用只是冰山一角。你可以将 ChatOps 应用做得比我们这里的更强大。你可以让它显示图表，从服务的 `pprof` 转储中抓取配置文件信息并给你一个链接来查看，部署新版本的应用程序，或者回滚版本。只需将文件拖入
+    Slack 窗口（例如配置更改），即可将文件推送到服务。像警报这样的重要事件可以通过让 Ops 服务向 ChatOps 服务发送消息的方式广播给值班人员，使用
+    ChatOps 还能增加对服务运行情况和所执行操作的可观察性。
 - en: And as a side effect, unlike tools that must be run on a laptop or desktop,
     Slack and many other chat applications have mobile versions, so you can interact
     or do emergency operations with your cell phone with no extra cost in development.
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
+  zh: 另外，和必须在笔记本电脑或台式机上运行的工具不同，Slack 和许多其他聊天应用程序都有移动版，因此你可以通过手机与之交互或进行紧急操作，而无需额外的开发成本。
 - en: Summary
+  id: totrans-250
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 摘要
 - en: 'In [*Chapter 9*](B17626_09.xhtml#_idTextAnchor461), *Observability with OpenTelemetry*,
     we explored how using Open Telemetry can provide observability into your application
     and the applications it depends on. We discussed how to set up telemetry for your
@@ -1008,8 +1524,14 @@
     chapter, we looked at the architecture for interacting with a service. We built
     an interaction layer using Slack to do operations such as filtering traces, getting
     the currently deployed version, and showing alerts.'
+  id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 在 [*第 9 章*](B17626_09.xhtml#_idTextAnchor461)，*通过 OpenTelemetry 实现可观察性*，我们探讨了如何使用
+    Open Telemetry 提供对应用程序及其依赖应用程序的可观察性。我们讨论了如何使用两种最流行的后端：Jaeger 和 Prometheus（这两者都是用
+    Go 语言编写的）来为应用程序设置遥测。在 [*第 10 章*](B17626_10.xhtml#_idTextAnchor496)，*使用 GitHub
+    Actions 自动化工作流*，我们展示了如何使用 GitHub Actions 自动化代码部署，并使用 Go 添加自定义操作。最后，在本章中，我们研究了与服务交互的架构。我们使用
+    Slack 构建了一个交互层，进行诸如过滤追踪记录、获取当前部署版本以及显示警报等操作。
 - en: In the next set of chapters, we will talk about how to use Go, and tools written
     in Go, to ease the burden of working in the cloud. This will cover building standard
     images that can be deployed to VMs or other node infrastructure. We will show
@@ -1017,5 +1539,8 @@
     on the market today. Finally, we will guide you on how you can design DevOps workflows
     and systems to protect yourself from the chaos that is inherent in running operations
     against infrastructure.
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: 在接下来的章节中，我们将讨论如何使用 Go 语言及其编写的工具来减轻在云端工作的负担。内容将涵盖构建可以部署到虚拟机或其他节点基础设施的标准镜像。我们还将展示如何扩展
+    Kubernetes，当前市场上最流行的容器编排系统。最后，我们将指导你如何设计 DevOps 工作流和系统，以保护自己免受在基础设施上运行操作时所固有的混乱。
