@@ -2319,21 +2319,25 @@
   id: totrans-319
   prefs: []
   type: TYPE_NORMAL
+  zh: 第二段代码使用在第一段代码中获取的 AMI 创建了一个 AWS EC2 实例。它将实例类型设置为`t3.micro`，这是一种适合测试目的的小型实例类型。
 - en: It also adds a tag to the EC2 instance with a key called `Name` and a value
     called `TestInstance` so that it can easily be identified in the AWS Management
     Console.
   id: totrans-320
   prefs: []
   type: TYPE_NORMAL
+  zh: 它还为 EC2 实例添加了一个标签，键名为`Name`，值为`TestInstance`，这样它就能在 AWS 管理控制台中轻松识别。
 - en: 'You can read more about the `aws_ami` data resource in the documentation: [https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami).'
   id: totrans-321
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以在文档中阅读更多关于`aws_ami`数据资源的内容：[https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami)。
 - en: 'After making this modification, we can run `terraform plan` and see whether
     something changes:'
   id: totrans-322
   prefs: []
   type: TYPE_NORMAL
+  zh: 做了这个修改后，我们可以运行`terraform plan`并查看是否有所变化：
 - en: '[PRE67]'
   id: totrans-323
   prefs: []
@@ -2348,21 +2352,27 @@
   id: totrans-324
   prefs: []
   type: TYPE_NORMAL
+  zh: 计划成功执行，看起来它找到了一个最近的适用于 Ubuntu Linux 22.04 的 AMI。我们需要考虑一些其他问题，尤其是如果我们想确保能够连接到这个新的
+    EC2 实例。 当然，如果我们应用更改，它会被创建，但我们目前没有办法连接到它。首先，让我们将 EC2 实例连接到正确的网络：我们将使用一个默认的 VPC
+    和一个公有子网，这样我们就能直接连接到这个实例。
 - en: 'To figure out the ID of the default VPC and a public subnet, once again, we
     will use a data resource:'
   id: totrans-325
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了找出默认 VPC 和公有子网的 ID，我们将再次使用数据资源：
 - en: '**VPC** **documentation**: [https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc%20)'
   id: totrans-326
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**VPC** **文档**：[https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc)'
 - en: '**Subnet** **documentation**: [https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets%20)'
   id: totrans-327
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**子网** **文档**：[https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets)'
 - en: The question is whether we want to automatically put all created instances in
     a default VPC (and a public subnet) or not. Usually, the answer to this question
     is *no*. In that case, we will need to add some variables to be passed to this
@@ -2370,11 +2380,13 @@
   id: totrans-328
   prefs: []
   type: TYPE_NORMAL
+  zh: 问题是我们是否希望将所有创建的实例自动放入默认的 VPC（和公有子网）。通常，这个问题的答案是*否*。在这种情况下，我们需要添加一些变量并将其传递给这个模块。
 - en: 'Let’s add another file to the root module, in which we will put all the data
     resources, called `data.tf`:'
   id: totrans-329
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们向根模块中添加另一个文件，在这个文件中放置所有的数据资源，命名为`data.tf`：
 - en: '[PRE68]'
   id: totrans-330
   prefs: []
@@ -2385,6 +2397,7 @@
   id: totrans-331
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们可以在模块中创建一个输入变量。返回到`modules/aws_ec2`目录并编辑`variables.tf`文件：
 - en: '[PRE69]'
   id: totrans-332
   prefs: []
@@ -2394,6 +2407,7 @@
   id: totrans-333
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，当你运行`terraform plan`时，你会看到以下错误：
 - en: '[PRE70]'
   id: totrans-334
   prefs: []
@@ -2405,6 +2419,7 @@
   id: totrans-335
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们创建了一个必需的变量，我们需要将其提供给模块。让我们通过编辑根模块中的`main.tf`文件（`aws/eu-central-1`目录）来完成：
 - en: '[PRE71]'
   id: totrans-336
   prefs: []
@@ -2417,6 +2432,7 @@
   id: totrans-337
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意`data.aws_subnets.public.ids[0]`。我们使用了列表表示法，在这里我们选择了列表中的第一个元素（它是一个字符串，因为模块期望它是字符串）。这是因为有多个子网，`aws_subnets`为我们返回了这些子网的列表。
 - en: Running a plan again should give us one resource to be added. Great! Now, our
     instance will get a public IP address we can connect to. But we’re still missing
     a firewall rule that will allow us to connect to port `22` (SSH). Let’s create
@@ -2424,6 +2440,8 @@
   id: totrans-338
   prefs: []
   type: TYPE_NORMAL
+  zh: 再次运行计划应该会给我们添加一个资源。太好了！现在，我们的实例将获得一个可以连接的公网 IP 地址。但我们仍然缺少一个防火墙规则，这个规则允许我们连接到端口`22`（SSH）。让我们创建一个**安全**
+    **组**（**SG**）。
 - en: 'Again, we could decide to create an SG in the root module, which would allow
     us to modify it without changing the EC2 module. Alternatively, we could add an
     SG inside the EC2 module, which would mean that the module would have full control
@@ -2435,6 +2453,7 @@
   id: totrans-339
   prefs: []
   type: TYPE_NORMAL
+  zh: 再次提醒，我们可以选择在根模块中创建一个安全组，这样我们就可以在不更改EC2模块的情况下修改它。或者，我们可以将安全组添加到EC2模块中，这意味着该模块将完全控制它，但会缺少一些灵活性。还可以创建一个同时执行两者的模块：从根模块注入一个安全组并使用模块中预定义的安全组，但这超出了本章的范围。在本例中，为了简化起见，我们将在模块内部创建一个安全组。
 - en: 'To create an SG, we will use the `aws_security_group` resource, which requires
     a VPC ID. There are two possibilities: we will need to introduce another variable
     to our EC2 module, or we will use another data resource to automatically get the
@@ -2443,6 +2462,8 @@
   id: totrans-340
   prefs: []
   type: TYPE_NORMAL
+  zh: 要创建一个安全组（SG），我们将使用`aws_security_group`资源，它需要一个VPC ID。有两种可能性：我们需要向EC2模块引入另一个变量，或者使用另一个数据资源从提供的子网自动获取VPC
+    ID。这次，采用更优雅的解决方案是使用数据资源。让我们将其添加到模块中的`main.tf`：
 - en: '[PRE72]'
   id: totrans-341
   prefs: []
@@ -2452,6 +2473,7 @@
   id: totrans-342
   prefs: []
   type: TYPE_NORMAL
+  zh: 有了这个配置，我们现在可以添加一个安全组了：
 - en: '[PRE73]'
   id: totrans-343
   prefs: []
@@ -2462,39 +2484,46 @@
   id: totrans-344
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述代码创建了一个允许SSH流量通过的AWS安全组（SG），以连接我们之前创建的EC2实例。
 - en: The `aws_security_group` resource is used to create an SG for the EC2 instance.
     It sets the name of the SG to `TestInstanceSG` and provides a brief description.
   id: totrans-345
   prefs: []
   type: TYPE_NORMAL
+  zh: '`aws_security_group`资源用于为EC2实例创建一个安全组。它将安全组的名称设置为`TestInstanceSG`，并提供简短的描述。'
 - en: The `vpc_id` attribute is set to the VPC ID of the current subnet. It uses the
     `aws_subnet` data source called `current` to fetch the current subnet’s VPC ID.
   id: totrans-346
   prefs: []
   type: TYPE_NORMAL
+  zh: '`vpc_id`属性被设置为当前子网的VPC ID。它使用名为`current`的`aws_subnet`数据源来获取当前子网的VPC ID。'
 - en: The `ingress` block defines the inbound rules for the security group. In this
     case, it allows SSH traffic from any IP address (`0.0.0.0/0`) by specifying `from_port`,
     `to_port`, `protocol`, and `cidr_blocks`.
   id: totrans-347
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ingress`块定义了安全组的入站规则。在本例中，它通过指定`from_port`、`to_port`、`protocol`和`cidr_blocks`，允许来自任何IP地址（`0.0.0.0/0`）的SSH流量。'
 - en: The `egress` block defines the outbound rules for the security group. In this
     case, it allows all outbound traffic by specifying `from_port`, `to_port`, `protocol`,
     and `cidr_blocks`. It also allows all IPv6 traffic by specifying `ipv6_cidr_blocks`.
   id: totrans-348
   prefs: []
   type: TYPE_NORMAL
+  zh: '`egress`块定义了安全组的出站规则。在本例中，它通过指定`from_port`、`to_port`、`protocol`和`cidr_blocks`允许所有出站流量。它还通过指定`ipv6_cidr_blocks`来允许所有IPv6流量。'
 - en: The `tags` attribute sets a tag for the SG with a key called `Name` and a value
     called `TestInstanceSG` so that it can be easily identified in the AWS Management
     Console.
   id: totrans-349
   prefs: []
   type: TYPE_NORMAL
+  zh: '`tags`属性为安全组设置一个标签，键为`Name`，值为`TestInstanceSG`，这样可以方便地在AWS管理控制台中进行识别。'
 - en: 'Now, we’re ready to attach this SG to our instance. We will need to use the
     `security_groups` option for the `aws_instance` resource:'
   id: totrans-350
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们准备将此安全组附加到我们的实例。我们需要在`aws_instance`资源中使用`security_groups`选项：
 - en: '[PRE74]'
   id: totrans-351
   prefs: []
@@ -2504,6 +2533,7 @@
   id: totrans-352
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，运行`terraform plan`后，您将看到两个需要添加的资源：
 - en: '[PRE75]'
   id: totrans-353
   prefs: []
@@ -2517,20 +2547,24 @@
   id: totrans-354
   prefs: []
   type: TYPE_NORMAL
+  zh: 在此时，我们需要将我们的公有SSH密钥添加到AWS并配置EC2使用它作为默认的Ubuntu Linux用户（`ubuntu`）。假设您已经生成了SSH密钥，我们将创建一个包含该密钥的变量，创建一个资源使该密钥可用于EC2实例，最后将其添加到实例配置中。
 - en: Important note
   id: totrans-355
   prefs: []
   type: TYPE_NORMAL
+  zh: 重要说明
 - en: In some AWS regions, it’s required to use an old RSA key format. Whenever available,
     we recommend the newest format according to up-to-date recommendations. At the
     time of writing this book, it’s recommended to use the `ED25519` key.
   id: totrans-356
   prefs: []
   type: TYPE_NORMAL
+  zh: 在某些AWS区域中，要求使用旧版RSA密钥格式。只要可用，我们建议根据最新的推荐使用最新的格式。在撰写本书时，推荐使用`ED25519`密钥。
 - en: 'Let’s add a variable to the root module:'
   id: totrans-357
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们在根模块中添加一个变量：
 - en: '[PRE76]'
   id: totrans-358
   prefs: []
@@ -2540,6 +2574,7 @@
   id: totrans-359
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们为EC2模块添加一个类似的安全组：
 - en: '[PRE77]'
   id: totrans-360
   prefs: []
@@ -2550,6 +2585,7 @@
   id: totrans-361
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是没有默认值的，以使得这个变量对每个模块使用时都是必需的。现在，让我们在EC2模块（`main.tf`）中添加密钥到AWS中：
 - en: '[PRE78]'
   id: totrans-362
   prefs: []
@@ -2559,6 +2595,7 @@
   id: totrans-363
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们可以在`aws_instance`资源中使用它：
 - en: '[PRE79]'
   id: totrans-364
   prefs: []
@@ -2568,6 +2605,7 @@
   id: totrans-365
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要在根模块中的`main.tf`里使用这个新变量：
 - en: '[PRE80]'
   id: totrans-366
   prefs: []
@@ -2577,6 +2615,7 @@
   id: totrans-367
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，运行`terraform plan`将给我们显示三个资源：
 - en: '[PRE81]'
   id: totrans-368
   prefs: []
@@ -2588,6 +2627,7 @@
   id: totrans-369
   prefs: []
   type: TYPE_NORMAL
+  zh: 太棒了！运行`terraform apply`并接受任何更改将会在公共子网中部署EC2实例，并使用我们的密钥。但是，除非我们去AWS控制台手动检查，否则我们仍然无法知道实例的IP地址。
 - en: To get this information, we will need to export these variables from the EC2
     module and then once again in the root module. For this, we have another code
     block called `output`. Its syntax is very similar to the `variable` syntax, but
@@ -2596,11 +2636,14 @@
   id: totrans-370
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了获取这些信息，我们需要从EC2模块中导出这些变量，然后再次在根模块中使用。为此，我们有另一个代码块叫`output`。它的语法与`variable`语法非常相似，但你还可以将`output`变量标记为敏感信息，这样在运行`terraform
+    plan`或`terraform apply`命令时，默认情况下不会显示它。
 - en: 'Let’s define outputs showing us the public IP address of the EC2 instance.
     In the EC2 module in the `outputs.tf` file, place the following code:'
   id: totrans-371
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们定义输出，显示EC2实例的公共IP地址。在EC2模块的`outputs.tf`文件中，放入以下代码：
 - en: '[PRE82]'
   id: totrans-372
   prefs: []
@@ -2611,6 +2654,7 @@
   id: totrans-373
   prefs: []
   type: TYPE_NORMAL
+  zh: 在根模块中创建`outputs.tf`文件，并在那里放入以下代码：
 - en: '[PRE83]'
   id: totrans-374
   prefs: []
@@ -2620,6 +2664,7 @@
   id: totrans-375
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，当你运行`terraform plan`时，你会看到输出结果有所变化：
 - en: '[PRE84]'
   id: totrans-376
   prefs: []
@@ -2631,17 +2676,20 @@
   id: totrans-377
   prefs: []
   type: TYPE_NORMAL
+  zh: 这样，我们通过创建一个单独的EC2实例创建了一个简单的模块。如果我们运行`terraform apply`，实例将被创建，并且输出结果会显示我们该实例的IP地址。
 - en: From here, the next steps would involve adding more functionality to the module,
     adding the ability to create more than one instance with the `count` meta-argument,
     or creating a set of different EC2 instances by using the `for_each` meta-argument.
   id: totrans-378
   prefs: []
   type: TYPE_NORMAL
+  zh: 从这里开始，接下来的步骤将涉及为模块添加更多功能，通过使用`count`元参数来创建多个实例，或者通过使用`for_each`元参数来创建一组不同的EC2实例。
 - en: Summary
   id: totrans-379
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: In this chapter, we introduced the concept of IaC. We explained why it is an
     important method of managing and developing your infrastructure. We also introduced
     some tools that are quite popular in this way of working. As a tool of choice,
@@ -2649,33 +2697,40 @@
   id: totrans-380
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们介绍了IaC的概念。我们解释了为什么它是管理和开发基础设施的重要方法。我们还介绍了一些在这种工作方式中相当流行的工具。作为首选工具，我们讲解了Terraform——可能是最广泛使用的工具。
 - en: In the next chapter, we are going to show you how you can leverage some online
     tools and automation to build pipelines for **CI** and **CD**.
   id: totrans-381
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一章，我们将展示如何利用一些在线工具和自动化来构建**CI**和**CD**的管道。
 - en: Exercises
   id: totrans-382
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 练习
 - en: 'Try out the following exercises to test what you’ve learned in this chapter:'
   id: totrans-383
   prefs: []
   type: TYPE_NORMAL
+  zh: 尝试以下练习，测试你在本章中学到的内容：
 - en: Create a module that will create an S3 bucket with enabled server-side encryption.
   id: totrans-384
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 创建一个模块，用于创建启用服务器端加密的S3存储桶。
 - en: Add an instance profile to the module we’ve created using the same IAM policy
     that we used in [*Chapter 10*](B18197_10.xhtml#_idTextAnchor282).
   id: totrans-385
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 向我们创建的模块添加一个实例配置文件，并使用我们在[*第10章*](B18197_10.xhtml#_idTextAnchor282)中使用的相同IAM策略。
 - en: Use the `count` meta-argument to create two instances.
   id: totrans-386
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用`count`元参数创建两个实例。
