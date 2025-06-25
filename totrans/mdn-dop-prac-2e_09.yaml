@@ -1,944 +1,1355 @@
 - en: '9'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '9'
 - en: Configuration Management with Ansible
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用 Ansible 进行配置管理
 - en: In the last chapter, we looked at **Infrastructure as Code** (**IaC**) with
     Terraform, its core concepts, IaC workflow, state, and debugging techniques. We
     will now delve into **configuration management** (**CM**) and **Configuration
     as Code** (**CaC**) with Ansible. Ansible is a CM tool that helps you to define
     configuration as idempotent chunks of code.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上一章中，我们介绍了**基础设施即代码**（**IaC**）与 Terraform，以及其核心概念、IaC 工作流、状态和调试技巧。现在，我们将深入探讨使用
+    Ansible 进行**配置管理**（**CM**）和**配置即代码**（**CaC**）。Ansible 是一种配置管理工具，帮助你将配置定义为幂等的代码块。
 - en: 'In this chapter, we’re going to cover the following main topics:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将涵盖以下主要主题：
 - en: Introduction to configuration management
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 配置管理简介
 - en: Setting up Ansible
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设置 Ansible
 - en: Introduction to Ansible playbooks
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Ansible 剧本简介
 - en: Ansible playbooks in action
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Ansible 剧本实战
 - en: Designing for reusability
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 设计可重用性
 - en: Technical requirements
+  id: totrans-9
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 技术要求
 - en: You will need an active Azure subscription to follow the exercises for this
     chapter. Currently, Azure is offering a free trial for 30 days with $200 worth
     of free credits, and you can sign up at [https://azure.microsoft.com/en-in/free](https://azure.microsoft.com/en-in/free).
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 你需要一个有效的 Azure 订阅才能进行本章的练习。目前，Azure 提供 30 天的免费试用，赠送 200 美元的免费信用额度，你可以在 [https://azure.microsoft.com/en-in/free](https://azure.microsoft.com/en-in/free)
+    注册。
 - en: 'You will also need to clone the following GitHub repository for some of the
     exercises:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 你还需要克隆以下 GitHub 仓库以完成部分练习：
 - en: '[https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e)'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: '[https://github.com/PacktPublishing/Modern-DevOps-Practices-2e](https://github.com/PacktPublishing/Modern-DevOps-Practices-2e)'
 - en: 'Run the following command to clone the repository into your home directory,
     and `cd` into the `ch9` directory to access the required resources:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 运行以下命令将仓库克隆到你的主目录，并`cd`进入`ch9`目录以访问所需资源：
 - en: '[PRE0]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: You also need to install Terraform on your system. Refer to [*Chapter 8*](B19877_08.xhtml#_idTextAnchor1010),
     *Infrastructure as Code (IaC) with Terraform*, for more details on installing
     and setting up Terraform.
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 你还需要在系统中安装 Terraform。有关安装和设置 Terraform 的更多详细信息，请参考 [*第 8 章*](B19877_08.xhtml#_idTextAnchor1010)，*使用
+    Terraform 实现基础设施即代码（IaC）*。
 - en: Introduction to configuration management
+  id: totrans-16
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 配置管理简介
 - en: CM, in the realm of technology and systems administration, can be compared to
     the role of a conductor leading an orchestra. Imagine yourself guiding a group
     of musicians, each playing a unique instrument. Your responsibility is to ensure
     that everyone is harmoniously in sync, adhering to the correct musical score,
     and executing their parts at precisely the right moments.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
+  zh: 在技术和系统管理领域，配置管理（CM）可以比作指挥家领导乐团的角色。想象一下，你在指导一群演奏不同乐器的音乐家。你的责任是确保每个人都能和谐地同步，遵循正确的乐谱，在恰当的时刻演奏各自的部分。
 - en: In the context of technology and systems administration, CM is the practice
     of skilfully orchestrating and overseeing the creation, updates, and maintenance
     of computer systems and software, much akin to how a conductor directs musicians
     to produce splendid music.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
+  zh: 在技术和系统管理的背景下，配置管理（CM）是指巧妙地协调和监督计算机系统和软件的创建、更新和维护的实践，就像指挥家指挥乐队演奏精彩的音乐一样。
 - en: 'Here’s a breakdown of how it functions:'
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是其功能的分解：
 - en: '**Standardization**: As with musicians employing the same musical notes and
     scales, CM guarantees that all computers and software within an organization adhere
     to standardized configurations. This uniformity mitigates errors and bolsters
     system reliability.'
+  id: totrans-20
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**标准化**：就像音乐家使用相同的音符和音阶一样，配置管理（CM）确保组织内的所有计算机和软件都遵循标准化的配置。这种一致性减少了错误并增强了系统的可靠性。'
 - en: '**Automation**: In an orchestra, musicians don’t manually fine-tune their instruments
     during a performance. Likewise, CM tools automate the configuration and upkeep
     of computer systems, consistently applying configurations without the need for
     manual intervention.'
+  id: totrans-21
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**自动化**：在乐队中，音乐家不会在演出时手动调试他们的乐器。同样，配置管理工具自动化计算机系统的配置和维护，持续应用配置而无需人工干预。'
 - en: '**Version control**: Musicians follow specific sheet music, and if alterations
     occur, everyone receives updated sheet music. CM maintains a version history of
     system configurations, simplifying the tracking of changes, reverting to previous
     versions, and ensuring alignment across the board.'
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**版本控制**：音乐家遵循特定的乐谱，如果发生更改，每个人都会收到更新的乐谱。配置管理保持系统配置的版本历史，简化了更改跟踪、回滚到先前的版本，并确保全局一致性。'
 - en: '**Efficiency**: Just as a conductor synchronizes the timing of each instrument,
     CM optimizes system performance and resource allocation. It guarantees that software
     and systems operate efficiently and can scale as required.'
+  id: totrans-23
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**效率**：就像指挥家同步每个乐器的节奏一样，配置管理优化系统性能和资源分配。它确保软件和系统高效运行，并根据需要进行扩展。'
 - en: '**Compliance and security**: Analogous to a conductor enforcing performance
     guidelines, CM enforces adherence to security policies and best practices. It
     plays a crucial role in upholding a secure and compliant IT environment.'
+  id: totrans-24
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**合规性和安全性**：类似于指挥家执行表演指导，配置管理（CM）确保遵循安全政策和最佳实践。它在维护一个安全且合规的 IT 环境中发挥着至关重要的作用。'
 - en: '**Troubleshooting**: When issues arise during a performance, the conductor
     swiftly identifies and addresses them. CM tools assist in troubleshooting and
     rectifying configuration-related problems in IT systems.'
+  id: totrans-25
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**故障排除**：当表演过程中出现问题时，指挥家迅速识别并解决问题。配置管理工具帮助排查和修复与 IT 系统配置相关的问题。'
 - en: To understand CM better, let’s first look at the traditional way of hosting
     and managing applications. We first create a **virtual machine** (**VM**) from
     physical infrastructure and then log in manually to VMs. We can then run a set
     of scripts or do the setup manually. At least, that’s what we’ve been doing till
     now, even in this book.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了更好地理解配置管理，让我们首先看一下传统的托管和管理应用程序的方式。我们首先从物理基础设施中创建一个**虚拟机**（**VM**），然后手动登录到虚拟机中。接着我们可以运行一组脚本或手动进行设置。至少，直到现在，我们一直是这样做的，甚至在本书中也是如此。
 - en: 'There are several problems with this approach. Let’s look at some of them:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种方法存在一些问题。让我们来看一些：
 - en: If we set up the server manually, the process is not repeatable. For example,
     if we need to build another server with a similar configuration, we must repeat
     the entire process to build another server.
+  id: totrans-28
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 如果我们手动设置服务器，过程不可重复。例如，如果我们需要构建另一台具有类似配置的服务器，就必须重复整个过程来构建新的服务器。
 - en: Even if we use scripts, the scripts themselves are not idempotent. This means
     they cannot identify and apply only the delta configuration if needed.
+  id: totrans-29
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 即使我们使用脚本，这些脚本本身也不是幂等的。这意味着它们无法识别并仅在需要时应用增量配置。
 - en: Typical production environments consist of many servers; therefore, setting
     everything up manually is a labor-intensive task and adds to the toil. Software
     engineers should focus on novel ways of automating processes that cause toil.
+  id: totrans-30
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 典型的生产环境由多个服务器组成；因此，手动设置一切是一个劳动密集型任务，并且增加了繁重的工作量。软件工程师应该专注于自动化那些导致繁琐工作的过程。
 - en: While you can store scripts within source control, they are *imperative*. We
     always encourage a *declarative* way of managing things.
+  id: totrans-31
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 虽然你可以将脚本存储在源代码管理中，但它们是*命令式*的。我们始终鼓励使用*声明式*的方式来管理事物。
 - en: 'Modern CM tools such as Ansible solve all these problems by providing the following
     benefits:'
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 现代的配置管理工具如 Ansible 通过提供以下好处解决了所有这些问题：
 - en: They manage configuration through a set of declarative code pieces
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它们通过一组声明式代码片段来管理配置
 - en: You can store code in version control
+  id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 你可以将代码存储在版本控制中
 - en: You can apply code to multiple servers from a single control node
+  id: totrans-35
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 你可以从单个控制节点将代码应用到多个服务器
 - en: As they are idempotent, they only apply the delta configuration
+  id: totrans-36
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 由于它们是幂等的，它们只应用增量配置
 - en: It is a repeatable process; you can use variables and templates to apply the
     same configuration to multiple environments
+  id: totrans-37
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 这是一个可重复的过程；你可以使用变量和模板将相同的配置应用于多个环境
 - en: They provide deployment orchestration and are mostly used within CI/CD pipelines
+  id: totrans-38
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它们提供部署编排，主要用于 CI/CD 流水线中
 - en: Although many tools available on the market provide CM, such as **Ansible**,
     **Puppet**, **Chef**, and **SaltStack**, Ansible is the most popular and straightforward
     tool used for this. It is more efficient, and its simplicity makes it less time-consuming
     than others.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管市场上有许多提供配置管理的工具，如**Ansible**、**Puppet**、**Chef**和**SaltStack**，但 Ansible 是最受欢迎和最简单的工具。它更高效，且由于其简洁性，花费的时间比其他工具少。
 - en: 'It is an open source CM tool built using Python and is owned by **Red Hat**.
     It provides the following features:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一个开源的配置管理工具，使用 Python 构建，并由**红帽**公司拥有。它提供以下功能：
 - en: It helps you to automate routine tasks such as OS upgrades, patches, and backups
     while also creating all OS-level configurations, such as users, groups, permissions,
     and others
+  id: totrans-41
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它帮助你自动化常规任务，如操作系统升级、补丁和备份，同时创建所有操作系统级别的配置，如用户、组、权限等。
 - en: The configuration is written using simple YAML syntax
+  id: totrans-42
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 配置使用简单的 YAML 语法编写
 - en: It uses **Secure Shell** (**SSH**) to communicate with managed nodes and sends
     commands
+  id: totrans-43
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它通过 **安全外壳**（**SSH**）与管理节点通信并发送命令
 - en: The commands are executed sequentially within each node in an idempotent manner
+  id: totrans-44
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 命令在每个节点内按顺序以幂等方式执行
 - en: It connects to nodes parallelly to save time
+  id: totrans-45
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它通过并行连接节点来节省时间
 - en: 'Let’s delve into the reasons why using Ansible is a great choice for CM and
     automation. Here are some compelling factors:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们深入探讨使用 Ansible 作为配置管理和自动化工具的优点。以下是一些令人信服的因素：
 - en: '**Simplicity and user-friendliness**: Ansible boasts an uncomplicated, human-readable
     YAML syntax that’s easy to grasp and employ, even for those with limited coding
     experience.'
+  id: totrans-47
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**简洁与易用性**：Ansible 拥有简单的、易于理解的 YAML 语法，即使对于编码经验有限的人也能轻松掌握和使用。'
 - en: '**Agentless approach**: Ansible communicates through SSH or WinRM, eliminating
     the need to install agents on managed nodes. This reduces overhead and security
     concerns, a topic we’ll explore further when we discuss Ansible architecture.'
+  id: totrans-48
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**无代理方式**：Ansible 通过 SSH 或 WinRM 通信，避免在管理节点上安装代理，减少了开销和安全问题，关于这一点，我们将在讨论 Ansible
+    架构时进一步探讨。'
 - en: '**Idempotent operations**: Ansible ensures the desired system state is achieved,
     even if configurations are applied repeatedly. This minimizes the risk of unintended
     changes.'
+  id: totrans-49
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**幂等操作**：Ansible 确保即使配置被重复应用，也能实现期望的系统状态，从而最小化意外更改的风险。'
 - en: '**Broad adoption**: With a thriving and active user community, Ansible offers
     extensive documentation, modules, and playbooks for various use cases.'
+  id: totrans-50
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**广泛采用**：Ansible 拥有一个蓬勃发展的活跃用户社区，提供大量的文档、模块和针对各种使用案例的 playbook。'
 - en: '**Cross-platform compatibility**: Ansible can handle diverse environments,
     managing various operating systems, cloud providers, network devices, and infrastructure
     components with a single tool.'
+  id: totrans-51
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**跨平台兼容性**：Ansible 可以处理多种环境，管理不同的操作系统、云服务商、网络设备和基础设施组件，且只需一个工具。'
 - en: '**Seamless integration**: Ansible seamlessly integrates with other tools, including
     **version control systems** (**VCSs**), monitoring solutions, and CI/CD pipelines.'
+  id: totrans-52
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**无缝集成**：Ansible 可以与其他工具无缝集成，包括 **版本控制系统**（**VCS**）、监控解决方案和 CI/CD 管道。'
 - en: '**Scalability**: Ansible scales effortlessly to handle both small and large
     environments, catering to both enterprises and start-ups.'
+  id: totrans-53
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**可扩展性**：Ansible 能够轻松扩展，处理从小型到大型的各种环境，适用于企业和初创公司。'
 - en: '**Version control**: Infrastructure configurations are stored in plain text
     files, simplifying change management, history tracking, and collaboration through
     Git or similar VCSs.'
+  id: totrans-54
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**版本控制**：基础设施配置存储在纯文本文件中，简化了变更管理、历史跟踪，并通过 Git 或类似的版本控制系统（VCS）进行协作。'
 - en: '**Automation of routine tasks**: Ansible automates repetitive chores such as
     software installations, configuration updates, and patch management, freeing up
     time for strategic tasks.'
+  id: totrans-55
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**自动化常规任务**：Ansible 自动化软件安装、配置更新和补丁管理等重复性工作，为战略任务腾出时间。'
 - en: '**Security and compliance**: Implement security policies and compliance standards
     consistently across your infrastructure using Ansible’s **Role-Based Access Control**
     (**RBAC**) and integrated security modules.'
+  id: totrans-56
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**安全性与合规性**：使用 Ansible 的 **基于角色的访问控制**（**RBAC**）和集成的安全模块，可以在整个基础设施中一致地实施安全策略和合规标准。'
 - en: '**Rollback and recovery**: Ansible enables easy rollback to prior configurations
     in the case of issues, reducing downtime and minimizing the impact of changes.'
+  id: totrans-57
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**回滚与恢复**：Ansible 允许在出现问题时轻松回滚到之前的配置，减少停机时间并最小化变更的影响。'
 - en: '**Modularity and reusability**: Ansible encourages the creation of modular,
     reusable playbooks and roles, fostering an organized and efficient automation
     approach.'
+  id: totrans-58
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**模块化与可重用性**：Ansible 鼓励创建模块化、可重用的 playbook 和角色，推动一种有序高效的自动化方法。'
 - en: '**Supportive community**: Benefit from a robust Ansible community that offers
     support, documentation, and a repository of contributed roles and modules.'
+  id: totrans-59
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**支持性社区**：受益于强大的 Ansible 社区，提供支持、文档以及贡献的角色和模块库。'
 - en: '**Cost-effective**: Ansible is open source and free to use, cutting down on
     licensing expenses compared to other automation tools.'
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**成本效益**：Ansible 是开源并且免费使用，相比其他自动化工具，大大降低了许可费用。'
 - en: '**Orchestration and workflow automation**: Beyond CM, Ansible can orchestrate
     intricate workflows, including application deployment and infrastructure provisioning.'
+  id: totrans-61
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**编排和工作流自动化**：除了配置管理（CM）之外，Ansible 还可以编排复杂的工作流，包括应用部署和基础设施配置。'
 - en: '**Immutable infrastructure**: Ansible supports the concept of immutable infrastructure,
     where changes involve recreating components rather than modifying them in place.
     This leads to more predictable and dependable deployments.'
+  id: totrans-62
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**不可变基础设施**：Ansible 支持不可变基础设施的概念，即更改时是通过重建组件而不是在原地修改它们。这使得部署更加可预测和可靠。'
 - en: '**Real-time feedback**: Ansible provides real-time feedback and reporting,
     simplifying the monitoring and troubleshooting of automation tasks.'
+  id: totrans-63
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**实时反馈**：Ansible 提供实时反馈和报告，简化了自动化任务的监控和故障排除。'
 - en: These advantages establish Ansible as a popular choice for CM, automation, and
     orchestration across a wide spectrum of IT environments and industries.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些优势使得 Ansible 成为广泛 IT 环境和行业中配置管理、自动化和编排的热门选择。
 - en: 'Ansible has a simple architecture. It has a **control node** that takes care
     of managing multiple **managed nodes**. All you need is a control node server
     to install Ansible and the nodes to manage using the control node (also known
     as managed nodes). The managed nodes should allow an SSH connection from the Ansible
     control node—something like the following diagram:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible 具有简单的架构。它有一个**控制节点**，负责管理多个**受管节点**。你所需要的只是一个控制节点服务器来安装 Ansible，以及用于通过控制节点管理的节点（也称为受管节点）。这些受管节点应该允许来自
+    Ansible 控制节点的 SSH 连接——如下图所示：
 - en: '![Figure 9.1 – Ansible architecture](img/B19877_09_1.jpg)'
+  id: totrans-66
   prefs: []
   type: TYPE_IMG
+  zh: '![图 9.1 – Ansible 架构](img/B19877_09_1.jpg)'
 - en: Figure 9.1 – Ansible architecture
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.1 – Ansible 架构
 - en: Now, let’s go ahead and see how we can install and set up the required configuration
     using Ansible. Let’s look at how to install Ansible in the next section.
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们继续看看如何使用 Ansible 安装和配置所需的配置。接下来的部分将介绍如何安装 Ansible。
 - en: Setting up Ansible
+  id: totrans-69
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 配置 Ansible
 - en: We need to set up and install Ansible in the control node, but before we do
     that, we will have to spin three servers to start the activity—an Ansible control
     node and two managed nodes.
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要在控制节点上安装并设置 Ansible，但在此之前，我们将需要启动三台服务器来开始活动——一台 Ansible 控制节点和两台受管节点。
 - en: Setting up inventory
+  id: totrans-71
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 配置库存
 - en: The idea is to set up a two-tier architecture with **Apache** and **MySQL**.
     So, let’s use Terraform to spin up the three servers.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 目的是建立一个包含**Apache**和**MySQL**的两层架构。所以，让我们使用 Terraform 启动三台服务器。
 - en: 'Let’s first `cd` into the directory where the Terraform templates are located
     and then edit the `terraform.tfvars` file to fill in the required details. (Please
     refer to [*Chapter 8*](B19877_08.xhtml#_idTextAnchor1010), *Infrastructure as
     Code (IaC) with Terraform*, for more details about how to get the attributes):'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，让我们`cd`进入 Terraform 模板所在的目录，然后编辑 `terraform.tfvars` 文件，填写所需的详细信息。（有关如何获取属性的更多详细信息，请参考[*第
+    8 章*](B19877_08.xhtml#_idTextAnchor1010)，*基础设施即代码 (IaC) 与 Terraform*）
 - en: '[PRE1]'
+  id: totrans-74
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'Then, use the following commands to spin up the servers using Terraform:'
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，使用以下命令通过 Terraform 启动服务器：
 - en: '[PRE2]'
+  id: totrans-76
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Once the `terraform apply` command is completed successfully, we will see three
     servers—`ansible-control-node`, `web`, and `db`, and the associated resources
     created within the `ansible-exercise` resource group.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦 `terraform apply` 命令成功完成，我们将看到三台服务器——`ansible-control-node`、`web` 和 `db`，以及在
+    `ansible-exercise` 资源组内创建的相关资源。
 - en: The `terraform apply` output also provides the public IP addresses of the Ansible
     control node and the `web` VM. You should see the public IP address we got in
     the output.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: '`terraform apply`的输出还提供了 Ansible 控制节点和`web`虚拟机的公网 IP 地址。你应该在输出中看到我们获得的公网 IP
+    地址。'
 - en: Note
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 注意
 - en: It might take a while for Azure to report the output, and if you did not get
     the IP addresses during `terraform apply`, you could subsequently run `terraform
     output` to get the details.
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: Azure 可能需要一些时间来报告输出，如果在 `terraform apply` 时没有获得 IP 地址，你可以之后运行 `terraform output`
+    来获取详细信息。
 - en: Ansible requires the control node to connect with managed nodes via SSH. Now,
     let’s move on and look at how we can communicate with our managed nodes (also
     known as inventory servers).
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible 需要控制节点通过 SSH 与受管节点连接。现在，让我们继续并看看如何与我们的受管节点（也称为库存服务器）进行通信。
 - en: Connecting the Ansible control node with inventory servers
+  id: totrans-82
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 将 Ansible 控制节点与库存服务器连接
 - en: We’ve already set up **passwordless SSH** between the control node and managed
     nodes when we provisioned the infrastructure using Terraform. Let’s look at how
     we did that to understand it better.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们使用Terraform提供基础设施时，我们已经在控制节点和受控节点之间设置了**无密码SSH**。让我们看看我们是如何做到这一点的，以便更好地理解它。
 - en: 'We created an `control-node`, `web`, and `db` within that subnet. If we look
     at the VM resource configuration, we also have a `custom_data` field that can
     be used to pass an initialization script to the VM, as follows:'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们在该子网内创建了`control-node`、`web`和`db`。如果我们查看VM资源配置，还可以看到`custom_data`字段，可用于将初始化脚本传递给VM，如下所示：
 - en: '[PRE3]'
+  id: totrans-85
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'As we can see, the `control_node` VM refers to a `data.template_file.control_node_init`
     resource, and the `web` and `db` nodes refer to a `data.template_file.managed_nodes_init`
     resource. These are `template_file` resources that can be used for template files.
     Let’s look at the resources as follows:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，`control_node`虚拟机引用了`data.template_file.control_node_init`资源，而`web`和`db`节点引用了`data.template_file.managed_nodes_init`资源。这些是可以用于模板文件的`template_file`资源。让我们看一下资源如下：
 - en: '[PRE4]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'As we can see, the `managed_nodes_init` resource points to the `managed-nodes-user-data.sh`
     file and passes an `admin_password` variable to that file. Similarly, the `control_node_init`
     resource points to the `control-node-user-data.sh` file. Let’s look at the `managed-nodes-user-data.sh`
     file first:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们所看到的，`managed_nodes_init`资源指向`managed-nodes-user-data.sh`文件，并向该文件传递一个`admin_password`变量。同样，`control_node_init`资源指向`control-node-user-data.sh`文件。让我们先看看`managed-nodes-user-data.sh`文件：
 - en: '[PRE5]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'As we can see, it is a shell script that does the following:'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，这是一个执行以下操作的shell脚本：
 - en: Creates an `ansible` user.
+  id: totrans-91
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 创建一个`ansible`用户。
 - en: Adds the user to the `sudoers` list.
+  id: totrans-92
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将用户添加到`sudoers`列表。
 - en: Generates an `ssh` key pair for passwordless authentication.
+  id: totrans-93
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 为无密码认证生成`ssh`密钥对。
 - en: Sets the password for the `ansible` user.
+  id: totrans-94
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 设置`ansible`用户的密码。
 - en: 'As we’ve generated the `ssh` key pair, we would need to do the same within
     the control node with some additional configuration. Let’s look at the `control-node-user-data.sh`
     script, as follows:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们已经生成了`ssh`密钥对，因此我们需要在控制节点上进行相同的操作，并进行一些额外的配置。让我们看一下`control-node-user-data.sh`脚本，如下所示：
 - en: '[PRE6]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: 'The script does the following:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 该脚本执行以下操作：
 - en: Creates an `ansible` user
+  id: totrans-98
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 创建一个`ansible`用户
 - en: Adds the user to the `sudoers` list
+  id: totrans-99
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将用户添加到`sudoers`列表
 - en: Generates an `ssh` key pair for passwordless authentication
+  id: totrans-100
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 为无密码认证生成`ssh`密钥对
 - en: Adds the `web` and `db` VMs to the `known_hosts` file to ensure we trust both
     hosts
+  id: totrans-101
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将`web`和`db`虚拟机添加到`known_hosts`文件中，以确保我们信任这两个主机
 - en: Installs the `sshpass` utility to allow for sending the `ssh` public key to
     the `web` and `db` VMs
+  id: totrans-102
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 安装`sshpass`实用程序以允许发送`ssh`公钥到`web`和`db`虚拟机
 - en: Copies the `ssh` public key to the `web` and `db` VMs for passwordless connectivity
+  id: totrans-103
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将`ssh`公钥复制到`web`和`db`虚拟机以实现无密码连接
 - en: 'These files get executed automatically when the VMs are created; therefore,
     passwordless SSH should already be working. So, let’s use an `ansible-control-node`
     using the IP address we got in the last step. We will use the username and password
     we configured in the `terraform.tfvars` file:'
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 当VM创建时，这些文件会自动执行；因此，无密码SSH应已经起作用。因此，让我们使用上一步中获取的IP地址使用`ansible-control-node`。我们将使用在`terraform.tfvars`文件中配置的用户名和密码：
 - en: '[PRE7]'
+  id: totrans-105
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'Once you are in the control node server, switch the user to `ansible` and try
     doing an SSH to the `web` server using the following commands:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦你在控制节点服务器上，请切换用户到`ansible`，并尝试使用以下命令连接到`web`服务器：
 - en: '[PRE8]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: And if you land on the `web` server, passwordless authentication is working
     correctly.
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你登陆到`web`服务器，无密码认证是正常工作的。
 - en: Repeat the same steps to check whether you can connect with the `db` server.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 重复相同的步骤检查您是否可以与`db`服务器连接。
 - en: Exit the prompts until you are in the control node.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 退出提示，直到您在控制节点。
 - en: Now, as we’re in the control node, let’s install Ansible.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，因为我们在控制节点上，让我们安装Ansible。
 - en: Installing Ansible in the control node
+  id: totrans-112
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 在控制节点安装Ansible
 - en: Ansible requires a Linux/Unix machine (preferably), and you should have Python
     `2.x` or `3.x` installed.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible需要一个Linux/Unix机器（最好是），并且应安装Python `2.x`或`3.x`。
 - en: As the Ansible control node runs on Ubuntu, Ansible provides a `apt` commands.
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于Ansible控制节点运行在Ubuntu上，Ansible提供了`apt`命令。
 - en: 'Use the following commands to install Ansible on the server:'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用以下命令在服务器上安装Ansible：
 - en: '[PRE9]'
+  id: totrans-116
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'To check whether Ansible has been installed successfully, run the following
     command:'
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 要检查Ansible是否已成功安装，请运行以下命令：
 - en: '[PRE10]'
+  id: totrans-118
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: And, as we see, `ansible 2.9.27` is successfully installed on your control node.
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如我们所见，`ansible 2.9.27`已成功安装在您的控制节点上。
 - en: Ansible uses an inventory file to manage nodes. Therefore, the next step is
     to set up an inventory file.
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible使用清单文件来管理节点。因此，下一步是设置清单文件。
 - en: Setting up an inventory file
+  id: totrans-121
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 设置清单文件
 - en: An inventory file within Ansible is a file that allows you to group your managed
     nodes according to roles. For example, you can define roles such as `webserver`
     and `dbserver` and group related servers together. You can use IP addresses, hostnames,
     or aliases for that.
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 在Ansible中的清单文件是一个文件，允许您根据角色对受管节点进行分组。例如，您可以定义诸如`webserver`和`dbserver`之类的角色，并将相关服务器分组。您可以使用IP地址、主机名或别名进行定义。
 - en: Tip
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: Always use aliases because they provide room for IP address and hostname changes.
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 始终使用别名，因为它们为IP地址和主机名更改提供了空间。
 - en: You can run Ansible commands on hosts or a group of hosts using the role tagged
     to them. There is no limit to servers that can have a particular role. If your
     server uses a non-standard SSH port, you can also use that port within the inventory
     file.
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 您可以使用分配给它们的角色在主机或一组主机上运行Ansible命令。可以有一个特定角色的服务器没有限制。如果您的服务器使用非标准SSH端口，您还可以在清单文件中使用该端口。
 - en: 'The default location of the Ansible inventory file is `/etc/ansible/hosts`.
     If you look at the `/etc/ansible` directory ownership, it is owned by the `root`
     user. We want to use the `ansible` user that we created for security purposes.
     Therefore, we must change the `/etc/ansible` directory ownership and its subdirectories
     and files to `ansible`. Use the following command to do so:'
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible清单文件的默认位置是`/etc/ansible/hosts`。如果查看`/etc/ansible`目录的所有权，则其所有者是`root`用户。出于安全目的，我们希望使用我们为此创建的`ansible`用户。因此，我们必须更改`/etc/ansible`目录及其子目录和文件的所有权为`ansible`。请使用以下命令执行此操作：
 - en: '[PRE11]'
+  id: totrans-127
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'We can then switch the user to `ansible` and clone the Git repository that
     contains the required files into the control server using the following commands:'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们可以将用户切换到`ansible`，并使用以下命令将包含所需文件的Git存储库克隆到控制服务器：
 - en: '[PRE12]'
+  id: totrans-129
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'In our scenario, we have a web server called `web` and a database server called
     `db`. Therefore, if you check the host file called `hosts` within the repository,
     you will see the following:'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的场景中，我们有一个名为`web`的Web服务器和一个名为`db`的数据库服务器。因此，如果您检查存储库中名为`hosts`的主机文件，您将看到以下内容：
 - en: '[PRE13]'
+  id: totrans-131
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: The `[all:vars]` section contains variables applicable to all groups. Here,
     we’re explicitly defining `ansible_python_interpreter` to `python3` so that Ansible
     uses `python3` instead of `python2`. As we’re using Ubuntu, `python3` comes installed
     as default, and `python2` is deprecated.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
+  zh: '`[all:vars]`部分包含适用于所有组的变量。在这里，我们明确地将`ansible_python_interpreter`定义为`python3`，以便Ansible使用`python3`而不是`python2`。由于我们使用的是Ubuntu，默认安装了`python3`，而`python2`已弃用。'
 - en: We also see that instead of using `web` directly, we’ve specified an `ansible_host`
     section. That defines `web` as an alias, pointing to a host with the hostname
     `web`. You can also use the IP address instead of the hostname if required.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们还看到，我们没有直接使用`web`，而是指定了一个`ansible_host`部分。它将`web`定义为一个别名，指向一个名为`web`的主机。如果需要，您也可以使用IP地址而不是主机名。
 - en: Tip
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: Always group the inventory according to the function performed. That helps us
     to apply a similar configuration to a large number of machines with a similar
     role.
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 始终根据执行的功能对清单进行分组。这有助于我们对大量具有相似角色的机器应用相似的配置。
 - en: As we want to keep the configuration with code, we would wish to stay within
     the Git repository itself. So, we must tell Ansible that the inventory file is
     in a non-standard location. To do so, we will create an Ansible configuration
     file.
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们希望将配置与代码保持一致，因此我们希望保留在Git存储库本身内。因此，我们必须告诉Ansible清单文件位于非标准位置。为此，我们将创建一个Ansible配置文件。
 - en: Setting up the Ansible configuration file
+  id: totrans-137
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 设置Ansible配置文件
 - en: 'The Ansible configuration file defines global properties that are specific
     to our setup. The following are ways in which you can specify the Ansible configuration
     file, and the first method overrides the next – the settings are not merged, so
     keep that in mind:'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible配置文件定义了特定于我们设置的全局属性。以下是指定Ansible配置文件的方法，第一种方法会覆盖下一个——设置不会合并，所以请记住这一点：
 - en: By setting an environment variable, `ANSIBLE_CONFIG`, pointing to the Ansible
     configuration file
+  id: totrans-139
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过设置环境变量`ANSIBLE_CONFIG`，指向Ansible配置文件
 - en: By creating an `ansible.cfg` file in the current directory
+  id: totrans-140
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过在当前目录中创建`ansible.cfg`文件
 - en: By creating an `ansible.cfg` file in the home directory of the current user
+  id: totrans-141
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过在当前用户的主目录中创建 `ansible.cfg` 文件
 - en: By creating an `ansible.cfg` file in the `/``etc/ansible` directory
+  id: totrans-142
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 通过在`/etc/ansible` 目录中创建 `ansible.cfg` 文件
 - en: Tip
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: If you manage multiple applications, with each application in its Git repositories,
     having a local `ansible.cfg` file in every repository will help keep the applications
     decentralized. It will also enable GitOps and make Git the **single source** **of
     truth**.
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你管理多个应用，每个应用都有自己的 Git 仓库，那么在每个仓库中都有一个本地的 `ansible.cfg` 文件将有助于保持应用的去中心化。它还将启用
+    GitOps 并使 Git 成为**单一的可信源**。
 - en: 'So, if you check the `ansible.cfg` file in the current directory, you will
     see the following:'
+  id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 所以，如果你检查当前目录中的 `ansible.cfg` 文件，你会看到以下内容：
 - en: '[PRE14]'
+  id: totrans-146
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Now, to check whether our inventory file is correct, let’s list our inventory
     by using the following command:'
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，为了检查我们的清单文件是否正确，让我们使用以下命令列出我们的清单：
 - en: '[PRE15]'
+  id: totrans-148
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: We see that there are two groups—`dbservers` containing `db` and `webservers`
     containing `web`, each using `python3` as the `ansible_python_interpreter`.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们看到有两个组——`dbservers` 包含 `db`，`webservers` 包含 `web`，每个组都使用 `python3` 作为 `ansible_python_interpreter`。
 - en: 'If we want to see all the hosts, we can use the following command:'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们想查看所有主机，我们可以使用以下命令：
 - en: '[PRE16]'
+  id: totrans-151
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'If we want to list all hosts that have the `webservers` role, we can use the
     following command:'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们想列出所有具有 `webservers` 角色的主机，我们可以使用以下命令：
 - en: '[PRE17]'
+  id: totrans-153
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'Now, let’s check whether Ansible can connect to these servers by using the
     following command:'
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们使用以下命令来检查 Ansible 是否能够连接到这些服务器：
 - en: '[PRE18]'
+  id: totrans-155
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: And, as we can observe, we get a successful response for both servers. So, we’re
     all set up and can start defining the configuration. Ansible offers **tasks**
     and **modules** to provide CM. Let’s look at these in the next section.
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 如我们所见，对于两个服务器，我们都得到了成功的响应。因此，我们已经完全设置好，可以开始定义配置。Ansible 提供了**任务**和**模块**来提供配置管理。让我们在下一节中详细了解这些内容。
 - en: Ansible tasks and modules
+  id: totrans-157
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Ansible 任务和模块
 - en: 'Ansible tasks form the basic building block of running Ansible commands. Ansible
     tasks are structured in the following format:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible 任务是执行 Ansible 命令的基本构建块。Ansible 任务的结构如下所示：
 - en: '[PRE19]'
+  id: totrans-159
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'Ansible modules are reusable code for a particular function, such as running
     a `shell` command or creating and managing users. You can use Ansible modules
     with Ansible tasks to manage configuration within managed nodes. For example,
     the following command will run the `uname` command on each managed server:'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible 模块是用于特定功能的可重用代码，例如运行 `shell` 命令或创建和管理用户。你可以通过 Ansible 任务与 Ansible 模块一起使用来管理受管节点中的配置。例如，以下命令将在每个受管服务器上运行
+    `uname` 命令：
 - en: '[PRE20]'
+  id: totrans-161
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'So, we get a reply from the `db` server and the `web` server, each providing
     a return code, `0`, and an output, `Linux`. If you look at the command, you will
     see that we have provided the following flags:'
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，我们从 `db` 服务器和 `web` 服务器得到了回复，每个服务器提供了返回码 `0` 和输出 `Linux`。如果你查看命令，你会发现我们提供了以下标志：
 - en: '`-m`: The name of the module (`shell` module here)'
+  id: totrans-163
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`-m`：模块的名称（这里是 `shell` 模块）'
 - en: '`-a`: The parameters to the module (`uname` in this case)'
+  id: totrans-164
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '`-a`：模块的参数（在此例中为`uname`）'
 - en: The command finally ends with where we want to run this task. Since we’ve specified
     `all`, it runs the task on all servers. We can run this on a single server, a
     set of servers, a role, or multiple roles, or use a wildcard to select the combination
     we want.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 命令最后会指定我们想在哪个地方运行这个任务。由于我们指定了 `all`，因此任务将在所有服务器上运行。我们也可以将任务运行在单个服务器、一组服务器、角色或多个角色上，或者使用通配符选择我们想要的组合。
 - en: The tasks have three possible statuses—`SUCCESS`, `CHANGED`, and `FAILURE`.
     The `SUCCESS` status denotes that the task was successful, and Ansible took no
     action. The `CHANGED` status denotes that Ansible had to change the existing configuration
     to apply the expected configuration, and `FAILURE` denotes an error while executing
     the task.
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 任务有三种可能的状态——`SUCCESS`、`CHANGED` 和 `FAILURE`。`SUCCESS` 状态表示任务成功完成，Ansible 没有进行任何操作。`CHANGED`
+    状态表示 Ansible 为了应用预期的配置，必须更改现有的配置，而 `FAILURE` 表示在执行任务时发生了错误。
 - en: Ansible modules are reusable scripts that we can use to define configuration
     within servers. Each module targets a particular aspect of CM. Modules are used
     in both Ansible tasks and playbooks. There are many modules available for consumption,
     and they are available at [https://docs.ansible.com/ansible/latest/collections/index_module.html](https://docs.ansible.com/ansible/latest/collections/index_module.html).
     You can pick and choose modules according to your requirements and use cases.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: Ansible 模块是可重用的脚本，我们可以用它们来定义服务器内的配置。每个模块针对配置管理（CM）的特定方面。模块在 Ansible 任务和剧本中都可以使用。有许多模块可供使用，它们可以在[https://docs.ansible.com/ansible/latest/collections/index_module.html](https://docs.ansible.com/ansible/latest/collections/index_module.html)找到。你可以根据自己的需求和使用场景挑选并使用模块。
 - en: Tip
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 提示
 - en: As Ansible is idempotent, always use modules specific to your task and avoid
     using `command` and `shell` modules. For example, use the `apt` module to install
     a package instead of the `command` module to run `apt install <package> -y`. If
     your playbook starts to look like code, then you’re doing something fundamentally
     wrong.
+  id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于 Ansible 是幂等的，始终使用特定于任务的模块，避免使用`command`和`shell`模块。例如，使用`apt`模块安装软件包，而不是使用`command`模块运行`apt
+    install <package> -y`。如果你的剧本看起来像代码，那么你可能做错了根本性的事情。
 - en: Tasks do not make sense when we have a series of steps to follow while setting
     up a server. Therefore, Ansible provides *playbooks* for this activity. Let’s
     have a look at this in the next section.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们在设置服务器时有一系列步骤要跟随时，任务就没有意义。因此，Ansible 为这个活动提供了*剧本*。我们将在下一部分了解这一点。
 - en: Introduction to Ansible playbooks
+  id: totrans-171
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Ansible 剧本介绍
 - en: Imagine you’re a conductor leading an orchestra. In this scenario, Ansible playbooks
     are akin to your musical score, guiding every musician to create a harmonious
     symphony of automation in the tech world.
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 想象一下你是指挥家，正在带领一个交响乐团。在这种情境下，Ansible 剧本就像是你的乐谱，指导每个音乐家在技术世界中创造一场和谐的自动化交响乐。
 - en: 'In the realm of tech and automation, Ansible playbooks provide the following:'
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 在技术和自动化领域，Ansible 剧本提供了以下功能：
 - en: '**Musical score for automation**: Just as a conductor uses a musical score
     with notations to guide each instrument, an Ansible playbook contains a set of
     instructions and actions for orchestrating specific IT tasks and configurations,
     spanning from software deployments to system configurations.'
+  id: totrans-174
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**自动化的乐谱**：就像指挥家使用带有记谱符号的乐谱来指导每个乐器一样，Ansible 剧本包含了一系列指令和操作，用于编排特定的 IT 任务和配置，从软件部署到系统配置等。'
 - en: '**Harmonious guidance**: Ansible playbooks take a similar approach. You declare
     the desired IT state, and Ansible plays the role of the conductor, ensuring that
     all the necessary steps are followed, much like specifying, “*I want a flawless
     musical performance*,” and Ansible orchestrates the entire process.'
+  id: totrans-175
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**和谐的引导**：Ansible 剧本采取了类似的方式。你声明所需的 IT 状态，而 Ansible 扮演指挥的角色，确保所有必要的步骤都得到执行，就像指定“*我希望演奏一场完美的音乐会*”，而
+    Ansible 就是协调整个过程。'
 - en: '**Tasks and reusability**: Ansible playbooks are organized into tasks and roles,
     as with musical sheets and instruments. These tasks can be reused across various
     playbooks, promoting consistency and saving time.'
+  id: totrans-176
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**任务与重用性**：Ansible 剧本被组织成任务和角色，就像乐谱和乐器一样。这些任务可以在多个剧本中重用，促进一致性并节省时间。'
 - en: '**Instrument selection and direction**: Just as a conductor selects which instruments
     play at which times, playbooks specify which servers or machines (the inventory)
     should execute tasks. You can direct specific server groups or individual machines.'
+  id: totrans-177
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**乐器选择与指挥**：就像指挥家选择哪些乐器在何时演奏一样，剧本指定了哪些服务器或机器（清单）应执行任务。你可以指挥特定的服务器组或单独的机器。'
 - en: '**Harmonious execution**: Ansible can skilfully coordinate tasks on multiple
     machines simultaneously, much as a conductor harmonizes the efforts of different
     musicians to create a beautiful composition.'
+  id: totrans-178
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**和谐的执行**：Ansible 能够巧妙地协调多台机器上的任务，就像指挥家协调不同音乐家之间的配合，创造出一首美丽的乐章。'
 - en: '**Fine-tuned performance**: If unexpected challenges arise during the performance,
     a conductor adjusts and guides the musicians to ensure a flawless outcome. Similarly,
     Ansible playbooks incorporate error-handling strategies to handle unexpected issues
     during automation.'
+  id: totrans-179
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**精细调控的表现**：如果在演奏过程中出现意外挑战，指挥家会调整并引导音乐家以确保演出完美无缺。同样，Ansible 剧本也包含了错误处理策略，以应对自动化过程中的意外问题。'
 - en: '**Ansible playbooks** are a collection of tasks that produce the desired configuration
     within the managed nodes. They have the following features:'
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: They help in managing configuration within multiple remote servers using declarative
     steps
+  id: totrans-181
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: They use a sequential list of idempotent steps, and steps that match the expected
     configuration are not applied again
+  id: totrans-182
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Tasks within the playbook can be synchronous and asynchronous
+  id: totrans-183
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: They enable GitOps by allowing the steps to be stored using a simple YAML file
     to keep in source control, providing CaC
+  id: totrans-184
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Ansible playbooks consist of multiple **plays**, and each play is mapped to
     a group of **hosts** using a **role** and consists of a series of **tasks** required
     to achieve them—something like the following diagram:'
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
 - en: '![Figure 9.2 – Playbooks](img/B19877_09_2.jpg)'
+  id: totrans-186
   prefs: []
   type: TYPE_IMG
 - en: Figure 9.2 – Playbooks
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following `ping.yaml` file is an example of a simple playbook that pings
     all servers:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-189
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: The YAML file contains a list of plays, as the list directive shows. Each play
     consists of a `hosts` attribute that defines the role to which we want to apply
     the play. The `tasks` section consists of a list of tasks, each with `name` and
     `action` attributes. In the preceding example, we have a single play with a single
     task that pings all servers.
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: Checking playbook syntax
+  id: totrans-191
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: 'It is a best practice to check playbook syntax before applying it to your inventory.
     To check your playbook’s syntax, run the following command:'
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE22]'
+  id: totrans-193
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: The syntax is correct, as we get a response with the playbook name. Now, let’s
     go ahead and apply the playbook.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: Applying the first playbook
+  id: totrans-195
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: 'To apply the playbook, run the following command:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE23]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: 'There are three elements of play execution:'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: '**Gathering facts**: Ansible checks for all hosts that are part of the role,
     logs in to each instance, and gathers information from each host it uses while
     executing the tasks from the plays.'
+  id: totrans-199
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Run tasks**: Then, it runs the tasks of each play, as defined in the playbook.'
+  id: totrans-200
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '**Play recap**: Ansible then provides a recap of the tasks it executed and
     the hosts it ran them on. This includes a list of all successful and failed responses.'
+  id: totrans-201
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: As we’ve investigated an elementary example of playbooks, we must understand
     how to use Ansible playbooks effectively. In the next section, let’s look at Ansible
     playbooks in action with a better example.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
 - en: Ansible playbooks in action
+  id: totrans-203
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: Let’s set up an Apache server for a custom website that connects with a MySQL
     backend—in short, a **Linux**, **Apache**, **MySQL**, and **PHP** (**LAMP**) stack
     using Ansible.
+  id: totrans-204
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following directory contains all resources for the exercises in this section:'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE24]'
+  id: totrans-206
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: 'We have created the following custom `index.php` page that tests the connection
     to the MySQL database and displays whether it can connect or not:'
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE25]'
+  id: totrans-208
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: We create several Ansible playbooks according to the logical steps we follow
     with CM.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
 - en: It is an excellent practice to update the packages and repositories at the start
     of every configuration. Therefore, we need to start our playbook with this step.
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
 - en: Updating packages and repositories
+  id: totrans-211
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -946,11 +1357,14 @@
     We must update packages and repositories to ensure the latest package index is
     available with all our `apt` repositories and avoid any untoward issues while
     installing packages. The following playbook, `apt-update.yaml`, performs the update:'
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE26]'
+  id: totrans-213
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: The YAML file begins with a list of plays and contains a single play in this
     case. The `hosts` attribute defines a colon-separated list of `roles`/`hosts`
     inventory to apply the playbook. In this case, we’ve specified `webservers` and
@@ -960,58 +1374,74 @@
     packages`. The task uses the `apt` module and consists of `update_cache=yes`.
     It will run an `apt update` operation on all nodes with the `webservers` and `dbservers`
     roles. The next step is to install packages and services.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
 - en: Installing application packages and services
+  id: totrans-215
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: We will use the `apt` module to install the packages on Ubuntu, and the `service`
     module to start and enable the service.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s start by installing Apache on the web servers using the following `install-webserver.yaml`
     playbook:'
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE27]'
+  id: totrans-218
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: As this configuration is for `webservers`, we’ve specified that within the `hosts`
     attribute. The `tasks` section defines two tasks—`Install packages` and `Start
     and Enable Apache service`. The `Install packages` task uses the `apt` module
     to install `apache2`, `php`, `libapache2-mod-php`, and `php-mysql`. The `Start
     and Enable Apache service` task will start and enable the `apache2` service.
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
 - en: 'Similarly, we will install and set up the MySQL service using the following
     `install-dbserver.yaml` playbook:'
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE28]'
+  id: totrans-221
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: This playbook will run two tasks—`Install packages` and `Start and enable MySQL
     service`. The `Install packages` task will install the `python-mysql` and `mysql-server`
     packages using the `apt` module. The `Start and enable MySQL service` task will
     start and enable the MySQL service.
+  id: totrans-222
   prefs: []
   type: TYPE_NORMAL
 - en: Configuring applications
+  id: totrans-223
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: The next step in the chain is to configure the applications. There are two playbooks
     for this. The first will configure Apache on `webservers`, and the second will
     configure MySQL on `dbservers`.
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following `setup-webservers.yaml` playbook will configure `webservers`:'
+  id: totrans-225
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE29]'
+  id: totrans-226
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: This playbook runs on all nodes with the `webservers` role, and there are three
     tasks in this playbook. The `Delete index.html file` task uses the `file` module
     to delete the `/var/www/html/index.html` file from the web server. That is because
@@ -1024,17 +1454,22 @@
     events. In this scenario, if there is a change in the `Upload application file`
     task, the `Restart Apache` handler will be triggered and will restart the `apache2`
     service.
+  id: totrans-227
   prefs: []
   type: TYPE_NORMAL
 - en: 'We will use the following `setup-dbservers.yaml` playbook to configure MySQL
     on `dbservers`:'
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE30]'
+  id: totrans-229
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: This playbook is a bit more complicated, but let’s break it down into parts
     to facilitate our understanding.
+  id: totrans-230
   prefs: []
   type: TYPE_NORMAL
 - en: 'There is a `vars` section in this playbook that defines a `mysql_root_password`
@@ -1042,11 +1477,14 @@
     to set up the root password. The best way to set that up is by defining a `/root/.my.cnf`
     file within MySQL that contains the root credentials. We are copying the following
     `client.my.cnf` file to `/root/.my.cnf` using the `copy` module:'
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE31]'
+  id: totrans-232
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: Then, the `Create a test user` task uses the `mysql_user` module to create a
     user called `testuser`. It requires values for the `login_user` and `login_password`
     attributes, and we are supplying `root` and `{{ mysql_root_password }}`, respectively.
@@ -1056,9 +1494,11 @@
     grepping a file using a regex and then replacing those lines with the line attribute’s
     value. All these tasks notify the `Restart MySQL` handler that restarts the MySQL
     database service.
+  id: totrans-233
   prefs: []
   type: TYPE_NORMAL
 - en: Combining playbooks
+  id: totrans-234
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1066,41 +1506,54 @@
     configure the services before installing packages and services, and there is no
     point in running an `apt` update after installing the packages. Therefore, we
     can create a playbook of playbooks.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: 'To do so, we’ve created a YAML file, `playbook.yaml`, that has the following
     content:'
+  id: totrans-236
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE32]'
+  id: totrans-237
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: This YAML file contains a list of plays, and every play contains an `import_playbook`
     statement. The plays are executed in order as specified in the file. Now, let’s
     go ahead and execute the playbook.
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
 - en: Executing playbooks
+  id: totrans-239
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: 'Executing the playbook is simple. We will use the `ansible-playbook` command
     followed by the playbook YAML file. As we’ve combined playbooks in a `playbook.yaml`
     file, the following command will run the playbook:'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE33]'
+  id: totrans-241
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: 'As we can see, the configuration is applied on both `webservers` and `dbservers`,
     so let’s run a `curl` command to the web server to see what we get:'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE34]'
+  id: totrans-243
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: As we can see, the database is connected successfully! That proves that the
     setup was successful.
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
 - en: There are several reasons why the way we approached the problem was not the
@@ -1109,9 +1562,11 @@
     to variables within them. That does not make the playbooks a candidate for reuse.
     The best way to design software is to keep reusability in mind. Therefore, there
     are many ways in which we can redesign the playbooks to foster reusability.
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
 - en: Designing for reusability
+  id: totrans-246
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1119,9 +1574,11 @@
     You can substitute variables in the right places using **Jinja2** markup, which
     we’ve already used in the last playbook. Let’s now look at Ansible variables,
     their types, and how to use them.
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
 - en: Ansible variables
+  id: totrans-248
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1130,25 +1587,31 @@
     sometimes, there are some differences in configuration. Ansible variables help
     you template your playbooks so that you can reuse them for a variety of similar
     systems. There are multiple places where you can define your variables:'
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
 - en: Within the Ansible playbook within the `vars` section
+  id: totrans-250
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: In your inventory
+  id: totrans-251
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: In reusable files or roles
+  id: totrans-252
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Passing variables through the command line
+  id: totrans-253
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Registering variables by assigning the return values of a task
+  id: totrans-254
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1156,100 +1619,135 @@
     You cannot have a Python *keyword* as a variable, as Ansible uses Python in the
     background. Also, a variable name cannot begin with a number but can start with
     an underscore.
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
 - en: You can define variables using a simple key-value pair within the YAML files
     and following the standard YAML syntax.
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
 - en: Variables can broadly be of three types—*simple variables*, *list variables*,
     and *dictionary variables*.
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
 - en: Simple variables
+  id: totrans-258
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '`{{ var_name }}`. You should always quote Jinja expressions, as the YAML files
     will fail to parse without that.'
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following is an example of a simple variable declaration:'
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE35]'
+  id: totrans-261
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: 'And this is how you should reference it:'
+  id: totrans-262
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE36]'
+  id: totrans-263
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: Now, let’s look at list variables.
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
 - en: List variables
+  id: totrans-265
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '**List variables** hold a list of values you can reference using an index.
     You can also use list variables within loops. To define a list variable, you can
     use the standard YAML syntax for a list, as in the following example:'
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE37]'
+  id: totrans-267
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: 'To access the variable, we can use the index format, as in this example:'
+  id: totrans-268
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE38]'
+  id: totrans-269
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: Ansible also supports more complex dictionary variables. Let’s have a look.
+  id: totrans-270
   prefs: []
   type: TYPE_NORMAL
 - en: Dictionary variables
+  id: totrans-271
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: '**Dictionary variables** hold a complex combination of *key-value pairs*, the
     same as a Python dictionary. You can define dictionary variables using the standard
     YAML syntax, as in the following example:'
+  id: totrans-272
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE39]'
+  id: totrans-273
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: 'There are two ways in which to refer to these variables’ values. For example,
     in dot notation, we can write the following:'
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE40]'
+  id: totrans-275
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: 'And in bracket notation, we can depict the same thing using the following expression:'
+  id: totrans-276
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE41]'
+  id: totrans-277
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: We can use either dot or bracket notation in the same way as in Python.
+  id: totrans-278
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-279
   prefs: []
   type: TYPE_NORMAL
 - en: While both dot and bracket notation signify the same thing, bracket notification
     is better. With dot notation, some keys can collide with the methods and attributes
     of Python dictionaries.
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
 - en: Now, let’s look at ways of sourcing variable values.
+  id: totrans-281
   prefs: []
   type: TYPE_NORMAL
 - en: Sourcing variable values
+  id: totrans-282
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1260,9 +1758,11 @@
     system metadata during the gathering facts phase for the former requirement. That
     helps determine which variables are available and how to use them. Let’s understand
     how we can gather that information.
+  id: totrans-283
   prefs: []
   type: TYPE_NORMAL
 - en: Finding metadata using Ansible facts
+  id: totrans-284
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
@@ -1271,59 +1771,78 @@
     variable directly within the playbook. We can use the `setup` module as an Ansible
     task to determine the facts. For example, you can run the following command to
     get the Ansible facts for all nodes with the `webservers` role:'
+  id: totrans-285
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE42]'
+  id: totrans-286
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: So, as we can see, we get `ansible_facts` with multiple variables associated
     with the inventory item. As we have a single server here, we get `web` server
     details. Within the piece, we have an `ansible_hostname` attribute called `web`.
     We can use that `ansible_hostname` attribute within our playbook if we need to.
+  id: totrans-287
   prefs: []
   type: TYPE_NORMAL
 - en: Sometimes, we want to source a task’s output to a particular variable to use
     the variable in any subsequent tasks of the playbook. Let’s look at how we can
     do that.
+  id: totrans-288
   prefs: []
   type: TYPE_NORMAL
 - en: Registering variables
+  id: totrans-289
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
 - en: If a task within your playbook, for example, needs a value from the result of
     a preceding task, we can use the `register` attribute.
+  id: totrans-290
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following directory contains all the resources for exercises in this section:'
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE43]'
+  id: totrans-292
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: 'Let’s look at the following example `register.yaml` file:'
+  id: totrans-293
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE44]'
+  id: totrans-294
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: The playbook contains two tasks. The first task uses the `command` module to
     execute a command, `free -m`, and registers the result in the `free_space` variable.
     The subsequent task uses the previous task’s output using the `debug` module to
     print `free_space` as a message to the console.
+  id: totrans-295
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s run the playbook to see for ourselves:'
+  id: totrans-296
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE45]'
+  id: totrans-297
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: Now that we’ve understood variables, let’s look at other aspects that will help
     us improve the last playbook.
+  id: totrans-298
   prefs: []
   type: TYPE_NORMAL
 - en: Jinja2 templates
+  id: totrans-299
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1331,23 +1850,29 @@
     use the Python syntax within the file, starting with `{{` and ending with `}}`.
     That will allow you to substitute variables during runtime and run complex computations
     on variables.
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
 - en: 'To understand this further, let’s modify the `index.php` file to supply the
     MySQL username and password dynamically during execution:'
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE46]'
+  id: totrans-302
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: As we can see, instead of hardcoding the username and password, we can use templates
     to substitute the variable values during runtime. That will make the file more
     reusable and will fit multiple environments. Ansible provides another important
     aspect of coding reusability within your playbooks—Ansible **roles**. Let’s have
     a look at this in the next section.
+  id: totrans-303
   prefs: []
   type: TYPE_NORMAL
 - en: Ansible roles
+  id: totrans-304
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1355,141 +1880,181 @@
     it, and none of them are reusable. The code we’ve written can only set up the
     configuration in a particular way. This may work fine for smaller teams with limited
     configurations to manage, but it is not as simple as it looks for most enterprises.
+  id: totrans-305
   prefs: []
   type: TYPE_NORMAL
 - en: 'Ansible roles help to standardize an Ansible setup and promote reusability.
     With roles, you can automatically load **var files**, **handlers**, **tasks**,
     and other Ansible artifacts using a standard directory structure relative to your
     playbooks. The directory structure is as follows:'
+  id: totrans-306
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE47]'
+  id: totrans-307
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: 'The `roles` directory contains multiple subdirectories for each role. Each
     role directory contains multiple standard directories:'
+  id: totrans-308
   prefs: []
   type: TYPE_NORMAL
 - en: '`tasks`: This directory contains a list of tasks’ YAML files. It should contain
     a file called `main.yaml` (or `main.yml` or `main`), containing an entire list
     of tasks or importing tasks from other files within the directory.'
+  id: totrans-309
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`handlers`: This directory contains a list of handlers associated with the
     role within a file called `main.yaml`.'
+  id: totrans-310
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`library`: This directory contains Python modules that can be used with the
     role.'
+  id: totrans-311
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`files`: This directory contains all files that we require for our configuration.'
+  id: totrans-312
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`templates`: This directory contains the Jinja2 templates that the role deploys.'
+  id: totrans-313
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`vars`: This directory contains a `main.yaml` file with a list of variables
     associated with the role.'
+  id: totrans-314
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`defaults`: This directory contains a `main.yaml` file containing the default
     variables associated with the role that can be easily overridden by any other
     variable that includes inventory variables.'
+  id: totrans-315
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`meta`: This directory contains the metadata and dependencies associated with
     the role within a `main.yaml` file.'
+  id: totrans-316
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Some best practices revolve around managing your Ansible configuration through
     the folder structure. Let’s look at some of these next.
+  id: totrans-317
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-318
   prefs: []
   type: TYPE_NORMAL
 - en: While choosing between the `vars` and `defaults` directories, the rule of thumb
     is to put variables that will not change within the `vars` directory. Put variables
     that are likely to change within the `defaults` directory.
+  id: totrans-319
   prefs: []
   type: TYPE_NORMAL
 - en: So, we’ll go and use the `defaults` directory as much as we can. There are some
     best practices regarding roles that we should follow as well. Let’s look at some
     of them.
+  id: totrans-320
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-321
   prefs: []
   type: TYPE_NORMAL
 - en: Think about the full life cycle of a specific service while designing roles
     rather than building the entire stack—in other words, instead of using `lamp`
     as a role, use `apache` and `mysql` roles instead.
+  id: totrans-322
   prefs: []
   type: TYPE_NORMAL
 - en: We will create three roles for our use—`common`, `apache`, and `mysql`.
+  id: totrans-323
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-324
   prefs: []
   type: TYPE_NORMAL
 - en: Use specific roles, such as `apache` or `mysql`, instead of using `webserver`
     or `dbserver`. Typical enterprises have a mix and match of multiple web servers
     and database technologies. Therefore, giving a generic name to a role will confuse
     things.
+  id: totrans-325
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following directory contains all the resources for the exercises in this
     section:'
+  id: totrans-326
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE48]'
+  id: totrans-327
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: 'The following is the directory structure we will follow for our scenario:'
+  id: totrans-328
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE49]'
+  id: totrans-329
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE49]'
 - en: 'There are three roles that we’ll create—`apache`, `mysql`, and `common`. Let’s
     look at the directory structure of the `apache` role first:'
+  id: totrans-330
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE50]'
+  id: totrans-331
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE50]'
 - en: 'There is also a `common` role that will apply to all scenarios. The following
     directory structure defines that:'
+  id: totrans-332
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE51]'
+  id: totrans-333
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE51]'
 - en: 'Finally, let’s define the `mysql` role through the following directory structure:'
+  id: totrans-334
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE52]'
+  id: totrans-335
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE52]'
 - en: 'The `apache` directory consists of the following:'
+  id: totrans-336
   prefs: []
   type: TYPE_NORMAL
 - en: We’ve used the same `index.php` file we created in the last exercise, converted
     it to a Jinja2 template called `index.php.j2`, and copied it to `roles/apache/templates`.
+  id: totrans-337
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The `handlers` directory contains a `main.yaml` file that contains the `Restart`
     `Apache` handler.
+  id: totrans-338
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1498,43 +2063,55 @@
     a list of tasks that will set up Apache, similar to what we did in the previous
     exercise. The `main.yaml` file contains tasks from both files, using `include`
     directives such as the following:'
+  id: totrans-339
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[PRE53]'
+  id: totrans-340
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE53]'
 - en: The `defaults` directory contains the `main.yaml` file, which contains the `mysql_username`
     and `mysql_password` variables and their default values.
+  id: totrans-341
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-342
   prefs: []
   type: TYPE_NORMAL
 - en: Use as few variables as possible and try to default them. Use defaults for variables
     in such a way that minimal custom configuration is needed.
+  id: totrans-343
   prefs: []
   type: TYPE_NORMAL
 - en: 'The `mysql` directory consists of the following:'
+  id: totrans-344
   prefs: []
   type: TYPE_NORMAL
 - en: 'We’ve modified `client.my.cnf` and converted that to a `j2` file. The `j2`
     file is a Jinja2 template file we will use in the role through the `template`
     module in the `Set the root password` task. The file exists within the `templates`
     directory:'
+  id: totrans-345
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[PRE54]'
+  id: totrans-346
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE54]'
 - en: As we can see, we’re providing the password through a Jinja2 expression. When
     we run the `mysql` role through the playbook, the value of `mysql_root_password`
     will be substituted in the `password` section.
+  id: totrans-347
   prefs: []
   type: TYPE_NORMAL
 - en: The `handlers` directory contains the `Restart` `MySQL` handler.
+  id: totrans-348
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1542,85 +2119,111 @@
     contains tasks that install `mysql`, and the `setup-mysql.yaml` file contains
     tasks that set up `mysql`. The `main.yaml` file combines both these files using
     `include` task directives, as follows:'
+  id: totrans-349
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[PRE55]'
+  id: totrans-350
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE55]'
 - en: The `defaults` directory contains a `main.yaml` file with a list of variables
     we will use within the role. In this case, it just contains the value of `mysql_root_password`.
+  id: totrans-351
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The `common` directory contains a single directory called `tasks` that includes
     a `main.yaml` file with a single task to run an `apt` `update` operation.
+  id: totrans-352
   prefs: []
   type: TYPE_NORMAL
 - en: 'The main directory contains `ansible.cfg`, `hosts`, and `playbook.yaml` files.
     While the `hosts` and `ansible.cfg` files are the same as the last exercise, the
     `playbook.yaml` file looks like the following:'
+  id: totrans-353
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE56]'
+  id: totrans-354
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE56]'
 - en: The playbook is now a concise one with a lot of reusable elements. It consists
     of two plays. The first play will run on all web servers with the `root` user
     and apply `common` and `apache` roles to them. The second play will run on all
     nodes with the `dbservers` role with the `root` user and use `common` and `mysql`
     roles.
+  id: totrans-355
   prefs: []
   type: TYPE_NORMAL
 - en: Tip
+  id: totrans-356
   prefs: []
   type: TYPE_NORMAL
 - en: Always keep roles loosely coupled. In the preceding example, the `apache` role
     has no dependency on `mysql` and vice versa. This will allow us to reuse configuration
     with ease.
+  id: totrans-357
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now, let’s go ahead and execute the playbook:'
+  id: totrans-358
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE57]'
+  id: totrans-359
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE57]'
 - en: And, as we can see, there are no changes to the configuration. We’ve applied
     the same configuration but in a better way. If we want to share our configuration
     with people within the team, we can share the `roles` directory, and they can
     apply the role within their playbook.
+  id: totrans-360
   prefs: []
   type: TYPE_NORMAL
 - en: 'There may be instances where we want to use a different value for the variable
     defined in the `roles` section. You can override variables within the playbook
     by supplying the variable values with the `extra-vars` flag, as follows:'
+  id: totrans-361
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE58]'
+  id: totrans-362
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE58]'
 - en: 'When we apply the playbook using the preceding command, we’ll see that the
     user now changes to `foo` and that the password changes to `bar@123` in both the
     Apache and MySQL configurations:'
+  id: totrans-363
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE59]'
+  id: totrans-364
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE59]'
 - en: 'So, if we run the `curl` command to the web host, we will get the same response
     as before:'
+  id: totrans-365
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE60]'
+  id: totrans-366
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE60]'
 - en: Our setup is working correctly with roles. We’ve set up the Ansible playbook
     by following all the best practices and using reusable roles and templates. That
     is the way to go forward in designing powerful Ansible playbooks.
+  id: totrans-367
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-368
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1631,174 +2234,216 @@
     reusability with Ansible variables, Jinja2 templates, and roles and reorganized
     our configuration with reusability in mind. We also looked at several best practices
     along the way.
+  id: totrans-369
   prefs: []
   type: TYPE_NORMAL
 - en: In the next chapter, we will combine Terraform with Ansible to spin up something
     useful and look at HashiCorp’s Packer to create immutable infrastructure.
+  id: totrans-370
   prefs: []
   type: TYPE_NORMAL
 - en: Questions
+  id: totrans-371
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: It is a best practice to avoid using `command` and `shell` modules as much as
     possible. (True/False)
+  id: totrans-372
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Aliases help in keeping your inventory generic. (True/False)
+  id: totrans-373
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: What does the `ansible-playbook` command do?
+  id: totrans-374
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A. It runs an ad hoc task on the inventory.
+  id: totrans-375
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: B. It runs a series of tasks on the inventory.
+  id: totrans-376
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: C. It applies the plays and tasks configured with the playbook.
+  id: totrans-377
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: D. It destroys the configuration from managed nodes.
+  id: totrans-378
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: Which of the following techniques helps in building reusability within your
     Ansible configuration? (Choose three)
+  id: totrans-379
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A. Use variables.
+  id: totrans-380
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: B. Use Jinja2 templates.
+  id: totrans-381
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: C. Use roles.
+  id: totrans-382
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: D. Use tasks.
+  id: totrans-383
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: While naming roles, what should we consider? (Choose two)
+  id: totrans-384
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A. Name roles as precisely as possible.
+  id: totrans-385
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: B. While thinking of roles, think of the service instead of the full stack.
+  id: totrans-386
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: C. Use generic names for roles.
+  id: totrans-387
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: In which directory should you define variables within roles if the variable’s
     value is likely to change?
+  id: totrans-388
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A. `defaults`
+  id: totrans-389
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: B. `vars`
+  id: totrans-390
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: Handlers are triggered when the output of the task associated with the handler
     is …?
+  id: totrans-391
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A. `SUCCESS`
+  id: totrans-392
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: B. `CHANGED`
+  id: totrans-393
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: C. `FAILED`
+  id: totrans-394
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: Does a `SUCCESS` status denote that the task did not detect any changed configuration?
     (True/False)
+  id: totrans-395
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: What are the best practices for inventory management? (Choose three)
+  id: totrans-396
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A. Use a separate inventory for each environment.
+  id: totrans-397
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: B. Group the inventory by functions.
+  id: totrans-398
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: C. Use aliases.
+  id: totrans-399
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: D. Keep the inventory file in a central location.
+  id: totrans-400
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
 - en: Answers
+  id: totrans-401
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'True'
+  id: totrans-402
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'True'
+  id: totrans-403
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: C
+  id: totrans-404
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A, B, C
+  id: totrans-405
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A, B
+  id: totrans-406
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A
+  id: totrans-407
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: B
+  id: totrans-408
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'True'
+  id: totrans-409
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: A, B, and C
+  id: totrans-410
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
