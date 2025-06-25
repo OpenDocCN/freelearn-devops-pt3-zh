@@ -1,0 +1,529 @@
+<html><head></head><body>
+		<div id="_idContainer352">
+			<h1 class="chapter-number" id="_idParaDest-184"><a id="_idTextAnchor185"/>9</h1>
+			<h1 id="_idParaDest-185"><a id="_idTextAnchor186"/>Leveraging Docker and Kubernetes for Advanced Configurations</h1>
+			<p>In the previous chapter, we looked at implementing continuous deployment through Bitbucket Pipelines and worked with various platforms using various technologies. However, we reserved discussions of deploying with Docker and Kubernetes until now. Bitbucket Pipelines can leverage containers for its build environment, as a build package, and even as runners to run pipeline executions. In each case mentioned, you can use a public image or create and use a <span class="No-Break">private image.</span></p>
+			<p>In this chapter, we will examine using Docker container technology and Kubernetes. We’ll cover the following recipes in this chapter while implementing <span class="No-Break">Bitbucket Pipelines:</span></p>
+			<ul>
+				<li>Using a Docker image as a <span class="No-Break">build environment</span></li>
+				<li>Using containerized services in <span class="No-Break">Bitbucket Pipelines</span></li>
+				<li>Using Docker commands in <span class="No-Break">Bitbucket Pipelines</span></li>
+				<li>Deploying a Docker image to Kubernetes using <span class="No-Break">Bitbucket Pipelines</span></li>
+				<li>Setting up Docker-based runners <span class="No-Break">in Linux</span></li>
+			</ul>
+			<p>Let’s begin our exploration of Docker and Kubernetes in <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<h1 id="_idParaDest-186"><a id="_idTextAnchor187"/>Technical requirements</h1>
+			<p>Before we begin our exploration, we should identify what’s needed to work with Docker and Kubernetes in our local <span class="No-Break">development environment.</span></p>
+			<p>To work with <strong class="bold">Docker images</strong>, you need to make sure Docker applications are installed on your runner machines for executing any <span class="No-Break">Docker commands.</span></p>
+			<p>For development machines that are used to create build environments, a good option is Docker Desktop, an application that provides all the required Docker tools for building, packaging, running, and deploying applications as containers. It is available for Mac, Windows, and Linux machines. More information can be found <span class="No-Break">at </span><a href="https://docs.docker.com/get-docker/"><span class="No-Break">https://docs.docker.com/get-docker/</span></a><span class="No-Break">.</span></p>
+			<p>Runners only require Docker applications that can build and run containerized applications. For that, Docker Engine is a good application to install and configure on your runner. It is available for many common Linux distributions, including Ubuntu, Debian, and Red Hat. More information can be found <span class="No-Break">at </span><a href="https://docs.docker.com/engine/"><span class="No-Break">https://docs.docker.com/engine/</span></a><span class="No-Break">.</span></p>
+			<p>For working with Kubernetes clusters, <strong class="source-inline">kubectl</strong> is the preferred tool. The binary for <strong class="source-inline">kubectl</strong> can be downloaded for Linux, Mac, or Windows. Package managers such as yum for Red Hat Linux, apt for Debian Linux, homebrew for Mac, and chocolatey for Windows can also download and install <strong class="source-inline">kubectl</strong>. More information can be found <span class="No-Break">at </span><a href="https://kubernetes.io/docs/home/"><span class="No-Break">https://kubernetes.io/docs/home/</span></a><span class="No-Break">.</span></p>
+			<p>The sample code for this chapter can be found in the <strong class="source-inline">Chapter9</strong> folder of this book’s GitHub <span class="No-Break">repository </span><a href="https://github.com/PacktPublishing/Atlassian-DevOps-Toolchain-Cookbook/tree/main/Chapter9"><span class="No-Break">https://github.com/PacktPublishing/Atlassian-DevOps-Toolchain-Cookbook/tree/main/Chapter9</span></a></p>
+			<h1 id="_idParaDest-187"><a id="_idTextAnchor188"/>Introducing containers and Bitbucket Pipelines</h1>
+			<p>One of <a id="_idIndexMarker643"/>the most recent advances in technology that furthered the DevOps movement was the introduction of <strong class="bold">container</strong> technology. As mentioned in <a href="B21937_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>, instead of setting up complete environments as physical or <strong class="bold">virtual machines</strong> (<strong class="bold">VMs</strong>), an application and its required libraries would reside in a self-contained entity called a container. This container interacts with outside resources through a managing application. At the time of writing, the most popular application for managing containers is Docker Engine from <span class="No-Break">Docker Inc.</span></p>
+			<p>Containers have allowed for application portability at an unprecedented level. Developers can create an application, package it as a container, and run tests on the application in a test environment managing that container. Deployment to production would use the same container image, but in an environment with possibly more resources, depending on the target, allowing multiple instances of the application container for load sharing or <span class="No-Break">high availability.</span></p>
+			<p><strong class="bold">Bitbucket Pipelines</strong> can<a id="_idIndexMarker644"/> work with containers. So, let’s consider some of the uses of containers in <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<p>By default, Bitbucket Pipelines uses Docker images as build. You can define which Docker image to use for <span class="No-Break">your build.</span></p>
+			<p>You can also use Bitbucket Pipelines to create a Docker container image and update the appropriate Docker <span class="No-Break">container repository.</span></p>
+			<p>Bitbucket Pipelines<a id="_idIndexMarker645"/> can use runners that can be created from Docker images to execute builds. This may allow for dynamic allocation of runners to perform a build by creating as many Docker containers as needed and destroying those containers when complete. The only limitation to this is the available resources in <span class="No-Break">your environment.</span></p>
+			<p>Another application of container technology comes in the form of Kubernetes. Kubernetes was initially developed by Google to abstract applications stored in containers as services and provide an environment for establishing and maintaining clusters of <span class="No-Break">containerized services.</span></p>
+			<p>Finally, Bitbucket Pipelines can build an application into a Docker container image. This image can be deployed into a Kubernetes cluster as part of the <span class="No-Break">pipeline script.</span></p>
+			<p>Now that we understand how Docker containers work with Bitbucket Pipelines, let’s examine how we can make <span class="No-Break">that happen.</span></p>
+			<h1 id="_idParaDest-188"><a id="_idTextAnchor189"/>Using a Docker image as a build environment</h1>
+			<p>Bitbucket Pipelines<a id="_idIndexMarker646"/> uses a Docker image as a platform to execute the commands found in <strong class="source-inline">bitbucket-pipelines.yml</strong>. This image is normally a default provided by Atlassian but can be replaced with a <span class="No-Break">custom image.</span></p>
+			<p>Let’s examine how Bitbucket Pipelines uses these <span class="No-Break">Docker images.</span></p>
+			<h2 id="_idParaDest-189"><a id="_idTextAnchor190"/>Getting ready</h2>
+			<p>In Bitbucket Pipelines, the runner executes the commands specified on <strong class="source-inline">bitbucket-pipelines.yml</strong> in a build environment. This build environment always uses a <span class="No-Break">Docker container.</span></p>
+			<p>If a Docker image isn’t specified, Bitbucket Pipelines will select a default Docker image for <span class="No-Break">the container.</span></p>
+			<p>Default images used by Bitbucket Pipelines are stored by <a id="_idIndexMarker647"/>Atlassian in <strong class="bold">Docker Hub</strong> <span class="No-Break">at </span><a href="https://hub.docker.com/r/atlassian/default-image/"><span class="No-Break">https://hub.docker.com/r/atlassian/default-image/</span></a><span class="No-Break">.</span></p>
+			<p>Version numbers for the default image can be specified. If no version number is specified, the version specified with the <strong class="bold">latest</strong> tag will <span class="No-Break">be used.</span></p>
+			<p>The following <a id="_idIndexMarker648"/>table provides a synopsis of the default <span class="No-Break">image versions:</span></p>
+			<table class="No-Table-Style _idGenTablePara-1" id="table001-1">
+				<colgroup>
+					<col/>
+					<col/>
+					<col/>
+				</colgroup>
+				<thead>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="bold">Version</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="bold">Tags</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="bold">Contents</strong></span></p>
+						</td>
+					</tr>
+				</thead>
+				<tbody>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>1.x (<span class="No-Break">deprecated)</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="source-inline">latest</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>Platform: <span class="No-Break"><strong class="source-inline">ubuntu 14.04</strong></span></p>
+							<p>Packages available out of the box: <strong class="source-inline">wget xvfb curl git: 1.9.1 java: 1.8u66 maven: 3.0.5 node: 4.2.1 npm: 2.14.7 nvm: 0.29.0 python: 2.7.6 </strong><span class="No-Break"><strong class="source-inline">gcc: 4.8.4</strong></span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>2.x (<span class="No-Break">deprecated)</span></p>
+						</td>
+						<td class="No-Table-Style"/>
+						<td class="No-Table-Style">
+							<p>Platform: <span class="No-Break"><strong class="source-inline">ubuntu 16.04</strong></span></p>
+							<p>Packages available out of the box: <strong class="source-inline">wget xvfb curl ssh git: 2.7.4 mercurial: 3.7.3 java: Open-JDK 1.8u151 maven: 3.3.9 node: 8.9.4 npm: 5.6.0 nvm: 0.33.8 python: 2.7.12 gcc: 5.4.0 </strong><span class="No-Break"><strong class="source-inline">ant: 1.9.6</strong></span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>3.x (<span class="No-Break">deprecated)</span></p>
+						</td>
+						<td class="No-Table-Style"/>
+						<td class="No-Table-Style">
+							<p>Platform: <strong class="source-inline">ubuntu </strong><span class="No-Break"><strong class="source-inline">20.04 (LTS)</strong></span></p>
+							<p>Packages available out of the box: <strong class="source-inline">wget xvfb curl ssh zip jq tar parallel git: 2.39.1 node: 14.17.5 npm: 6.14.14 nvm: 0.38.0 python: 3.8.10 gcc: 9.4.0 </strong><span class="No-Break"><strong class="source-inline">ant: 1.10.7</strong></span></p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>4.x (<span class="No-Break">recommended)</span></p>
+						</td>
+						<td class="No-Table-Style"/>
+						<td class="No-Table-Style">
+							<p>Platform: <strong class="source-inline">ubuntu </strong><span class="No-Break"><strong class="source-inline">22.04 (LTS)</strong></span></p>
+							<p>Packages available out of the box: <strong class="source-inline">wget xvfb curl ssh zip jq tar parallel git: 2.39.1 node: 18.16.1 npm: 9.5.1 nvm: 0.39.2 python: 3.10.6 gcc: 11.3.0 </strong><span class="No-Break"><strong class="source-inline">ant: 1.10.12</strong></span></p>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Table 9.1 – Default Atlassian build environment Docker images</p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">An image tagged as <strong class="source-inline">latest</strong> is using an older image with other images that are created more recently. This allows for backward compatibility with older Bitbucket <span class="No-Break">Pipelines builds.</span></p>
+			<p>To specify the desired version, add the following line <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">bitbucket-pipelines.yml</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+image: atlassian/default-image:&lt;version number&gt;</pre>			<p>Here, <strong class="source-inline">&lt;version number&gt;</strong> represents the desired version or tag (such <span class="No-Break">as </span><span class="No-Break"><strong class="source-inline">latest</strong></span><span class="No-Break">).</span></p>
+			<p>We can specify <a id="_idIndexMarker649"/>any Docker image, from a public or private repository, to create our build environment. Let’s examine the methods for doing so in our <span class="No-Break">next section.</span></p>
+			<h2 id="_idParaDest-190"><a id="_idTextAnchor191"/>How to do it…</h2>
+			<p>Bitbucket Pipelines can use any Docker image from public or private repositories. The information that’s required differs based on whether the repository is public <span class="No-Break">or private.</span></p>
+			<p>Let’s learn how to use a Docker image from a <span class="No-Break">public registry.</span></p>
+			<h3>Using a public image</h3>
+			<p>A <a id="_idIndexMarker650"/>public repository hosts Docker images available for use by anyone. This repository can reside on Docker Hub, another repository, or even a self-published repository, so long as it can be accessed on <span class="No-Break">the internet.</span></p>
+			<p>Let’s look at using a public Docker image for your <span class="No-Break">build environment:</span></p>
+			<ol>
+				<li>Specify the image by name in the <strong class="source-inline">bitbucket-pipelines.yml</strong> file. If a tag isn’t included, the <strong class="source-inline">latest</strong> tag <span class="No-Break">is implied:</span><pre class="source-code">
+image: postgres</pre></li>				<li>If an account is specified, it should be included as part of <span class="No-Break">the name:</span><pre class="source-code">
+image: bitnami/postgresql</pre></li>				<li>Specific versions can be included after the image’s name with <span class="No-Break">a colon:</span><pre class="source-code">
+image: bitnami/postgresql:16.2.0</pre></li>				<li>If you’re using a public image not hosted on Docker Hub, include the repository’s URL in the <span class="No-Break">image specification:</span><pre class="source-code">
+image: docker.publicimage.com/bitnami/postgresql:16.2.0</pre></li>			</ol>
+			<p>With that, you’ve <a id="_idIndexMarker651"/>learned how to specify public Docker images for build environments. Now, let’s look at using <span class="No-Break">private images.</span></p>
+			<h3>Using a private image</h3>
+			<p>Private Docker<a id="_idIndexMarker652"/> repositories are often used by companies and other organizations to store custom Docker images containing that organization’s intellectual property. These repositories are often secured through <span class="No-Break">authentication policies.</span></p>
+			<p>Let’s look at configuring build environments by using private <span class="No-Break">Docker images:</span></p>
+			<ol>
+				<li>You can add secured variables to store your credentials and refer to the variables in the <strong class="source-inline">bitbucket-pipelines.yml</strong> file. Variables and secrets were discussed in <a href="B21937_06.xhtml#_idTextAnchor103"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>. The following code snippet shows an example of a private Docker <span class="No-Break">Hub repository:</span><pre class="source-code">
+image:
+   name: my-company-account/bitnami/postgresql:16.2.0
+   username: $DOCKER_HUB_USERNAME
+   password: $DOCKER_HUB_PASSWORD
+   email: $DOCKER_HUB_EMAIL</pre></li>				<li>If your private <a id="_idIndexMarker653"/>Docker repository uses AWS <strong class="bold">EC2 Container Registry</strong> (<strong class="bold">ECR</strong>), you can set up the access key and secret key as variables. They will be identified in a separate <span class="No-Break"><strong class="source-inline">aws</strong></span><span class="No-Break"> section:</span><pre class="source-code">
+image:
+   name:
+&lt;aws_account_id&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/bitnami/postgresql:16.2.0
+   aws:
+      access-key: $AWS_ACCESS_KEY
+      secret-key: $AWS_SECRET_KEY</pre></li>				<li>Another <a id="_idIndexMarker654"/>method of passing AWS credentials involves setting up an IAM role in AWS and setting up Bitbucket Pipelines as a web identity provider. This allows Bitbucket Pipelines to connect to AWS ECR using Open ID Connect. Detailed instructions for this are located at <a href="https://support.atlassian.com/bitbucket-cloud/docs/use-aws-ecr-images-in-pipelines-with-openid-connect/">https://support.atlassian.com/bitbucket-cloud/docs/use-aws-ecr-images-in-pipelines-with-openid-connect/</a>. The following code snippet must then be placed <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">bitbucket-pipelines.yml</strong></span><span class="No-Break">:</span><pre class="source-code">
+image:
+   name: &lt;aws_account_id&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com/bitnami/postgresql:16.2.0
+   aws:
+          oidc-role: arn:aws:iam::&lt;aws_account_id&gt;:role/&lt;your_role_name&gt;</pre></li>				<li>If your private Docker repository is located in <strong class="bold">Google Container Registry</strong> (<strong class="bold">GCR</strong>), you <a id="_idIndexMarker655"/>must create a service account in the GCP admin console that grants <em class="italic">Viewer</em> access to GCR for Bitbucket Pipelines. This will create a private key in JSON format. Download the key and save it in Bitbucket Pipelines as a secured variable. You can then access the image using the following <span class="No-Break">code snippet:</span><pre class="source-code">
+image:
+   name: &lt;region&gt;.gcr.io/&lt;project&gt;/image
+   username: _json_key
+   password: '$GCR_JSON_KEY'</pre><p class="list-inset">For <a id="_idIndexMarker656"/>any other private Docker repository, provide the registry URL and include the credentials as secured variables. This is shown in the following <span class="No-Break">code snippet:</span></p><pre class="source-code">image:
+   name: docker.&lt;company name&gt;.com/&lt;account-name&gt;/bitnami/postgresql:16.2.0
+   username: $USERNAME
+   password: $PASSWORD
+   email: $EMAIL</pre></li>			</ol>
+			<p>With that, you’ve seen a variety of places where Bitbucket Pipelines can retrieve Docker images for use as <span class="No-Break">build environments.</span></p>
+			<p>Next, we’ll look at defining and using containerized services while running our <span class="No-Break">Bitbucket pipeline.</span></p>
+			<h1 id="_idParaDest-191"><a id="_idTextAnchor192"/>Using containerized services in Bitbucket Pipelines</h1>
+			<p>You can<a id="_idIndexMarker657"/> run multiple services in a Bitbucket pipeline by defining containers to use. Once the pipeline runs, these services are <a id="_idIndexMarker658"/>scheduled to run in the step they are invoked. Services that can be invoked in this manner include databases, code analytics, and <span class="No-Break">web services.</span></p>
+			<p>In this recipe, we’ll look at defining and using <span class="No-Break">containerized services.</span></p>
+			<h2 id="_idParaDest-192"><a id="_idTextAnchor193"/>Getting ready</h2>
+			<p>There are a few things to understand about the limitations of using services implemented in containers during pipeline executions. Let’s take a close look at <span class="No-Break">them now.</span></p>
+			<p>There are a limited number of resources available for these containerized services. Any given step in the pipeline can work with a maximum of five services. If you need to run with a larger number of services, you can define a <strong class="bold">Docker-in-Docker</strong> configuration that allows you to execute additional services through <strong class="source-inline">docker run</strong> <span class="No-Break">or </span><span class="No-Break"><strong class="source-inline">docker-compose</strong></span><span class="No-Break">.</span></p>
+			<p>Each of <a id="_idIndexMarker659"/>these services will run without waiting for service startup. While these services are running, you cannot access the services or their logs through REST API calls, although logs should be available through the Bitbucket Pipelines <strong class="bold">user interface</strong> (<strong class="bold">UI</strong>). Also, while running, TCP and UDP port <strong class="source-inline">29418</strong> will be reserved and cannot be used for <span class="No-Break">external actions.</span></p>
+			<p>The most involved limits for services involve memory. Each step can be defined as either a regular step with a 4,096 MB memory limit or as a large build step (defined by adding the <strong class="source-inline">size: 2x</strong> statement in the step definition), which increases the memory limit to <span class="No-Break">8,192 MB.</span></p>
+			<p>The memory<a id="_idIndexMarker660"/> in a step is divided into one build container and the number of service containers as defined by the step. A build container requires a minimum of 1,024 MB. This amount of memory is needed to handle the build process and any overhead required by <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<p>The remaining memory is then available to the service containers. After memory is allocated by the build container, 3,027 MB or 7,128 MB is left over for the service containers. By default, each service container can receive 1,024 MB or a custom amount between 128 MB and the maximum amount. This can be set by using the <strong class="source-inline">memory</strong> keyword in the <span class="No-Break">service definition.</span></p>
+			<p>If your build step includes Bitbucket Pipes, it uses a built-in Docker service. By default, this Docker service occupies 1,024 MB of the build step’s memory but can be configured to a custom amount by setting the memory between 128 MB to <span class="No-Break">the maximum.</span></p>
+			<p>Now that we understand these limitations, let’s learn how to define the services that can run on a <span class="No-Break">given step.</span></p>
+			<h2 id="_idParaDest-193"><a id="_idTextAnchor194"/>How to do it…</h2>
+			<p>The following is a set of examples of the types of services that can be defined within a build step. In this recipe, we’re going to look at examples that <span class="No-Break">use them:</span></p>
+			<ul>
+				<li><span class="No-Break">Database service</span></li>
+				<li>Data store (for example, <span class="No-Break">NoSQL) service</span></li>
+				<li><span class="No-Break">Docker-in-Docker service</span></li>
+			</ul>
+			<p>Let’s look at how to define <span class="No-Break">these services.</span></p>
+			<h3>Defining a containerized database service</h3>
+			<p>Let’s start with <a id="_idIndexMarker661"/>what the definition would be for a database service that had all <span class="No-Break">default values:</span></p>
+			<ol>
+				<li>In the <strong class="source-inline">definitions:</strong> section, specify the service name in <strong class="source-inline">services:</strong>, add the <a id="_idIndexMarker662"/>Docker image using the <strong class="source-inline">image:</strong> keyword, and the necessary credentials (as secure variables) in the <strong class="source-inline">variables:</strong> section. This should look <span class="No-Break">as follows:</span><pre class="source-code">
+definitions:
+   services:
+      mysql:
+         image: mysql:5.7
+         variables:
+            MYSQL_DATABASE: test-db
+            #set up password as secure variable and use here
+                 MYSQL_ROOT_PASSWORD: $password</pre></li>				<li>To use the service in a step, add the service in the <strong class="source-inline">services:</strong> section of the step. This is shown in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+default:
+   - step:
+         services:
+            - mysql</pre></li>				<li>To customize the memory allocation, add the desired amount of memory, in MB, after the <strong class="source-inline">memory:</strong> keyword in the <strong class="source-inline">definitions:</strong> section. The code should now look <span class="No-Break">as follows:</span><pre class="source-code">
+definitions:
+   services:
+      mysql:
+         image: mysql:5.7
+         memory: 2048 # double the mimimum
+         variables:
+            MYSQL_DATABASE: test-db
+            #set up password as secure variable and use here
+            MYSQL_ROOT_PASSWORD: $password</pre></li>			</ol>
+			<p>We now have <a id="_idIndexMarker663"/>a <a id="_idIndexMarker664"/>database service running for our build step with 2,048 MB in its <span class="No-Break">service container.</span></p>
+			<h3>Defining a containerized data store service</h3>
+			<p>Let’s create our<a id="_idIndexMarker665"/> data store service in the same manner that we did in the <span class="No-Break">previous example:</span></p>
+			<ol>
+				<li>In the <strong class="source-inline">definitions:</strong> section, set up the service name in <strong class="source-inline">services:</strong> and add the Docker image using the <strong class="source-inline">image:</strong> keyword. These additions should look <span class="No-Break">as follows:</span><pre class="source-code">
+definitions:
+   services:
+      redis:
+         image: redis:3.2</pre></li>				<li>To use the service in a step, simply add it to the <strong class="source-inline">services:</strong> section of the step. We’ve also added a command we’re running based on the service. This is shown in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+default:
+   - step:
+         script:
+            - redis-cli -h localhost ping
+         services:
+            - mysql</pre></li>			</ol>
+			<p>With that, we’ve<a id="_idIndexMarker666"/> learned how to define a containerized service and use it within the <span class="No-Break">build step.</span></p>
+			<p>Now, let’s learn how to invoke a <span class="No-Break">Docker-in-Docker service.</span></p>
+			<h3>Defining a service for Docker-in-Docker</h3>
+			<p>Let’s <a id="_idIndexMarker667"/>look at <a id="_idIndexMarker668"/>running a Docker service within our <span class="No-Break">build step:</span></p>
+			<ol>
+				<li>In the <strong class="source-inline">definitions:</strong> section, set up the service name in <strong class="source-inline">services:</strong>. This should look <span class="No-Break">as follows:</span><pre class="source-code">
+definitions:
+   services:
+      docker:</pre></li>				<li>To use the service in a step, add it to the <strong class="source-inline">services:</strong> section of the step. We’ve also added a command we’re running based on the service. This is shown in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+default:
+   - step:
+         script:
+            - docker info
+         services:
+            - docker</pre></li>				<li>You can <a id="_idIndexMarker669"/>give your Docker services custom names. Define the service with the custom name and set <strong class="source-inline">type:</strong> to <strong class="source-inline">docker</strong>. A detailed example of a custom<a id="_idIndexMarker670"/> Docker service with memory size customizations is shown in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+definitions:
+   services:
+      my-docker:
+         memory: 5120
+         type: docker
+default:
+   - step:
+      services: my-docker
+      size: 2x
+      script:
+         - docker info</pre></li>			</ol>
+			<p>With that, we’ve learned how to define Docker as a service from within <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<p>Next, we’ll learn how to deploy our Bitbucket Pipelines output as a Docker image and push the image to a Docker repository. For that, we need to understand how to execute Docker commands. Let’s see how <span class="No-Break">that’s done.</span></p>
+			<h1 id="_idParaDest-194"><a id="_idTextAnchor195"/>Using Docker commands in Bitbucket Pipelines</h1>
+			<p>If you <a id="_idIndexMarker671"/>have a Dockerfile in your Bitbucket repository, you <a id="_idIndexMarker672"/>can use Bitbucket Pipelines to build the image and push it to your Docker repository. You can do this by executing Docker commands from within the <strong class="source-inline">bitbucket-pipelines.yml</strong> file. Let’s take a closer look at how <span class="No-Break">that’s done.</span></p>
+			<h2 id="_idParaDest-195"><a id="_idTextAnchor196"/>Getting ready</h2>
+			<p>Before adding Docker commands to the <strong class="source-inline">bitbucket-pipelines.yml</strong> file, we need to enable the <span class="No-Break">following configurations:</span></p>
+			<ul>
+				<li>Allowing access to the <span class="No-Break">Docker daemon</span></li>
+				<li>Enabling <span class="No-Break">Docker BuildKit</span></li>
+			</ul>
+			<p>These configurations are part of <strong class="source-inline">bitbucket-pipelines.yml</strong>. Let’s see where <span class="No-Break">they go.</span></p>
+			<h3>Enabling access to the Docker daemon</h3>
+			<p>Access<a id="_idIndexMarker673"/> to the Docker daemon as a service can be done either by adding Docker as a service to an individual step, which is <a id="_idIndexMarker674"/>recommended so that you can keep track of how many services your overall pipeline is running, or by adding Docker as a service to all steps. Let’s see how each alternative <span class="No-Break">is done:</span></p>
+			<ol>
+				<li>To add Docker as a service for the build step, make sure it is present in the <strong class="source-inline">services:</strong> section of the step. This is illustrated in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+pipelines:
+  default:
+    - step:
+        script:
+          - ...
+        services:
+          - docker</pre></li>				<li>To <a id="_idIndexMarker675"/>add Docker as a service globally, add <strong class="source-inline">docker</strong> in the <strong class="source-inline">options:</strong> section and set it to <strong class="source-inline">true</strong>, as shown<a id="_idIndexMarker676"/> in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+options:
+  docker: true</pre></li>			</ol>
+			<p>There are a few things to note about enabling access to the Docker daemon. Docker is defined as a service by default, so we don’t need to define it in the <strong class="source-inline">definitions:</strong> section <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">bitbucket-pipelines.yml</strong></span><span class="No-Break">.</span></p>
+			<p>These days, creating Docker builds involves using Docker BuildKit. So, let’s learn how to work with Docker BuildKit in <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<h3>Enabling Docker BuildKit</h3>
+			<p>Docker BuildKit is a <a id="_idIndexMarker677"/>default part of building when using Docker Desktop or Docker Engine v23.0 and beyond. We want to make<a id="_idIndexMarker678"/> sure it is enabled to ensure compatibility with these versions. So, let’s explore how to work with <span class="No-Break">Docker BuildKit.</span></p>
+			<p>To enable Docker BuildKit, make sure the <strong class="source-inline">DOCKER_BUILDKIT</strong> environment variable is set to <strong class="source-inline">1</strong>, as shown in the following <span class="No-Break">code snippet:</span></p>
+			<pre class="source-code">
+pipelines:
+   default:
+       - step:
+         script:
+            - export DOCKER_BUILDKIT=1
+            - docker build .
+         services:
+            - docker</pre>			<p>Now, let’s learn how to use Docker commands in <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<h2 id="_idParaDest-196"><a id="_idTextAnchor197"/>How to do it…</h2>
+			<p>With<a id="_idIndexMarker679"/> Docker and Docker BuildKit enabled, we can run most Docker commands. For security, reasons Bitbucket Pipelines has placed limitations on the Docker commands that can be run, as well as the modes of other Docker commands. A detailed list of the restrictions can be found <span class="No-Break">at </span><a href="https://support.atlassian.com/bitbucket-cloud/docs/run-docker-commands-in-bitbucket-pipelines/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/run-docker-commands-in-bitbucket-pipelines/</span></a><span class="No-Break">.</span></p>
+			<p>In the meantime, we’ll consider the common use cases for incorporating Docker into Bitbucket Pipelines. These include <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>Building a Docker image from <span class="No-Break">a Dockerfile</span></li>
+				<li>Passing secrets to Docker BuildKit from Bitbucket <span class="No-Break">secured variables</span></li>
+				<li>Passing secrets to Docker BuildKit from external <span class="No-Break">secret managers</span></li>
+				<li>Pushing a Docker image to a <span class="No-Break">Docker repository</span></li>
+			</ul>
+			<p>Let’s examine these common <span class="No-Break">use cases.</span></p>
+			<h3>Building a Docker image from a Dockerfile</h3>
+			<p>With <a id="_idIndexMarker680"/>Docker BuildKit enabled, Bitbucket Pipelines can build a Docker image. Let’s look at this <span class="No-Break">in detail:</span></p>
+			<ol>
+				<li>Make sure that a Dockerfile exists at the root level of your <span class="No-Break">Bitbucket repository.</span><p class="list-inset">You may want to specify your image’s name as <span class="No-Break">a variable.</span></p></li>
+				<li>Add the following line in the script portion of your <span class="No-Break">build step:</span><pre class="source-code">
+- docker build -t $IMAGE_NAME .</pre></li>			</ol>
+			<p>With this done, let’s move on to the next <span class="No-Break">use case.</span></p>
+			<h3>Passing secrets to Docker BuildKit with secured variables</h3>
+			<p>If we <a id="_idIndexMarker681"/>need to pass secrets such as credentials or API keys to a BuildKit build, we can use secured variables in Bitbucket to pass them. Here’s how we can <span class="No-Break">do this:</span></p>
+			<ol>
+				<li>Create the secure variable <span class="No-Break">in Bitbucket.</span><p class="list-inset">In the <strong class="source-inline">bitbucket-pipelines.yml</strong> file, add the <strong class="source-inline">--secret</strong> flag and set the ID to the secure variable. The code snippet shows <strong class="source-inline">SECRET</strong> as the <span class="No-Break">secure variable:</span></p><pre class="source-code">
+pipelines:
+   default:
+      - step:
+            name: 'BuildKit and secure variables'
+            script:
+            # Enable BuildKit
+           - export DOCKER_BUILDKIT=1
+           # Pass the secure variable into Docker build and prevent caching
+           - docker image build -t latest --secret id=SECRET --progress=plain --no-cache dockerfile
+           services:
+           - Docker</pre></li>				<li>In the Dockerfile, add a <strong class="source-inline">RUN</strong> instruction that mounts the secure variable (using the <strong class="source-inline">--mount=type=secret</strong> flag) into the default Docker secret store <strong class="source-inline">(/run/secrets/*)</strong>. This is illustrated in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+FROM ubuntu:latest
+# Mount and print SECRET
+RUN --mount=type=secret, id=SECRET \
+      cat /run/secrets/SECRET</pre></li>			</ol>
+			<p>There’s another way secrets can be passed to Docker BuildKit: using an external secret manager. So, let’s <a id="_idIndexMarker682"/>explore how to work with external <span class="No-Break">secret managers.</span></p>
+			<h3>Passing secrets to Docker BuildKit with external secret managers</h3>
+			<p>We <a id="_idIndexMarker683"/>can also connect to external secret managers such as Hashicorp Vault or Google Cloud Secret Manager to pass secrets such as credentials or API keys to a BuildKit build. Let’s <span class="No-Break">learn how:</span></p>
+			<ol>
+				<li>In the <strong class="source-inline">bitbucket-pipelines.yml</strong> file, get the secret from the manager, place the secret in a pipeline file, add the <strong class="source-inline">--secret</strong> flag, and identify the source as the pipeline file. Remember that the pipeline file will be deleted when the pipeline step is complete and the container is removed. The following code snippet shows <strong class="source-inline">SECRET</strong> as the <span class="No-Break">secure variable:</span><pre class="source-code">
+pipelines:
+   default:
+      - step:
+            name: 'BuildKit and external secret managers'
+            script:
+            # Enable BuildKit
+           - export DOCKER_BUILDKIT=1
+           # This is where the call to the external secret manager resides.  We assume here that it has added the secret to "/secret_file"
+           # Pass the secure variable into Docker build and prevent caching
+           - docker image build -t latest --secret id=SECRET,src=/secret_file --progress=plain --no-cache dockerfile
+           services:
+           - docker</pre></li>				<li>In <a id="_idIndexMarker684"/>the Dockerfile, add a <strong class="source-inline">RUN</strong> instruction that mounts the secure variable (using the <strong class="source-inline">--mount=type=secret</strong> flag), including the pipeline file containing the secret, into the default Docker secret store (<strong class="source-inline">/run/secrets/*</strong>). This is illustrated in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+FROM ubuntu:latest
+# Mount and print SECRET
+RUN --mount=type=secret, id=SECRET,dst=/secret_file \
+      cat /run/secrets/SECRET</pre></li>			</ol>
+			<p>With that, we’ve built an image that passed a secret found in an external source. Now, let’s look at the various actions you can perform, including pushing to a <span class="No-Break">Docker registry.</span></p>
+			<h3>Pushing a Docker image to a Docker registry</h3>
+			<p>You <a id="_idIndexMarker685"/>can push images you create to Docker Hub or another registry as part of a Bitbucket Pipelines script execution. Follow <span class="No-Break">these steps:</span></p>
+			<ol>
+				<li>Create variables for the image name, username for the Docker repository, and password for the Docker repository. The username and password should be <span class="No-Break">secure variables.</span></li>
+				<li>Add commands to the script portion of the step to deploy the Docker image. To do this, you must do <span class="No-Break">the following:</span><ol><li class="upper-roman">Log in to the <span class="No-Break">Docker repository.</span></li><li class="upper-roman">Push the image via <span class="No-Break"><strong class="source-inline">docker push</strong></span><span class="No-Break">.</span></li></ol><p class="list-inset">The following code snippet shows a basic example of how to build and push a <span class="No-Break">Docker image:</span></p><pre class="source-code">
+- step:
+   name: Build
+   script:
+      # Build the Docker image (assumes the Dockerfile is at the root level of the repository)
+      - docker build -t $IMAGE_NAME .
+      # Authenticate with the Docker registry (this example is Docker Hub)
+      - docker login --username $DOCKER_HUB_USERNAME --password $DOCKER_HUB_PASSWORD
+      # Push the image to the Docker registry
+      - docker push $IMAGE_NAME
+   services:
+      - docker</pre></li>			</ol>
+			<p>With that, we’ve <a id="_idIndexMarker686"/>learned how to deploy our application as a Docker image by building it and pushing the resulting image to a Docker registry. We can take our example a step further by deploying the Docker image to a Kubernetes cluster. We’ll do this in the <span class="No-Break">next section.</span></p>
+			<h1 id="_idParaDest-197"><a id="_idTextAnchor198"/>Deploying a Docker image to Kubernetes using Bitbucket Pipelines</h1>
+			<p>A potential <a id="_idIndexMarker687"/>next step after building the Docker image is to deploy it to a Kubernetes cluster. By taking advantage of the redundancy capabilities in a cluster, we can perform application upgrades without a service <span class="No-Break">outage occurring.</span></p>
+			<h2 id="_idParaDest-198"><a id="_idTextAnchor199"/>Getting ready</h2>
+			<p>The instructions in this recipe assume that you have an existing Kubernetes cluster or minikube environment that was <span class="No-Break">created manually.</span></p>
+			<p>In addition, you must manually define a deployment that runs the application in Kubernetes. So, let’s learn how to create <span class="No-Break">a deployment.</span></p>
+			<p>Ensure <a id="_idIndexMarker688"/>the application name and the Docker registry username are available for easy reference. Execute the <strong class="source-inline">kubectl</strong> command, including the necessary flags, as shown in the following code snippet. These will include the application name and Docker registry name as part of the <span class="No-Break">image name:</span></p>
+			<pre class="console">
+kubectl run &lt;my.app&gt; --labels="app=&lt;my.app&gt;" --image=&lt;my.dockerhub.username&gt;/&lt;my.app&gt;:latest --replicas=2 --port=8080</pre>			<p>Now that we have established a deployment in Kubernetes, let’s learn about the continuous deployment aspect of the application when using <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<h2 id="_idParaDest-199"><a id="_idTextAnchor200"/>How to do it…</h2>
+			<p>We can integrate with the <strong class="source-inline">kubectl</strong> application from Bitbucket Pipelines in one of <span class="No-Break">two ways:</span></p>
+			<ul>
+				<li>Using a Pipe <span class="No-Break">to integrate</span></li>
+				<li>Setting up <span class="No-Break">a service</span></li>
+			</ul>
+			<p>Let’s take a look at each method in <span class="No-Break">more detail.</span></p>
+			<h3>Executing kubectl using pipes</h3>
+			<p>As we<a id="_idIndexMarker689"/> saw in <a href="B21937_06.xhtml#_idTextAnchor103"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>, Bitbucket Pipes are pre-packaged integrations with common third-party tools and utilities. They can be easily added into Bitbucket Pipelines steps and will execute through separate containers <span class="No-Break">as services.</span></p>
+			<p>Let’s learn how to incorporate the pipe <span class="No-Break">for </span><span class="No-Break"><strong class="source-inline">kubectl</strong></span><span class="No-Break">:</span></p>
+			<ol>
+				<li>Set up the <strong class="source-inline">kubeconfig</strong> file for reading. This file needs to be <strong class="source-inline">Base64</strong> encoded and then stored as a secure variable. You can use the following code to <span class="No-Break">do so:</span><pre class="source-code">
+KUBE_CONFIG_BASE64=$(cat ~/.kube/config | base64)</pre></li>				<li>Add the pipe to the script portion of the step. The pipe definition should look <span class="No-Break">like this:</span><pre class="source-code">
+- step:
+   name: Deploy
+   deployment: production
+   script:
+      -pipe: atlassian/kubectl-run:1.1.2
+       variables:
+          KUBE_CONFIG: $KUBE_CONFIG
+          KUBECTL_COMMAND: 'apply'
+          RESOURCE_PATH: 'deployment.yml</pre></li>			</ol>
+			<p>With that, we<a id="_idIndexMarker690"/> have deployed to Kubernetes using a pipe via <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<p>Sometimes, we need to execute a different version of <strong class="source-inline">kubectl</strong> than what’s provided on a Pipe. In this case, executing from the Atlassian-provided Docker image for <strong class="source-inline">kubectl</strong> is a better alternative. One reason for incorporating a different version may be to ensure compatibility with an existing Kubernetes cluster on a legacy version. Let’s explore that <span class="No-Break">option now.</span></p>
+			<h3>Executing kubectl using a kubectl Docker image</h3>
+			<p>Bitbucket Pipelines<a id="_idIndexMarker691"/> also has a version of <strong class="source-inline">kubectl</strong> that’s encapsulated in its own Docker image. This image is located on Docker Hub at <a href="https://hub.docker.com/r/atlassian/pipelines-kubectl">https://hub.docker.com/r/atlassian/pipelines-kubectl</a> and can be used within a Bitbucket Pipelines script to execute <span class="No-Break"><strong class="source-inline">kubectl</strong></span><span class="No-Break"> commands.</span></p>
+			<p>To deploy on Kubernetes using a <strong class="source-inline">kubectl</strong> service, perform the <span class="No-Break">following steps:</span></p>
+			<ol>
+				<li>Within the deployment step, define the Docker image using the <span class="No-Break"><strong class="source-inline">image:</strong></span><span class="No-Break"> keyword.</span></li>
+				<li>Set up our <strong class="source-inline">kubeconfig</strong> file. This time, we’re decoding Base64 to create a temporary file that gets destroyed <span class="No-Break">after execution:</span><pre class="source-code">
+echo $KUBECONFIG | base64 -d &gt; kubeconfig.yml</pre></li>				<li>Execute the <strong class="source-inline">kubectl</strong> command to apply a new version of <span class="No-Break">the application:</span><pre class="source-code">
+- kubectl --kubeconfig=kubeconfig.yml apply -f deployment.yml</pre></li>				<li>Putting<a id="_idIndexMarker692"/> this all together, we have the following <span class="No-Break">code snippet:</span><pre class="source-code">
+-step:
+   name: Deploy to Kubernetes
+   image: atlassian/pipelines-kubectl
+   script:
+      - echo $KUBECONFIG | base64 -d &gt; kubeconfig.yml
+      # Run deployment command using kubectl
+      - kubectl --kubeconfig=kubeconfig.yml apply -f deployment.yml</pre><p class="list-inset">As seen in the <em class="italic">Configuring deployments</em> recipe in <a href="B21937_08.xhtml#_idTextAnchor149"><span class="No-Break"><em class="italic">Chapter 8</em></span></a>, you can monitor your deployment using the <span class="No-Break">deployment dashboard.</span></p></li>			</ol>
+			<p>With that, you’ve learned how to build our application as a Docker image and deploy it to a <span class="No-Break">Kubernetes environment.</span></p>
+			<p>Our last stop in examining how we can leverage Docker moves us from pipelines to runners. So, let’s learn how to configure Docker-based runners <span class="No-Break">on Linux.</span></p>
+			<h1 id="_idParaDest-200"><a id="_idTextAnchor201"/>Setting up Docker-based runners on Linux</h1>
+			<p>This<a id="_idIndexMarker693"/> application of this self-hosted runner <a id="_idIndexMarker694"/>allows for the ultimate in dynamic configuration. By allowing runners inside Docker containers, we can add or subtract runners <span class="No-Break">as needed.</span></p>
+			<p>We’ll start with a Linux environment, install Docker, and load and run the Docker image for the Bitbucket runner software. Let’s take a look at the complete picture of setting up <span class="No-Break">Docker-based runners.</span></p>
+			<h2 id="_idParaDest-201"><a id="_idTextAnchor202"/>Getting ready</h2>
+			<p>Our<a id="_idIndexMarker695"/> Linux environment has some prerequisites <a id="_idIndexMarker696"/>we must cover before we can proceed. First, we need to understand our Linux environment. This environment should have the <span class="No-Break">following features:</span></p>
+			<ul>
+				<li>You should be using the 64-bit version <span class="No-Break">of Linux.</span></li>
+				<li>A minimum of 8 GB of RAM should be allocated to the host for the runner. If you know that you are going to need a lot of room (for example, due to more build steps), you should allocate <span class="No-Break">more memory.</span></li>
+				<li>At least 512 MB must be allocated for the <span class="No-Break">runner container.</span></li>
+				<li>Docker v19.03 or above must <span class="No-Break">be installed.</span></li>
+			</ul>
+			<p>With the Linux environment set up in this manner, we have to look at best practices for our Linux environment recommended by Atlassian. Atlassian recommends the following <span class="No-Break">environment configurations:</span></p>
+			<ul>
+				<li>Disabling <strong class="bold">swap</strong> space in your <span class="No-Break">Linux environment</span></li>
+				<li><span class="No-Break">Configuring </span><span class="No-Break"><strong class="source-inline">vm.swappiness</strong></span></li>
+			</ul>
+			<p>Let’s take a closer look at <span class="No-Break">these recommendations.</span></p>
+			<h3>Disabling swap space</h3>
+			<p>Depending on<a id="_idIndexMarker697"/> the Linux distribution you’re using, you may not have the necessary commands installed. If the following commands aren’t available in your Linux environment, you can install them using the distribution’s preferred <span class="No-Break">package manager:</span></p>
+			<ol>
+				<li>Check if swap <span class="No-Break">is enabled:</span><pre class="source-code">
+<strong class="bold">sudo swapon -sv</strong></pre><p class="list-inset">Existing swap partitions will appear, as shown in the following output, if swap <span class="No-Break">is enabled:</span></p><pre class="source-code"><strong class="bold">NAME      TYPE      SIZE   USED PRIO</strong>
+<strong class="bold">/dev/sda3 partition   2G 655.2M   -1</strong></pre></li>				<li>Disable<a id="_idIndexMarker698"/> swap by executing the <span class="No-Break">following command:</span><pre class="source-code">
+<strong class="bold">sudo swapoff -av</strong></pre></li>				<li>Remove any configured swap partitions <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">/etc/fstab</strong></span><span class="No-Break">.</span></li>
+				<li>Reboot your <span class="No-Break">Linux machine.</span></li>
+				<li>Repeat these steps until no swap <span class="No-Break">partitions appear.</span></li>
+			</ol>
+			<p>At this point, we have eliminated one source of swap storage. However, we should eliminate other sources. For that, we will take a look at <span class="No-Break">configuring </span><span class="No-Break"><strong class="source-inline">vm.swappiness</strong></span><span class="No-Break">.</span></p>
+			<h3>Configuring vm.swappiness</h3>
+			<p>Again, some <a id="_idIndexMarker699"/>Linux distributions may not have the commands specified in the following steps. If this is the case, install the required commands using the Linux distribution’s recommended <span class="No-Break">package manager.</span></p>
+			<p>Let’s take a close look at correctly configuring <strong class="source-inline">vm.swappiness</strong> to <span class="No-Break">disable swap:</span></p>
+			<ol>
+				<li>Check the value of <strong class="source-inline">vm.swappiness</strong> using the <span class="No-Break">following command:</span><pre class="source-code">
+<strong class="bold">sudo sysctl -n vm.swappiness</strong></pre></li>				<li>If the value isn’t <strong class="source-inline">1</strong>, configure <strong class="source-inline">vm.swappiness</strong> by performing the <span class="No-Break">following steps:</span><ol><li class="upper-roman">Open <strong class="source-inline">/etc/sysctl.conf</strong> and add <strong class="source-inline">vm.swappiness=1</strong> to its own line in <span class="No-Break">the file.</span></li><li class="upper-roman">Save <span class="No-Break">your changes.</span></li><li class="upper-roman">Reboot the <span class="No-Break">Linux machine.</span></li></ol></li>
+				<li>If subsequent examinations of the value of <strong class="source-inline">vm.swappiness</strong> are anything other than <strong class="source-inline">1</strong>, repeat these steps and ensure the setting is configured correctly <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">/etc/sysctl.conf</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<p>The <a id="_idIndexMarker700"/>next step is highly recommended to maintain the proper operation of your Linux environment. Periodically, stale Docker container images should be cleaned up. Let’s see how to schedule <span class="No-Break">this operation.</span></p>
+			<h3>Automating the cleanup process for stale Docker images</h3>
+			<p>Our Linux<a id="_idIndexMarker701"/> environment should regularly remove unused Docker images to save on disk space. We want to ensure we have adequate disk space in our Linux environment so that we can continue to operate our runner and ensure its availability for Bitbucket Pipelines jobs. The command to remove unused Docker images is <strong class="source-inline">docker system prune -af</strong>. A common way of scheduling an automated means for running a command is by using <strong class="bold">cron</strong>. Let’s see how that can <span class="No-Break">be done:</span></p>
+			<ol>
+				<li>For the correct user, open their <strong class="source-inline">crontab</strong> file by typing the <span class="No-Break">following command:</span><pre class="source-code">
+<strong class="bold">crontab -e</strong></pre><p class="list-inset">Append the command to the <strong class="source-inline">crontab</strong> file while setting up the correct frequency, dates, and times. The following example runs the command on Sundays <span class="No-Break">at midnight:</span></p><pre class="source-code"><strong class="bold">0 0 * * 0 docker system prune -af</strong></pre></li>				<li>Save the file and exit <span class="No-Break">the editor.</span></li>
+			</ol>
+			<p>With that, we’ve used cron to automate the deletion of unused Docker images. Now, it’s time to set up <span class="No-Break">our runner.</span></p>
+			<h2 id="_idParaDest-202"><a id="_idTextAnchor203"/>How to do it…</h2>
+			<p>With the <a id="_idIndexMarker702"/>preliminary steps out of the way, it’s time to connect our Linux environment to Bitbucket so that it can be used as a runner. Let’s <a id="_idIndexMarker703"/>examine how to <span class="No-Break">do that:</span></p>
+			<ol>
+				<li>On Bitbucket, define a new runner. A workplace runner can be defined by clicking the administration cog at the top-right corner of the screen and selecting <span class="No-Break"><strong class="bold">Workspace settings</strong></span><span class="No-Break">:</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer346">
+					<img alt="Figure 9.1 – Selecting Workspace settings in Bitbucket" src="image/B21937_09_01.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.1 – Selecting Workspace settings in Bitbucket</p>
+			<ol>
+				<li value="2">In the menu bar on the left, select <span class="No-Break"><strong class="bold">Workspace runners</strong></span><span class="No-Break">:</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer347">
+					<img alt="Figure 9.2 – Selecting Workspace runners" src="image/B21937_09_02.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.2 – Selecting Workspace runners</p>
+			<p class="list-inset">Alternatively, if <a id="_idIndexMarker704"/>you’re setting up a runner for use within a repository, select the repository<a id="_idIndexMarker705"/> and select <strong class="bold">Repository settings</strong> in the <span class="No-Break">repository’s sidebar.</span></p>
+			<div>
+				<div class="IMG---Figure" id="_idContainer348">
+					<img alt="Figure 9.3 – Selecting Repository settings" src="image/B21937_09_03.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.3 – Selecting Repository settings</p>
+			<ol>
+				<li value="3">In<a id="_idIndexMarker706"/> the <strong class="bold">Repository settings</strong> sidebar, select <strong class="bold">Runners</strong> <span class="No-Break">under </span><span class="No-Break"><strong class="bold">Pipelines</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer349">
+					<img alt="Figure 9.4 – Selecting Runners" src="image/B21937_09_04.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.4 – Selecting Runners</p>
+			<ol>
+				<li value="4">Regardless<a id="_idIndexMarker707"/> of whether you’re selecting<a id="_idIndexMarker708"/> the runner for the workspace or the repository, you can create the runner by selecting the <strong class="bold">Add </strong><span class="No-Break"><strong class="bold">runner</strong></span><span class="No-Break"> button.</span><p class="list-inset">In the modal that appears, select <strong class="bold">Linux Docker (x86_64)</strong> or <strong class="bold">Linux Docker (arm64)</strong> in the <strong class="bold">System and architecture</strong> panel, depending on your underlying hardware platform. <span class="No-Break">Click </span><span class="No-Break"><strong class="bold">Next</strong></span><span class="No-Break">.</span></p></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer350">
+					<img alt="Figure 9.5 – Selecting Linux Docker under System and architecture" src="image/B21937_09_05.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.5 – Selecting Linux Docker under System and architecture</p>
+			<p class="list-inset">In the <a id="_idIndexMarker709"/>next modal, copy the Docker command<a id="_idIndexMarker710"/> that’s displayed and paste it into a Terminal window in your Linux environment. This command goes to the Docker registry to retrieve the Bitbucket Pipelines runner software as a Docker image and creates <span class="No-Break">the container.</span></p>
+			<div>
+				<div class="IMG---Figure" id="_idContainer351">
+					<img alt="Figure 9.6 – Copying the Docker command to pull the runner" src="image/B21937_09_06.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.6 – Copying the Docker command to pull the runner</p>
+			<ol>
+				<li value="5">You <a id="_idIndexMarker711"/>may want to get the most up-to-date <a id="_idIndexMarker712"/>version of the runner when you start the runner again or just to make sure you have the latest one. To perform this update, execute the following <strong class="source-inline">docker pull</strong> command in your <span class="No-Break">Linux environment:</span><pre class="source-code">
+<strong class="bold">docker image pull docker-public.packages.atlassian.com/sox/atlassian/bitbucket-pipelines-runner:1</strong></pre><p class="list-inset">You may encounter the following error when starting <span class="No-Break">the runner:</span></p><pre class="source-code"><strong class="bold">docker: Error response from daemon: docker: Error response from daemon: Conflict. The container name "/runner-76b247e7-b925-5e7b-9da2-1cda14c4ff2c" is already in use by container "c3403236e3af5962ed3a9b8771561bd2021974941cc8a89a40c6c66cecb18f53". You have to remove (or rename) that container to be able to reuse that name.</strong>
+<strong class="bold">See 'docker run --help'.</strong></pre><p class="list-inset">If this is the case, remove the runner by executing the <span class="No-Break">following command:</span></p><pre class="source-code"><strong class="bold">docker container rm -f runner-76b247e7-b925-5e7b-9da2-1cda14c4ff2c</strong></pre></li>				<li>It’s<a id="_idIndexMarker713"/> possible to change the working directory that’s used by the runner on your Linux machine. To change the<a id="_idIndexMarker714"/> working directory, add the following two flags to the <strong class="source-inline">docker </strong><span class="No-Break"><strong class="source-inline">run</strong></span><span class="No-Break"> command:</span><ul><li>The <strong class="source-inline">-v</strong> flag and the directory, as seen on the <span class="No-Break">host machine.</span></li><li>The <strong class="source-inline">-e</strong> flag and the desired mount point inside the runner. You can use any desired mount point, but it must match the value of the <strong class="source-inline">WORKING_DIRECTORY</strong> <span class="No-Break">environment variable.</span></li></ul><p class="list-inset">An example of using the <strong class="source-inline">docker run</strong> command is shown in the following <span class="No-Break">code snippet:</span></p><pre class="source-code">
+<strong class="bold">docker run [all existing parameters] -v /mydir:/mydir -e WORKING_DIRECTORY=/mydir</strong></pre></li>			</ol>
+			<p>With that, we’ve established Docker-based runners for any future executions of <span class="No-Break">Bitbucket Pipelines.</span></p>
+		</div>
+	
+
+		<div class="Content" id="_idContainer353">
+			<h1 id="_idParaDest-203" lang="en-US" xml:lang="en-US"><a id="_idTextAnchor204"/>Part 3: Maintaining Operations</h1>
+			<p>After release, the focus turns to ensuring that the environment, with its new features and products, maintains the same level of performance, scalability, and security as before. Measurements of performance, both in the context of how the system is operating and whether it is delivering its promised value, are taken <span class="No-Break">and displayed.</span></p>
+			<p>The displays reflect a focus on observability, ensuring not only that the metrics exist but that they are available and visible to everyone: developers, operations people, site reliability engineers, and others in <span class="No-Break">the business.</span></p>
+			<p>When problems occur, people from these disciplines come together to collaborate on the problem and find <span class="No-Break">a solution.</span></p>
+			<p>In this part, we will explore how Atlassian tools such as Jira, Opsgenie, and Compass work together and with other tools to allow observability to all disciplines and the rapid escalation and resolution <span class="No-Break">of problems.</span></p>
+			<p>This part has the <span class="No-Break">following chapters:</span></p>
+			<ul>
+				<li><a href="B21937_10.xhtml#_idTextAnchor205"><em class="italic">Chapter 10</em></a><em class="italic">, Collaborating with Operations through Continuous Deployment and Observability</em></li>
+				<li><a href="B21937_11.xhtml#_idTextAnchor214"><em class="italic">Chapter 11</em></a><em class="italic">, Monitoring Component Activity and Metrics </em><em class="italic">Through CheckOps </em><em class="italic">in Compass</em></li>
+				<li><a href="B21937_12.xhtml#_idTextAnchor240"><em class="italic">Chapter 12</em></a><em class="italic">, Escalating Using Opsgenie Alerts</em></li>
+			</ul>
+		</div>
+		<div>
+			<div id="_idContainer354">
+			</div>
+		</div>
+		<div>
+			<div class="Basic-Graphics-Frame" id="_idContainer355">
+			</div>
+		</div>
+	</body></html>

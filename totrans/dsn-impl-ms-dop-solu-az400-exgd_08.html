@@ -1,0 +1,652 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer120">
+<h1 class="chapter-number" id="_idParaDest-187"><a id="_idTextAnchor542"/>8</h1>
+<h1 id="_idParaDest-188"><a id="_idTextAnchor543"/>Implement Infrastructure and Configuration as Code</h1>
+<p>In the previous chapter, the focus was on storing and building application code and releasing the created binaries. You learned how to create a pipeline, from source control to a target environment, for the automated, repeatable deployment of your applications.</p>
+<p>In this chapter, you will learn how to apply the same principles to the infrastructure that your application runs on and the runtime configuration of your application. Doing so will help you to further increase the speed at which changes can be delivered to production, increasing the flow of value to your end users.</p>
+<p>This chapter will start off by explaining the value of having everything, infrastructure and configuration included, as code. After that, it continues by explaining <strong class="bold">Azure Resource Manager</strong> (<strong class="bold">ARM</strong>) templates. The syntax will be explained, as well as how to deploy ARM templates. Then, it proceeds to explain the Azure Automation offering, available in the Azure cloud. Azure Automation can be used to run scripts on a schedule or load and apply PowerShell DSC modules. Next up is managing application settings for PaaS offerings, such as Azure App Service. Finally, it concludes by discussing several other tools that have similar capabilities.</p>
+<p>The following topics will be covered in this chapter: </p>
+<ul>
+<li>Having everything as code</li>
+<li>Working with ARM templates</li>
+<li>Deploying ARM templates </li>
+<li>Reverse engineering a template </li>
+<li>Using Azure Automation </li>
+<li>Managing application settings </li>
+<li>Other tools</li>
+</ul>
+<h1 id="_idParaDest-189"><a id="_idTextAnchor544"/><a id="_idTextAnchor545"/>Technical requirements</h1>
+<p>To experiment with one or more of the technologies described in this chapter, one or more of the following may be required:</p>
+<ul>
+<li>An Azure subscription, for executing ARM templates and running Azure Automation</li>
+<li>PowerShell with the Azure PowerShell modules, for executing ARM templates, available from <a href="https://docs.microsoft.com/en-us/powershell/azure/install-az-ps?view=azps-7.3.0">https://docs.microsoft.com/en-us/powershell/azure/install-az-ps?view=azps-7.3.0</a></li>
+<li>The Azure CLI, for executing ARM templates, available from https://docs.microsoft.com/en-us/cli/azure/</li>
+</ul>
+<h1 id="_idParaDest-190"><a id="_idTextAnchor546"/><a id="_idTextAnchor547"/>Having everything as code</h1>
+<p>If you have been responsible for creating and maintaining application infrastructure and configuration in the past, you have most likely experienced what is called <strong class="bold">configuration drift</strong>. Configuration drift <a id="_idIndexMarker656"/>is the name for the phenomenon where the configuration between servers in acceptance and the production environment differs. Or, even worse, when having multiple servers in the production environment, it might be the case that the configuration of these is not always the same.</p>
+<p>The most common cause of configuration drift is manual change. When making changes manually, maybe under the pressure of a production issue, there is always the risk that you apply different settings to different servers or hosts. If you ever need to scale out and add another server to your production environment, the chance of that server taking on the same configuration as all already-existing servers is very slim.</p>
+<p class="callout-heading">Tip</p>
+<p class="callout">Declarative (functional) and imperative (procedural) are <a id="_idIndexMarker657"/>two <a id="_idIndexMarker658"/>of the <a id="_idIndexMarker659"/>main approaches adopted to<a id="_idIndexMarker660"/> implement <strong class="bold">Infrastructure as Code</strong> (<strong class="bold">IaC</strong>) and <strong class="bold">Configuration as Code</strong> (<strong class="bold">CaC</strong>).</p>
+<p>With IaC and CaC, you no<a id="_idIndexMarker661"/> longer make changes to application configuration <a id="_idIndexMarker662"/>and infrastructure manually, but through automation. The first step to do this is specifying the desired state of configuration and infrastructure. The desired state is then fed into configuration management tooling that enforces this configuration on your infrastructure. Specifying only the desired state is <a id="_idIndexMarker663"/>called a <em class="italic">declarative</em> approach, which differs<a id="_idIndexMarker664"/> from an <em class="italic">imperative</em> approach, where you specify all of the steps that need to b<a id="_idTextAnchor548"/>e taken.</p>
+<p>Some of these tools are often also capable of checking the current state of your infrastructure and configuration at regular intervals and reapplying your desired state if any deviation is detected. This is possible due to the declarative approach. This makes applying configuration an idempotent operation. </p>
+<p class="callout-heading">Tip</p>
+<p class="callout">An operation<a id="_idIndexMarker665"/> is idempotent if it can be repeated one or more times, while the outcome remains the same.</p>
+<p>When adopting IaC and CaC, you can even go so far as to recreate the complete infrastructure before deploying an application, deploy the application on that new infrastructure, and then disregard the old infrastructure after switching to the new deployment. This is an extreme form of immutable servers. The added benefit of this approach is that you are now guaranteed that there will be no traces from any configuration or binaries from the previous deployment.</p>
+<p>In the following sections, you will learn about different IaC technologies and how to use them. It is important to understand that they are complementary and are often used together. For example, ARM templates can be used to create virtual machines in Azure and, once that is done, PowerShell DSC or Ansible can be used to configure thos<a id="_idTextAnchor549"/>e virtual <a id="_idTextAnchor550"/>machines.</p>
+<h1 id="_idParaDest-191"><a id="_idTextAnchor551"/>Working with ARM templates</h1>
+<p>When working on the <a id="_idIndexMarker666"/>Azure platform, infrastructure is described using ARM templates. ARM templates are written in JSON, and a skeleton template looks as follows:</p>
+<pre class="source-code">
+{
+    "$schema":
+"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate. json#",
+    "contentVersion": "1.0.0.0", 
+    "parameters": {
+    },
+    "variables": {
+    },
+    "resources": [
+    ],
+    "outputs":<a id="_idTextAnchor552"/> {
+    }
+}</pre>
+<p>The template itself is, at the highest level, a JSON object. There is a mandatory property, <strong class="source-inline">$schema</strong>. </p>
+<p><strong class="source-inline">$schema</strong> is a required <a id="_idIndexMarker667"/>element and the value version number depends on the scope of the deployment and the JSON editor. The <strong class="source-inline">contentVersion</strong> property is also required and can be specified to version the contents. This version can be used by the author to version the template if necessary.</p>
+<p>The rest of this chapter will discuss the different parts that make up ARM templates in more detail. You will find a link to the online documentation at the end of this chapter. A link to a formal, detailed breakdown of the structure an<a id="_idTextAnchor553"/>d syntax of ARM templates is also provided at the end of th<a id="_idTextAnchor554"/>is chapter.</p>
+<h2 id="_idParaDest-192"><a id="_idTextAnchor555"/>Parameters</h2>
+<p>The <a id="_idIndexMarker668"/>parameters section is usually near the top of the template. Before beginning deployment activities, ARM will resolve the parameter values. The resolved value is referenced whenever the parameter is found in the template by ARM. </p>
+<p>This section takes the form of a JSON object, which can be empty but cannot be left out. The use of this section is to declare one or more parameters that can be specified by the caller of the ARM template before deploying it. A common reason for using the parameters section is to use the same template for both the test and production environments but vary the names of resources between the two. An example parameters section might look like this:</p>
+<pre class="source-code">
+{
+  "appServiceName": { 
+    "type": "string", 
+    "metadata": {
+      "description": "a free to choose text"
+    }
+}</pre>
+<p>For every parameter, a new key is specified with the parameter’s name. The value is an object. This object has one mandatory key, <strong class="source-inline">type</strong>. The allowed values for <strong class="source-inline">type</strong> are <strong class="source-inline">string</strong>, <strong class="source-inline">int</strong>, <strong class="source-inline">bool</strong>, <strong class="source-inline">object</strong>, <strong class="source-inline">array</strong>, <strong class="source-inline">secureString</strong>, and <strong class="source-inline">secureObject</strong>. The <strong class="source-inline">secureString</strong> and <strong class="source-inline">secureObject</strong> variations can be used to make sure that the runtime values of these parameters are scrubbed from any log and output. They are intended to hold passwords, keys, or other secrets.</p>
+<p>The <strong class="source-inline">metadata</strong> object, with the <strong class="source-inline">description</strong> key, is optional and can be used to add a description to the parameter for futur<a id="_idTextAnchor556"/>e reference.</p>
+<p>Other properties that can be specified on a parameter object are the following:</p>
+<ul>
+<li><strong class="source-inline">minValue</strong> and <strong class="source-inline">maxValue</strong> for specifying bounds on an integer value</li>
+<li><strong class="source-inline">minLength</strong> and <strong class="source-inline">maxLength</strong> for specifying bounds on the length of a string value </li>
+<li><strong class="source-inline">defaultValue</strong> for specifying a default value that will be used if no value is specified when applying the template</li>
+<li><strong class="source-inline">allowedValues</strong> for <a id="_idIndexMarker669"/>specifying an array of allowed values, limiting<a id="_idTextAnchor557"/> valid inputs</li>
+</ul>
+<p>Next, let’s understand what paramet<a id="_idTextAnchor558"/>er files are.</p>
+<h3>Parameter files</h3>
+<p>You <a id="_idIndexMarker670"/>can make use of a JSON file that contains the parameter values instead of specifying them as inline values in your script. In this section, we will discuss how to use parameter files to use with the templates. Often, a single template is accompanied by more than one parameter file, for example, one for test and one for production. The JSON for a parameter file appears as follows:</p>
+<pre class="source-code">
+{
+  "$schema":
+"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameter s.json#",
+  "contentVersion": "1.0.0.0", 
+  "parameters": {
+    "exampleParameter": { 
+      "value": "exampleValue"
+    }
+  }
+}</pre>
+<p>Just like an ARM template, every parameter file is a JSON object with mandatory <strong class="source-inline">$schema</strong> and <strong class="source-inline">contentVersion</strong> properties. The third property parameter is used to specify one or more parameter values. For each parameter, specify its name as the key and an object as the value. This object can hold the <strong class="source-inline">value</strong> key for providing the actual value of the parameter.</p>
+<p>While very valuable for specifying names for resources, scaling options, and other things that have to vary between environments, this solution is not useful for secrets. </p>
+<p>The <a id="_idIndexMarker671"/>following diagram shows how the parameter file references the secret and passes that value to the template:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer111">
+<img alt="Figure 8.1 – Using secrets in an Azure template " height="169" src="image/B18655_08_01.jpg" width="640"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.1 – Using secrets in an Azure template</p>
+<p>Keys, passwords, and other secrets should not be stored as plaintext in source control in a parameter file. For secrets, another notation is available:</p>
+<pre class="source-code">
+{
+  "$schema":
+"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameter s.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": { 
+    "exampleSecretParameter": {
+      "reference": {
+        "keyvault": {
+          "id": "/subscriptions/…/Microsoft.KeyVault/vaults/&lt;vaultname&gt;"
+        },
+        "secretName": "myKeyVaultSecretName"
+      }
+    }
+  }
+}</pre>
+<p>With this <a id="_idIndexMarker672"/>notation, instead of specifying the value directly, there is a pointer to a location in an Azure key vault where the correct value is stored. When deploying the template, this secret is (within Azure!) taken from the key vault and used in deployment. This is allowed only if the user or service starting the deployment has either an owner or contributor role in relation to the key vault, and the key vault is enabled for template deployment.</p>
+<p class="callout-heading">Important Note</p>
+<p class="callout">Strictly speaking, any role that includes the <strong class="source-inline">Microsoft.KeyVault/vaults/deploy/action</strong> permission will work. By default, these are the owner and contributor roles, but you can create custom roles that include this <a id="_idTextAnchor559"/>action as well.</p>
+<h2 id="_idParaDest-193"><a id="_idTextAnchor560"/>Variables</h2>
+<p>The <a id="_idIndexMarker673"/>variables section is used to specify one or more values that will be used throughout the template. A common approach is building the names of all resources in the variables section, based on a single parameter called <strong class="source-inline">environmentName</strong>. This ensures that resources will have the same name between environments. Variables are also used to specify values that cannot be specified from outside the template but should be recognized as configurable. An example might look like this:</p>
+<pre class="source-code">
+"Variables": {
+  "appServicePlanType": "B1", 
+  "appServiceName": "[concat('myAppService-',
+parameters('environmentName'))]"
+}</pre>
+<p>Please note that the example for <strong class="source-inline">appServiceName</strong> contains functions, which are discussed in t<a id="_idTextAnchor561"/>he next section.</p>
+<h2 id="_idParaDest-194"><a id="_idTextAnchor562"/>Functions</h2>
+<p>Functions<a id="_idIndexMarker674"/> are used to allow the dynamic evaluation of properties in ARM templates. Calling functions uses a notation very similar to that of many programming languages: <strong class="source-inline">functionName(arg1, arg2, …)</strong>. Functions can return either a value, such as <strong class="source-inline">string</strong> or <strong class="source-inline">int,</strong> or an object or array. </p>
+<p>When an object is returned, any property can be accessed using the <strong class="source-inline">.propertyName</strong> notation. Accessing elements in an array can be done using <strong class="source-inline">[index]</strong>. To indicate which parts of a string should be evaluated as a function, they must be enclosed in brackets:</p>
+<pre class="source-code">
+"myVariable": "[concat('myAppService-', parameters('environmentName'))]"</pre>
+<p>The preceding section shows two examples of functions. In the first, the <strong class="source-inline">concat</strong> function is called to concatenate two string values. One is hardcoded and the other one is the result of a second function call to retrieve the value of a template parameter.</p>
+<p>There are a fair number of functions available. They can be used for string manipulation, retrieving details about the current subscription, resource group, or <strong class="bold">Azure Active Directory</strong> (<strong class="bold">AAD</strong>) tenant, or getting resource details.</p>
+<p>Functions can also be used to retrieve account keys or other secrets. This is often done to automatically insert keys directly from the service that exposes the key to the application settings or a key vault. This eliminates the need for the manual transfer of secrets. Variables and functions can help make your templates easier to maintain.</p>
+<p>You can also add your own functions to your template. These functions can be used in your template. User-defined functions exist independently of regular template functions. In most cases, you define complex expressions that you don’t want to repeat throughout your template.</p>
+<h2 id="_idParaDest-195"><a id="_idTextAnchor563"/>Comments and metadata</h2>
+<p>An ARM template can contain sections that aren’t related to the JSON language itself. You have a few options to add comments and metadata.</p>
+<h3>Comments</h3>
+<p>To<a id="_idIndexMarker675"/> comment the rest of a line, <strong class="source-inline">//</strong> is used, or to comment a block, the <strong class="source-inline">/* */</strong> notation is used. This makes the following snippets both valid as part of an ARM template:</p>
+<pre class="source-code">
+{
+  "appServiceName": {
+    // this is a single line comment
+    "type": "string",
+      /*
+        This is a multi-line comment
+      */
+      "metadata": {
+          "description": " The name of the web app that you wish to create.",
+      "author": "author Name"
+    },
+  "location": "[
+      parameters('location')
+      ]", //defaults to resource group location
+}</pre>
+<p>Another deviation from JSON is that ARM templates allow for a multiline string. You can break a string into multiple lines. See the <strong class="source-inline">location</strong> property in the preceding example.</p>
+<p>In the preceding example, you will notice the use of comments and metadata in your templates.</p>
+<p class="callout-heading">Important Note</p>
+<p class="callout">To deploy templates with multiline strings and comments, use Azure PowerShell or the Azure CLI. For the CLI, use version 2.3.0 or later, and specify the <strong class="source-inline">--handle-extended-json-format</strong> switch. </p>
+<h3>metadata</h3>
+<p>Text you <a id="_idIndexMarker676"/>add to a metadata description is automatically used as a tip for that parameter. ARM will ignore the <strong class="source-inline">metadata</strong> object, and this can be added anywhere in the template.</p>
+<h2 id="_idParaDest-196"><a id="_idTextAnchor564"/>Resources</h2>
+<p>Resources are <a id="_idIndexMarker677"/>the main part of the template, where all of the resources to be created are specified. This section is the only one that is not an object, but an array. Within that array, one or more objects of the following form are specified:</p>
+<pre class="source-code">
+{
+    "type": "Microsoft.Sql/servers", 
+    "apiVersion": "2021-02-01-preview", 
+    "name": "mySqlServer",
+    "location": "West Europe", 
+    "properties": {
+        "administratorLogin": "myUsername", 
+        "administratorLoginPassword": "myPassword", 
+        "version": "12.0"
+    }
+}</pre>
+<p>Each resource is specified in the form of an object. The first four properties are mandatory for every type of resource:</p>
+<ul>
+<li>The type of the resource to be created or updated needs to be specified. This takes the form of the name of <strong class="source-inline">resourceprovider</strong> followed by a slash and the name of a resource type that belongs to that <strong class="source-inline">resourceprovider</strong>.</li>
+<li>The version of the REST API to use for this resource: A list of supported API versions can be retrieved from <a href="https://docs.microsoft.com/en-us/azure/templates/microsoft.resources/allversions">https://docs.microsoft.com/en-us/azure/templates/microsoft.resources/allversions</a>.</li>
+<li>The name for the resource: Every resource type has its own rules for determining what a valid name is. These can also available in the reference link shared in preceding point.</li>
+<li>Many <a id="_idIndexMarker678"/>resources will need to have a location. If the resources require a location, you must specify one for each resource. The location does not have to be the same as the location of the resource group. The location must be a valid Azure region.</li>
+</ul>
+<p>All other properties on the object vary from resource type to reso<a id="_idTextAnchor565"/>urce type and are all speci<a id="_idTextAnchor566"/>fied in the resource.</p>
+<h2 id="_idParaDest-197"><a id="_idTextAnchor567"/>Dependent resources</h2>
+<p>A <a id="_idIndexMarker679"/>special type of resource is the dependent resource. For example, SQL databases are hosted on SQL Server and Service Bus topics are located within a Service Bus namespace.</p>
+<p>For a nested resource type, the type and name reflect this nesting. The following example shows the explicit dependency of Service Bus topics on a Service Bus namespace:</p>
+<pre class="source-code">
+{
+    "apiVersion": "2021-11-01",
+    "name": "myNamespaceName/myTopicName",
+    "type": "Microsoft.ServiceBus/namespaces/topics", 
+    "dependsOn": [
+        "Microsoft.ServiceBus/namespaces/my<a id="_idTextAnchor568"/>NamespaceName"
+    ]
+}</pre>
+<p>Next to nesting the type and the name, the extra property, <strong class="source-inline">dependsOn</strong>, is also mandatory to specify that this nested resource can only be created after the contain<a id="_idTextAnchor569"/>ing resource exists. A <strong class="source-inline">location</strong> property is not necessary since this will be inherited from the containing resource.</p>
+<p>The <a id="_idIndexMarker680"/>following sample depicts a logical dependency between Azure SQL Server and Azure SQL Database. When the <strong class="source-inline">dependson</strong> property is utilized, an explicit deployment dependency between a child resource and the parent resource is established automatically. The child resource will be deployed after the parent resource. Here, you will notice the use of the built-in important <strong class="source-inline">resourceID</strong> function. The <strong class="source-inline">resourceID</strong> function returns the unique identifier of a resource:</p>
+<pre class="source-code">
+{
+    "type": "Microsoft.Sql/servers",
+    "apiVersion": "2020-02-02-preview",
+    "name": "[parameters('serverName')]",
+    "location": "[parameters('location')]",
+    "resources": [
+      {
+        "type": "databases",
+        "name": "[parameters('sqlDBName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Sql/servers', concat(parameters('serverName')))]"
+        ]
+      }
+    ]
+  }</pre>
+<p class="callout-heading">Important Note</p>
+<p class="callout">A <strong class="bold">circular dependency</strong> is a <a id="_idIndexMarker681"/>problem with dependency order, resulting in the deployment running in a loop, unable to continue and complete the deployment. ARM identifies circular dependencies dur<a id="_idTextAnchor570"/>ing template validation.</p>
+<h2 id="_idParaDest-198"><a id="_idTextAnchor571"/>Nested templates</h2>
+<p>A second <a id="_idIndexMarker682"/>special type of resource is template deployment. This way, one template can trigger the deployment of another. An example of defining a template deployment as a resource in a template looks as follows:</p>
+<pre class="source-code">
+{
+    "type": "Microsoft.Resources/deployments", 
+    "apiVersion": "2021-04-01",
+    "name": "linkedTemplate", 
+    "properties": {
+        "mode": "Incremental", 
+        "templateLink": {
+            "uri":"https://.../myLinkedTemplate.json"
+        },
+        "parametersLink": { 
+            "uri":"https://.../myParameters.json"
+        }
+    }
+}</pre>
+<p>The locations of the template and parameter file can be specified using both HTTP and HTTPS, that is, with a valid <strong class="bold">Uniform Resource Identifier</strong> (<strong class="bold">URI</strong>), but have to be publicly accessible locations. Although the <a id="_idIndexMarker683"/>template URI needs to be accessed externally, we would like to enable security and restrict access for these templates.  To gain access during deployment, append an SAS token to the template file URI As an alte<a id="_idTextAnchor572"/>rnative, a single property template can be specified. This should then contain a whole <a id="_idIndexMarker684"/>template as a JSON object. However, you can’t use both inline parameters and <a id="_idTextAnchor573"/>a link to a parameter file.</p>
+<h2 id="_idParaDest-199"><a id="_idTextAnchor574"/>Outputs</h2>
+<p>The <a id="_idIndexMarker685"/>next section of a template is the outputs section. Here are the keys returned to the caller of the template. The caller can use these values to start another task or script and use one or more of the values crea<a id="_idTextAnchor575"/>ted or used by the template.</p>
+<p>The main use for this is to prevent hardcoding names and other dynamic values, especially IPs, in downstream automation. The outputs section is a JSON object of the following format:</p>
+<pre class="source-code">
+{
+    "outputName":
+    {
+        "type": "string", 
+        "value": "myValue"
+    }
+}</pre>
+<p>When specifying outputs, the same types can be used as for parameters. Of course, it does not make much sense hardcoding the values, so functions are <a id="_idTextAnchor576"/>used to retrieve values from parameters, variables, or even created resources.</p>
+<p>To continue with the previous example in the <em class="italic">Dependent resources</em> section for creating a SQL server, a sample of the output would be as follows:</p>
+<pre class="source-code">
+"outputs": {
+    "SqlServerURL": {
+      "type": "string",
+      "value": "[reference(parameters('serverName')).fullyQualifiedDomainName]"
+    }
+  }</pre>
+<p>The output <a id="_idIndexMarker686"/>would be as follows:</p>
+<pre class="source-code">
+ sqlServerURL String serverName.database.windows.net</pre>
+<p>Well, so far, we have learned about the different parts that make up an ARM template, which you should be able to write on your own. Now it’s time to learn how we can deploy them wi<a id="_idTextAnchor577"/><a id="_idTextAnchor578"/><a id="_idTextAnchor579"/><a id="_idTextAnchor580"/>th the help of various tools.</p>
+<h1 id="_idParaDest-200"><a id="_idTextAnchor581"/>Deploying ARM templates</h1>
+<p>Once an ARM <a id="_idIndexMarker687"/>template and its accompanying parameter files are written, they can be applied to an Azure environment. There are PowerShell cmdlet and Azure CLI commands available for applying an ARM template from a scripting environment. When ARM templates are used for the infrastructure of an application, Azure Pipelines can be used for deploying not only code but also ARM templates. Other alternatives for deploying templates in Azure include the Azure portal, Azure CLI, REST API, and Azure Cloud Shell or ARM template specs.</p>
+<p>Whatever deployment method is used (REST API, Azure CLI, or ARM templates), it will all have a <em class="italic">deployment mode</em>. This can be either <em class="italic">Incremental</em> or <em class="italic">Complete</em>. In Incremental mode, all resources specified in the template will be created in Azure or their properties will be updated if the resource already exists. In Complete deployment mode, any resources that are not defined in the ARM template will be deleted. This mode does not redeploy all resources; instead, it verifies that the resources stated in the template have been created and removes those that have not been defined and already exist in Azure. </p>
+<p>The default deployment mode is Incremental.</p>
+<p>In the next sections, several tools for executing deployment<a id="_idTextAnchor582"/>s are discus<a id="_idTextAnchor583"/>sed, starting with PowerShell.</p>
+<h2 id="_idParaDest-201"><a id="_idTextAnchor584"/>PowerShell</h2>
+<p>For the<a id="_idIndexMarker688"/> local development and testing of ARM templates on a<a id="_idIndexMarker689"/> local machine, PowerShell has a quick command to apply an ARM template to a resource group:</p>
+<pre class="source-code">
+<strong class="bold">New-AzResourceGroupDeployment -ResourceGroupName myResourceGroup - TemplateFile "c:\my\template.json" ` -TemplateParameterFile "c:\my\parameters.json"</strong></pre>
+<p>The preceding command will pick up the specified template and parameter file and apply it to the specified resource group. This command assumes that the current session has already been logged in to Azure.</p>
+<p>There are a few variations of the command available:</p>
+<ul>
+<li>A parameter called <strong class="source-inline">-Mode</strong> with a <strong class="source-inline">Complete</strong> or <strong class="source-inline">Incremental</strong> value is available. This can be used to specify <strong class="source-inline">deploymentmode</strong>.</li>
+<li>If no parameter file is specified and the template requires parameters, the cmdlet will prompt for these values on the command line.</li>
+<li>As an alternative, the <strong class="source-inline">-TemplateUri</strong> and <strong class="source-inline">-TemplateParametersUri</strong> options can be used to specify the location of the template and parameters to be retrieved from another location.</li>
+</ul>
+<p>The next tool that w<a id="_idTextAnchor585"/><a id="_idTextAnchor586"/><a id="_idTextAnchor587"/>e’ll look into is the Azure CLI.</p>
+<h2 id="_idParaDest-202"><a id="_idTextAnchor588"/>The Azure CLI</h2>
+<p>The Azure CLI<a id="_idIndexMarker690"/> is another way of deploying ARM templates from <a id="_idIndexMarker691"/>the command line. The benefit of the CLI is that it is completely cross-platform and runs on Windows, macOS, and Linux. The Azure CLI command for deploying an ARM template is as follows:</p>
+<pre class="source-code">
+<strong class="bold">az group deployment create –resource-group myResourceGroup –template-file "c:\my\template.json" –<a id="_idTextAnchor589"/>parameters "c:\my\parameters.json"</strong></pre>
+<p>All other <a id="_idIndexMarker692"/>options that are available in PowerS<a id="_idTextAnchor590"/>hell are <a id="_idIndexMarker693"/>also available in the CLI.</p>
+<h2 id="_idParaDest-203"><a id="_idTextAnchor591"/>Azure Pipelines</h2>
+<p>A third<a id="_idIndexMarker694"/> mechanism for deploying ARM templates is<a id="_idIndexMarker695"/> from an Azure pipeline. This is particularly useful for deploying the infrastructure and configuration of an application, together with the binaries. To deploy an ARM template deployment from a pipeline, at least one service connection of the ARM template needs to be configured. After doing this, a pipeline can be configured, as shown in the following screenshot:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer112">
+<img alt="Figure 8.2 – Azure Pipelines ARM template deployment " height="754" src="image/B18655_08_02.jpg" width="1120"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.2 – Az<a id="_idTextAnchor592"/>ure Pipelines ARM template deployment</p>
+<p>In this<a id="_idIndexMarker696"/> example, there are two deployments <a id="_idIndexMarker697"/>of an ARM template, surrounding the deployment of the application code. The first deployment is of the Incremental mode, while the second deployment is of the Complete mode. </p>
+<p class="callout-heading">Tip</p>
+<p class="callout">The ARM template test toolkit<a id="_idIndexMarker698"/> is available at <a href="https://github.com/Azure/arm-ttk">https://github.com/Azure/arm-ttk</a> for you to make ARM templates compliant with standard practices. </p>
+<p>Using this <a id="_idIndexMarker699"/>approach, the first deployment will create all new infrastructure needed by the new version of the application. This deployment is done in Incremental mode, so infrastructure that is no longer present in the template but still in use by the currently deployed version of the application will not yet be removed. The second deployment will take care<a id="_idTextAnchor593"/> of removing these elements after the new version of the code is deployed.</p>
+<h2 id="_idParaDest-204"><a id="_idTextAnchor594"/>ARM REST API</h2>
+<p>ARM <a id="_idIndexMarker700"/>provides REST API operational groups to deploy <a id="_idIndexMarker701"/>and manage infrastructure to Azure. In order to get a list of resources in a subscription, run the following command:</p>
+<p class="source-code">GET https://management.azure.com/subscriptions/{subscriptionId}/resources?api-version=2021-04-01</p>
+<p>You can use ARMClient, a simple command-line tool, to send HTTP requests to the new ARM REST API:</p>
+<p class="source-code">armclient GET /subscriptions/{subscriptionId}/resources?api-version=2021-04-01</p>
+<p>The preceding command gets a list of resources in the subscription. Please note that ARM client is not an official Microsoft tool. It is an OSS project that is maintained on GitHub.</p>
+<p>Also, you can use the <strong class="source-inline">az rest</strong> command <a id="_idIndexMarker702"/>to run these <a id="_idIndexMarker703"/>commands. Take the following example:</p>
+<p class="source-code">az rest --method get --uri /subscriptions/{subscriptionId}/resources?api-version=2021-04-01</p>
+<h2 id="_idParaDest-205"><a id="_idTextAnchor595"/>Azure Cloud Shell</h2>
+<p>Azure <a id="_idIndexMarker704"/>Cloud Shell provides a Bash and PowerShell <a id="_idIndexMarker705"/>experience to manage and deploy Azure resources from within the browser itself. Azure Cloud Shell is hosted in Azure.</p>
+<div>
+<div class="IMG---Figure" id="_idContainer113">
+<img alt="Figure 8.3 – Azure Cloud Shell " height="67" src="image/B18655_08_03.jpg" width="800"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.3 – Azure Cloud Shell</p>
+<p>The Azure Cloud Shell command for deploying an ARM template in a resource group is as follows:</p>
+<pre class="source-code">
+<strong class="bold">az deployment group create --resource-group testrg --name rollout01 --template-uri https://myresource/azuredeploy.json --parameters @myparameters.json</strong></pre>
+<p>All other options that are available in the Azure CLI are also available in Azure Cloud Shell.</p>
+<h1 id="_idParaDest-206"><a id="_idTextAnchor596"/>Reverse engineering a template</h1>
+<p>Writing an ARM template from<a id="_idIndexMarker706"/> scratch can be a tedious and time-consuming task. Luckily, there are two approaches available to generate an ARM template from existing infrastructure<a id="_idTextAnchor597"/>:</p>
+<ul>
+<li>Using <strong class="bold">Export template</strong></li>
+<li>Using <strong class="bold">Resource Explorer</strong></li>
+</ul>
+<p>Let’s dis<a id="_idTextAnchor598"/>cuss both of these in the upcoming subsections.</p>
+<h2 id="_idParaDest-207"><a id="_idTextAnchor599"/>Using Export template</h2>
+<p>The first<a id="_idIndexMarker707"/> approach is using the <strong class="bold">Export template</strong> option, which can be found on every resource and resource group in the Azure portal. This will generate an ARM template of the current state of the resource (group), as shown in the following screen<a id="_idTextAnchor600"/>shot:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer114">
+<img alt="Figure 8.4 – Exporting an ARM template  " height="741" src="image/B18655_08_04.jpg" width="1184"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.4 – Exporting an ARM template </p>
+<p>Please <a id="_idIndexMarker708"/>note that not every service currently supports reverse engineering an ARM template using this approach. For any service not supported, there will be a warning at the top of the screen. To work around this limitation for retrieving the JSON template for an individual resource, there is another approach, which is our next topic of discussion. The E<strong class="source-inline">xport template</strong> process will create a reusable ARM template. However, most exported templates require some modifications be<a id="_idTextAnchor601"/><a id="_idTextAnchor602"/><a id="_idTextAnchor603"/>fore they can be used to deploy Azure resources.</p>
+<h2 id="_idParaDest-208"><a id="_idTextAnchor604"/>Using Resource Explorer</h2>
+<p>To retrieve the JSON <a id="_idIndexMarker709"/>template for an individual resource, we can use <strong class="bold">Resource Explorer</strong>. Resource Explorer is shown here and can be found in the Azure portal by using the menu (<strong class="bold">1</strong>):</p>
+<div>
+<div class="IMG---Figure" id="_idContainer115">
+<img alt="Figure 8.5 – Azure Resource Explorer  " height="838" src="image/B18655_08_05.jpg" width="1492"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.5 – Azure Resource Explorer </p>
+<p>After opening Resource Explorer, two new panes open up. The left pane can be used to navigate through subscriptions and drill down into the resource groups, down to the individual resources. For every element that is selected, the corresponding JSON will be displayed on the right. In the preceding <a id="_idTextAnchor605"/>example, the JSON for a hard disk is shown. This JSON is the same as the JSON that can be used in the resources array of an ARM template, except the ID element. Note that due to the different API versions used, the JSON out<a id="_idTextAnchor606"/>put and the relevant template resource may vary.</p>
+<h2 id="_idParaDest-209"><a id="_idTextAnchor607"/>Subscription-level templates</h2>
+<p>The discussion of<a id="_idIndexMarker710"/> ARM templates up to this point has all been about ARM templates for a resource group deployment. A template describes one or more resources that are deployed to a resource group. Additionally, there are also subscription-level templates. An example ARM template for a resource group is as follows:</p>
+<pre class="source-code">
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01
+/subscriptionDeploymentTemplate.json#", 
+    "contentVersion": "1.0.0.1", 
+    "parameters": { },
+    "variables": { }, 
+    "resources": [
+        {
+            "type": "Microsoft.Resources/resourceGroups", 
+            "apiVersion": "2021-04-01",
+            "location": "West Europe", 
+            "name": "myResourceGroup", 
+            "pro<a id="_idTextAnchor608"/>perties": {}
+        }
+    ],
+    "outputs": {}
+}</pre>
+<p>The format for a <a id="_idIndexMarker711"/>subscription template is completely the same as that for a resource group. The differences are <strong class="source-inline">$schema</strong>, which points to another schema location, and the types of resources that are supported. Subscription templates do not support the creation of resources directly and support only the creation of resource groups, the initiation of template deployments, creating and <a id="_idTextAnchor609"/>assigning Azu<a id="_idTextAnchor610"/>re policies, and the creation of role assignments.</p>
+<h2 id="_idParaDest-210"><a id="_idTextAnchor611"/>Azure Blueprints</h2>
+<p>Next to subscription-level <a id="_idIndexMarker712"/>templates, there is also another offering available: Azure Blueprints. Blueprints can be used to describe the desired state of an Azure subscription and apply that to an existing subscription.</p>
+<p>All of the things that can be done using a blueprint can nowadays also be done using an ARM template. However, the other way around is not true. Azure Blueprints only supports the following constructs, which are called artifacts:</p>
+<ul>
+<li>Policy assignments</li>
+<li>Role (RBAC) assignments </li>
+<li>Resource group creation</li>
+<li>Nested ARM templates at the subscription or resource group level</li>
+</ul>
+<p>These are all of the elements that are needed to build the defau<a id="_idTextAnchor612"/>lt layout, or a blueprint, for Azure subscriptions.</p>
+<p>There are a number of key differences between blueprints and ARM templates:</p>
+<ul>
+<li>A<a id="_idIndexMarker713"/> blueprint is a resource you can create and<a id="_idIndexMarker714"/> navigate to in the portal. The authoring experience is also in the portal, not in text files on a local computer.</li>
+<li>The relationship between a subscription and the blueprint that was used to create it remains, also after the deployment completes.</li>
+<li>With the assignment of a blueprint to a subscription, it is possible to mark the assignment as locked. If this is done, all of the resources deployed through the blueprint cannot be deleted or edited as long as the blueprint is applied—not even by the owners of the subscription that it is assigned to.</li>
+<li>There are many built-in blueprints available that can be used to implement controls f<a id="_idTextAnchor613"/>rom well-known standards such as ISO, NIST, or HIPAA.</li>
+</ul>
+<p>Azure Blueprints is still in preview at the time of writing. While using Blueprints, you can install RBAC roles, ARM templates, and Azure policies all at once and assign them to a certain scope. Removing the assignment does not delete or remove the resources, thus this soon becomes tedious, and Azure DevOps has <a id="_idTextAnchor614"/><a id="_idTextAnchor615"/><a id="_idTextAnchor616"/>no tasks or automation to manage blueprints at scale.</p>
+<h2 id="_idParaDest-211"><a id="_idTextAnchor617"/>Bicep</h2>
+<p>Bicep<a id="_idIndexMarker715"/> is a <strong class="bold">Domain-Specific Language</strong> (<strong class="bold">DSL</strong>) that allows the declarative deployment of Azure resources. Everything <a id="_idIndexMarker716"/>you can do with an ARM template can be accomplished with Bicep as well.</p>
+<p>Bicep provides all resource types and API versions. Bicep provides a better authoring experience as it supports type safety and a simple declarative syntax. Bicep files are idempotent, and one file will represent the desired state. You can then use that file to repeatedly deploy your infrastructure in a consistent manner.</p>
+<p>Bicep is a transparent abstraction over ARM template JSON and supports JSON template capabilities. The Bicep <a id="_idIndexMarker717"/>CLI converts a Bicep file into ARM template JSON. You can use the Bicep Playground (<a href="https://aka.ms/bicepdemo">https://aka.ms/bicepdemo</a>) to view Bicep and equivalent JSON side by side.</p>
+<p>To decompile ARM template JSON to Bicep in the Azure CLI, use the following:</p>
+<p class="source-code">az bicep decompile --file deployment.json</p>
+<p>The command creates a file named <strong class="source-inline">deployment.bicep</strong>. Decompiling an ARM template helps you get started with Bicep development.</p>
+<h1 id="_idParaDest-212"><a id="_idTextAnchor618"/>Using Azure Automation</h1>
+<p>Azure Automation <a id="_idIndexMarker718"/>is a service in Azure that is designed to help users to create, manage, deploy, and maintain their Azure resources. Azure Automation contains several concepts that remove some of the complexities and low-level details from these actions. Azure Automation allows for th<a id="_idTextAnchor619"/>e formulation of workflows in the form of runbooks. These runbooks can b<a id="_idTextAnchor620"/>e executed against Azure resources on behalf of the user.</p>
+<h2 id="_idParaDest-213"><a id="_idTextAnchor621"/>Automation account resources</h2>
+<p>Within an Azure <a id="_idIndexMarker719"/>Automation account, there are several resources that make this more than just a scripting engine. These r<a id="_idTextAnchor622"/>esources are shared on the level of the Automation<a id="_idTextAnchor623"/> account and can hence be reused within multiple runbooks.</p>
+<h3>Run As account</h3>
+<p>The first of <a id="_idIndexMarker720"/>these constructs is the <em class="italic">Run As</em> account. This account is a service principal that will be created in the AAD that the Azure subscription containing the Automation account is linked to. The credentials to authenticate as this service principal are securely stored within the Automation account. These credentials are non-retrievable directly from an Automation account. The service principal is also added as a contributor to the Azure subscription. As a result, runbooks can now be set up to execute using this account. Run As accounts can be automatically created when creating the Automation account.</p>
+<p>Run As account functionality is still available for current and new Automation accounts. However, the Run As account has been replaced with managed identities. Managed identities are the recommended way to authenticate in your runbooks and the default authentication method for your Automation account. Because no credentials are saved, a managed identity is more secure and easier to use. If you use Run As in your runbook co<a id="_idTextAnchor624"/><a id="_idTextAnchor625"/><a id="_idTextAnchor626"/>de, you should change it to use managed identities instead.</p>
+<h3>Schedules</h3>
+<p>A common way of automating<a id="_idIndexMarker721"/> workflows is scheduling them to run on a specific date and time or at a fixed interval. Instead of specifying a schedule for every workflow, shared schedules can be created and reused in runbooks. To create a new schedule, first, open the list of all schedules. After that, a new schedule can be added, as shown in the following screenshot:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer116">
+<img alt="Figure 8.6 – Azure Automation workflow schedules " height="822" src="image/B18655_08_06.jpg" width="1047"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.6 – Azure Automation workflow schedules</p>
+<p>A schedule<a id="_idIndexMarker722"/> has a name and a description. These values are for the users interacting with the schedule only. Next, a starting date and time can be configured, along with an optional recurrence interval, and, if a recurrence interval is specified, an expiration date and time.<a id="_idTextAnchor627"/><a id="_idTextAnchor628"/><a id="_idTextAnchor629"/></p>
+<p>Once the schedule is created, it can be used for a runbook.</p>
+<h3>Modules</h3>
+<p>The runbooks that are used in<a id="_idIndexMarker723"/> Azure Automation are written in PowerShell or Python. PowerShell has a very rich ecosystem of modules with predefined functionalities that can be used. To use PowerShell modules from an Automation account, only modules that have been uploaded to the modules section can be used. One major benefit of this is that it is possible to fix the version of a module to use. This guarantees that scripts will keep working and not break in case of updates to dependencies.</p>
+<p>The <a id="_idIndexMarker724"/>PowerShell modules for interacting with Azure are by default installed into every Automation account. Fu<a id="_idTextAnchor630"/>rthermore, more modules can be added, and <a id="_idTextAnchor631"/>existing modules can be upgraded or removed by administrators.</p>
+<h3>Variables</h3>
+<p>Within <a id="_idIndexMarker725"/>runbooks, a lot of variables might come into play: the names of resource groups, virtual machines, startup or shutdown times, and so on. Hardcoding these values inside a script is not good practice but storing them together with a runbook also has downsides. For example, in the case that there are three runbooks for the same virtual machine, this would mean that a number of variable values (for example, resource group name and virtual machine name) would be repeated at least three times. To prevent this, it is possible to store variable values at the Automation account level, from where they can be reused throughout every runbook that is executed in that account.</p>
+<p>Once a variable is set, it can be accessed from a runbook using the following command:</p>
+<p class="source-code">$exampleVar = Get-AutomationVariable -Name 'ExampleVar'</p>
+<p>In addition to reading and using variables inside a runbook, they can also be updated from within a runbook:</p>
+<p class="source-code">Set-AutomationVariable -name 'ExampleVar' -value 'ExampleValue'</p>
+<p>While a very powerful feature, updating variables from within runbooks can have unexpected consequences. If a variable value that is used in multiple runbooks gets updated by one of them, this might break the other runbooks. Keeping track of which variabl<a id="_idTextAnchor632"/><a id="_idTextAnchor633"/><a id="_idTextAnchor634"/>es are read-only and which are written to as well is important.</p>
+<h4>Credentials</h4>
+<p>A special type of <a id="_idIndexMarker726"/>variable is the credential. Credentials contain not one but two values: a username and a password. Credentials are treated as secrets everywhere they are used. This means that they will not appear in logs and that they have to be retrieved using a specific PowerShell syntax:</p>
+<p class="source-code">$myCredential = Get-AutomationPSCredential -Name 'MyCredential'</p>
+<p>After executing this<a id="_idIndexMarker727"/> <a id="_idTextAnchor635"/>command, the <strong class="source-inline">myCredenti<a id="_idTextAnchor636"/>al</strong> object can be used to retrieve both the username and password.</p>
+<h4>Connections</h4>
+<p>It is a very common <a id="_idIndexMarker728"/>scenario to have to connect to one or more external services from within a runbook. A common example is the ARM  template that is used to manage all resources within Azure. To avoid having to store a series of variables and build the corresponding connection in a runbook, Automation accounts allow for the creation beforehand of one or more connections.</p>
+<p class="callout-heading">Tip</p>
+<p class="callout">In most scenarios, it is not necessary to create connections manually as they are provided along with a Run As account.</p>
+<p>Once all of the shar<a id="_idTextAnchor637"/>ed resources are in place, it is time to start wr<a id="_idTextAnchor638"/>iting one or more runbooks, which is our next topic of discussion.</p>
+<h2 id="_idParaDest-214"><a id="_idTextAnchor639"/>Runbooks</h2>
+<p>Azure<a id="_idIndexMarker729"/> Automation supports <a id="_idIndexMarker730"/>a number of types of runbooks: PowerShell, Python 2, and graphical. The first two allow for writing scripts in the specified language. Graphical runbooks allow for composing a runbook from all uploaded Po<a id="_idTextAnchor640"/>werShell modules, assets, and existing runbooks using drag and drop.</p>
+<p>In addition to these three basic types of runbooks, there are PowerShell workflow and graphical workflow types available. The difference between a regular runbook<a id="_idIndexMarker731"/> and a workflow runbook<a id="_idIndexMarker732"/> is that workflow runbooks also support parallelism. Another benefit of PowerShell workflow <a id="_idTextAnchor641"/>is that it supports the use of checkpoints, which all<a id="_idTextAnchor642"/>ow a script to be resumed if it encounters an exception mid-execution.</p>
+<h3>Runbook execution</h3>
+<p>Once the <a id="_idIndexMarker733"/>runbook is written, there are a number of ways to execute it:</p>
+<ul>
+<li><strong class="bold">Manually</strong>: Any runbook can be run at any time by opening it in the Azure portal and pressing <strong class="bold">Start</strong>. Of course, these operations are also available using PowerShell or the Azure CLI.</li>
+<li><strong class="bold">By attaching a webhook</strong>: Once a runbook is published, one or more webhooks can be generated for executing the runbook. Each webhook can be enabled or disabled or given an expiration date. These tools allow a new webhook to be generated for every user of the runbook and fine-grained control to be initiated if ever, in the future, access should not be accorded to a particular user.</li>
+<li><strong class="bold">On a schedule</strong>: Published runbooks can be attached to one or more of the shared schedules. Being able to attach to multiple schedules means that it is easy to precreate a series of schedules for typical reoccurrences, such as hourly, daily, or<a id="_idIndexMarker734"/> every Monday, and reuse and combine these for the appropriate runbooks.</li>
+</ul>
+<p>When exe<a id="_idTextAnchor643"/>cuting the runbook from a webh<a id="_idTextAnchor644"/>ook or on a schedule, the option to run it manually will stay available.</p>
+<h3>Jobs</h3>
+<p>Every time a runbook is<a id="_idIndexMarker735"/> executed, a new entry is created in the <strong class="bold">Jobs</strong> log. This log will show an entry for every time the runbook has run, no matter how the execution was initiated. Every entry will contain the date and time <a id="_idTextAnchor645"/><a id="_idTextAnchor646"/><a id="_idTextAnchor647"/>the run was started, whether there were errors, and a full execution log.</p>
+<h3>Runbooks gallery</h3>
+<p>Runbooks<a id="_idIndexMarker736"/> are a great way of automating common tasks. Of course, there are tasks that are only for specific customers, but there are also many tasks that are applicable to all Azure customers. Examples include the automated startup of a virtual machine every Monday at 8 A.M. or scaling up a database every morning and back down every evening.</p>
+<p>For these common scenarios, there is the runbooks gallery, which is enabled within every Automation account. In this gallery, hundreds of premade runbooks can be browsed and searched. Once an appropriate runbook has been found, it can be imported directly into the account as a runbook.</p>
+<p>Besides exe<a id="_idTextAnchor648"/>cuting scripts at set intervals or upon the invocation of a webhook, Azure Automation can also be used as a PowerShell DSC pull server. Let’s discuss this next.</p>
+<p>Before you run a new runbook that you’ve created or imported, you must first publish it. Each Azure Automation runbook has a Draft and a Published edition. Only the Published version can be run, and the Draft version can be modified. Any modifications to the Draft version have no effect on the Published version. When the Draft version is ready, you pu<a id="_idTextAnchor649"/>blish it, replacing the existing Published version with the Draft version.</p>
+<h2 id="_idParaDest-215"><a id="_idTextAnchor650"/>PowerShell DSC</h2>
+<p>PowerShell DSC<a id="_idIndexMarker737"/> is a notion for specifying the configuration of servers. This configuration is stored on a pull server, where it can be accessed by one or more virtual machines. These virtual machines are configured to check this server at a specified interval for the latest DSC configuration and update themselves to comply with this configuration.</p>
+<p>PowerShell DSC is an extension to the PowerShell language specification that is used for writing desired state configurations. A configuration enables the desired state of one or more nodes to be specified. A node specifies which server, or set of servers, is to be configured. The configuration for a node is written in the form of one or more resources. An example configuration is as follows:</p>
+<pre class="source-code">
+configuration ServerFarmConfig
+{
+    Node FrontEndServer
+    {
+        WindowsFeature IIS
+        {
+            Ensure = 'Present' 
+            Name = 'Web-Server'
+            IncludeAllSubFeature = $true
+        }
+        File LogDirectory
+        {
+            Type = 'Directory' 
+            Desti<a id="_idTextAnchor651"/>nationPath = 'C:\logs' 
+            Ensure = "Present"
+ 
+        }
+    }
+}</pre>
+<p>In this example, the configuration for a server farm with a single type of server is described. This server contains two resources. The first one, of the <strong class="source-inline">WindowsFeature</strong> type, with the name <strong class="bold">Internet Information Services</strong> (<strong class="bold">IIS</strong>), ensures that <strong class="source-inline">IIS</strong> is installed together <a id="_idIndexMarker738"/>with all of its subfeatures. The second resource, of the <strong class="source-inline">File</strong> type, ensures that a directory, <strong class="source-inline">c:\logs</strong>, exists. The resource types of <strong class="source-inline">IIS</strong> an<a id="_idTextAnchor652"/>d <strong class="source-inline">File</strong> and many more are built into the PowerShell DSC specification. A full reference of all reso<a id="_idTextAnchor653"/>urces is available online and a link is included at the end of this chapter.</p>
+<h3>Compiling and applying PowerShell DSC</h3>
+<p>PowerShell<a id="_idIndexMarker739"/> DSC files are saved in plaintext, often in a <strong class="source-inline">.ps1</strong> file. These<a id="_idIndexMarker740"/> files can be compiled<a id="_idIndexMarker741"/> into <strong class="bold">Managed Object Format</strong> (<strong class="bold">MOF</strong>) files. These MOF files can then be pushed to one or more servers to update the state of the server to the state described in the MOF file. This is <a id="_idIndexMarker742"/>called <strong class="bold">push mode</strong>.</p>
+<p>Besides push<a id="_idIndexMarker743"/> mode, there is another mode for deploying MOF files. This is called <strong class="bold">pull mode</strong>. In pull mode, MOF files are not directly pushed to individual servers but stored on a central server, which is<a id="_idIndexMarker744"/> called the <strong class="bold">pull server</strong>. This way, the pull server has a complete record of all configurations and node definitions within those configurations.</p>
+<p>Once the pull server is up and running, individual servers are configured to fetch their DSC configuration at a fixed interval and apply that configuration. Applying a configuration means that, for every defined resource, the described state will be enacted. This can be done by doing nothing if the actual state already matches the desired state, or by running commands to achieve the desired state. In this p<a id="_idTextAnchor654"/><a id="_idTextAnchor655"/>rocess, all previous changes—even by administrators—will be reverted if necessary.</p>
+<h3>Using PowerShell DSC with Azure Automation</h3>
+<p>Azure <a id="_idIndexMarker745"/>Automation has built-in capabilities for <a id="_idIndexMarker746"/>PowerShell DSC and can fulfill the role of pull server for one or more virtual machines.</p>
+<p>To start using the built-in pull server capabilities, upload one or more configuration files to the Automation account. This is done from the <strong class="bold">State configuration</strong> view that is shown in the following screenshot. Now, complete the following steps:</p>
+<ol>
+<li>Open by clicking the menu option on the left.</li>
+<li>Select <strong class="bold">Configurations</strong> in the tab bar at the top.</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer117">
+<img alt="Figure 8.7 – Azure Automation state configuration " height="622" src="image/B18655_08_07.jpg" width="976"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.7 – Azure Automation state configuration</p>
+<ol>
+<li value="3">Once the<a id="_idIndexMarker747"/> overview of all configurations is <a id="_idIndexMarker748"/>opened, new configurations can be added using the <strong class="bold">Add</strong> button. In <strong class="source-inline">topHere</strong>, a local <strong class="source-inline">ps1</strong> file can be selected, and that will be added to the list. Any valid configuration in the list can be clicked on and compiled in place.</li>
+<li>Now, the configuration will also be shown in the tab with compiled configurations and can be applied to one or more virtual machines.</li>
+<li>Once a compiled configuration is available, the <strong class="bold">Nodes</strong> tab can be used for adding one or more virtual machines from the subscription to a configuration node.</li>
+<li>Clicking the <strong class="bold">Add</strong> button while this tab is shown opens<a id="_idTextAnchor656"/> the view shown here:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer118">
+<img alt="Figure 8.8 – Azure Automation – adding a new virtual machine " height="482" src="image/B18655_08_08.jpg" width="1255"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.8 – Azure Automation – adding a new virtual machine</p>
+<ol>
+<li value="7">In this <a id="_idIndexMarker749"/>view, a virtual machine can be<a id="_idIndexMarker750"/> selected to which the selected configuration should be applied.</li>
+<li>The local configuration manager on that machine will be configured to refresh the configuration at fixed intervals.</li>
+<li>Whenever the configuration is refreshed, it will be reapplied to the server.</li>
+</ol>
+<p>Azure Automation enables users to manage virtual machines, for example, to apply application configuration. When working with PaaS offerings, this cannot be done using tec<a id="_idTextAnchor657"/>hniques such as PowerShell DSC; other techniques have t<a id="_idTextAnchor658"/>o be used to manage application settings. These will be discussed in the next section.</p>
+<h1 id="_idParaDest-216"><a id="_idTextAnchor659"/>Managing application settings</h1>
+<p>Another part of <a id="_idIndexMarker751"/>the infrastructure of an application is the <a id="_idIndexMarker752"/>application configuration. In this section, a number of approaches for storing and loading the application configuration for an Azure App Service are discussed. They include the following:</p>
+<ul>
+<li>Storing the configuration in the app settings</li>
+<li>Using a combination of a managed identity and key vault</li>
+<li>Using the Azure App Configuration service</li>
+</ul>
+<p>The disadvantage of the first approach is that the app settings can be read by any user who has administrative (read) access to th<a id="_idTextAnchor660"/><a id="_idTextAnchor661"/><a id="_idTextAnchor662"/>e app service that is configured. The next two approaches do not have this disadvantage.</p>
+<h2 id="_idParaDest-217"><a id="_idTextAnchor663"/>Azure App Service settings from an ARM template</h2>
+<p>The first way <a id="_idIndexMarker753"/>to configure application settings as code is by specifying app settings as a resource in an ARM template. This should be specified as a nested resource. This can be done as shown in the following screenshot:</p>
+<pre class="source-code">
+{
+    "name": "[concat(variables('websiteName'), '/appsettings')]", 
+    "type": "config",
+    "apiVersion": "2021-03-01", 
+    "dependsOn": [
+        "[concat('Microsoft.Web/sites/', variables('webSiteName'))]"
+    ],
+    "properties": {
+        "key1": " [listKeys(parameters('storagename'), 2021-03-01').keys[0].value]",
+        "key2": "value2"
+    }
+}</pre>
+<p>The use of the <strong class="source-inline">listKeys</strong> function is especially useful in these scenarios. It allows for the direct copying of secrets from supported services to the application settings without ever storing them in an intermediate solution. For secrets that do not come from Azure sources, template parameters should be used.</p>
+<p>The<a id="_idIndexMarker754"/> configuration specified in the ARM template corresponds to the configuration of an app service that can be found in the portal. These settings are used to override corresponding entries in the <strong class="source-inline">appsettings.json</strong> or <strong class="source-inline">appsettings.config</strong> files. Updating this configuration automatically reloads the application as well.</p>
+<p>The downside of this approach is that secrets that are stored this way are readable through the <a id="_idTextAnchor664"/>Azure port<a id="_idTextAnchor665"/>al. Any user with read access to the app service can retrieve all secrets stored this way.</p>
+<h2 id="_idParaDest-218"><a id="_idTextAnchor666"/>Loading settings at runtime from a key vault</h2>
+<p>The<a id="_idIndexMarker755"/> next possible location for storing app service settings is in an Azure key vault, where the <a id="_idTextAnchor667"/>application loads them at runtime. To make this possible, the following has to be in place.</p>
+<p>To be able to authorize an application with access to a key vault, the application first has to be able to authenticate itself against AAD. Of course, this can be done by registering a service principal manually, but this would return a username and password that have to be stored somewhere. Usernames and passwords are secrets but cannot be stored in the key vault since they are needed for accessing it. This problem of how to keep the key to the vault safe can be solved by using an<a id="_idIndexMarker756"/> Azure capability called a <strong class="bold">managed identity</strong>.</p>
+<p class="callout-heading">Important Note</p>
+<p class="callout">The problem of securely storing secrets but getting another secret in return for accessing them is often referred to as the problem of <em class="italic">turtles all the way down</em>. This refers to an old anecdote to which a link is included at the end of this chapter.</p>
+<p>With an Azure managed identity enabled on an app service, Azure automatically generates a service principal with a non-retrievable username and password. Only at runtime, using specific code, can an application authenticate itself as this principal. Azure will ensure that this will only work for code that is running with the app service that the managed identity belongs to.</p>
+<p>Now that an application can have its own identity, that identity has to be granted access to the key vault. This can be done in the key vault description in an ARM template, using the following syntax<a id="_idIndexMarker757"/> for reference:</p>
+<pre class="source-code">
+{
+    "type": "Microsoft.KeyVault/vaults", 
+    "name": "[parameters('keyVaultName')]", 
+    "apiVersion": " 2021-11-01-preview",
+    "location": "[resourceGroup().location]", 
+    "dependsOn": [
+        "[resourceId('Microsoft.Web/sites/',
+parameters('appServiceName'))]"
+    ],
+    "properties": { 
+        "enabledForTemplateDeployment": false, 
+        "tenantId": "[subscription().tenantId]", 
+        "accessPolicies": [
+          {
+              "tenantId": "[subscription().tenantId]", "objectId":
+              [reference(concat(resourceId('Microsoft.Web/sites',parameters('appServiceNa me')),  '/providers/Microsoft.ManagedIdentity/Idntities/default'), ' 2021-11-01-preview').principalId]", "permissions": {    "secrets": [ "get", "list" ]
+               }
+          }
+      <a id="_idTextAnchor668"/>  ],
+        "sku": {
+          "name": "standard",
+          "family": "A"
+        }
+    }
+}</pre>
+<p>In this <a id="_idIndexMarker758"/>example, the <strong class="source-inline">reference()</strong> function is used to retrieve the information of the managed identity and uses this to create an access policy on the key vault.</p>
+<p>Finally, with the key vault and access to it set up, the application has to retrieve the contents at startup time. To do this, config builders can be used. They are introduced with .NET Core 2.0 (and .NET Framework 4.7.1) and are used in the <strong class="source-inline">StartUp</strong> class, as shown in the following code snippet:</p>
+<pre class="source-code">
+var tokenProvider = new AzureServiceTokenProvider();
+var kvClient = new KeyVaultClient((authority, resource, scope) =&gt; tokenProvider.KeyVaultTokenCallback(authority, resource, scope));
+var configurationBuilder = new ConfigurationBuilder().AddAzureKeyVault(
+    $"https://{ Configuration["keyVaultName"]}.vault.azure.net/", kvClient,
+    new DefaultKeyVaultSecretManager()); 
+Configuration = configurationBuilder.Build();</pre>
+<p>All types in this code e<a id="_idTextAnchor669"/><a id="_idTextAnchor670"/>xample are available in the NuGet <strong class="source-inline">Microsoft.Configuration.ConfigurationBuilders.Azure</strong> package.</p>
+<h2 id="_idParaDest-219"><a id="_idTextAnchor671"/>Azure App Configuration</h2>
+<p>Another<a id="_idIndexMarker759"/> location for storing the configuration of applications is Azure App Configuration. This is a new service, and at the time of writing, it is still in preview. App Configuration allows for the creation of a central register of key-value pairs that can be used as configuration by such a register, but also multiple applications.</p>
+<p>App Configuration <a id="_idIndexMarker760"/>is another type of resource that can be created from the portal. The main component is a <strong class="bold">Configuration explorer,</strong> as shown in the following screenshot:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer119">
+<img alt="Figure 8.9 – Azure App Configuration " height="824" src="image/B18655_08_09.jpg" width="1085"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.9 – Azure App Configuration</p>
+<p>In addition to the Configuration explorer, there is a keys section for retrieving access keys that applications can use to read the configuration. There are also options to view recent changes to the configuration and restore earlier versions and for importing or exporting all configuration settings.</p>
+<p>After the App Configuration resource has been created and configuration keys added, they can be retrieved from within an application by using an extension method of the <strong class="bold">IConfiguration</strong> framework type:</p>
+<p class="source-code">config.AddAzureAppConfiguration(settings["ConnectionStrings:AppConfig"]);</p>
+<p>The loader for settings from<a id="_idTextAnchor672"/> an app configuration is part of the NuGet <strong class="source-inline">Microsoft.Azure.AppConfiguration.AspNetCore</strong> package.</p>
+<p>Compared to <a id="_idIndexMarker761"/>storing settings in Azure Key Vault, App Configuration has two downsides:</p>
+<ul>
+<li>First, the application needs to be configured with a connection string to the Azure App Configuration, storing at least one new secret in the app settings.</li>
+<li>Second App Configuration does not have access control options that are as rigid as Key Vault. For this reason, it might make sense to distribute configuration over both App Configuration and Key Vault, depending on the type of configuration value.</li>
+</ul>
+<p>This concludes our discussion of Azure and Azure DevOps capabili<a id="_idTextAnchor673"/>ties for IaC. The next section will discuss a series of other tools available that offer similar capabilities.</p>
+<h1 id="_idParaDest-220"><a id="_idTextAnchor674"/>Other tools</h1>
+<p>There are many other tools available for managing infrastructure and configuration through code. Next to the native Azure and Windows options discussed in the previous sections, there are many alternatives widely in use and some of them are liste<a id="_idTextAnchor675"/>d in this section. It<a id="_idTextAnchor676"/> is important to know which tool can be used for which scenarios and how to integrate with them.</p>
+<h2 id="_idParaDest-221"><a id="_idTextAnchor677"/>CloudFormation</h2>
+<p>CloudFormation<a id="_idIndexMarker762"/> is the IaC language for the AWS cloud. CloudFormation templates can be written in either JSON or YAML format. One example of creating an AWS S3 storage bucket that is publicly readable would look like this:</p>
+<pre class="source-code">
+Resources:
+  HelloBucket:
+  Type: AWS::S3::Bucket 
+  Properties:
+  AccessControl: PublicRead</pre>
+<p>There is an <a id="_idIndexMarker763"/>extension available that allows the execution of CloudFormation templates on AWS from Azure DevOps. This extension provides tasks for creating, updating, or deleting AWS stacks. A stack has a function that is comparable to<a id="_idTextAnchor678"/><a id="_idTextAnchor679"/><a id="_idTextAnchor680"/> a resource group in Azure and the tasks are comparable to the tasks for applying an ARM template.</p>
+<h2 id="_idParaDest-222"><a id="_idTextAnchor681"/>Chef</h2>
+<p>Chef<a id="_idIndexMarker764"/> is a tool for CaC, with support for describing and enforcing the configuration of servers. Chef uses a centralized server, the <strong class="bold">Chef server</strong>, where all configuration for all servers is saved. Here, the correct<a id="_idIndexMarker765"/> desired state for every server is determined, which is then <a id="_idIndexMarker766"/>pulled by the <strong class="bold">Chef client</strong>, an agent that runs on the <em class="italic">node</em> that is being managed.</p>
+<p>Defining the desired state for a server is done using a number of constructs. The lowest level is the recipe. A recipe contains one or more resources, which are built-in capabilities that can be used. An example resource is <strong class="source-inline">execute</strong>, which runs a Bash command. Another example resource is <strong class="source-inline">apt_update</strong>, which provides the means to interact with the <strong class="source-inline">apt</strong> package manager. One or more recipes are combined in cookbooks, which describe a capability that can be assigned to a node. The assignment of one or more cookbooks to a node is done using the run list. The run list contains all cookbooks that have to be applied to a node.</p>
+<p>Interaction with the Chef server is done using a command-line tool cal<a id="_idTextAnchor682"/>led <strong class="source-inline">knife</strong>.</p>
+<p>While the term<a id="_idTextAnchor683"/>inology is completely different, there are many conceptual parallels between PowerShell DSC and Chef.</p>
+<h2 id="_idParaDest-223"><a id="_idTextAnchor684"/>Puppet</h2>
+<p>Puppet is a <a id="_idIndexMarker767"/>deployment and configuration management tool that operates using a server-client model. There is a centralized server called the <strong class="bold">Puppet master</strong> that is<a id="_idIndexMarker768"/> responsible for taking in all of the desired state descriptions and compiling them to an internal catalog that holds the desired state for every managed server. All servers that are managed by Puppet need to have the Puppet agent installed on the local server. The agent connects to the server to pull the state for the server it manages, and applies that locally. A managed server is called a <strong class="bold">node</strong>.</p>
+<p>The base building block used by Puppet is<a id="_idIndexMarker769"/> called a <strong class="bold">resource</strong>. A resource is defined by specifying a resource type and a series of attributes. There are many resource types available, for example, for managing users and installed applications. Resources are grouped into one or more <em class="italic">classes</em>. These classes are, in turn, assigned to one or more nodes.</p>
+<p>Puppet can<a id="_idIndexMarker770"/> be installed on any Linux or Windows virtual machine in Azure. There is also a prebuilt image with Puppet Enterprise available in the Azure Marketplace.</p>
+<p>Puppet is comparable to Chef and PowerShell DS<a id="_idTextAnchor685"/><a id="_idTextAnchor686"/><a id="_idTextAnchor687"/>C. All three have a comparable model for describing the desired state and they all serve the same purpose.</p>
+<h2 id="_idParaDest-224"><a id="_idTextAnchor688"/>Ansible</h2>
+<p>Ansible is<a id="_idIndexMarker771"/> yet another configuration management tool that is mostly used on Linux but also has support for Windows. One aspect that differentiates Ansible from other tools is that it does not have a centralized server that hosts all of the desired states, nor does it work with agents. All commands executed by Ansible are executed using SSH or other relevant protocols—HTTP(S), WinRM, and so on.</p>
+<p>Any server can initiate the deployment of a <em class="italic">playbook</em> against one or more <em class="italic">items</em> in an <em class="italic">inventory</em>. An Ansible inventory<a id="_idIndexMarker772"/> contains all of the servers that can be managed by Ansible. They can be grouped into one or more groups, which can be nested into other groups as well. Each individual server and every group is an inventory item. In Ansible, the<a id="_idIndexMarker773"/> desired state is written in playbooks. A playbook is a series of tasks or roles that need to be run on the target server. A<a id="_idIndexMarker774"/> role is a group of tasks. Roles are intended to be reused in more than one playbook and should, therefore, be general enough to be usable in multiple situations. Roles should also be idempotent. This means that the tasks in the role should ensure that the outcome of running the playbook is the same, no matter the number of times it is run.</p>
+<p>Ansible scripts<a id="_idIndexMarker775"/> can be executed using command-line tools or an Azure DevOps extension that wraps this tool. There are also other management systems availab<a id="_idTextAnchor689"/>le, such as Ansible <a id="_idTextAnchor690"/>Tower, which provides <a id="_idIndexMarker776"/>a graphical user interface on top of the capabilities of the Ansible command-line tools.</p>
+<h2 id="_idParaDest-225"><a id="_idTextAnchor691"/>Terraform</h2>
+<p><strong class="bold">Terraform</strong> is a <a id="_idIndexMarker777"/>multicloud infrastructure management solution. It is comparable to ARM templates or Bicep, the difference being that it also supports Amazon Web Services, Google Cloud Platform, and other supported cloud services. Terraform uses a custom file format for specifying one or more resources to be created using one or more providers. The resources correspond to the cloud resources, and the providers are responsible for knowing how to interact with the APIs of the different vendors.</p>
+<p>Optionally, you <a id="_idIndexMarker778"/>can use a JSON format instead of the Terraform proprietary format called <strong class="bold">HashiCorp Configuration Language</strong> (<strong class="bold">HCL</strong>). Terraform also supports the use of modules for creating packages that are reusable components.</p>
+<p>Terraform configuration files are executed using CLIs.</p>
+<p>You can refer to the<a id="_idIndexMarker779"/> Te<a id="_idTextAnchor692"/>rraform fundamentals (<a href="https://learn.hashicorp.com/collections/terraform/cli">https://learn.hashicorp.com/collections/terraform/cli</a>) to learn about these core components.</p>
+<h1 id="_idParaDest-226"><a id="_idTextAnchor693"/>Summary</h1>
+<p>In this chapter, you learned about the concepts of IaC and CaC, their value, and how to use them in practice. To implement these, you learned about ARM templates, the IaC mechanism for Azure. You also learned about PowerShell DSC to manage the configuration of virtual machines and about different techniques for managing the configuration of your applications. Finally, you learned about several other tools available on the market. You learned which tool can be used in which situation and whether these tools can integrate with Azure DevOps.</p>
+<p>With this knowledge, you are now able to start describing the infrastructure and configuration of your application(s) in source control using one or more of the tools you have read about. You are also capable of setting up the means to deliver the infrastructure using automation, either from a release pipeline or using dedicated infrastructure management tools. But no matter which solution you choose, you now have the capabilities to incorporate infrastructure into your DevOps processes.</p>
+<p>In the next chapter, you will learn about another challenge you might encounter when implementing DevOps practices, related to databases. When increasing the speed at which features flow to production, you may also have to cha<a id="_idTextAnchor694"/>nge the way you manage your database schema and how you apply changes. The next chapter will discuss this subject.</p>
+<h1 id="_idParaDest-227"><a id="_idTextAnchor695"/>Activity </h1>
+<ul>
+<li>Create And Deploy Empty ARM template using Azure CLI</li>
+<li>Add a resource to create Storage account in your ARM template</li>
+</ul>
+<h1 id="_idParaDest-228"><a id="_idTextAnchor696"/>Questions</h1>
+<p>As we conclude, here is a list of questions for you to test your knowledge regarding this chapter’s material. You will find the answers in the <em class="italic">Assessments</em> section of the Appendix:</p>
+<ol>
+<li value="1">True or False: ARM templates in Incremental deployment mode can be used for creating, updating, and deleting Azure resources.</li>
+<li>Which of the following is not an Azure Automation account resource?<ol><li>Modules</li><li>Containers</li><li>Managed identities </li><li>Variables</li></ol></li>
+<li>True or False: One disadvantage of IaC is that you have to put sensitive information in source control as ARM template parameter files.</li>
+<li>True or False: Azure Automation accounts al<a id="_idTextAnchor697"/>low for the execution of PowerShell runbooks at a predefined schedule.</li>
+<li>What are some of the benefits of using IaC?</li>
+</ol>
+<h1 id="_idParaDest-229"><a id="_idTextAnchor698"/>Further reading</h1>
+<ul>
+<li>A formal breakdown of the ARM template structure and syntax can be found at <a href="https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/template-expressions">https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/template-expressions</a>.</li>
+<li>The complete ARM template documentation can be found at <a href="https://docs.microsoft.com/en-us/azure/templates/">https://docs.microsoft.com/en-us/azure/templates/</a>.</li>
+<li>An overview of all functions that can be used in ARM templates can be found at <a href="https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/template-functions">https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/template-functions</a>.</li>
+<li>More information about Azure Blueprints can be found at <a href="https://docs.microsoft.com/en-us/azure/governance/blueprints/overview">https://docs.microsoft.com/en-us/azure/governance/blueprints/overview</a>.</li>
+<li>Details about the <strong class="source-inline">WhatIf</strong> command for ARM templates can be found at <a href="https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-what-if">https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-what-if</a>.</li>
+<li>Documentation for all PowerShell DSC built-in resources, can be found at <a href="https://docs.microsoft.com/en-us/powershell/dsc/overview/decisionmaker?view=dsc-1.1">https://docs.microsoft.com/en-us/powershell/dsc/overview/decisionmaker?view=dsc-1.1</a>.</li>
+<li>More information about CloudFormation can be found at <a href="https://aws.amazon.com/cloudformation/">https://aws.amazon.com/cloudformation/</a>.</li>
+<li>More information about Chef can be found at <a href="https://www.chef.io/">https://www.chef.io/</a>. </li>
+<li>More information about Puppet can be found at <a href="https://puppet.com/">https://puppet.com/</a>.</li>
+<li>More information about Ansible can be found at <a href="https://www.ansible.com/">https://www.ansible.com/</a>.</li>
+<li>More information about Terraform can be found at <strong class="source-inline">https://www.terraform.io/</strong>.</li>
+<li>More information about Azure resource manager commands <a href="https://docs.microsoft.com/en-us/cli/azure/deployment/group?view=azure-cli-latest#az-deployment-group-create">https://docs.microsoft.com/en-us/cli/azure/deployment/group?view=azure-cli-latest#az-deployment-group-create</a></li>
+<li>Bicep overview: <ul><li><a href="https://github.com/Azure/bicep">https://github.com/Azure/bicep</a></li><li><a href="https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/learn-bicep">https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/learn-bicep</a></li></ul></li>
+<li>Learning path to explore the <em class="italic">Infrastructure as Code</em>: <a href="https://docs.microsoft.com/en-us/learn/paths/az-400-manage-infrastructure-as-code-using-azure/">https://docs.microsoft.com/en-us/learn/paths/az-400-manage-infrastructure-as-code-using-azure/</a>.</li>
+<li>There are many online references to the story of <em class="italic">turtles all the way down</em>, but an early reference can be found digitized at <a href="https://dspace.mit.edu/handle/1721.1/15166">https://dspace.mit.edu/handle/1721.1/15166</a>.</li>
+</ul>
+</div>
+</div></body></html>

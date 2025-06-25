@@ -1,0 +1,415 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer110">
+			<h1 id="_idParaDest-216" class="chapter-number"><a id="_idTextAnchor227"/>9</h1>
+			<h1 id="_idParaDest-217"><a id="_idTextAnchor228"/>Enhancing the Speed and Maintainability of CI/CD Pipelines</h1>
+			<p>In this chapter, we’re going to cover the different tools and methods you can leverage to enhance the speed and maintainability of your CI/CD pipelines. Our goal in this chapter is to cover three main methods for how to speed up your pipelines. We don’t plan on covering every method to speed up a CI pipeline in GitLab, but rather the most impactful methods on <span class="No-Break">pipeline speed.</span></p>
+			<p>We will cover the following topics in <span class="No-Break">this chapter:</span></p>
+			<ul>
+				<li>Accelerating pipelines with directed acyclic graphs and <span class="No-Break">parent-child architecture</span></li>
+				<li>Building code for <span class="No-Break">multiple architectures</span></li>
+				<li>When and how to leverage caching <span class="No-Break">or artifacts</span></li>
+				<li>Reducing repeated configuration code with anchors <span class="No-Break">and extensions</span></li>
+				<li>Improving maintainability by combining multiple pipelines and leveraging <span class="No-Break">parent-child pipelines</span></li>
+				<li>Securing and accelerating jobs with <span class="No-Break">purpose-built containers</span></li>
+			</ul>
+			<h1 id="_idParaDest-218"><a id="_idTextAnchor229"/>Accelerating pipelines with directed acyclic graphs and parent-child architecture</h1>
+			<p>GitLab supports the usage of the <strong class="bold">directed acyclic graph</strong> (<strong class="bold">DAG</strong>) pattern for building CI pipelines. Under<a id="_idIndexMarker672"/> normal usage with GitLab, each stage represents a series of jobs that need to be completed. Each<a id="_idIndexMarker673"/> stage is comprised of multiple jobs that are executed in parallel. Once a stage completes, then the next stage begins, until the pipeline completes. This is the typical processing loop that GitLab utilizes to complete a <span class="No-Break">CI pipeline.</span></p>
+			<p>However, it is possible to create an internal loop of CI jobs that are directed to execute in a specific order that does not loop. This pattern is called a <strong class="bold">DAG</strong> or directed acyclic graph. <em class="italic">Directed</em> refers to the ordering of operations, <em class="italic">acyclic</em> refers to the fact it only happens once, and <em class="italic">graph</em> indicates the ordering <span class="No-Break">of steps.</span></p>
+			<p>When leveraged <a id="_idIndexMarker674"/>properly, the DAG pattern can dramatically decrease the time it takes a pipeline to<a id="_idIndexMarker675"/> complete. This occurs because you are creating processing loops inside of the CI pipeline and are explicitly defining the order of operations for CI jobs outside of stages. A good example of this is if one job’s execution is dependent on another job’s execution, you can leverage the <strong class="source-inline">needs:</strong> keyword to ensure they’re run one after another outside of a Stage ordering. This creates a simple <span class="No-Break">DAG process.</span></p>
+			<h2 id="_idParaDest-219"><a id="_idTextAnchor230"/>How to create a DAG in GitLab CI</h2>
+			<p>The following is an <a id="_idIndexMarker676"/>example of a normal GitLab CI <a id="_idIndexMarker677"/>pipeline. The following is a YAML implementation of the example we described in <span class="No-Break">the introduction:</span></p>
+			<pre class="source-code">
+Job1:
+  stage: A
+Job2:
+  stage: A
+Job3:
+  stage: B
+Job4:
+  stage: B</pre>
+			<p>In a traditional pipeline, as shown here, jobs defined in <strong class="source-inline">stage: B</strong> will only begin execution after all jobs in <strong class="source-inline">stage: A</strong> have finished. The following is an example of this same pipeline set up to <span class="No-Break">leverage DAG:</span></p>
+			<pre class="source-code">
+Job1:
+  stage: A
+Job2:
+  stage: A
+Job3:
+  stage: B
+  needs: ["Job1"]
+Job4:
+  stage: B</pre>
+			<p>By adding the <strong class="source-inline">needs</strong> keyword to <strong class="source-inline">Job3</strong>, we have created a relationship between <strong class="source-inline">Job1</strong> and <strong class="source-inline">Job3</strong>. So, as soon as <strong class="source-inline">Job1</strong> is completed, <strong class="source-inline">Job3</strong> will begin execution. This occurs outside of regular stage ordering. In the event <strong class="source-inline">needs</strong> is not defined, stage ordering will be respected. As we<a id="_idIndexMarker678"/> can see with <strong class="source-inline">Job4</strong>, for <strong class="source-inline">Job4</strong> to begin execution, <strong class="source-inline">stage: A</strong> has to complete <a id="_idIndexMarker679"/>properly. However, if <strong class="source-inline">needs: []</strong> is defined but blank, then GitLab will execute that job the moment a pipeline starts and not assign it to any stage <span class="No-Break">for execution.</span></p>
+			<h1 id="_idParaDest-220"><a id="_idTextAnchor231"/>Building code for multiple architectures</h1>
+			<p>GitLab CI enables you<a id="_idIndexMarker680"/> to build artifacts for multiple architectures at once. This can easily speed up software builds by two or three times since, with multiple architectures, you typically have to build the software multiple times for each architecture. Here, we’re going to use CI jobs and pipelines to execute a software build for multiple architectures at the <span class="No-Break">same time.</span></p>
+			<p>When building software for multiple architectures, there are some special requirements. The first requirement is that you must have GitLab Runners installed and configured on a machine running each architecture. For this section, we’re going to use three platforms as an example: <strong class="source-inline">x86_64</strong>, <strong class="source-inline">arch64</strong>, and <strong class="source-inline">powerpc</strong>. In this case, the expectation would be that you have a machine for each of the three architectures, with a GitLab Runner installed on it. That GitLab Runner also needs to have a tag assigned to it for which architecture it is <span class="No-Break">running on.</span></p>
+			<p>The second<a id="_idIndexMarker681"/> requirement is that the toolchain you use to build your software must be able to support a multi-architecture build. For this demo, we’re going to use GCC and a multi-architecture Docker image. We’re also going to be using the <strong class="source-inline">parallel:</strong> and <strong class="source-inline">matrix:</strong> keywords for <span class="No-Break">GitLab CI.</span></p>
+			<p>The <strong class="source-inline">parallel:</strong> keyword is designed to allow a CI job to run multiple times in parallel. So, for example, if you set <strong class="source-inline">parallel: 5</strong> in a CI job, that CI job will run 5 times inside of that pipeline, <span class="No-Break">in parallel.</span></p>
+			<p>The <strong class="source-inline">matrix:</strong> keyword is designed to work with the <strong class="source-inline">parallel:</strong> keyword to spin up multiple CI jobs at a time, with different variables assigned to them. The following is an example of what this looks like when used in a pipeline for <span class="No-Break">multi-architecture builds:</span></p>
+			<pre class="source-code">
+my-multiarch-ci-job:
+  stage: build
+  image: multiarch/crossbuild
+  script:
+    - make helloworld
+  parallel:
+    matrix:
+      - ARCH: x86
+        CROSS_TRIPLE: " "
+      - ARCH: arch64
+        CROSS_TRIPLE: "arch64-linux-gnu"
+      - ARCH: powerpc
+        CROSS_TRIPLE: "powerpcle-linux-gnu"
+  tags:
+    - $ARCH</pre>
+			<p>The preceding example is going to do three <span class="No-Break">key operations:</span></p>
+			<ul>
+				<li>First, with the use of <strong class="source-inline">parallel:</strong> and <strong class="source-inline">matrix:</strong>, GitLab is going to spin up three separate jobs – one for each of the variable pairs I’ve defined with <strong class="source-inline">ARCH</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">CROSS_TRIPLE</strong></span><span class="No-Break">.</span></li>
+				<li>Second, each<a id="_idIndexMarker682"/> of those jobs will have a tag assigned to them, reflecting whatever value is defined in <strong class="source-inline">ARCH:</strong>. This will cause that job to be assigned to the appropriate runner for <span class="No-Break">that tag.</span></li>
+				<li>Third, GitLab will expose the <strong class="source-inline">CROSS_TRIPLE:</strong> environment variable to the <strong class="source-inline">multiarch/crossbuild</strong> container. This environment variable is used by the container to properly configure the GCC toolchain so that it’s ready to build for <span class="No-Break">that architecture.</span></li>
+			</ul>
+			<p>When the container spins up, and the CI job executes, the <strong class="source-inline">make helloworld</strong> command will be run. This command will invoke the preconfigured GCC toolchain and cause it to begin building our application binaries. The resulting binaries will be built to support the <span class="No-Break">specified architecture.</span></p>
+			<p>By building multi-architecture binaries this way, we take the complexity out of a multi-architecture build. We make those multi-architecture builds repeatable and easily understandable. We also run those builds in parallel so that they’re not waiting on each other, and we can see the results built from each <span class="No-Break">architecture quickly.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">The <strong class="source-inline">parallel:</strong> and <strong class="source-inline">matrix:</strong> keywords can be used in any circumstance where you need multiple CI jobs with the same configurations, but with different injected variables. The <strong class="source-inline">matrix:</strong> keyword can also accept an array as the environment variable value. The environment variable key, however, <em class="italic">cannot</em> be <span class="No-Break">an array.</span></p>
+			<h1 id="_idParaDest-221"><a id="_idTextAnchor232"/>When and how to leverage caching or artifacts</h1>
+			<p>With GitLab, there is often confusion about the usage of caching or artifacts. Many users are curious as to which functionality to leverage and when. We aim to demystify both in this chapter and give you the tools to implement either approach while explaining the benefits and pitfalls of <a id="_idIndexMarker683"/><span class="No-Break">each pattern.</span></p>
+			<p>Caching should be <a id="_idIndexMarker684"/>thought of as a method to save items that are commonly used in CI jobs or stages. It shouldn’t be thought of as a means to pass items between stages or jobs – that’s what artifacts are for. The difference is important because of the implementation and configuration of each. A cache is not built or designed to be a method to move items between CI jobs. Because of this, in the future, any features or changes that are made to it will be tailored toward <span class="No-Break">that functionality.</span></p>
+			<p>Artifacts are the main way to support storing items created by your CI job indefinitely, as well as passing them as a dependency to other CI jobs. With artifacts, you get insight into what was stored, and you can link CI jobs with hard dependencies on each other to ensure that the artifacts are shared. With caching, there is only a soft link. A job using a cache will still work if a cache doesn’t exist; however, a job with an artifact <span class="No-Break">will not.</span></p>
+			<p>The next consideration between caching and artifacts is how they’re stored, and the networking calls involved. Cache bundles are processed by the GitLab Runner, and the GitLab Runner’s configuration determines where it is stored. Under default configuration parameters, the cache is stored on the machine where the runner is operating. In terms of containers, the cache is destroyed. By adding an S3 configuration to the GitLab Runner, the Runner will push all cache bundles to S3 storage. Any further CI jobs that use that cache will pull it from S3 storage before the CI <span class="No-Break">job begins.</span></p>
+			<p>In the case of artifacts, the Runner doesn’t play a role in its processing. Every artifact bundle is uploaded to the GitLab instance directly. GitLab’s configuration then determines when and where that artifact is stored. The most common configuration is also an S3 storage provider. Any future CI jobs that require this artifact also download it before the start of the CI job. Like cache bundles, the artifact bundle is then uncompressed into the working directory <span class="No-Break">for usage.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">In this chapter, we will talk about two types of dependencies. The first is CI job dependencies, which should be handled with artifacts. CI job dependencies essentially link the result from one CI job to another. The second dependency type is toolchain dependencies, which are the dependencies of your application – usually, third-party libraries. These are used by multiple CI jobs or multiple CI pipelines, so they should <span class="No-Break">leverage caching.</span></p>
+			<h2 id="_idParaDest-222"><a id="_idTextAnchor233"/>Caching characteristics</h2>
+			<p>These are the<a id="_idIndexMarker685"/> things that separate caching <span class="No-Break">from artifacts:</span></p>
+			<ul>
+				<li>You can define a cache per job by using the <strong class="source-inline">cache</strong> keyword. Otherwise, it <span class="No-Break">is disabled.</span></li>
+				<li>Subsequent pipelines can use <span class="No-Break">the cache.</span></li>
+				<li>Subsequent jobs in the same pipeline can use the cache if the dependencies <span class="No-Break">are identical.</span></li>
+				<li>Different projects cannot share <span class="No-Break">the cache.</span></li>
+				<li>By default, protected and non-protected branches do not share the cache. However, you can change <span class="No-Break">this behavior.</span></li>
+			</ul>
+			<h2 id="_idParaDest-223"><a id="_idTextAnchor234"/>Artifact characteristics</h2>
+			<p>These are the things<a id="_idIndexMarker686"/> that separate artifacts <span class="No-Break">from caching:</span></p>
+			<ul>
+				<li>You can define artifacts <span class="No-Break">per job.</span></li>
+				<li>Subsequent jobs in later stages of the same pipeline can <span class="No-Break">use artifacts.</span></li>
+				<li>Different projects cannot <span class="No-Break">share artifacts.</span></li>
+				<li>Artifacts expire after 30 days by default. You can define a custom <span class="No-Break">expiration time.</span></li>
+				<li>The latest artifacts do not expire if <strong class="bold">Keep latest artifacts</strong> <span class="No-Break">is enabled.</span></li>
+				<li>You can use dependencies to control which jobs fetch <span class="No-Break">the artifacts.</span></li>
+			</ul>
+			<h2 id="_idParaDest-224"><a id="_idTextAnchor235"/>Using caching</h2>
+			<p>The first step in leveraging the usage of caching is adding the configuration to your GitLab CI file. The<a id="_idIndexMarker687"/> following is a code sample of how this is done. If you look at this sample, you’ll see we’ve defined a CI job labeled <strong class="source-inline">MyCIJob</strong>. From there, we’ve defined a <strong class="source-inline">cache</strong> block and added a <strong class="source-inline">path</strong> parameter with a list of the directories and files we want to cache. This is the minimum viable code necessary to cache items as part of your <span class="No-Break">CI job:</span></p>
+			<pre class="source-code">
+MyCIJob:
+  cache:
+    paths:
+      - theDirectoryToSave/*
+      - myFileToSave.js</pre>
+			<p>Now, every time this CI job spins up, it will use the same cache bundle every single time. This is very useful when you have dependencies that are downloaded every time a CI job runs. By placing these dependencies inside a cache, they won’t need to be downloaded every time. Instead, GitLab will insert these dependencies at the beginning of the job. This cuts down time on CI jobs significantly, ultimately reducing the CI pipeline time <span class="No-Break">to completion.</span></p>
+			<p>Now, we’re going to take this a step further. Let’s assume you have four separate CI jobs, and two of each of the CI jobs want to share a cache. In the previous example, we created a generic cache that could be used for all jobs. But in this example, we want to link a cache between two CI jobs. This can be done with the addition of the <span class="No-Break"><strong class="source-inline">key</strong></span><span class="No-Break"> value:</span></p>
+			<pre class="source-code">
+MyCIJob:
+  cache:
+    key: cache1
+    paths:
+      - theDirectoryToSave/*
+      - myFileToSave.js</pre>
+			<p>With the addition of the <strong class="source-inline">key</strong> value, GitLab will have an identifier with which to determine when and which cache bundle to download. This key value can obtain a string, a variable, or any combination of both. Many users will end up using a GitLab predefined variable as a key so that GitLab can manage the cache more effectively. For example, if you use the <strong class="source-inline">$CI_PIPELINE_ID</strong> variable, then that cache bundle will only be leveraged inside of a pipeline with an ID matching <strong class="source-inline">$CI_PIPELINE_ID</strong>. This means that every <a id="_idIndexMarker688"/>pipeline will have its own brand-new <span class="No-Break">cache bundle.</span></p>
+			<p>A final configuration you can leverage with caching is the ability to change when and how the cached bundle gets uploaded <span class="No-Break">and downloaded:</span></p>
+			<pre class="source-code">
+MyCIJob:
+  cache:
+    key: cache1
+    policy: pull
+    paths:
+      - theDirectoryToSave/*
+      - myFileToSave.js</pre>
+			<p>As you can see, the cache GitLab CI object has a value called <strong class="source-inline">policy</strong>. By default, this is set to a value of <strong class="source-inline">push-pull</strong>, which means the cached bundle is pulled down when the job starts and pushed up when the job ends. However, you can also configure this to push or pull. By setting it to push, it will push the cache object but never pull it, while by setting it to pull, it will pull a cache but not push updates to <span class="No-Break">the bundle.</span></p>
+			<h2 id="_idParaDest-225"><a id="_idTextAnchor236"/>Using artifacts</h2>
+			<p>In the previous<a id="_idIndexMarker689"/> section, we discussed caching. Much of the same concepts of caching are going to apply to artifacts, but artifacts have a richer feature set. Because artifacts are used for things such as reporting, passing artifacts between jobs, and job dependency management, they require a deeper feature set. Let’s start with a basic artifact object and build a more intricate one <span class="No-Break">from that:</span></p>
+			<pre class="source-code">
+MyArtifactJob:
+  artifacts:
+    paths:
+      - theDirectoryToSave/*
+      - myFileToSave.js</pre>
+			<p>From the preceding example, you can see it’s very similar to caching at its core. We’ve added an artifact job, assigned an <strong class="source-inline">artifacts:</strong> object to it, added a <strong class="source-inline">paths:</strong> object to that, and listed the files we want to be artifacted. From here, when <strong class="source-inline">MyArtifactJob</strong> executes, at the end of the pipeline run, it will send everything listed in <strong class="source-inline">paths:</strong> to GitLab and <span class="No-Break">store it.</span></p>
+			<p>Similar to the cache’s <strong class="source-inline">policy</strong> option, which defines what to do with the cache, artifacts have a <strong class="source-inline">when</strong> object that allows you to specify what happens to the artifact when an<a id="_idIndexMarker690"/> artifact is created. Its options are <strong class="source-inline">on_success</strong>, <strong class="source-inline">on_failure</strong>, and <strong class="source-inline">always</strong>. The first option, <strong class="source-inline">on_success</strong>, will upload an artifact only on a job’s successful execution. The second, <strong class="source-inline">on_failure</strong>, will only upload when the job fails. Finally, <strong class="source-inline">always</strong> will always upload an artifact no matter the outcome. When applied to our job, the resulting job will look <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+MyArtifactJob:
+  artifacts:
+    when: 'on_success'
+    paths:
+      - theDirectoryToSave/*
+      - myFileToSave.js</pre>
+			<p>In conclusion, the preceding job will only execute when other CI jobs are successful. It will then store the objects in the <strong class="source-inline">theDirectoryToSave/</strong> folder, in the <span class="No-Break"><strong class="source-inline">myFileToSave.js</strong></span><span class="No-Break"> file.</span></p>
+			<h2 id="_idParaDest-226"><a id="_idTextAnchor237"/>Leveraging artifacts as job dependencies</h2>
+			<p>Now that we’ve covered the basics of artifacts, let’s use them in a real-world scenario by chaining jobs<a id="_idIndexMarker691"/> together with artifacts. By leveraging the <strong class="source-inline">dependencies</strong> keyword in a CI job block, we can pull artifacts from another job and make an intrinsic connection between two separate <span class="No-Break">CI jobs.</span></p>
+			<p>Our application will be built by the <strong class="source-inline">MyBuildJob</strong> job, which will be defined shortly. You may recognize much of the syntax from earlier chapters. This first job is an example of how to build a Node.js-based application. First, we leverage the <strong class="source-inline">npm install</strong> command to pull down any dependencies used to build this application. To keep this example simple, we’re not leveraging a cache for dependencies, but we should be <span class="No-Break">in production.</span></p>
+			<p>Secondly, we’re running the <strong class="source-inline">npm build</strong> command to build the Node.js application. The common standard of all Node.js projects is that their built files are produced in a folder named <strong class="source-inline">dist</strong>. The Node.js dependencies are commonly stored <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">node_modules</strong></span><span class="No-Break">.</span></p>
+			<p>Lastly, we have<a id="_idIndexMarker692"/> an artifact definition that lists both the folders of <strong class="source-inline">node_modules</strong> and <strong class="source-inline">dist</strong> as needing to be archived. Now, when this job is executed and completed, GitLab will store all of the items in the two <span class="No-Break">folders listed:</span></p>
+			<pre class="source-code">
+MyBuildJob:
+  image: nodejs:latest
+  script:
+    - npm install
+    - npm build
+  artifacts:
+    when: 'on_success'
+    paths:
+      - node_modules/*
+      - dist/*</pre>
+			<p>The following CI job, defined as <strong class="source-inline">MyDependentJob</strong>, has been built to pull the artifacts from our previous job. Then, it leverages those artifacts in the build of a Dockerfile. The <strong class="source-inline">dependencies</strong> keyword is the glue that connects these <span class="No-Break">two jobs:</span></p>
+			<pre class="source-code">
+MyDependentJob:
+  image: docker:latest
+  dependencies:
+    - MyBuildJob
+  script:
+    - docker build</pre>
+			<p>As we can see, by using the <strong class="source-inline">dependencies</strong> keyword, we are instructing GitLab to make sure that <strong class="source-inline">MyDependentJob</strong> has everything it needs to run. Without this functionality, <strong class="source-inline">MyDependentJob</strong> would be<a id="_idIndexMarker693"/> required to pull down these artifacts itself, which will take additional time <span class="No-Break">and configuration.</span></p>
+			<h1 id="_idParaDest-227"><a id="_idTextAnchor238"/>Reducing repeated configuration code with anchors and extensions</h1>
+			<p>All GitLab CI pipeline files must be valid YAML. This also means they support various templates and <a id="_idIndexMarker694"/>repeatable code patterns that the YAML language supports. Writing multiple CI job definitions for each CI job in a pipeline can be time-consuming and lead to serious maintainability concerns. If you leverage the same variable in multiple places in a pipeline, it’s better to have it defined once, and then referenced multiple times. This way, when you need to change the variable, you do it in one place as opposed to many. Not only is this easier to do, but it’s also safer as with large pipelines, multiple variable replacements can lead <span class="No-Break">to errors.</span></p>
+			<p>The three methods GitLab and YAML offer for creating reusable CI pipelines are <strong class="bold">anchors</strong>, the <strong class="bold">extends</strong> (<strong class="source-inline">extends:</strong>) keyword, and a <strong class="bold">reference</strong> (<strong class="source-inline">!reference</strong>) tag. In the following sections, we’re going to explain the benefits and usage of each of these three methods. Each method comes with pros and cons in terms <span class="No-Break">of functionality.</span></p>
+			<h2 id="_idParaDest-228"><a id="_idTextAnchor239"/>Anchors</h2>
+			<p>The first method we’re going to <a id="_idIndexMarker695"/>review is <strong class="bold">anchors</strong>. YAML<a id="_idIndexMarker696"/> anchors allow you to duplicate or inherit properties of one CI job to another. With anchors, you can define an entire GitLab CI job or a few attributes and then <span class="No-Break">repeat them.</span></p>
+			<p>Here, we’re going to utilize a basic YAML anchor. As you can see, <strong class="source-inline">&amp;job_definition</strong> is the anchor we’re going to set. Then, we’re going to use it in <strong class="source-inline">jobOne</strong> and <strong class="source-inline">jobTwo</strong> to pull in the<a id="_idIndexMarker697"/> content <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">&amp;job_definition</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+.job_definition: &amp;job_definition
+  image: node:latest
+  services:
+    - postgres
+jobOne:
+  &lt;&lt;: *job_definition
+  script:
+    - npm build
+jobTwo:
+  &lt;&lt;: *job_definition
+  script:
+    - npm test</pre>
+			<p>Once GitLab has processed <a id="_idIndexMarker698"/>the CI file, the result will look something like this. Here, the contents of <strong class="source-inline">&amp;job_definition</strong> has been merged into our two <span class="No-Break">CI jobs:</span></p>
+			<pre class="source-code">
+jobOne:
+  image: node:latest
+  services:
+    - postgres
+  script:
+    - npm build
+jobTwo:
+  image: node:latest
+  services:
+    - postgres
+  script:
+    - npm test</pre>
+			<p>In the preceding example, we defined a job with a dot (<strong class="source-inline">.</strong>) at the beginning of it. This dot means the CI job <a id="_idIndexMarker699"/>will not be executed as a CI job and merely exists as a reference. This was defined as <strong class="source-inline">.job_definition:</strong>. After this definition, we added a YAML anchor. This is the <strong class="source-inline">&amp;job_definition</strong> statement that you can see. Everything after the <strong class="source-inline">&amp;</strong> symbol defines the name of the anchor. Then, we define what a normal job should <span class="No-Break">look like.</span></p>
+			<p>After, we define two CI jobs, each with different <strong class="source-inline">script:</strong> blocks. However, we use the <strong class="source-inline">&lt;&lt;:</strong> keyword to tell the YAML processor that we want to merge the <strong class="source-inline">.job_definition:</strong> attributes<a id="_idIndexMarker700"/> and keywords with this job. The <strong class="source-inline">*</strong> character followed by the name of the anchor references the anchor we defined with the <strong class="source-inline">&amp;</strong> <span class="No-Break">symbol.</span></p>
+			<p>The result is the two jobs inside of the merged result <span class="No-Break">code block.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">YAML anchors can only be used in the same GitLab CI file in which they were defined. This means that if you are leveraging the <strong class="source-inline">includes:</strong> keyword to break your CI files into multiple files, you must use <strong class="source-inline">extends:</strong> or <strong class="source-inline">!reference</strong> instead of <span class="No-Break">YAML anchors.</span></p>
+			<h2 id="_idParaDest-229"><a id="_idTextAnchor240"/>The extends: keyword</h2>
+			<p>The second way of reusing <a id="_idIndexMarker701"/>CI jobs and configuration inside<a id="_idIndexMarker702"/> GitLab CI files is via the <strong class="source-inline">extends:</strong> keyword. The <strong class="source-inline">extends:</strong> keyword and YAML anchors are very similar in the way they operate. One major difference is that YAML anchors are mostly used for duplicating a single value or attribute across your CI pipeline file, whereas <strong class="source-inline">extends:</strong> is more often used to reuse entire configuration blocks inside your CI pipeline file. In the preceding anchor example, <strong class="source-inline">extends:</strong> is a better fit <span class="No-Break">for usage.</span></p>
+			<p>In the following example, we’re defining a <strong class="source-inline">.rules_definition</strong> block. Then, we’re including it in the <strong class="source-inline">.job_definition</strong> block and using the <strong class="source-inline">.job_definition</strong> block in <strong class="source-inline">jobOne</strong> and <strong class="source-inline">jobTwo</strong>. Any job definitions that begin with a dot (<strong class="source-inline">.</strong>) are not processed by GitLab as an<a id="_idIndexMarker703"/> actual job. Instead, they <a id="_idIndexMarker704"/>are treated <span class="No-Break">like templates:</span></p>
+			<pre class="source-code">
+.rule_definition:
+  rules:
+    - if: $CI_PIPELINE_SOURCE =="push"
+.job_definition:
+  extends: .rule_definition
+  image: node:latest
+  services:
+    - postgres
+jobOne:
+  extends: .job_definition
+  script:
+    - npm build
+jobTwo:
+  extends: .job_definition
+  script:
+    - npm test</pre>
+			<p>After GitLab processes the preceding CI file, the final merged result will look as follows. Here, the contents of <strong class="source-inline">.rule_definition</strong> and <strong class="source-inline">.job_definition</strong>, which were defined once, are now included in both <strong class="source-inline">jobOne</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">jobTwo</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+jobOne:
+  image: node:latest
+  services:
+    - postgres
+  script:
+    - npm build
+  rules:
+    - if: $CI_PIPELINE_SOURCE =="push"
+jobTwo:
+  image: node:latest
+  services:
+    - postgres
+  script:
+    - npm test
+  rules:
+    - if: $CI_PIPELINE_SOURCE =="push"</pre>
+			<p>As you can see, this example is slightly different than the one we used for anchors. That’s because <a id="_idIndexMarker705"/>another key difference <a id="_idIndexMarker706"/>between anchors and <strong class="source-inline">extends:</strong> is that <strong class="source-inline">extends:</strong> can inherit configuration from multiple CI <span class="No-Break">job definitions.</span></p>
+			<p>Because of this, you can see the resulting merged job definitions have an added <strong class="source-inline">rules:</strong> attribute assigned to them. This is inherited through the <strong class="source-inline">.job_definition</strong> CI job, from the <strong class="source-inline">.rules_definition</strong> <span class="No-Break">CI job.</span></p>
+			<h2 id="_idParaDest-230"><a id="_idTextAnchor241"/>Reference tags</h2>
+			<p>The third method of reusing configuration inside CI files is by using <strong class="source-inline">!reference</strong> tags. <strong class="source-inline">!reference</strong> tags are custom YAML tags that are used to select keyword configurations from other <a id="_idIndexMarker707"/>CI job sections <a id="_idIndexMarker708"/>and reuse them in the current section. They’re very similar in usage to YAML anchors, but you can use reference tags in multiple CI files. On the other hand, YAML anchors can only be used in the same file in which they were defined. Let’s look at <span class="No-Break">an example.</span></p>
+			<p>Create a <strong class="source-inline">Build.gitlab-ci.yml</strong> file that looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+.build-node:
+  stage: deploy
+  before_script:
+    - npm install
+  script:
+    - npm build</pre>
+			<p>Create a <strong class="source-inline">.gitlab-ci.yml</strong> file that looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+include:
+  - local: Build.gitlab-ci.yml
+Build-My-App:
+  stage: build
+  script:
+    - !reference [.build-node, script]
+    - echo "Application is Built"</pre>
+			<p>The result after GitLab processes these two files should look <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+Build-My-App:
+  stage: build
+  script:
+    - npm build
+    - echo "Application is Built"</pre>
+			<p>In the preceding example, a job definition was created in <strong class="source-inline">Build.gitlab-ci.yml</strong>. Then, we included that <strong class="source-inline">Build</strong> CI file in our main <strong class="source-inline">.gitlab-ci.yml</strong> file. After, we used the <strong class="source-inline">!reference</strong> keyword to pull the script block straight from the <strong class="source-inline">.build-node</strong> job definition. By<a id="_idIndexMarker709"/> leveraging <strong class="source-inline">!reference</strong> instead of <strong class="source-inline">extends:</strong>, we can only pull the configuration we want from that job definition, as opposed to the whole job definition. If we had used <strong class="source-inline">extends:</strong>, we would have<a id="_idIndexMarker710"/> brought over the <strong class="source-inline">stage:</strong> and <strong class="source-inline">before_script:</strong> attributes of that CI job definition <span class="No-Break">as well.</span></p>
+			<h1 id="_idParaDest-231"><a id="_idTextAnchor242"/>Improving maintainability by combining multiple pipelines and leveraging parent-child pipelines</h1>
+			<p>Most GitLab users simply utilize a single <strong class="source-inline">.gitlab-ci.yml</strong> file for their pipelines. This approach is perfectly acceptable, but in many cases, the amount of code inside this file can become very large and difficult to maintain. GitLab has introduced the ability to include multiple <strong class="source-inline">gitlab-ci</strong> files together as one. In this section, we’re going to cover how to break up a <strong class="source-inline">.gitlab-ci.yml</strong> file into multiple sections. Later, we’re going to cover how to take a second <strong class="source-inline">.gitlab-ci.yml</strong> file and execute a second child pipeline, and then discuss the reasons why you may want to <span class="No-Break">do this.</span></p>
+			<h2 id="_idParaDest-232"><a id="_idTextAnchor243"/>Leveraging includes for maintainability</h2>
+			<p>Create a <strong class="source-inline">.gitlab-ci.yml</strong> file that <a id="_idIndexMarker711"/>looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+"Build Application":
+  stage: build
+  script:
+    - code here
+"Build Container":
+  stage: build
+  script:
+    - code here
+"Deploy Container":
+  stage: deploy
+  script:
+    - code here
+"Deploy Production":
+  stage: deploy
+  script:
+    - code here</pre>
+			<p>This preceding code shows an example of what a traditional <strong class="source-inline">.gitlab-ci.yml</strong> file looks like. For this example, we’ve included four jobs – two build jobs and two deploy jobs. In a normal <strong class="source-inline">.gitlab-ci.yml</strong> file, this would be tens of jobs with tons of logic between them, likely <a id="_idIndexMarker712"/>spanning hundreds of lines of code. This is a perfectly acceptable practice, but it is difficult to maintain and manage. As with all forms of source code, we want to ensure that the code we write is legible and understandable at a glance to <span class="No-Break">ensure maintainability.</span></p>
+			<p>To break this code up, and make it more maintainable, we can leverage the <strong class="source-inline">include:</strong> keyword in the GitLab CI’s syntax. This keyword is used to tell GitLab’s YAML processor when to combine multiple YAML files into a single context. Let’s use this tool to break up our CI file into separate CI files <span class="No-Break">for reusability.</span></p>
+			<p>Create a <strong class="source-inline">Build.gitlab-ci.yml</strong> file that looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+"Build Application":
+  stage: build
+  script:
+    - code here
+"Build Container":
+  stage: build
+  script:
+    - code here</pre>
+			<p>Create a <strong class="source-inline">Deploy.gitlab-ci.yml</strong> file that looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+"Deploy Container":
+  stage: deploy
+  script:
+    - code here
+"Deploy Production":
+  stage: deploy
+  script:
+    - code here</pre>
+			<p>Create a <strong class="source-inline">.gitlab-ci.yml</strong> file that<a id="_idIndexMarker713"/> looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+include: "Build.gitlab-ci.yml"
+include: "Deploy.gitlab-ci.yml"</pre>
+			<p>Here, we split the individual jobs into files based on stages. Then, we included those files in our <strong class="source-inline">.gitlab-ci.yml</strong> file. When GitLab’s CI processor goes through our <strong class="source-inline">.gitlab-ci.yml</strong> file, it will merge each YAML file into a single context from top to bottom. This means that if I write the same job in <strong class="source-inline">Build.gitlab-ci.yml</strong> and <strong class="source-inline">Deploy.gitlab-ci.yml</strong> because <strong class="source-inline">Deploy.gitlab-ci.yml</strong> is included last, it will overwrite whatever was in the Build CI file. This is a simple example and method of separating your CI files for more maintainability. Next, we’re going to focus on combining an example from earlier with <span class="No-Break">this method.</span></p>
+			<h2 id="_idParaDest-233"><a id="_idTextAnchor244"/>Leveraging includes for reusability</h2>
+			<p>Earlier, you learned how to<a id="_idIndexMarker714"/> use includes to help with maintainability. In this section, we will combine the usage of <strong class="source-inline">include:</strong> and the knowledge we learned earlier in this chapter around anchors and extensions to show you how to create reusable pipelines. We’ll start with <span class="No-Break">an example.</span></p>
+			<p>Create a <strong class="source-inline">Templates.gitlab-ci.yml</strong> file that looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+.npm-build:
+  stage: build
+  variables:
+    NPM_CLI_OPTS: ""
+  before_script:
+    - npm install
+  script:
+    - npm rebuild $NPM_CLI_OPTS</pre>
+			<p>In the preceding GitLab CI file, we’ve created a very simple CI job definition. Because this CI job’s name begins with a <strong class="source-inline">.</strong>, this job will not run on its own. We’ve included a <strong class="source-inline">variables:</strong> block and inserted an empty <strong class="source-inline">NPM_CLI_OPTS</strong> variable as a placeholder. Then, we used that variable in our <strong class="source-inline">script:</strong> block when we executed the <strong class="source-inline">rebuild</strong> command. The reason for this default variable is that we want to have a sane default when this job <span class="No-Break">is used.</span></p>
+			<p>We’ve named this CI file <strong class="source-inline">Templates.gitlab-ci.yml</strong> to indicate that it houses our CI job templates and not actual CI job definitions. However, we want to leverage this in a CI pipeline. The following example shows how to <span class="No-Break">achieve this.</span></p>
+			<p>Create a <strong class="source-inline">.gitlab-ci.yml</strong> file that looks <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+include: Templates.gitlab-ci.yml
+My-NPM-Job:
+  extends: .npm-build
+  variables:
+    NPM_CLI_OPTS: '--global'</pre>
+			<p>Here, we’re including all job definitions from the <strong class="source-inline">Templates.gitlab-ci.yml</strong> file, and we’re starting our own job based on those definitions. However, in the <strong class="source-inline">variables:</strong> block, we’re adding our own variables to control how the template CI job definition <span class="No-Break">will run.</span></p>
+			<p>This method of templating a<a id="_idIndexMarker715"/> CI job and then using variables to expose configuration options for it is similar to how componentization occurs in traditional software development. It follows the same purpose, rules, and goals, even though the syntax <span class="No-Break">is different.</span></p>
+			<h2 id="_idParaDest-234"><a id="_idTextAnchor245"/>Includes from remote areas</h2>
+			<p>The <strong class="source-inline">include:</strong> keyword is not <a id="_idIndexMarker716"/>delegated to a single project or repository. You can include GitLab CI files from the open internet as well. Some examples of remote includes are <span class="No-Break">listed here:</span></p>
+			<ul>
+				<li>Including from a separate project <span class="No-Break">and branch:</span><pre class="source-code">
+include:</pre><pre class="source-code">
+  - project: "my-group/my-project"</pre><pre class="source-code">
+    ref: my-branch</pre><pre class="source-code">
+    file: 'Templates.gitlab-ci.yml</pre></li>
+				<li>Including from a <span class="No-Break">remote location:</span><pre class="source-code">
+include:</pre><pre class="source-code">
+  - remote: 'https://www.google.com/Templates.gitlab-ci.yml'</pre></li>
+				<li>Include from a template on the GitLab <span class="No-Break">instance (</span><span class="No-Break"><strong class="source-inline">lib/gitlab/ci/templates</strong></span><span class="No-Break">):</span><pre class="source-code">
+include:</pre><pre class="source-code">
+  - template: 'Templates.gitlab-ci.yml'</pre></li>
+			</ul>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">You can include a CI file from anywhere the starter of a CI pipeline has access. Provided that the person who starts the CI pipeline has read access to the included file, the pipeline will succeed. However, if the person does not have access, the pipeline <span class="No-Break">will fail.</span></p>
+			<h2 id="_idParaDest-235"><a id="_idTextAnchor246"/>Leveraging parent-child pipelines</h2>
+			<p>Now that we’ve spoken about including multiple YAML files and how you can templatize them for reusability, let’s talk <a id="_idIndexMarker717"/>about how we can leverage them with the <strong class="source-inline">trigger:</strong> keyword to create <span class="No-Break">child pipelines.</span></p>
+			<p>A <strong class="bold">child pipeline</strong> is a pipeline that is<a id="_idIndexMarker718"/> triggered by another pipeline. The triggering pipeline is referred to as the <strong class="bold">parent pipeline</strong>. Once a<a id="_idIndexMarker719"/> parent pipeline triggers a child pipeline, the parent’s pipeline execution waits for the new child pipeline to complete before it resumes. This is a powerful tool for building multiple pipelines to support a monorepo, or for breaking one large complex pipeline into smaller, more <span class="No-Break">manageable pipelines.</span></p>
+			<p>To invoke a child pipeline, simply add the <strong class="source-inline">trigger:</strong> keyword as the parent to an <strong class="source-inline">include: </strong>statement. The following example will execute the <strong class="source-inline">build.gitlab-ci.yml</strong> file as a <span class="No-Break">child pipeline:</span></p>
+			<pre class="source-code">
+My-Child-CI-Job:
+    stage: build
+    trigger:
+      include:
+        - project: "my-group/my-project"
+          ref: my-branch
+          file: 'Build.gitlab-ci.yml'</pre>
+			<p>With the preceding example, in a CI pipeline view, you will see a CI job that states <strong class="source-inline">My-Child-CI-Job</strong>. This CI job will have another pipeline attached to it labeled <strong class="source-inline">Downstream Pipeline</strong>. In that view, you will be able to see all of the jobs from the child pipeline and their <span class="No-Break">execution status.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">An invoked child pipeline accepts all normal CI job attributes and keywords. Keywords such as <strong class="source-inline">rules:</strong> can <a id="_idIndexMarker720"/>determine when a child pipeline is invoked. The <strong class="source-inline">environment:</strong> keyword can also tie the invocation of a child pipeline to approval rules or <span class="No-Break">environment tracking.</span></p>
+			<h1 id="_idParaDest-236"><a id="_idTextAnchor247"/>Securing and accelerating jobs with purpose-built containers</h1>
+			<p>GitLab, when set up properly, runs all the CI jobs of a pipeline in a container. This means that the entire build operation happens in a container. Because of this, container stewardship is exceptionally important. If a CI job happens in an insecure container, then that means the entire CI job and pipeline are insecure. If a CI job uses a non-performant <a id="_idIndexMarker721"/>container, that CI job and pipeline will take much longer to complete, resulting in a much slower time to show results. In every measurable way, the container used for your CI jobs is the most important part of <span class="No-Break">your pipeline.</span></p>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">To quickly set or identify which container a specific CI job is using, look for the <strong class="source-inline">image:</strong> attribute in a CI job. This attribute will define the source of the container image, and the exact container image <span class="No-Break">being used.</span></p>
+			<p class="callout">A second area to look for this container image is at the top of the CI job log. There will be a message indicating which container image is <span class="No-Break">being used.</span></p>
+			<p>We aim to resolve these concerns with a practice we call <em class="italic">purpose-built containers</em>. These are containers whose entire design is to be used in a CI pipeline. Here, we will outline some attributes of these containers and explain how to build them. When building containers for a CI pipeline, try to follow as much of this guidance as possible. Even if you’re not able to achieve every item mentioned here, following them as much as possible will result in a much more secure, performant, and maintainable container for your <span class="No-Break">CI pipeline.</span></p>
+			<p>The first item to consider is the file size of the container. A container for use in GitLab CI should contain only the minimum number of components necessary to run and perform its tasks. This container should also only perform one set of tasks. This means you would have a separate container for each toolchain – that is, one for Java and one for Node.js. You do not want to mix multiple toolchains because it will explode your container’s file size. There is rarely a scenario where you would need multiple toolchains in the same container as they are usually executed in separate CI jobs. A good rule to follow is that if a CI job does not need something, that something should not be included in <span class="No-Break">the container.</span></p>
+			<p>The second item to consider is ensuring your containers are multi-use. You still want to keep your toolchains in separate containers; however, you should avoid embedding configuration inside of a container that will prevent it from being used in multiple CI jobs or multiple pipelines. A good example of what to include would be encryption certificates so that the container can communicate with any resources it needs. An example of what not to<a id="_idIndexMarker722"/> include would be any configuration or settings that are related only to a single CI job or pipeline. The difference between these two items is that the first example (certificate) is used to enable the container to work properly, whereas the second example (configuration or setting) will restrict which CI jobs and pipelines the container can <span class="No-Break">run in.</span></p>
+			<p>The third item to consider is preventing the container from being run under normal use. A purpose-built container for GitLab CI should effectively be a zombie or a shell. There should be no circumstance where the container executes anything other than what the CI job instructs it to. This can be performed by ensuring the container’s entry point is empty. If a Docker container executes anything as it starts in a GitLab CI, it can cause conflicts and will also take more time <span class="No-Break">to start.</span></p>
+			<p>The fourth item to consider is to avoid adding needless layers inside of a Docker container. With every <strong class="source-inline">RUN</strong> or <strong class="source-inline">ADD</strong> command in a Dockerfile, Docker will create a new layer. Needless layers can balloon the size of the Docker container significantly and thus violate the first concern. When you run commands in a Dockerfile, you should use the <strong class="source-inline">&amp;</strong> operator liberally to chain together run commands. We have provided an example of this usage in our <span class="No-Break">Dockerfile example.</span></p>
+			<p>The final item to consider is privilege. A Docker container running in GitLab CI does not typically need elevated permissions to run and perform operations. On OpenShift and some Kubernetes platforms, any Docker container with elevated privileges may not be allowed to run and execute. Setting a random user ID when creating the container will help prevent these platforms from giving the container any form of privilege. If you need to provide permissions to a file or folder, they should be granted to a group as opposed to <span class="No-Break">individual users.</span></p>
+			<h2 id="_idParaDest-237"><a id="_idTextAnchor248"/>A purpose-built container example</h2>
+			<p>Here, we have provided an example of a purpose-built container. This example follows all the considerations we listed <a id="_idIndexMarker723"/>previously. This is a Docker image that has been built upon the <strong class="source-inline">alpine:3.12.0</strong> base container. From there, we have a <strong class="source-inline">RUN</strong> command that combines multiple commands in one line. It makes use of the <strong class="source-inline">&amp;</strong> operator to chain together multiple APK package manager commands. This reduces the number of layers in the Docker file. At the end of that command line, we assign a folder to the group of the running user. In doing so, we reserve the ability to manipulate that folder, but we prevent it from gaining any privilege from a bad <span class="No-Break">group assignment:</span></p>
+			<pre class="source-code">
+FROM alpine:3.12.0
+RUN apk update &amp;&amp; apk add –no-cache nodejs npm &amp;&amp; mkdir ~/.npm &amp;&amp; chmod -R g=u ~/.npm
+USER 1001
+CMD ["echo", "This is a purpose built container. It is meant to be used in a pipeline and not executed."]</pre>
+			<p>For the first consideration, you can see it is being met with <strong class="source-inline">apk add –no-cache nodejs npm</strong>. Node.js is the only toolchain that is installed in <span class="No-Break">this container.</span></p>
+			<p>For the second consideration, you can see no configuration is embedded in the Dockerfile. This means the container will pull all of its configurations from the CI <span class="No-Break">job’s configuration.</span></p>
+			<p>For the third consideration, you can look at the line starting with <strong class="source-inline">CMD ["echo"</strong>. This line prevents the container from running outside of a CI job. It presents an error message and kills <span class="No-Break">the container.</span></p>
+			<p>For the fourth consideration, look at the line starting with <strong class="source-inline">RUN apk</strong>. This line has multiple commands strung together with <strong class="source-inline">&amp;</strong>. Each <strong class="source-inline">RUN</strong> command in a container creates a second layer. Here, we are using as few <strong class="source-inline">RUN</strong> commands <span class="No-Break">as possible.</span></p>
+			<p>For the fifth consideration, we close the container with <strong class="source-inline">USER 1001</strong>. This line forces all commands in the <a id="_idIndexMarker724"/>container to be run as a random user ID. This means no commands will run with any form of <span class="No-Break">escalated privilege.</span></p>
+			<h1 id="_idParaDest-238"><a id="_idTextAnchor249"/>Summary</h1>
+			<p>In this chapter, we learned about many tools we can use with GitLab CI to create fast and reusable pipelines. We started with DAGs, which allow us to make pipelines execute faster. Then, we learned how to build code for multiple architectures. With the introduction of mainstream ARM platforms, this is going to gain importance over time. Later, we learned when to leverage caching or artifacts in pipelines for <span class="No-Break">dependency management.</span></p>
+			<p>The last two topics we covered are likely the most important. We learned three different methods to build reusable pipeline definitions so that you don’t have to write the same logic in multiple places. Finally, we learned about a concept called <em class="italic">purpose-built pipelines</em>, which enables you to build fast, secure, and stable containers to execute your CI <span class="No-Break">workloads in.</span></p>
+			<p>In the next chapter, you’re going to learn how to expand the reach of your <span class="No-Break">CI/CD pipelines.</span></p>
+		</div>
+		<div>
+			<div id="_idContainer111" class="IMG---Figure">
+			</div>
+		</div>
+	</div>
+</div>
+</body></html>

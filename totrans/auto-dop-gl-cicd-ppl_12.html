@@ -1,0 +1,240 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer139">
+			<h1 id="_idParaDest-287" class="chapter-number"><a id="_idTextAnchor300"/>12</h1>
+			<h1 id="_idParaDest-288"><a id="_idTextAnchor301"/>Troubleshooting and the Road Ahead with GitLab</h1>
+			<p>By now, we have covered the end-to-end use of GitLab CI/CD for planning, building, testing, and shipping software. You should hopefully be familiar with the vocabulary of GitLab CI/CD pipelines and Runner infrastructure, and you should also have the confidence to develop and deploy basic applications <span class="No-Break">with GitLab.</span></p>
+			<p>CI/CD occupies a constantly shifting space in the software industry. The best practices and tools of the trade today may very well be obsolete five years from now, if not earlier. We have made a conscious effort in this book to maintain a balanced focus between concepts and tooling. The goal is to preserve relevance by emphasizing CI/CD and DevOps fundamentals, while still offering you a chance to practice and follow along, even if the syntax and some of the tools change over the next <span class="No-Break">several years.</span></p>
+			<p>The purpose of this final chapter is to synthesize what we’ve learned and guide you toward the next steps in your DevOps journey. We will first discuss some common troubleshooting scenarios and “gotchas” that you might encounter when working with CI/CD. Next, we’ll discuss using GitLab CI/CD in an operations capacity, applying software development workflows and version control to your infrastructure. Finally, we will discuss how the industry is likely to change going forward, and summarize key takeaways from <span class="No-Break">this book.</span></p>
+			<p>Here is how we’ll cover the topics in <span class="No-Break">this chapter:</span></p>
+			<ul>
+				<li>Troubleshooting and best practices for common <span class="No-Break">pipeline problems</span></li>
+				<li>Managing your operational infrastructure <span class="No-Break">using GitOps</span></li>
+				<li>Future <span class="No-Break">industry trends</span></li>
+				<li>Conclusion and <span class="No-Break">next steps</span></li>
+			</ul>
+			<h1 id="_idParaDest-289"><a id="_idTextAnchor302"/>Technical requirements</h1>
+			<p>As in previous chapters, an account on a GitLab instance (SaaS or self-managed) is recommended. Some of the content in this chapter is more conceptual than example-based, but access to <strong class="bold">Infrastructure-as-Code</strong> (<strong class="bold">IaC</strong>) tooling such as Terraform and Ansible is recommended if you wish to practice the concepts discussed in the <em class="italic">Managing your operational infrastructure using GitOps</em> section. In that case, an account in a cloud service provider (such as AWS or Microsoft Azure) would be recommended for infrastructure provisioning and configuration management using your chosen <span class="No-Break">IaC tool.</span></p>
+			<p>We will now turn to identifying and troubleshooting common issues when working with <span class="No-Break">GitLab CI/CD.</span></p>
+			<h1 id="_idParaDest-290"><a id="_idTextAnchor303"/>Troubleshooting and best practices for common pipeline problems</h1>
+			<p>Problems encountered in GitLab CI/CD pipelines tend to fall into two broad categories. The first category is errors or <a id="_idIndexMarker869"/>unexpected behavior caused by the syntax and logic in <strong class="source-inline">.gitlab-ci.yml</strong>, the primary CI/CD configuration file. The second category involves limitations or misconfigurations in the runner infrastructure used to run CI/CD jobs. We will address each of these categories <span class="No-Break">in turn.</span></p>
+			<h2 id="_idParaDest-291"><a id="_idTextAnchor304"/>Troubleshooting CI/CD syntax and logic</h2>
+			<p>When errors in GitLab CI/CD can<a id="_idIndexMarker870"/> be narrowed down to the content of <strong class="source-inline">.gitlab-ci.yml</strong>, the first step in troubleshooting is to identify whether the issue is faulty or unsupported syntax, or misconfiguration (or misunderstanding) of an otherwise valid <span class="No-Break">YAML file.</span></p>
+			<h3>Syntax errors in .gitlab-ci.yml</h3>
+			<p>One of the easiest cases <a id="_idIndexMarker871"/>to troubleshoot (and therefore a good place to check for problems first) is syntax or formatting errors in <strong class="source-inline">.gitlab-ci.yml</strong>. A typical example is errors caused by omitting required keywords. GitLab CI/CD at minimum requires at least one stage (defined using the <strong class="source-inline">stages</strong> keyword), each job must be assigned to a stage, and then each job must do something (generally defined using the <strong class="source-inline">script</strong> or <strong class="source-inline">trigger</strong> keywords). The example that follows shows a very basic configuration that defines two stages and two jobs. However, the <strong class="source-inline">compile_assets</strong> job lacks a stage assignment. And the <strong class="source-inline">build</strong> stage, therefore, does not have at least one job assigned <span class="No-Break">to it:</span></p>
+			<pre class="source-code">
+stages:
+  - build
+  - deploy
+compile_assets:
+  script:
+    - echo "Run build scripts here"
+publish_application:
+  stage: deploy
+  script:
+    - echo "Run deployment scripts here"</pre>
+			<p><span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.1</em> shows the<a id="_idIndexMarker872"/> pipeline error that we see if we navigate to <strong class="bold">CI/CD</strong> | <span class="No-Break"><strong class="bold">Pipelines</strong></span><span class="No-Break">:</span></p>
+			<div>
+				<div id="_idContainer132" class="IMG---Figure">
+					<img src="image/B18073_12_1.jpg" alt="Figure 12.1 – Configuration error message shown on the pipelines page" width="1163" height="629"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.1 – Configuration error message shown on the pipelines page</p>
+			<p>Notice that GitLab does not even attempt to run the pipeline (that is, assign jobs to runners) when there is a YAML syntax<a id="_idIndexMarker873"/> error. We see the error mentions that the stage for the <strong class="source-inline">compile_assets</strong> job does <span class="No-Break">not exist.</span></p>
+			<p class="callout-heading">Default Stage Assignments for Jobs</p>
+			<p class="callout">The error shown in <span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.1</em> is actually a bit nuanced. Technically, if a CI/CD job is not explicitly assigned to a stage in the config, GitLab will automatically assign it to the <strong class="source-inline">test</strong> stage. However, we did not define a <strong class="source-inline">test</strong> stage in this example. Therefore, GitLab is reporting that the “chosen” stage (to which GitLab would otherwise assign the <strong class="source-inline">compile_assets</strong> job) does not exist, as we only defined <strong class="source-inline">build</strong> and <span class="No-Break"><strong class="source-inline">deploy</strong></span><span class="No-Break"> stages.</span></p>
+			<p>GitLab will also produce an error if the configuration does not follow the correct YAML formatting. Let’s attempt to fix the previous error by adding the <strong class="source-inline">compile_assets</strong> job to the <span class="No-Break"><strong class="source-inline">build</strong></span><span class="No-Break"> stage:</span></p>
+			<pre class="source-code">
+stages:
+  - build
+  - deploy
+compile_assets:
+stage: build
+  script:
+    - echo "Run build scripts here"
+publish_application:
+  stage: deploy
+  script:
+    - echo "Run deployment scripts here"</pre>
+			<p>When we look at the pipeline graph again, we see another error, more generic this time, saying that the configuration does not have valid YAML syntax (see <span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.2</em>). Despite the vagueness<a id="_idIndexMarker874"/> of the error, GitLab does include a link to a CI linter that can help identify where the problem <span class="No-Break">might be:</span></p>
+			<div>
+				<div id="_idContainer133" class="IMG---Figure">
+					<img src="image/B18073_12_2.jpg" alt="Figure 12.2 – Generic syntax error message for CI/CD pipeline" width="1118" height="874"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.2 – Generic syntax error message for CI/CD pipeline</p>
+			<p>Following the link takes us to a tool called <strong class="bold">Pipeline Editor</strong>, which will inform us of the validity of the <strong class="source-inline">.gitlab-ci.yml</strong> file. In this <a id="_idIndexMarker875"/>case, <span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.3</em> shows an error description referencing an unknown mapping value. Ultimately, the issue lies in the indentation requirements for YAML. The <strong class="source-inline">stage</strong> keyword must be indented at least two spaces so that it is a valid element in the <strong class="source-inline">compile_assets</strong> <span class="No-Break">job definition.</span></p>
+			<div>
+				<div id="_idContainer134" class="IMG---Figure">
+					<img src="image/B18073_12_3.jpg" alt="Figure 12.3 – Pipeline Editor showing an invalid CI/CD configuration" width="1202" height="635"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.3 – Pipeline Editor showing an invalid CI/CD configuration</p>
+			<p>After proper<a id="_idIndexMarker876"/> indentation, <span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.4</em> now shows the Pipeline Editor describing valid CI/CD syntax. GitLab will now create a functioning pipeline from <span class="No-Break">this configuration:</span></p>
+			<div>
+				<div id="_idContainer135" class="IMG---Figure">
+					<img src="image/B18073_12_4.jpg" alt="Figure 12.4 – Pipeline Editor showing a valid CI/CD configuration" width="1278" height="688"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.4 – Pipeline Editor showing a valid CI/CD configuration</p>
+			<p>Thus, a primary takeaway for CI/CD syntax issues is to take advantage of the Pipeline Editor so that you can check for logical and stylistic errors in your CI/CD configuration in real time. The editor is valuable for identifying typos, omitted required keywords, and YAML <span class="No-Break">formatting issues.</span></p>
+			<h3>CI/CD configuration logic and job order</h3>
+			<p>Another key area of CI/CD troubleshooting is <a id="_idIndexMarker877"/>understanding the logic of your job definitions and order. As your pipelines get advanced, your <strong class="source-inline">.gitlab-ci.yml</strong> file might start to be filled with the <strong class="source-inline">rules</strong> keyword governing how jobs run, and your primary configuration might call other configurations as templates or <span class="No-Break">downstream pipelines.</span></p>
+			<p>Consider the following <span class="No-Break">CI/CD configuration:</span></p>
+			<pre class="source-code">
+stages:
+    - build
+    - test
+    - deploy
+build_app:
+  stage: build
+  script:
+    - echo "Run build on all branches"
+static_tests:
+  stage: test
+  script:
+    - echo "Run static tests only on feature branches"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: never
+    - when: always
+  needs: []
+deploy_app:
+  stage: deploy
+  script:
+    - echo "Run deploy only on main branch"
+  only:
+    - main
+  needs:
+    build_app</pre>
+			<p>Here, we have a mix of logical keywords and job ordering in the configuration. The <strong class="source-inline">test_app</strong> job uses the <strong class="source-inline">rules</strong> keyword so that it never runs on the <strong class="source-inline">main</strong> branch; otherwise, it runs on all other<a id="_idIndexMarker878"/> branches. Meanwhile, the <strong class="source-inline">deploy_app</strong> job uses the <strong class="source-inline">only</strong> keyword to specify it only runs on the <strong class="source-inline">main</strong> branch (and no other branches). Finally, the <strong class="source-inline">deploy_app</strong> job needs the <strong class="source-inline">build_app</strong> job to pass before it runs on the <strong class="source-inline">main</strong> branch, and the <strong class="source-inline">static_tests</strong> job runs independently on feature branches without waiting for any other jobs (such <span class="No-Break">as </span><span class="No-Break"><strong class="source-inline">build_app</strong></span><span class="No-Break">).</span></p>
+			<p>As your pipelines grow, the mix of logic and different CI/CD variables can be difficult to parse. There are some features in the GitLab UI that can help you keep your job logic and order straight. The <strong class="bold">Job dependencies</strong> (see <span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.5</em>) and <strong class="bold">Needs</strong> tabs in <strong class="bold">CI/CD</strong> | <strong class="bold">Pipelines</strong> | <strong class="bold">Pipeline ID</strong> allow you to show which jobs are dependent on <span class="No-Break">other jobs:</span></p>
+			<div>
+				<div id="_idContainer136" class="IMG---Figure">
+					<img src="image/B18073_12_5.jpg" alt="Figure 12.5 – Pipeline Editor showing a valid CI/CD configuration" width="818" height="459"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.5 – Pipeline Editor showing a valid CI/CD configuration</p>
+			<p>The Pipeline Editor also has a <strong class="bold">Validate</strong> tab that allows you to simulate which jobs will run given the <a id="_idIndexMarker879"/>configuration’s defined logic and job order. <span class="No-Break"><em class="italic">Figure 12</em></span><em class="italic">.6</em> shows a simulated pipeline that would result from a commit pushed to the default (<span class="No-Break"><strong class="source-inline">main</strong></span><span class="No-Break">) branch:</span></p>
+			<div>
+				<div id="_idContainer137" class="IMG---Figure">
+					<img src="image/B18073_12_6.jpg" alt="Figure 12.6 – Pipeline validation in Pipeline Editor" width="1316" height="702"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.6 – Pipeline validation in Pipeline Editor</p>
+			<p>We heavily encourage <a id="_idIndexMarker880"/>you to make use of these features to organize and visualize your pipelines during development <span class="No-Break">and deployment.</span></p>
+			<h2 id="_idParaDest-292"><a id="_idTextAnchor305"/>Troubleshooting pipeline operation and runner assignment</h2>
+			<p>Aside from syntax and logic errors, it is also important to take note of the runners used for CI/CD execution, and <a id="_idIndexMarker881"/>ensure your pipeline configurations can be supported by your runner infrastructure. Examples of potential problems that can arise include mismanagement of runner tags and lack of or misconfigured <span class="No-Break">container support.</span></p>
+			<h3>Properly managing runner tags</h3>
+			<p>The <strong class="source-inline">tags</strong> CI/CD keyword (not to be confused with tagged Git commits) tells GitLab to only assign jobs to runners that <a id="_idIndexMarker882"/>include the same tags. There are a couple of considerations needed to ensure that CI/CD job tags are properly understood <span class="No-Break">and used.</span></p>
+			<p>When multiple tags are specified in a CI/CD job, that means GitLab will only assign a job to a runner that features all of those tags. For example, the following job will only be assigned to a runner that has the <strong class="source-inline">ubuntu</strong> tag, the <strong class="source-inline">python3</strong> tag, and the <span class="No-Break"><strong class="source-inline">amd64</strong></span><span class="No-Break"> tag:</span></p>
+			<pre class="source-code">
+deploy_to_linux:
+  stage: deploy
+  script:
+    - ./deploy_script.py
+  tags:
+    - ubuntu
+    - python3
+    - amd64</pre>
+			<p>On the other hand, the runner picking up the job can also have other descriptive tags associated with it, as long as those include at minimum the <strong class="source-inline">ubuntu</strong>, <strong class="source-inline">python3</strong>, and <strong class="source-inline">amd64</strong> tags. Check the<a id="_idIndexMarker883"/> runner’s assigned tags under <strong class="bold">Settings</strong> | <strong class="bold">CI/CD</strong> | <strong class="bold">Runners</strong> if the job is not being picked up by the expected runner. Remember that different runners may be configured in different parts of GitLab – that is, at the project, group, or <span class="No-Break">instance level.</span></p>
+			<h3>Managing containerized CI/CD pipelines</h3>
+			<p>Container-based environments<a id="_idIndexMarker884"/> such as Docker and Kubernetes are ever more frequently used by software teams for development, testing, and deployment. The <strong class="source-inline">image</strong> keyword is a critical keyword in a CI/CD job for specifying the type of Docker container in which a job must run. However, much is dependent on the proper execution of container-based CI/CD jobs, correct configuration syntax aside. Consider the following <span class="No-Break">job definition:</span></p>
+			<pre class="source-code">
+launch_web_services:
+  stage: deploy
+  image: node:19
+  services:
+    - postgres:latest
+  script:
+    - npm start</pre>
+			<p>The job’s instructions are to start web services inside a container launched from a Node.js Docker image with a supporting Postgres database running alongside. Let’s think about what the job requires in order to <span class="No-Break">successfully execute:</span></p>
+			<ul>
+				<li>Runners in the environment that support <span class="No-Break">Docker containers.</span></li>
+				<li>Non-container runners won’t inadvertently pick up <span class="No-Break">the job.</span></li>
+				<li>The runner has network connectivity to a container registry such as Docker Hub to pull down the <span class="No-Break">base images.</span></li>
+			</ul>
+			<p>This is just one simple example that requires developers to think about the infrastructure their jobs use<a id="_idIndexMarker885"/> for execution. One way to solve the second listed point, non-container runners picking up jobs, is to define a CI/CD tag specifically for container-based runners and include that tag in any jobs that use the <span class="No-Break"><strong class="source-inline">image</strong></span><span class="No-Break"> keyword.</span></p>
+			<p>Needing to manage operational infrastructure alongside application logic can be intimidating for developers. In the next section, we will introduce the concept of GitOps to help unify development and operations under a <span class="No-Break">best-practice workflow.</span></p>
+			<h1 id="_idParaDest-293"><a id="_idTextAnchor306"/>Managing your operational infrastructure using GitOps</h1>
+			<p>Development cannot be <a id="_idIndexMarker886"/>divorced from the infrastructure executing the code. We’ve seen this clearly as we’ve journeyed from using GitLab as a source code management tool to defining CI/CD pipelines to define how our source code is built and deployed, with runners (infrastructure) as an essential component <span class="No-Break">of CI/CD.</span></p>
+			<p>DevOps properly conceptualized is a culture unifying development and operations. How, then, can we incorporate configuring and managing our operational infrastructure into the GitLab flow already used and understood by developers? The answer lies in implementing <strong class="bold">GitOps</strong>. GitOps is a development practice that falls under DevOps, which encourages using a similar iterative change management model already used by development teams. As the term suggests, Git is an essential part of the workflow. Infrastructure should be under <a id="_idIndexMarker887"/>version control, just like application source code. Changes to infrastructure are then made by contributing changes to the code base, which in turn triggers CI/CD pipelines updating our environments with the <span class="No-Break">committed changes.</span></p>
+			<p class="callout-heading">GitOps Means Generally Putting Infrastructure Under Software Version Control</p>
+			<p class="callout">The GitOps described in this chapter is broader than the specific GitOps workflow for Kubernetes clusters that we previously discussed. Here, GitOps simply means applying Git development workflows to any manner of infrastructure management. This chapter uses Terraform and Ansible as reference examples that can be cross-applied to many different configuration <span class="No-Break">management tools.</span></p>
+			<p>Recall <span class="No-Break"><em class="italic">Figure 3</em></span><em class="italic">.10</em> from <a href="B18073_03.xhtml#_idTextAnchor061"><span class="No-Break"><em class="italic">Chapter 3</em></span></a> (shown again here), when we introduced GitLab flow as an iterative branching model for developers to make changes in a structured yet <span class="No-Break">efficient way:</span></p>
+			<div>
+				<div id="_idContainer138" class="IMG---Figure">
+					<img src="image/B18073_12_7.jpg" alt="Figure 12.7 – Major steps in GitLab flow" width="1093" height="349"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 12.7 – Major steps in GitLab flow</p>
+			<p>A core motivation of this workflow is removing friction from the development process. Textual changes to files in a Git-versioned code base trigger automated pipeline building, testing, and deploying to appropriate environments. Reviews and approvals are baked into the merge request feature, ensuring all our changes are intentional, and version control ensures we can roll back <span class="No-Break">as required.</span></p>
+			<p>How, then, do we apply this model to infrastructure management? Just as developers use programming languages to engineer applications, the industry now has a plethora of text-based tools that can be used to describe, provision, and configure an operational environment. These tools are described as infrastructure as code because they are designed to put infrastructure (servers, networking, storage, databases, identity, and access) under a similar programmatic model <a id="_idIndexMarker888"/>as traditional <span class="No-Break">software applications.</span></p>
+			<p>IaC is a quickly evolving field, where new tools are constantly being supplanted by newer tools. It can be difficult to decide which software to introduce in this kind of book due to rapid innovation threatening to render today’s common tooling obsolete. However, as of this writing, we’ve seen a couple of IaC tools widely used for GitOps with GitLab. We present them here with the understanding that in infrastructure tooling, the state of the art is rapidly changing. That said, the tools we see frequently used are <strong class="bold">Terraform</strong> for infrastructure provisioning and <strong class="bold">Ansible</strong> for <span class="No-Break">configuration management.</span></p>
+			<h2 id="_idParaDest-294"><a id="_idTextAnchor307"/>Using Terraform to deploy and update infrastructure state</h2>
+			<p>Terraform is an IaC tool used to describe<a id="_idIndexMarker889"/> how your infrastructure should look. The core project is open source, with enterprise versions developed and sold by HashiCorp. Terraform includes a language and syntax for describing infrastructure state, as well as a set of command-line tooling for validating and updating the said infrastructure. The configuration model used is <em class="italic">declarative</em>. We describe how our compute, networking, storage, and so on should look, and the software performs the minimum necessary changes so that our infrastructure reflects <span class="No-Break">the configuration.</span></p>
+			<p>Let’s look at a very basic example where we use Terraform to provision an object storage resource in AWS. Terraform has you describe your configuration in state files that end with the extension <strong class="source-inline">.tf</strong>. The details of Terraform syntax are well outside the scope of this book, but the following syntax shows how an S3 bucket might be configured in AWS. This “code” might be stored in a file <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">bucket.tf</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+resource "aws_s3_bucket" "coreSite" {
+    bucket = "travelBlog"
+    acl = "private"
+}</pre>
+			<p>This simple state file specifies an S3 bucket resource in AWS with a name and access permissions. It is then up to Terraform to “make it happen.” In the context of GitOps with GitLab, the “making it happen” takes place via a CI/CD pipeline. The pipeline will run the necessary Terraform commands to initialize, validate, and apply the configuration to your <a id="_idIndexMarker890"/><span class="No-Break">AWS account.</span></p>
+			<p>Installing and configuring Terraform can take a bit of work. Thankfully, GitLab packages Terraform’s tooling in a Docker image that can be launched using the <strong class="source-inline">image</strong> keyword in <strong class="source-inline">.gitlab-ci.yml</strong>. GitLab maintains a public example project with a sample <strong class="source-inline">.gitlab-ci.yml</strong> file (<a href="https://gitlab.com/gitlab-org/configure/examples/gitlab-terraform-aws/-/blob/master/.gitlab-ci.yml">https://gitlab.com/gitlab-org/configure/examples/gitlab-terraform-aws/-/blob/master/.gitlab-ci.yml</a>) containing the relevant jobs and commands for applying or updating a Terraform configuration in AWS. We recommend exploring this page and testing the examples in your own AWS account. Notice how the <strong class="source-inline">prepare</strong>, <strong class="source-inline">validate</strong>, <strong class="source-inline">build</strong>, and <strong class="source-inline">deploy</strong> stages and accompanying jobs are conceptually similar to the <strong class="source-inline">build</strong>, <strong class="source-inline">test</strong>, and <strong class="source-inline">deploy</strong> stages in typical <span class="No-Break">application development.</span></p>
+			<p>Terraform is a tool primarily used to deploy or provision infrastructure. The second tool we will discuss is primarily used to configure the resources that have <span class="No-Break">been provisioned.</span></p>
+			<h2 id="_idParaDest-295"><a id="_idTextAnchor308"/>Using Ansible to manage resource configurations</h2>
+			<p>Ansible is also an open source IaC tool, with paid versions offered by Red Hat. Like Terraform, Ansible is used by<a id="_idIndexMarker891"/> declaring resource configurations in files, whose contents are then translated into configuration changes by running commands. These Ansible resource configuration files are called <strong class="bold">playbooks</strong> and are<a id="_idIndexMarker892"/> written in YAML format. The content of an extremely basic playbook that installs and starts Apache might look like <span class="No-Break">the following:</span></p>
+			<pre class="console">
+---
+- hosts: web
+  become: yes
+  tasks:
+   - name: ensure Apache is installed
+     yum:
+       name: apache2
+       state: latest
+   - name: ensure Apache is enabled and started
+     service:
+       name: apache2
+       enabled: yes
+       state: started</pre>
+			<p>Like Terraform, we use a declarative syntax to describe how our environment should look, and rely on the tool (in this case Ansible) to make it so. Here, we specify that a collection of hosts called <strong class="source-inline">web</strong> should have the <strong class="source-inline">apache2</strong> package installed, and the corresponding service should be enabled and started. Ansible would then connect to the hosts in question, and once connected, install and <span class="No-Break">start </span><span class="No-Break"><strong class="source-inline">apache2</strong></span><span class="No-Break">.</span></p>
+			<p>Also like Terraform, we <a id="_idIndexMarker893"/>would define CI/CD jobs that run the tool’s commands to apply the configuration change. In the case of Ansible, GitLab does not have an official Docker image with Ansible tooling. So we might instead tell GitLab to use a runner that we know is an Ansible host to run <span class="No-Break">our playbook:</span></p>
+			<pre class="source-code">
+ansible-run:
+    stage: run
+    tags:
+        - ansible
+    script:
+        - ansible-playbook apache-playbook.yml --key-file $REMOTE_HOST_CREDENTIALS</pre>
+			<p>The preceding job is assigned to a runner with the <strong class="source-inline">ansible</strong> tag (which we may assume is a runner with Ansible installed and configured). The job script then runs the playbook and might also pass in credentials using CI/CD variables so that Ansible can authenticate to the servers it <span class="No-Break">is configuring.</span></p>
+			<p>For more details about using Ansible with GitLab, including interpreting and parsing CI/CD job output when Ansible commands are run, we refer you to this article (<a href="https://about.gitlab.com/blog/2019/07/01/using-ansible-and-gitlab-as-infrastructure-for-code/">https://about.gitlab.com/blog/2019/07/01/using-ansible-and-gitlab-as-infrastructure-for-code/</a>) published by GitLab as a more in-depth reference. Please also refer to the official Terraform<a id="_idIndexMarker894"/> and Ansible docs sites for further details on setup and system requirements. Ultimately, the goal of this section has been to introduce you to GitOps concepts as a paradigm for incorporating IaC tools into the CI/CD workflows we have learned <span class="No-Break">so far.</span></p>
+			<h1 id="_idParaDest-296"><a id="_idTextAnchor309"/>Future industry trends</h1>
+			<p>It goes without saying that learning anything new comes with the expectation that the knowledge will remain relevant in the future. Looking forward, continuous integration and delivery are well positioned to persist as critical practices in the software landscape, while continuing to undergo evolutionary changes. We can identify three likely ways the software development life cycle will change in the coming years. Those trends are increased automation, increased abstraction, and reduced development cycle time. We can also expect that GitLab as a platform will continue to play an important role. The concepts, examples, and tools presented in the previous chapters will serve as a good foundation to be a more productive developer right now while providing the confidence needed to adapt as the industry <span class="No-Break">inevitably shifts.</span></p>
+			<h2 id="_idParaDest-297"><a id="_idTextAnchor310"/>Automation will create more software at a larger scale</h2>
+			<p>Ask any organization today <a id="_idIndexMarker895"/>what is the most expensive part of operating, and they will likely respond that it’s the humans. Skilled human workers, which includes technologists, are particularly pricey. Talented engineers are hard to find, harder to replace, and expensive to keep. Moreover, those same engineers have designed software and tooling to make their own jobs easier and more productive. Organizations are now leveraging that tooling so that they can create and deploy more software using <span class="No-Break">fewer people.</span></p>
+			<p>Think about the teams of manual quality assurance testers that companies employed 20 or even 10 years ago. Now consider the role that tools like GitLab play in allowing a single developer to automate the process of releasing software, from conceptualization to deployment. Moreover, cloud service providers now offer almost limitless amounts of infrastructure to any developer <a id="_idIndexMarker896"/>with a credit card—dedicated teams for racking and stacking servers are no <span class="No-Break">longer required.</span></p>
+			<p>Yet, predictions of the singularity aside, humans aren’t going anywhere anytime soon. The prevalence of automation requires people who can understand and maintain that tooling. The more you can speak the language of automation and the platforms such as GitLab powering the trend, the more equipped you will be to contribute to the <span class="No-Break">automation revolution.</span></p>
+			<h2 id="_idParaDest-298"><a id="_idTextAnchor311"/>Abstraction will lead to everything-as-code business models</h2>
+			<p>In 2011, Marc Andreessen wrote his now-famous article titled <em class="italic">Why Software Is Eating the World</em> (<a href="https://a16z.com/2011/08/20/why-software-is-eating-the-world/">https://a16z.com/2011/08/20/why-software-is-eating-the-world/</a>). Andreessen predicted that the next generation of internet companies was leading a broad economic shift in which software<a id="_idIndexMarker897"/> becomes the language and engine of most, if not all, industries. Ten years later, in 2021, Jon Eckhardt wrote a follow-up article called <em class="italic">Software Is Eating the Software That’s Eating the World</em> (<a href="https://eiexchange.com/content/software-is-eating-the-software-thats-eating-the-world">https://eiexchange.com/content/software-is-eating-the-software-thats-eating-the-world</a>). Eckhardt recognized that not only have traditional industries been disrupted by software, but there is a whole generation of new tooling disrupting existing software models. This tooling can be thought of as powerful, easier-to-use programs that allow developers to work at a higher layer of abstraction. That is, developers can focus on the business logic while the tool handles the <span class="No-Break">finer details.</span></p>
+			<p>A good example of increased abstraction is how infrastructure has changed over the past 30 years. The industry has moved from mainframes to the server model. It then moved to virtual machines, so we can start to view operating systems as flexible, software-defined resources on a shared host. Then, configuration management helped take care of maintaining our IT resources so that we could focus more on the “what” and less on the “how.” Then, cloud services took off so that no one needed to set foot in a data center. And now, additional tools, such as containers and functions, allow developers to focus solely on their code without even needing to think about the computers and networks it may be <span class="No-Break">running on.</span></p>
+			<p>We expect this abstraction trend to continue. Like automation, we by no means anticipate that humans will be rendered irrelevant. Rather, we expect increased consolidation and specialization. Code will <a id="_idIndexMarker898"/>always be running on someone’s computer, somewhere, and we’ll need infrastructure experts to build and maintain those environments. But we also expect tools like GitLab to continue to proliferate, offering self-documenting, programmatic models that offer observability into all layers of <span class="No-Break">the business.</span></p>
+			<h2 id="_idParaDest-299"><a id="_idTextAnchor312"/>Reduced cycle time will help teams release better software faster</h2>
+			<p>The DevOps philosophy<a id="_idIndexMarker899"/> is primarily cultural, but it also represents a system of work inspired by the lean manufacturing revolution. Building on the trends of automation and abstraction, combined with project management methodologies such as Agile and Scrum, teams are now developing software in such a way that they release early and often, incorporating small improvements, and rolling back <span class="No-Break">as needed.</span></p>
+			<p>Books such as <em class="italic">The Lean Startup</em> by Eric Ries have introduced the language for this development model, and tooling has proliferated that allows developers to build, test, and release software in a very fast but controlled way. GitLab is one of these core platforms. Source code management and version control ensure continuous integration into a shared code base, and pipelines allow for a common set of build, test, and deploy tasks after every small commit. This allows for rapid, iterative development that can constantly adapt to meet <span class="No-Break">business needs.</span></p>
+			<p>The combination of automation, abstraction, and smaller release cycles will require developers to be comfortable with iterative approaches to project management and design. Don’t be afraid of failure, as rapid small changes will inevitably cause some broken or buggy code. Adopt a mindset of continuous improvement, focusing on developing better software rather than <span class="No-Break">perfect software.</span></p>
+			<h1 id="_idParaDest-300"><a id="_idTextAnchor313"/>Conclusion and next steps</h1>
+			<p>This book has guided you through using GitLab as a platform to manage your software development life cycle. After discussing the state of the industry before DevOps emerged as a culture and methodology, you were then guided through the basics of Git version control and GitLab’s project management components. Then, GitLab CI/CD pipelines were introduced as the central feature for organizing, designing, and automating your <span class="No-Break">development workflow.</span></p>
+			<p>You learned that GitLab CI/CD comprises three components: the text-based pipeline configuration file, the runners that execute pipeline tasks, and the main GitLab application that coordinates between the configuration and the runner agents. We then walked through how to leverage pipelines to verify, secure, package, and deploy your code. You learned that you can use GitLab CI/CD as a unified tool to perform these often-disparate steps in the software <span class="No-Break">life cycle.</span></p>
+			<p>After covering the supported CI/CD features and workflows, we moved to some advanced topics and best practices. You learned how to improve pipeline speed and maintainability, and how you can leverage GitLab CI/CD in other workflows that might not be <span class="No-Break">immediately obvious.</span></p>
+			<p>Finally, <a href="B18073_11.xhtml#_idTextAnchor268"><span class="No-Break"><em class="italic">Chapter 11</em></span></a> introduced you to an end-to-end example using all the concepts and features previously covered. That chapter’s objective is to show a basic but real use case of GitLab supporting all steps in the workflow of planning, building, and deploying an application. We then concluded with this chapter, offering some final troubleshooting tips, guidelines for next-gen infrastructure management with GitLab, and a look at where the industry is likely to go in the <span class="No-Break">coming years.</span></p>
+			<p>We hope your journey with GitLab, CI/CD, and DevOps doesn’t end with the conclusion of this book. GitLab itself is open core, and GitLab the company is transparent in how it intends to steward and evolve the software over time. We encourage you to continue following GitLab’s evolution and product roadmap by keeping tabs on the core product’s issue-tracking system and referring to the product’s online handbook pages, which document the category directions for each of <span class="No-Break">GitLab’s features.</span></p>
+			<p>Ultimately, as technologists, we know that learning never stops. We hope this book was helpful in familiarizing you with GitLab as a software platform, the problems it’s designed to solve, and how you can use it to meet the challenges faced in your own organization. We wish you the best as you continue your <span class="No-Break">DevOps journey.</span></p>
+		</div>
+		<div>
+			<div id="_idContainer140" class="IMG---Figure">
+			</div>
+		</div>
+	</div>
+</div>
+</body></html>

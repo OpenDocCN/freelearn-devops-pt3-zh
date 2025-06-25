@@ -1,0 +1,596 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer057">
+			<h1 id="_idParaDest-263"><a id="_idTextAnchor580"/>Chapter <a id="_idTextAnchor581"/><a id="_idTextAnchor582"/>11: Using ChatOps to Increase Efficiency</h1>
+			<p>As DevOps engineers, we often work as part of a team of engineers that help manage a network, service infrastructure, and public-facing services. This means there are a lot of moving parts and communication that needs to occur, especially in an emergency.</p>
+			<p>ChatOps provides teams with a central interface to tooling to ask questions about current states and to interact with other DevOps tools while recording those interactions for posterity. This can improve feedback loops and real-time communication between teams and help manage incidents effectively.</p>
+			<p>One of our colleagues, Sarah Murphy, has a saying – <em class="italic">Don't talk to the bus driver</em>. As a release engineer for Facebook in the early days, she was responsible for releasing Facebook across their data centers. This was a high-stress and detail-oriented job that required her complete attention. Many of the engineers wanted to know if their feature or patch was being included in the current release and, of course, asked the release engineer.</p>
+			<p>As any engineer who does high-impact rollouts will tell you, you need to focus. Having hundreds of engineers ping you about the status of their particular patch is not ideal. This is where ChatOps comes into play. Instrumenting ChatOps can allow a central place where questions about rollout status and what revision is in a release can stave off those hundreds of questions. It certainly did for Sarah.</p>
+			<p>In this chapter, we will dive into how to build a ChatOps bot for Slack. We will show how we can use that bot to ask the status of a service. We will show how we can use a bot to get deployment information. And finally, we will show how we can use the bot to deploy our software.</p>
+			<p>We will cover the following topics in this chapter:</p>
+			<ul>
+				<li>Environment architecture</li>
+				<li>Using an Ops service</li>
+				<li>Building a basic chatbot</li>
+				<li>Creating event handlers</li>
+				<li>Creating our Slack application</li>
+			</ul>
+			<h1 id="_idParaDest-264"><a id="_idTextAnchor583"/>Technical requirements</h1>
+			<p>The following are the prerequisites for this chapter:</p>
+			<ul>
+				<li>A Slack user account: Create a Slack user if you do not have one by following the instructions here: <a href="https://slack.com/get-started#/createnew">https://slack.com/get-started#/createnew</a>.</li>
+				<li>A Slack workspace to experiment: Instructions for creating a Slack workspace can be found here: <a href="https://slack.com/help/articles/206845317-Create-a-Slack-workspace">https://slack.com/help/articles/206845317-Create-a-Slack-workspace</a>.</li>
+				<li>Creation of a Slack application.</li>
+			</ul>
+			<p>It is highly suggested that you use a workspace you control instead of using a corporate one. That process requires approval by admins for your corporate Slack. </p>
+			<p>You will also need to create a Slack application, but this is covered in a later section.</p>
+			<p>The code files for this chapter can be downloaded from <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11</a></p>
+			<h1 id="_idParaDest-265"><a id="_idTextAnchor584"/>Environment architecture</h1>
+			<p>Our example ChatOps program will need to interact<a id="_idIndexMarker1113"/> with several services to provide information to users. </p>
+			<p>To enable this, we have built a more robust version of the <strong class="source-inline">Petstore</strong> application that we built in our previous chapters. This version does the following:</p>
+			<ul>
+				<li>Implements <strong class="bold">create, read, update and delete</strong> (<strong class="bold">CRUD</strong>).</li>
+				<li>Is gRPC based.</li>
+				<li>Has deeper Open Telemetry tracing that flows through RPC calls and records events.</li>
+				<li>Deeper metrics that can be used to inform Prometheus alarms.</li>
+				<li>Replaces logging with tracing events.</li>
+				<li>All errors are automatically added to traces.</li>
+				<li>Traces can be turned on by a client.</li>
+				<li>Traces are sampled by default but can be changed via an RPC.</li>
+			</ul>
+			<p>You can find this new Petstore here: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/petstore">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/petstore</a>. There is a <strong class="source-inline">README</strong> file that details the architecture if you want to dive into the details, but you do not need to for this chapter. </p>
+			<p>Our new Petstore is more capable and will allow us to show some of the power ChatOps can provide by combining our other lessons from this chapter.</p>
+			<p>The following is what our service architecture would look like:</p>
+			<div>
+				<div id="_idContainer043" class="IMG---Figure">
+					<img src="Images/B17626_11_001.jpg" alt="Figure 11.1 – ChatOps and Petstore architecture&#13;&#10;" width="711" height="703"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.1 – ChatOps and Petstore architecture</p>
+			<p class="callout-heading">Attribution</p>
+			<p class="callout">Poodle dog vector<a id="_idIndexMarker1114"/> created by <strong class="source-inline">gstudioimagen</strong> - <a href="http://www.freepik.com">www.freepik.com</a></p>
+			<p class="callout">Gophers by Egon Elbe: <a href="http://github.com/egonelbre/gophers">github.com/egonelbre/gophers</a></p>
+			<p>There are two services we will concentrate on creating here:</p>
+			<ul>
+				<li><strong class="bold">Ops service</strong>: The Ops service does the real work, such as talking <a id="_idIndexMarker1115"/>to Jaeger, Prometheus, running jobs, or anything else that is needed. This allows us to have multiple ChatOps services running in parallel (which might be needed if your company migrates from Slack to Microsoft Teams, for example). </li>
+			</ul>
+			<p>This architecture<a id="_idIndexMarker1116"/> has the benefit of allowing other teams to write tools using these functions in any language they choose.</p>
+			<ul>
+				<li><strong class="bold">ChatOps service</strong>: The ChatOps service acts<a id="_idIndexMarker1117"/> as the glue between Slack and the Ops service. It interprets messages sent to the Slack bot, which are forwarded to our ChatOps service, and makes requests to the Ops service. It uses the open source <strong class="source-inline">slack-go</strong> package, which can be found at <a href="https://github.com/slack-go/slack">https://github.com/slack-go/slack</a>.</li>
+			</ul>
+			<p>Let's jump into the basic details of the Ops servic<a id="_idTextAnchor585"/>e. </p>
+			<h1 id="_idParaDest-266"><a id="_idTextAnchor586"/>Using an Ops service</h1>
+			<p>We are not going to go into complete<a id="_idIndexMarker1118"/> detail about this service, as we have covered how gRPC works in previous chapters. As this service just makes gRPC or REST calls to other services, let's talk about the calls that need to be implemented.</p>
+			<p>The protocol buffer service definition is as follows:</p>
+			<p class="source-code">service Ops {</p>
+			<p class="source-code">     rpc ListTraces(ListTracesReq) returns (ListTracesResp) {};</p>
+			<p class="source-code">     rpc ShowTrace(ShowTraceReq) returns (ShowTraceResp) {};</p>
+			<p class="source-code">     rpc ChangeSampling(ChangeSamplingReq) returns (ChangeSamplingResp) {};</p>
+			<p class="source-code">     rpc DeployedVersion(DeployedVersionReq) returns (DeployedVersionResp) {};</p>
+			<p class="source-code">     rpc Alerts(AlertsReq) returns (AlertsResp) {};</p>
+			<p class="source-code">}</p>
+			<p>For our example service, these RPCs are targeted at a single deployed instance, but in a production<a id="_idIndexMarker1119"/> environment, this would work on multiple entities that exist on a site. </p>
+			<p>This allows users to get some information quickly, such as the following:</p>
+			<ul>
+				<li>See the traces we have in a certain time period, and the ability to filter by tags (such as <strong class="source-inline">error</strong>).</li>
+				<li>Retrieve basic trace data and the Jaeger URL of a trace given a trace ID.</li>
+				<li>Change the sampling type and rate for traces in the service.</li>
+				<li>Tell us what version has been deployed according to Prometheus.</li>
+				<li>Display any alerts that Prometheus shows are firing.</li>
+			</ul>
+			<p>You can read the code on how this is implemented here: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/ops">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/ops</a>.</p>
+			<p>We include a <strong class="source-inline">README</strong> file that goes over the basic architecture, but it is your standard gRPC service that makes calls using gRPC to the Petstore service/Jaeger and REST calls to Prometheus.</p>
+			<p>Now, let's jump into something new, writing the basic Slack<a id="_idTextAnchor587"/> bot.</p>
+			<h1 id="_idParaDest-267"><a id="_idTextAnchor588"/>Building a basic chatbot</h1>
+			<p>Go has a few clients that can interact<a id="_idIndexMarker1120"/> with popular chat services such as Slack, either as a general Slack client or as a ChatOps-focused bot. </p>
+			<p>We have found that it is best to have an architecture that separates the bot from the operations that you want to perform. This allows other tooling in other languages to access the capabilities.</p>
+			<p>By keeping the chatbot separate, you can focus on a single type of chat service and use all its features, instead of only features shared by each chat service client.</p>
+			<p>For this reason, we will use the <strong class="source-inline">slack-go</strong> package to interact with Slack.</p>
+			<p>Our bot will be basic, simply<a id="_idIndexMarker1121"/> listening to when someone mentions our bot in a message. This is called an <strong class="source-inline">AppMention</strong> event. Slack supports other events and has events specifically for commands that you can install. In our case, we just want to answer whenever we are mentioned, but <strong class="source-inline">slack-go</strong> has many other capabilities we will not explore.</p>
+			<p>Let's create a package called <strong class="source-inline">bot</strong> and add some imports:</p>
+			<p class="source-code">package bot</p>
+			<p class="source-code">import (</p>
+			<p class="source-code">        "log"</p>
+			<p class="source-code">        "context"</p>
+			<p class="source-code">        "regexp"</p>
+			<p class="source-code">        "encoding/json"</p>
+			<p class="source-code">        "github.com/slack-go/slack"</p>
+			<p class="source-code">        "github.com/slack-go/slack/slackevents"</p>
+			<p class="source-code">        "github.com/slack-go/slack/socketmode"</p>
+			<p class="source-code">)</p>
+			<p>Details on our third-party package are as follows:</p>
+			<ul>
+				<li><strong class="source-inline">slack</strong> is what is used to build a basic client.</li>
+				<li><strong class="source-inline">slackevents</strong> details the various events we can receive.</li>
+				<li><strong class="source-inline">socketmode</strong> provides a method of connecting to Slack from a bot that is behind a firewall.</li>
+			</ul>
+			<p>Let's create a type<a id="_idIndexMarker1122"/> that can handle an event we receive:</p>
+			<p class="source-code">type HandleFunc func(ctx context.Context, m Message)</p>
+			<p class="source-code">type register struct{</p>
+			<p class="source-code">        r *regexp.Regexp</p>
+			<p class="source-code">        h HandleFunc</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">HandleFunc</strong> receives a message that can be used to write to channels and get information about the message that was received.</p>
+			<p>We have also defined a register type that is used to register a <strong class="source-inline">HandleFunc</strong> with a <strong class="bold">regular expression</strong> (<strong class="bold">regex</strong>). The regex will be used to determine whether the message should be handled by that specific <strong class="source-inline">HandleFunc</strong>.</p>
+			<p>Let's define the <strong class="source-inline">Message</strong> type:</p>
+			<p class="source-code">type Message struct {</p>
+			<p class="source-code">        User *slack.User</p>
+			<p class="source-code">        AppMention *slackevents.AppMentionEvent</p>
+			<p class="source-code">        Text string</p>
+			<p class="source-code">}</p>
+			<p>This contains information about the Slack user who sent the message, information about the <strong class="source-inline">AppMention</strong> event, and the cleaned-up text that the user sent (removes the <strong class="source-inline">@User</strong> text and leading/trailing spaces).</p>
+			<p>Now, let's define our <strong class="source-inline">Bot</strong> type and its constructor:</p>
+			<p class="source-code">type Bot struct {</p>
+			<p class="source-code">    api *slack.Client</p>
+			<p class="source-code">    client *socketmode.Client</p>
+			<p class="source-code">    ctx context.Context</p>
+			<p class="source-code">    cancel context.CancelFunc</p>
+			<p class="source-code">    defaultHandler HandleFunc</p>
+			<p class="source-code">    reg []register</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New(api *slack.Client, client *socketmode.Client) (*Bot, error) {</p>
+			<p class="source-code">    b := &amp;Bot{</p>
+			<p class="source-code">            api: api,</p>
+			<p class="source-code">            client: client,</p>
+			<p class="source-code">            ctx: ctx,</p>
+			<p class="source-code">            cancel: cancel,</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return b, nil</p>
+			<p class="source-code">}</p>
+			<p>This code contains<a id="_idIndexMarker1123"/> our clients that will be used to interact with Slack, a context for canceling our bot's goroutines, <strong class="source-inline">defaultHandler</strong> for handling the case where no regex matches happen, and a list of registrations that we check on any message receipt.</p>
+			<p>We now need some methods to start and stop our bot:</p>
+			<p class="source-code">func (b *Bot) Start() {</p>
+			<p class="source-code">     b.ctx, b.cancel = context.WithCancel(context.Background())</p>
+			<p class="source-code">     go b.loop()</p>
+			<p class="source-code">     b.client.RunContext(b.ctx)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (b *Bot) Stop() {</p>
+			<p class="source-code">     b.cancel()</p>
+			<p class="source-code">     b.ctx = nil</p>
+			<p class="source-code">     b.cancel = nil</p>
+			<p class="source-code">}</p>
+			<p>This simply starts our event loop<a id="_idIndexMarker1124"/> and calls <strong class="source-inline">RunContext</strong> to listen to our event stream. We cancel our bot using the supplied <strong class="source-inline">context.Bot</strong>. <strong class="source-inline">Start()</strong> blocks until <strong class="source-inline">Stop()</strong> is called.</p>
+			<p>Our next method will allow us to register our regexes and their handlers:</p>
+			<p class="source-code">func (b *Bot) Register(r *regexp.Regexp, h HandleFunc) { </p>
+			<p class="source-code">    if h == nil { </p>
+			<p class="source-code">        panic("HandleFunc cannot be nil") </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    if r == nil {</p>
+			<p class="source-code">        if b.defaultHandle != nil {</p>
+			<p class="source-code">                panic("cannot add two default handles")</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        b.defaultHandle = h</p>
+			<p class="source-code">        return</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    b.reg = append(b.reg, register{r, h})</p>
+			<p class="source-code">}</p>
+			<p>In this code, if we don't supply a regex, then <strong class="source-inline">HandleFunc</strong> is used as the default handler when no regexes<a id="_idIndexMarker1125"/> match. You can only have one default handler. When the bot checks a message, it matches regexes in the order they are added; the first match wins.</p>
+			<p>Now, let's look at our event loop:</p>
+			<p class="source-code">func (b *Bot) loop() {</p>
+			<p class="source-code">    for {</p>
+			<p class="source-code">        select {</p>
+			<p class="source-code">        case &lt;-b.ctx.Done():</p>
+			<p class="source-code">                return</p>
+			<p class="source-code">        case evt := &lt;-b.client.Events:</p>
+			<p class="source-code">            switch evt.Type {</p>
+			<p class="source-code">            case socketmode.EventTypeConnectionError:</p>
+			<p class="source-code">                    log.Println("connection failed. Retrying later...")</p>
+			<p class="source-code">            case socketmode.EventTypeEventsAPI:</p>
+			<p class="source-code">                    data, ok := evt.Data.(slackevents.EventsAPIEvent)</p>
+			<p class="source-code">                    if !ok {</p>
+			<p class="source-code">                            log.Println("bug: got type(%v) which should be a slackevents.EventsAPIEvent, was %T", evt.Data)</p>
+			<p class="source-code">                            continue</p>
+			<p class="source-code">                    }</p>
+			<p class="source-code">                    b.client.Ack(*evt.Request)</p>
+			<p class="source-code">                    go b.appMentioned(data)</p>
+			<p class="source-code">            }</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">}</p>
+			<p>Here, we pull events off the <strong class="source-inline">socketmode</strong> client. We switch on the type of event. For our purposes, we are only interested<a id="_idIndexMarker1126"/> in two types of events:</p>
+			<ul>
+				<li>Error connecting to the WebSocket</li>
+				<li>An <strong class="source-inline">EventTypeEventsAPI</strong> event</li>
+			</ul>
+			<p>An <strong class="source-inline">EventTypeEventsAPI</strong> type is an interface that we turn into its concrete type, <strong class="source-inline">slackevents.EventsAPIEvent</strong>. We acknowledge receipt of the event and send the event to be handled by a method called <strong class="source-inline">appMentioned()</strong>.</p>
+			<p>There are other events you might be interested in. You can find a list of the official events<a id="_idIndexMarker1127"/> supported by Slack here: <a href="https://api.slack.com/events">https://api.slack.com/events</a>.</p>
+			<p>The Go package event<a id="_idIndexMarker1128"/> support may be slightly different and can be found here: <a href="https://pkg.go.dev/github.com/slack-go/slack/slackevents#pkg-constants">https://pkg.go.dev/github.com/slack-go/slack/slackevents#pkg-constants</a>.</p>
+			<p>Now, let's build <strong class="source-inline">appMentioned()</strong>:</p>
+			<p class="source-code">func (b *Bot) appMentioned(ctx context.Context, data slackevents.EventsAPIEvent) {</p>
+			<p class="source-code">    switch data.Type {</p>
+			<p class="source-code">    case slackevents.CallbackEvent:</p>
+			<p class="source-code">            callback := data.Data.(*slackevents.EventsAPICallbackEvent)</p>
+			<p class="source-code">            switch ev := data.InnerEvent.Data.(type) {</p>
+			<p class="source-code">            case *slackevents.AppMentionEvent:                </p>
+			<p class="source-code">                msg, err := b.makeMsg(ev)</p>
+			<p class="source-code">                if err != nil {</p>
+			<p class="source-code">                    log.Println(err)</p>
+			<p class="source-code">                    return</p>
+			<p class="source-code">                }</p>
+			<p class="source-code">                for _, reg := range b.reg {</p>
+			<p class="source-code">                    if reg.r.MatchString(m.Text){</p>
+			<p class="source-code">                            reg.h(ctx, b.api, b.client, m)</p>
+			<p class="source-code">                            return</p>
+			<p class="source-code">                    }</p>
+			<p class="source-code">                }</p>
+			<p class="source-code">                if b.defaultHandler != nil {</p>
+			<p class="source-code">                    b.defaultHandler(ctx, m)</p>
+			<p class="source-code">                }</p>
+			<p class="source-code">            }</p>
+			<p class="source-code">    default:</p>
+			<p class="source-code">        b.client.Debugf("unsupported Events API event received")</p>
+			<p class="source-code">    }</p>
+			<p>Slack events are events wrapped<a id="_idIndexMarker1129"/> inside events, so it takes a little decoding to get to the information you need. This code looks at the event data type and uses that information to know what type to decode. </p>
+			<p>For <strong class="source-inline">appMentioned()</strong>, this should always be <strong class="source-inline">slackevents.CallbackEvent</strong>, which decodes its <strong class="source-inline">.Data</strong> field into a <strong class="source-inline">*slackevents.EventsAPICallbackEvent</strong> type. </p>
+			<p>That has <strong class="source-inline">.InnerEvent</strong>, which can decode into a few other event types. We are only interested if it decodes to <strong class="source-inline">*slackevents.AppMentionEvent</strong>.</p>
+			<p>If it does, we call another internal method called <strong class="source-inline">makeMsg()</strong> that returns the message type we defined<a id="_idIndexMarker1130"/> earlier. We are going to skip the <strong class="source-inline">makeMsg()</strong> implementation, as it has some deep JSON data conversions that, due to the nature of JSON, are a little convoluted and uninteresting. You can just lift it from the linked code.</p>
+			<p>We then loop through our regexes looking for a match. If we find one, we call <strong class="source-inline">HandleFunc</strong> on that message and stop processing. If we don't find a match, we call <strong class="source-inline">defaultHandler</strong>, if it exists.</p>
+			<p>Now, we have a bot that can listen for when it is mentioned in a message and dispatch the message to a handler. Let's tie that into making some calls to <a id="_idTextAnchor589"/>our Ops service.</p>
+			<h1 id="_idParaDest-268"><a id="_idTextAnchor590"/>Creating event handlers</h1>
+			<p>The <strong class="source-inline">HandleFunc</strong> type we defined in the last sections handles the core of our functionality. This is also where<a id="_idIndexMarker1131"/> we decide on how we want to turn a bunch of text into a command to run.</p>
+			<p>There are a few ways to interpret raw text:</p>
+			<ul>
+				<li>Regexes via the <strong class="source-inline">regexp</strong> package</li>
+				<li>String manipulation via the <strong class="source-inline">strings</strong> package</li>
+				<li>Designing or using a lexer and parser</li>
+			</ul>
+			<p>Regexes and string manipulation are the fastest ways for an application of this type where we have single lines of text.</p>
+			<p>Lexers and parsers are great when you need to deal with complex inputs or multi-line text and cannot afford mistakes. This is the method that compilers use to read your textual code into instructions that eventually lead to a compiled binary. Rob Pike has a great talk on writing one in Go that you can view here: <a href="https://www.youtube.com/watch?v=HxaD_trXwRE">https://www.youtube.com/watch?v=HxaD_trXwRE</a>. The downside is that they are tedious to build and hard to train new people on. If you need to watch that video a few times to get the concept, you are not alone.</p>
+			<h2 id="_idParaDest-269"><a id="_idTextAnchor591"/>Case Study – Regexes versus Lexer and Parser</h2>
+			<p>One of the biggest jobs for network automation<a id="_idIndexMarker1132"/> is getting information out of different devices<a id="_idIndexMarker1133"/> made by different vendors. Some vendors<a id="_idIndexMarker1134"/> provide information via the <strong class="bold">Simple Network Management Protocol</strong> (<strong class="bold">SNMP</strong>), but for many types of information or debugging, you have to go to the CLI to get information.</p>
+			<p>On newer platforms, this can come in the form of JSON or XML. Many platforms don't have structured output, and sometimes, the XML is so badly formed that it is easier to use unstructured data.</p>
+			<p>At Google, we started with writing tools that used regexes. Regexes were buried in every individual tool, which lead to multiple implementations of data wrangling for the same data. This was a huge waste of effort and introduced different bugs to different tools.</p>
+			<p>Router output can be complex, so eventually, a special regex engine was made to deal with these complex multi-line regexes and a central repository was created where command output regexes could be found.</p>
+			<p>Unfortunately, we were trying to use a tool that wasn't suited for the job. That package was so complex that it required its own debugger for development. More importantly, it would fail silently, inputting zero values in fields when a vendor would change the output slightly on new OS releases. This caused a few not-so-minor issues in production.</p>
+			<p>We eventually moved to a lexer and parser<a id="_idIndexMarker1135"/> that would always detect when the output<a id="_idIndexMarker1136"/> was not as expected. We didn't want it to be quite as complex as a full lexer and parser, so we wrote a package that allowed very limited regex usage and validation of many of the data fields.</p>
+			<p>There is a certain amount of love/hate for that package when you have to interpret new data with it. The great thing is it doesn't fail silently on changes, it is lightning fast, requires minimal effort to update, and uses minimal memory. </p>
+			<p>But it does take a while to get your brain around the concepts and it takes a lot longer to write the matches. There is a public version I recreated after I left Google called the Half-Pike that you can find here: <a href="https://github.com/johnsiilver/halfpike">https://github.com/johnsiilver/halfpike</a>.</p>
+			<p>For our first handler, we want<a id="_idIndexMarker1137"/> to return a list of traces to the user. The main command is <strong class="source-inline">list</strong> <strong class="source-inline">traces</strong> followed by optional arguments. For options, we want the following:</p>
+			<ul>
+				<li><strong class="source-inline">operation=&lt;operation name&gt;</strong></li>
+				<li><strong class="source-inline">start=&lt;mm/dd/yyyy-hh:mm&gt;</strong></li>
+				<li><strong class="source-inline">end=&lt;mm/dd/yyyy-hh:mm, now&gt;</strong></li>
+				<li><strong class="source-inline">limit=&lt;number of items&gt;</strong></li>
+				<li><strong class="source-inline">tags=&lt;[tag1,tag2]&gt;</strong></li>
+			</ul>
+			<p>These options allow us to limit what traces we see. Maybe we only want to see traces for some certain period and only want the ones we tagged with <strong class="source-inline">error</strong>. This allows us to do filtered diagnostics.</p>
+			<p>A quick example of using this command would be as follows: </p>
+			<p class="source-code">list traces operation=AddPets() limit=25</p>
+			<p>All of our handlers will be talking to the Ops service via gRPC. We will create a type that can hold all the <strong class="source-inline">HandlFunc</strong> types we define and the clients they will need to access our Ops service and Slack:</p>
+			<p class="source-code">type Ops struct {</p>
+			<p class="source-code">     OpsClient *client.Ops</p>
+			<p class="source-code">     API       *slack.Client</p>
+			<p class="source-code">     SMClient  *socketmode.Client</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (o Ops) write(m bot.Message, s string, i ...interface{}) error {</p>
+			<p class="source-code">     _, _, err := o.API.PostMessage(</p>
+			<p class="source-code">          m.AppMention.Channel,</p>
+			<p class="source-code">          slack.MsgOptionText(fmt.Sprintf(s, i...), false),</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p>This defines our basic type<a id="_idIndexMarker1138"/> that will hold a single client to our Ops service. We will attach methods that implement the <strong class="source-inline">HandleFunc</strong> type. It also defines a <strong class="source-inline">write()</strong> method for writing text back to the user in Slack.</p>
+			<p>Now, we need to define a package level variable for the regex we need to tease apart our options. We define it at the package level so that we only need to compile it once:</p>
+			<p class="source-code">var listTracesRE = regexp.MustCompile(`(\S+)=(?:(\S+))`)</p>
+			<p class="source-code">type opt struct {</p>
+			<p class="source-code">     key string</p>
+			<p class="source-code">     val string</p>
+			<p class="source-code">}</p>
+			<p>You can see how our regex matches a key/value pair separated by <strong class="source-inline">=</strong>. The <strong class="source-inline">opt</strong> type is meant to hold our option key and value once we tease it apart with the regex.</p>
+			<p>Now for the handler that lists<a id="_idIndexMarker1139"/> the traces we specify with our filters:</p>
+			<p class="source-code">func (o Ops) ListTraces(ctx context.Context, m bot.Message) {</p>
+			<p class="source-code">	sp := strings.Split(m.Text, "list traces")</p>
+			<p class="source-code">	if len(sp) != 2 {</p>
+			<p class="source-code">		o.write(m, "The 'list traces' command is malformed")</p>
+			<p class="source-code">		return</p>
+			<p class="source-code">	}</p>
+			<p class="source-code">	t := strings.TrimSpace(sp[1])</p>
+			<p class="source-code">	kvOpts := []opt{}</p>
+			<p class="source-code">	matches := listTracesRE.FindAllStringSubmatch(t, -1)</p>
+			<p class="source-code">	for _, match := range matches {</p>
+			<p class="source-code">		kvOpts = append(</p>
+			<p class="source-code">			kvOpts,</p>
+			<p class="source-code">			opt{</p>
+			<p class="source-code">				strings.TrimSpace(match[1]),</p>
+			<p class="source-code">				strings.TrimSpace(match[2]),</p>
+			<p class="source-code">			},</p>
+			<p class="source-code">		)</p>
+			<p class="source-code">	}</p>
+			<p><strong class="source-inline">ListTraces</strong> implements the <strong class="source-inline">HandleFunc</strong> type we created earlier. We split the list traces text from <strong class="source-inline">Message.Text</strong> that the user sent and remove<a id="_idIndexMarker1140"/> any excess space at the beginning or end using <strong class="source-inline">strings.TrimSpace()</strong>. We then use our regex to create all our options. </p>
+			<p>Now, we need to process those options so we can send them to the Ops server:</p>
+			<p class="source-code">	options := []client.CallOption{}</p>
+			<p class="source-code">	for _, opt := range kvOpts {</p>
+			<p class="source-code">		switch opt.key {</p>
+			<p class="source-code">		case "operation":</p>
+			<p class="source-code">			options = append(</p>
+			<p class="source-code">				options,</p>
+			<p class="source-code">				client.WithOperation(opt.val),</p>
+			<p class="source-code">			)</p>
+			<p class="source-code">		case "start":</p>
+			<p class="source-code">			t, err := time.Parse(</p>
+			<p class="source-code">				`01/02/2006-15:04:05`, opt.val,</p>
+			<p class="source-code">			)</p>
+			<p class="source-code">			if err != nil {</p>
+			<p class="source-code">				o.write(m, "The start option must be in the form `01/02/2006-15:04:05` for UTC")</p>
+			<p class="source-code">				return</p>
+			<p class="source-code">			}</p>
+			<p class="source-code">			options = append(options, client.WithStart(t))</p>
+			<p class="source-code">		case "end":</p>
+			<p class="source-code">			if opt.val == "now" {</p>
+			<p class="source-code">				continue</p>
+			<p class="source-code">			}</p>
+			<p class="source-code">			t, err := time.Parse(</p>
+			<p class="source-code">				`01/02/2006-15:04:05`, opt.val,</p>
+			<p class="source-code">			)</p>
+			<p class="source-code">			if err != nil {</p>
+			<p class="source-code">				o.write(m, "The end option must be in the form `01/02/2006-15:04:05` for UTC")</p>
+			<p class="source-code">				return</p>
+			<p class="source-code">			}</p>
+			<p class="source-code">			options = append(options, client.WithEnd(t))</p>
+			<p class="source-code">		case "limit":</p>
+			<p class="source-code">			i, err := strconv.Atoi(opt.val)</p>
+			<p class="source-code">			if err != nil {</p>
+			<p class="source-code">				o.write(m, "The limit option must be an integer")</p>
+			<p class="source-code">				return</p>
+			<p class="source-code">			}</p>
+			<p class="source-code">			if i &gt; 100 {</p>
+			<p class="source-code">				o.write(m, "Cannot request more than 100 traces")</p>
+			<p class="source-code">				return</p>
+			<p class="source-code">			}</p>
+			<p class="source-code">			options = append(options, client.WithLimit(int32(i)))</p>
+			<p class="source-code">		case "tags":</p>
+			<p class="source-code">			tags, err := convertList(opt.val)</p>
+			<p class="source-code">			if err != nil {</p>
+			<p class="source-code">				o.write(m, "tags: must enclosed in [], like tags=[tag,tag2]")</p>
+			<p class="source-code">				return</p>
+			<p class="source-code">			}</p>
+			<p class="source-code">			options = append(options, client.WithLabels(tags))</p>
+			<p class="source-code">		default:</p>
+			<p class="source-code">			o.write(m, "don't understand an option type(%s)", opt.key)</p>
+			<p class="source-code">			return</p>
+			<p class="source-code">		}</p>
+			<p class="source-code">	}</p>
+			<p>This code loops through the options<a id="_idIndexMarker1141"/> we teased from the command and appends call options for sending to the Ops service. If there are any errors, we write to Slack to let them know there was a problem.</p>
+			<p>Finally, let's make our gRPC call to the Ops service:</p>
+			<p class="source-code">	traces, err := o.OpsClient.ListTraces(ctx, options...)</p>
+			<p class="source-code">	if err != nil {</p>
+			<p class="source-code">		o.write(m, "Ops server had an error: %s", err)</p>
+			<p class="source-code">		return</p>
+			<p class="source-code">	}</p>
+			<p class="source-code">	b := strings.Builder{}</p>
+			<p class="source-code">	b.WriteString("Here are the traces you requested:\n")</p>
+			<p class="source-code">	table := tablewriter.NewWriter(&amp;b)</p>
+			<p class="source-code">	table.SetHeader([]string{"Start Time(UTC)", "Trace ID"})</p>
+			<p class="source-code">	for _, item := range traces {</p>
+			<p class="source-code">		table.Append(</p>
+			<p class="source-code">			[]string{</p>
+			<p class="source-code">				item.Start.Format("01/02/2006 04:05"),</p>
+			<p class="source-code">				"http://127.0.0.1:16686/trace/" + item.ID,</p>
+			<p class="source-code">			},</p>
+			<p class="source-code">		)</p>
+			<p class="source-code">	}</p>
+			<p class="source-code">	table.Render()</p>
+			<p class="source-code">	o.write(m, b.String())</p>
+			<p class="source-code">}</p>
+			<p>This code uses our Ops service client to get a list of traces with the options that we passed. We use an ASCII table writing package (<a href="http://github.com/olekukonko/tablewriter">github.com/olekukonko/tablewriter</a>) to write out our traces table.</p>
+			<p>But how do users know<a id="_idIndexMarker1142"/> what commands they can send? This is handled by providing a help handler for the bot. We will create a map that will hold our various help messages and another variable that will hold a list of all commands in alphabetical order:</p>
+			<p class="source-code">var help = map[string]string{</p>
+			<p class="source-code">     "list traces": `</p>
+			<p class="source-code">list traces &lt;opt1=val1 op2=val2&gt;</p>
+			<p class="source-code">Ex: list traces operation=AddPets() limit=5</p>
+			<p class="source-code">...</p>
+			<p class="source-code">`,</p>
+			<p class="source-code">}</p>
+			<p class="source-code">var cmdList string</p>
+			<p class="source-code">func init() {</p>
+			<p class="source-code">     cmds := []string{}</p>
+			<p class="source-code">     for k := range help {</p>
+			<p class="source-code">          cmds = append(cmds, k)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     sort.Strings(cmds)</p>
+			<p class="source-code">     b := strings.Builder{}</p>
+			<p class="source-code">     for _, cmd := range cmds {</p>
+			<p class="source-code">          b.WriteString(cmd + "\n")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     b.WriteString("You can get more help by saying `help &lt;cmd&gt;` with a command from above.\n")</p>
+			<p class="source-code">     cmdList = b.String()</p>
+			<p class="source-code">}</p>
+			<p>Our help text is indexed in our <strong class="source-inline">help</strong> map. <strong class="source-inline">init()</strong> sets up a complete list of commands in <strong class="source-inline">cmdList</strong> during program initialization.</p>
+			<p>Now, let's use those commands in a handler<a id="_idIndexMarker1143"/> that provides help text if a user passed <strong class="source-inline">help</strong> to our bot:</p>
+			<p class="source-code">func (o Ops) Help(ctx context.Context, m bot.Message) {</p>
+			<p class="source-code">     sp := strings.Split(m.Text, "help")</p>
+			<p class="source-code">     if len(sp) &lt; 2 {</p>
+			<p class="source-code">          o.write(m, "%s,\nYou have to give me a command you want help with", m.User.Name)</p>
+			<p class="source-code">          return</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     cmd := strings.TrimSpace(strings.Join(sp[1:], ""))</p>
+			<p class="source-code">     if cmd == "" {</p>
+			<p class="source-code">          o.write(m, "Here are all the commands that I can help you with:\n%s", cmdList)</p>
+			<p class="source-code">          return</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     if v, ok := help[cmd]; ok {</p>
+			<p class="source-code">          o.write(m, "I can help you with that:\n%s", v)</p>
+			<p class="source-code">          return</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     o.write(m, "%s,\nI don't know what %q is to give you help", m.User.Name, cmd)</p>
+			<p class="source-code">}</p>
+			<p>This code receives as input the command<a id="_idIndexMarker1144"/> they want help with and outputs the help text if it exists. If they don't pass a command, it simply prints the list of commands we support.</p>
+			<p>If we don't have a handler to handle a particular command (maybe they misspelled the command), we need a handler as the last resort:</p>
+			<p class="source-code">func (o Ops) lastResort(ctx context.Context, m bot.Message) {</p>
+			<p class="source-code">     o.write(m, "%s,\nI don't have anything that handles what you sent.  Try the 'help' command", m.User.Name)</p>
+			<p class="source-code">}</p>
+			<p>This simply informs the user that we don't know what they want, as it is not something we support.</p>
+			<p>We have a minimum set of handlers, but we still need to have a way to register it with the bot:</p>
+			<p class="source-code">func (o Ops) Register(b *bot.Bot) {</p>
+			<p class="source-code">     b.Register(regexp.MustCompile(`^\s*help`), o.Help)</p>
+			<p class="source-code">     b.Register(regexp.MustCompile(`^\s*list traces`), o.ListTraces)</p>
+			<p class="source-code">     b.Register(nil, o.lastResort)</p>
+			<p class="source-code">}</p>
+			<p>This takes in a bot and registers <a id="_idIndexMarker1145"/>our three handlers with regexes that will are used to determine which handler to use.</p>
+			<p>Now, it's time for our <strong class="source-inline">main()</strong> function:</p>
+			<p class="source-code">func main() { </p>
+			<p class="source-code">    ... // Other setup like slack client init </p>
+			<p class="source-code">    b, err := bot.New(api, client) </p>
+			<p class="source-code">    if err != nil { </p>
+			<p class="source-code">        panic(err) </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    h := handlers.Ops{</p>
+			<p class="source-code">        OpsClient: opsClient, </p>
+			<p class="source-code">        API: api, </p>
+			<p class="source-code">        SMClient: smClient,</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    h.Register(b) </p>
+			<p class="source-code">    b.Start() </p>
+			<p class="source-code">} </p>
+			<p>This creates our Ops<a id="_idIndexMarker1146"/> object and registers any <strong class="source-inline">HandleFunc</strong> types we created with our bot. You can find the full code for the ChatOps bot here: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/</a>.</p>
+			<p>Now that we've seen the foundation of writing our bot, let’s setup our Slack application and run our example code.</p>
+			<h1 id="_idParaDest-270"><a id="_idTextAnchor592"/>Creating our Slack application</h1>
+			<p>For the bot to interact<a id="_idIndexMarker1147"/> with Slack, we need to set up a Slack application:</p>
+			<ol>
+				<li>Navigate<a id="_idIndexMarker1148"/> to <a href="https://api.slack.com/apps">https://api.slack.com/apps</a> on your browser.</li>
+			</ol>
+			<p>Here, you will need to click on the following button:</p>
+			<div>
+				<div id="_idContainer044" class="IMG---Figure">
+					<img src="Images/B17626_11_002.jpg" alt="Figure 11.2 – Create New App button&#13;&#10;" width="252" height="59"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.2 – Create New App button</p>
+			<p>You will then be presented with the following dialog box:</p>
+			<div>
+				<div id="_idContainer045" class="IMG---Figure">
+					<img src="Images/B17626_11_003.jpg" alt="Figure 11.3 – Create an app options&#13;&#10;" width="957" height="662"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.3 – Create an app options</p>
+			<ol>
+				<li value="2">Choose the <strong class="bold">From an app manifest</strong> option. This will present the following:</li>
+			</ol>
+			<div>
+				<div id="_idContainer046" class="IMG---Figure">
+					<img src="Images/B17626_11_004.jpg" alt="Figure 11.4 – Choosing a workspace&#13;&#10;" width="980" height="611"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.4 – Choosing a workspace</p>
+			<ol>
+				<li value="3">Choose the workspace<a id="_idIndexMarker1149"/> you created at the beginning of this section and then press <strong class="bold">Create App</strong>. Click the <strong class="bold">Next</strong> button.</li>
+				<li>Copy the text from the file present at <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/slack.manifest">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/11/chatbot/slack.manifest</a> and paste it onto the screen that is shown as follows as YAML:</li>
+			</ol>
+			<div>
+				<div id="_idContainer047" class="IMG---Figure">
+					<img src="Images/B17626_11_005.jpg" alt="Figure 11.5 – App manifest configuration&#13;&#10;" width="1006" height="760"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.5 – App manifest configuration</p>
+			<ol>
+				<li value="5">The text you see in the preceding figure<a id="_idIndexMarker1150"/> should be replaced with the text from the file. Click the <strong class="bold">Next</strong> button.</li>
+			</ol>
+			<p>You will be presented with a summary of the bots permissions, shown as follows:</p>
+			<div>
+				<div id="_idContainer048" class="IMG---Figure">
+					<img src="Images/B17626_11_006.jpg" alt="Figure 11.6 – Bot creation summary&#13;&#10;" width="969" height="646"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.6 – Bot creation summary</p>
+			<ol>
+				<li value="6">Click the <strong class="bold">Create</strong> button.</li>
+				<li>This will move<a id="_idIndexMarker1151"/> you to a page that is called <strong class="bold">Basic Information</strong>. Scroll down the page until you get to <strong class="bold">App-Level Tokens</strong>, as can be seen in the following figure:</li>
+			</ol>
+			<div>
+				<div id="_idContainer049" class="IMG---Figure">
+					<img src="Images/B17626_11_007.jpg" alt="Figure 11.7 – App-level token list&#13;&#10;" width="1248" height="634"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.7 – App-level token list</p>
+			<ol>
+				<li value="8">Click the <strong class="bold">Generate Token and Scopes</strong> button. This will lead<a id="_idIndexMarker1152"/> you to the following dialog box:</li>
+			</ol>
+			<div>
+				<div id="_idContainer050" class="IMG---Figure">
+					<img src="Images/B17626_11_008.jpg" alt="Figure 11.8 – App token creation&#13;&#10;" width="982" height="808"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.8 – App token creation</p>
+			<ol>
+				<li value="9">Set the token name to <strong class="source-inline">petstore-bot</strong>.</li>
+				<li>Provide these scopes<a id="_idIndexMarker1153"/> in the <strong class="bold">Scope</strong> field – <strong class="source-inline">connections:write</strong> and <strong class="source-inline">authorizations:read</strong>. Now, click <strong class="bold">Generate</strong>.</li>
+				<li>On the next screen, you will receive an app-level token. You will need to hit the <strong class="bold">Copy</strong> button and put the token somewhere for the time being. </li>
+			</ol>
+			<div>
+				<div id="_idContainer051" class="IMG---Figure">
+					<img src="Images/B17626_11_009.jpg" alt="Figure 11.9 – App token information&#13;&#10;" width="958" height="829"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.9 – App token information</p>
+			<p>In a production environment, you want to put this in some type of secure key store, such as Azure Key Vault<a id="_idIndexMarker1154"/> or AWS Key Management Service. You will need to put it in a file called the <strong class="source-inline">.env</strong> file that you should never check into a repository. We will cover making this file in the <em class="italic">Running the applications</em> section.</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">The key here is for a bot that was deleted right after this screenshot.</p>
+			<ol>
+				<li value="12">Click the <strong class="bold">Done</strong> button.</li>
+				<li>In the left menu<a id="_idIndexMarker1155"/> pane, choose <strong class="bold">OAuth and Permissions</strong>. On the screen that looks like the following, click <strong class="bold">Install to Workspace</strong>:</li>
+			</ol>
+			<div>
+				<div id="_idContainer052" class="IMG---Figure">
+					<img src="Images/B17626_11_010.jpg" alt="Figure 11.10 – Install tokens in your workspace&#13;&#10;" width="1277" height="323"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.10 – Install tokens in your workspace</p>
+			<ol>
+				<li value="14">There is a dialog box that asks for a channel to post as an app. Choose any channel you like and hit <strong class="bold">Allow</strong>.</li>
+			</ol>
+			<p>You are now back to <strong class="bold">OAuth and Permissions</strong>, but you will see your bot's <strong class="bold">auth token</strong> listed. Hit the <strong class="bold">Copy</strong> button and store this where you st<a id="_idTextAnchor593"/><a id="_idTextAnchor594"/>ored the app token from earlier.</p>
+			<h2 id="_idParaDest-271"><a id="_idTextAnchor595"/>Running the applications</h2>
+			<p>Here, we are going to use Docker Compose<a id="_idIndexMarker1156"/> to turn up our Open Telemetry services, Jaeger, Prometheus, and our Petstore application. Once those are running we will use Go to compile and run our ChatOps service that implements the chatbot connected to Slack:</p>
+			<ol>
+				<li value="1">In the <strong class="source-inline">Go-for-DevOps</strong> repository (<a href="https://github.com/PacktPublishing/Go-for-DevOps/">https://github.com/PacktPublishing/Go-for-DevOps/</a>), go to the <strong class="source-inline">chapter/11</strong> directory.</li>
+				<li>Turn up the Docker containers:<p class="source-code"><strong class="bold">docker-compose up -d</strong></p></li>
+				<li>Once the environment is running, change to the <strong class="source-inline">chapter/11/chatops</strong> directory.</li>
+				<li>You will need <a id="_idIndexMarker1157"/>to create a <strong class="source-inline">.env</strong> file in this directory that contains the following:<p class="source-code">AUTH_TOKEN=xoxb-[the rest of the token]</p><p class="source-code">APP_TOKEN=xapp-[the rest of the token]</p></li>
+			</ol>
+			<p>These were generated when we set up the Slack app.</p>
+			<ol>
+				<li value="5">Run the ChatOps server with the following command:<p class="source-code"><strong class="bold">go run chatbot.go</strong></p></li>
+				<li>You should be able to see the following message printed to standard output:<p class="source-code"><strong class="bold">Bot started</strong></p></li>
+			</ol>
+			<p>In the background, there is a demonstration client that is adding pets to the pet store and doing searches for pets (some searches will cause errors). The service is set to Float sampling, so not every call will generate a trace.</p>
+			<p>In another terminal, you can interact with the pet store by using the CLI application. This will let you add your own pets, delete pets, and search for pets with a filter. That client can be found here: <strong class="source-inline">chapter/11/petstore/client/cli/petstore</strong>. You can find instructions on its use by running the following:</p>
+			<p class="source-code">go run go run petstore.go --help</p>
+			<p>Traces can be observed at <strong class="source-inline">http://127.0.0.1:16686/search</strong>.</p>
+			<p>Prometheus metrics can be queried at <strong class="source-inline">http://127.0.0.1:9090/graph</strong>.</p>
+			<p>To interact with our ChatOps bot, you need to open Slack and add the bot to a channel. You can do this simply by doing a <strong class="source-inline">@PetStore</strong> mention in a channel. Slack will ask if you would like to add the bot to the channel. </p>
+			<p>Once that happens, you can try out various<a id="_idIndexMarker1158"/> operations. Start by asking the bot for help, as follows:</p>
+			<div>
+				<div id="_idContainer053" class="IMG---Figure">
+					<img src="Images/B17626_11_011.jpg" alt="Figure 11.11 – Basic help command output&#13;&#10;" width="1144" height="397"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.11 – Basic help command output</p>
+			<p>Let's ask for some help on how we can list some traces:</p>
+			<div>
+				<div id="_idContainer054" class="IMG---Figure">
+					<img src="Images/B17626_11_012.jpg" alt="Figure 11.12 – Help output for the list traces command&#13;&#10;" width="1163" height="515"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.12 – Help output for the list traces command</p>
+			<p>How about we ask the system to give us five recent traces:</p>
+			<div>
+				<div id="_idContainer055" class="IMG---Figure">
+					<img src="Images/B17626_11_013.jpg" alt="Figure 11.13 – Output from a command to list the last five traces&#13;&#10;" width="1185" height="519"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.13 – Output from a command to list the last five traces</p>
+			<p>We can also ask about a particular<a id="_idIndexMarker1159"/> trace:</p>
+			<div>
+				<div id="_idContainer056" class="IMG---Figure">
+					<img src="Images/B17626_11_014.jpg" alt="Figure 11.14 – Output showing a specific trace's data&#13;&#10;" width="1174" height="715"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 11.14 – Output showing a specific trace's data</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">You cannot directly paste a trace ID copied from list traces. This is because those are hyperlinks; you need to remove the rich text from an ID if you want to directly paste it for <strong class="source-inline">show trace</strong>.</p>
+			<p>There are more options<a id="_idIndexMarker1160"/> for you to play with in the bot. Give them a try.</p>
+			<p>This ChatOps application is just the tip of the iceberg. You can make the ChatOps application more powerful than the one we have here. You can have it display graphs, grab profile information from a <strong class="source-inline">pprof</strong> dump from the service and give you a link to view it, have it deploy new versions of your application, or roll a version back. Push files to the service by simply dragging them into the Slack window (such as a configuration change). Important events such as alerts can be broadcast to people who are on call by having the Ops service send messages to the ChatOps service, and the use of ChatOps increases observability of what your service is doing and what operations are being done against the service.</p>
+			<p>And as a side effect, unlike tools that must be run on a laptop or desktop, Slack and many other chat applications have mobile versions, so you can interact or do emergency operations with your cell phone with no extra cost in development.</p>
+			<h1 id="_idParaDest-272"><a id="_idTextAnchor596"/>Summary</h1>
+			<p>In <a href="B17626_09.xhtml#_idTextAnchor461"><em class="italic">Chapter 9</em></a>, <em class="italic">Observability with OpenTelemetry</em>, we explored how using Open Telemetry can provide observability into your application and the applications it depends on. We discussed how to set up telemetry for your application using the two most popular backends: Jaeger and Prometheus, which are both written in Go. In <a href="B17626_10.xhtml#_idTextAnchor496"><em class="italic">Chapter 10</em></a>, <em class="italic">Automating Workflows with GitHub Actions</em>, we showed how you can use GitHub actions to automate your code deployments and how to add custom actions using Go. Finally, in this chapter, we looked at the architecture for interacting with a service. We built an interaction layer using Slack to do operations such as filtering traces, getting the currently deployed version, and showing alerts. </p>
+			<p>In the next set of chapters, we will talk about how to use Go, and tools written in Go, to ease the burden of working in the cloud. This will cover building standard images that can be deployed to VMs or other node infrastructure. We will show how you can extend Kubernetes, the most popular container orchestration system on the market today. Finally, we will guide you on how you can design DevOps workflows and systems to protect yourself from the chaos that is inherent in running operations against infrastructure.</p>
+		</div>
+	</div></body></html>

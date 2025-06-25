@@ -1,0 +1,823 @@
+<html><head></head><body>
+		<div id="_idContainer280">
+			<h1 class="chapter-number" id="_idParaDest-102"><a id="_idTextAnchor103"/>6</h1>
+			<h1 id="_idParaDest-103"><a id="_idTextAnchor104"/>Extending and Executing Bitbucket Pipelines</h1>
+			<p>In <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>, we started with an introduction<a id="_idIndexMarker368"/> to <strong class="bold">Bitbucket Cloud</strong>, a cloud-based <strong class="bold">source code management</strong> (<strong class="bold">SCM</strong>) tool from <a id="_idIndexMarker369"/>Atlassian that<a id="_idIndexMarker370"/> includes <strong class="bold">Bitbucket Pipelines</strong>. Bitbucket Pipelines allows for <strong class="bold">continuous integration</strong> and <strong class="bold">deployment</strong>, where source code is built, tested, and deployed automatically once a commit <span class="No-Break">is made.</span></p>
+			<p>In this chapter, we will start by looking at continuous integration using Bitbucket Pipelines. You will extend your knowledge of Bitbucket Pipelines by adding integrations to third-party tools that perform testing for syntax checking and security. You will also define and configure runners and the agents that perform the execution of Bitbucket Pipelines. Recipes in this chapter include <span class="No-Break">the following:</span></p>
+			<ul>
+				<li>Configuring <span class="No-Break">pipeline options</span></li>
+				<li>Conditional execution <span class="No-Break">of pipelines</span></li>
+				<li><span class="No-Break">Manual execution</span></li>
+				<li><span class="No-Break">Scheduled execution</span></li>
+				<li><span class="No-Break">Defining variables</span></li>
+				<li>Defining a runner for <span class="No-Break">a pipeline</span></li>
+				<li>Connecting to <span class="No-Break">Bitbucket Pipes</span></li>
+				<li>Testing steps in <span class="No-Break">Bitbucket Pipelines</span></li>
+				<li>Security steps in <span class="No-Break">Bitbucket Pipelines</span></li>
+				<li>Reporting <span class="No-Break">test results</span></li>
+			</ul>
+			<p>Let’s begin our examination of Bitbucket Pipelines by looking at <span class="No-Break">its structure.</span></p>
+			<h1 id="_idParaDest-104"><a id="_idTextAnchor105"/>Technical requirements</h1>
+			<p>The recipes in this chapter require the setup of Bitbucket Cloud on a workspace, project, and repository. In addition, <strong class="bold">self-hosted runners</strong> require a machine running Linux, macOS, <span class="No-Break">or Windows.</span></p>
+			<p>The sample code for this chapter can be found in the <strong class="source-inline">Chapter6</strong> folder of this book’s GitHub <span class="No-Break">repository (</span><a href="https://github.com/PacktPublishing/Atlassian-DevOps-Toolchain-Cookbook/tree/main/Chapter6"><span class="No-Break">https://github.com/PacktPublishing/Atlassian-DevOps-Toolchain-Cookbook/tree/main/Chapter6</span></a><span class="No-Break">).</span></p>
+			<h1 id="_idParaDest-105"><a id="_idTextAnchor106"/>Configuring pipeline options</h1>
+			<p>This recipe will <a id="_idIndexMarker371"/>show you the general structure of the <strong class="source-inline">bitbucket-pipelines.yml</strong> file and the options for general configuration. We created the file that describes the pipeline to execute (<strong class="source-inline">bitbucket-pipelines.yml</strong>) in <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>. Let’s look at the configuration found in <span class="No-Break"><strong class="source-inline">bitbucket-pipelines.yml</strong></span><span class="No-Break"> now.</span></p>
+			<p>A sample of the possible configurations and the general structure of the <strong class="source-inline">bitbucket-pipelines.yml</strong> file is detailed in the following <span class="No-Break">code snippet:</span></p>
+			<pre class="source-code">
+options:
+  Global options are here (not required – this section may be absent)
+clone:
+  Configurations for Git clone behavior go here
+definitions:
+  Cache and service container definitions here
+image:
+  Docker image options are here (Chapter 9)
+pipeline:
+  Pipeline start options are here
+    parallel:
+      Parallel step options go here
+    stage:
+      Stage options are here
+    step:
+      Step options are here</pre>			<p>This recipe will show you the options for the general configuration of your pipelines. Subsequent recipes will demonstrate the applications, using the options outlined in the preceding <span class="No-Break">code snippet.</span></p>
+			<h2 id="_idParaDest-106"><a id="_idTextAnchor107"/>How to do it…</h2>
+			<p>We will evaluate the following configuration sections in <span class="No-Break">this recipe:</span></p>
+			<ul>
+				<li><span class="No-Break">Global options</span></li>
+				<li>The <strong class="source-inline">git </strong><span class="No-Break"><strong class="source-inline">clone</strong></span><span class="No-Break"> behavior</span></li>
+				<li><span class="No-Break"><strong class="source-inline">definitions</strong></span></li>
+			</ul>
+			<p>Subsequent <a id="_idIndexMarker372"/>recipes will talk about the configuration of the execution options for <span class="No-Break">your pipelines.</span></p>
+			<h3>Configuring global options</h3>
+			<p>Global options<a id="_idIndexMarker373"/> specify behavior for all of the pipelines executed. The global options include <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><span class="No-Break"><strong class="source-inline">docker</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">max-time</strong></span></li>
+				<li><span class="No-Break"><strong class="source-inline">size</strong></span></li>
+			</ul>
+			<p>Let’s examine these options one <span class="No-Break">by one:</span></p>
+			<ul>
+				<li>If you want your pipelines to run Docker commands, specify the <strong class="source-inline">docker</strong> keyword followed by the <strong class="source-inline">true</strong> value, as seen in the following code snippet (we examine this in detail in <a href="B21937_09.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 9</em></span></a><span class="No-Break">):</span><pre class="source-code">
+options:
+   docker: true</pre></li>				<li>If you need to allocate more time for steps to execute before timing out, specify the <strong class="source-inline">max-time</strong> keyword with an integer between <strong class="source-inline">1</strong> and <strong class="source-inline">120</strong>. The number specifies the wait time in minutes. The <strong class="source-inline">max-time</strong> option may also be used at the step level to set the timeout for the step. The following code snippet sets the max time to <strong class="source-inline">5</strong> minutes for all steps in <span class="No-Break">the pipeline:</span><pre class="source-code">
+options:
+   max-time: 5</pre></li>				<li>The <strong class="source-inline">size</strong> option can allocate additional memory to the entire pipeline or an individual step. If you are using runners on Bitbucket Cloud, your options are <strong class="source-inline">1x</strong> and <strong class="source-inline">2x</strong>, while self-hosted Docker runners have options of <strong class="source-inline">1x</strong>, <strong class="source-inline">2x</strong>, <strong class="source-inline">4x</strong>, and <strong class="source-inline">8x</strong>. The following code snippet sets the size of the entire pipeline to double the <span class="No-Break">normal allotment:</span><pre class="source-code">
+options:
+   size: 2x</pre></li>			</ul>
+			<p>We have seen how to configure global options relating to running Docker commands, wait times, and <a id="_idIndexMarker374"/>available runner memory. Let’s now look at options for configuring behavior when performing a <strong class="source-inline">git clone</strong> operation in <span class="No-Break">the pipeline.</span></p>
+			<h3>The git clone behavior</h3>
+			<p>The <strong class="source-inline">clone:</strong> section in <strong class="source-inline">bitbucket-pipelines.yml</strong> controls the copy of the repositor<a id="_idIndexMarker375"/>y through a <strong class="source-inline">git clone</strong> operation. It can be placed after the <strong class="source-inline">options:</strong> section to configure the <strong class="source-inline">git clone</strong> behavior for the entire pipeline or within a <strong class="source-inline">step:</strong> section to configure the <strong class="source-inline">git clone</strong> behavior for that step. The options available are outlined in the <span class="No-Break">following list:</span></p>
+			<ul>
+				<li><strong class="source-inline">depth</strong>: This controls the depth of the <span class="No-Break">clone operation.</span></li>
+				<li><strong class="source-inline">lfs</strong>: This allows support for<a id="_idIndexMarker376"/> Git <strong class="bold">Large File System</strong> (<span class="No-Break"><strong class="bold">LFS</strong></span><span class="No-Break">) files.</span></li>
+				<li><strong class="source-inline">enabled</strong>: This enables or disables the <strong class="source-inline">git </strong><span class="No-Break"><strong class="source-inline">clone</strong></span><span class="No-Break"> operation.</span></li>
+				<li><strong class="source-inline">skip-ssl-verify</strong>: This allows the skipping of the <strong class="bold">Secure Sockets Layer</strong> (<strong class="bold">SSL</strong>) verification <a id="_idIndexMarker377"/>on an <span class="No-Break">individual step.</span></li>
+			</ul>
+			<p>Let’s look at these options in depth one <span class="No-Break">by one:</span></p>
+			<ul>
+				<li>You can enable or disable the <strong class="source-inline">git clone</strong> operations for a specified scope by adding the <strong class="source-inline">enabled</strong> keyword with <strong class="source-inline">true</strong> to enable and <strong class="source-inline">false</strong> to disable. Here is an example that disables cloning for all <span class="No-Break">pipeline steps:</span><pre class="source-code">
+clone:
+   enabled: false
+pipelines:
+   default:
+      - step:
+          script:
+             - echo "Cloning not done"</pre></li>				<li>To control the<a id="_idIndexMarker378"/> number of commits to include in a <strong class="source-inline">git clone</strong> operation, use the <strong class="source-inline">depth</strong> keyword with the value of <strong class="source-inline">full</strong> to indicate a full clone operation or a positive integer that indicates how many commits to incorporate in the <strong class="source-inline">git clone</strong> operation. This feature sets up fast checkouts that don’t require the full history, especially for large repositories. The following code snippet illustrates a clone operation that clones the last five commits on all <span class="No-Break">pipeline steps:</span><pre class="source-code">
+clone:
+   depth: 5
+pipelines:
+   default:
+      - step:
+          script:
+            - ls $BITBUCKET_CLONE_DIR</pre></li>				<li>Use the <strong class="source-inline">lfs</strong> option with the value of <strong class="source-inline">true</strong> to download all LFS files at the start of every step when set globally. If this is placed within a step, the download of all LFS files will start only at the beginning of that step. The following code snippet illustrates the downloading of all LFS files at <span class="No-Break">every step:</span><pre class="source-code">
+clone:
+   lfs: true
+pipelines:
+   default:
+      - step:
+          name: Download LFS
+          script: "Cloning and downloading..."</pre></li>				<li>The <strong class="source-inline">skip-ssl-verify</strong> option is available only within the scope of an individual step<a id="_idIndexMarker379"/> and only with self-hosted pipeline runners. Setting this option to <strong class="source-inline">true</strong> disables SSL verification for that step, allowing the use of self-signed certificates. This is illustrated in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+pipelines:
+   default:
+      - step:
+          runs-on:
+             - 'self.hosted'
+          clone:
+             skip-ssl-verify: true
+          script:
+             - echo "Using self-signed certificate"</pre></li>			</ul>
+			<p>We have now seen what options are available for all pipeline steps or an individual pipeline step for the <strong class="source-inline">git clone</strong> operations. Let’s now see what resources can be included in the <a id="_idIndexMarker380"/>pipeline by configuring the <span class="No-Break"><strong class="source-inline">definitions</strong></span><span class="No-Break"> section.</span></p>
+			<h3>Configuring definitions</h3>
+			<p>The <strong class="source-inline">definitions</strong> section <a id="_idIndexMarker381"/>describes additional resources available for all pipeline steps. The following list outlines the type of <span class="No-Break">resources available:</span></p>
+			<ul>
+				<li><span class="No-Break">Caches</span></li>
+				<li><span class="No-Break">Services</span></li>
+				<li><span class="No-Break">YAML anchors</span></li>
+			</ul>
+			<p>We examine how services are configured using Docker containers in <a href="B21937_09.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 9</em></span></a>. Caches allow for the temporary storage of build dependencies and their directories. Let’s examine the uses <span class="No-Break">of caches:</span></p>
+			<ol>
+				<li>In the <strong class="source-inline">definitions</strong> section, you can define a cache with a file name or directory path. The path can include wildcard characters expressed as a glob pattern. In the following code snippet, we define and use a cache for a <span class="No-Break">Ruby build:</span><pre class="source-code">
+definitions:
+  caches:
+    my-bundler-cache: vendor/bundle
+pipelines:
+  default:
+    - step:
+        caches:
+          - my-bundler-cache # Cache is defined above in the definitions section
+        script:
+          - bundle install --path vendor/bundle
+          - ruby -e 'print "Building on Ruby"'</pre></li>				<li>The files that should be monitored for changes can be specified in the <strong class="source-inline">caches</strong> definition block as a <strong class="source-inline">key</strong> section with a listing noted under the <strong class="source-inline">files</strong> keyword. Multiple files can be specified using wildcard characters in glob patterns. The <strong class="source-inline">files</strong> location will be specified by the <strong class="source-inline">path</strong> option. The following code snippet shows the implementation of a cache definition for a Ruby build using<a id="_idIndexMarker382"/> a node defined by the <strong class="source-inline">key</strong>, <strong class="source-inline">files</strong>, and <span class="No-Break"><strong class="source-inline">path</strong></span><span class="No-Break"> keyword:</span><pre class="source-code">
+definitions:
+  caches:
+    my-bundler-cache:
+      key:
+        files:
+          - Gemfile.lock
+          - "**/*.gemspec" # glob patterns are supported for cache key files
+      path: vendor/bundle
+pipelines:
+  default:
+    - step:
+        caches:
+          - my-bundler-cache # Cache is defined above in the definitions section
+        script:
+          - bundle install --path vendor/bundle
+          - ruby -e 'print "Hello, World\n"'</pre></li>				<li>YAML anchors allow for the reuse of blocks of YAML lines. The anchor character (<strong class="source-inline">&amp;</strong>) defines the reusable block. An alias character (<strong class="source-inline">*</strong>) serves as the instruction to use the reference. The following code snippet uses YAML anchors to reuse the definition of <a id="_idIndexMarker383"/><span class="No-Break">a step:</span><pre class="source-code">
+definitions:
+  steps:
+    - step: &amp;package
+        name: Build and test
+        script:
+          - mvn package
+        artifacts:
+          - target/**
+pipelines:
+  default:
+    - step: *package</pre></li>			</ol>
+			<p class="callout-heading">Important note</p>
+			<p class="callout">The names of YAML anchors and aliases cannot contain the following characters: <strong class="source-inline">'['</strong>, <strong class="source-inline">']'</strong>, <strong class="source-inline">'{'</strong>, <strong class="source-inline">'}'</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">','</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-107"><a id="_idTextAnchor108"/>See also</h2>
+			<p>The following links provide more details on caches, especially pre-defined caches to use when building with standard languages <span class="No-Break">and tools:</span></p>
+			<ul>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/cache-dependencies/#Pre-defined-caches"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/cache-dependencies/#Pre-defined-caches</span></a></li>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/use-glob-patterns-on-the-pipelines-yaml-file/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/use-glob-patterns-on-the-pipelines-yaml-file/</span></a></li>
+			</ul>
+			<p>We have seen how to configure options globally on a pipeline. We are now ready to examine the more modular parts of a <span class="No-Break">pipeline’s structure.</span></p>
+			<h1 id="_idParaDest-108"><a id="_idTextAnchor109"/>Conditional execution of pipelines</h1>
+			<p>We turn from<a id="_idIndexMarker384"/> specifying the definition options of a pipeline to specifying the execution of a pipeline. This requires us to look at the following sections of a <span class="No-Break">pipeline’s structure:</span></p>
+			<ul>
+				<li><span class="No-Break">Pipelines</span></li>
+				<li><span class="No-Break">Parallel</span></li>
+				<li><span class="No-Break">Stage</span></li>
+				<li><span class="No-Break">Step</span></li>
+			</ul>
+			<p>We will see how these sections are affected in the following <span class="No-Break">use cases:</span></p>
+			<ul>
+				<li>Commit against <span class="No-Break">a branch</span></li>
+				<li>Create a <span class="No-Break">pull request</span></li>
+				<li>Creating <span class="No-Break">a tag</span></li>
+			</ul>
+			<p>Before we examine our use cases, let’s visit <span class="No-Break">our structure.</span></p>
+			<h2 id="_idParaDest-109"><a id="_idTextAnchor110"/>Getting ready</h2>
+			<p>The <strong class="source-inline">pipelines</strong> section in the <strong class="source-inline">bitbucket-pipelines.yml</strong> file defines all the available pipeline definitions to build and deploy. It is defined only once in the file and <span class="No-Break">is required.</span></p>
+			<p>Within the <strong class="source-inline">pipelines</strong> section are sections that define pipelines based on the conditional use cases mentioned in the preceding section. A pipeline can be thought of as a series of steps, defined by the <strong class="source-inline">step</strong> keyword. Pipelines are limited to <span class="No-Break">100 steps.</span></p>
+			<p>The step details at a minimum the commands needed to run the step in a Docker container defined as the build environment. These commands are contained in the required <strong class="source-inline">script</strong> section. In addition, other options can be defined in the <strong class="source-inline">step</strong> section to further define the step’s behavior. An example of a simple one-command step is shown in the following <span class="No-Break">code snippet:</span></p>
+			<pre class="source-code">
+pipelines:
+   default:
+      - step:
+          script:
+             - echo "Running a command"</pre>			<p>Steps are normally run sequentially. If you want to run multiple steps in parallel, group the steps together using the <strong class="source-inline">parallel</strong> keyword. A common use case is to allow testing steps to <a id="_idIndexMarker385"/>occur in parallel. An example is shown in the following <span class="No-Break">code snippet:</span></p>
+			<pre class="source-code">
+pipelines:
+  default:
+    - step:          # non-parallel build step
+        script:
+          - ./build.sh
+    - parallel:      # these 2 steps will run in parallel
+        steps:
+          - step:
+              script:
+                - ./integ-tests.sh --batch 1
+          - step:
+              script:
+                - ./integ-tests.sh --batch 2
+    - step:          # non-parallel deploy step
+        script:
+          - ./deploy.sh</pre>			<p>A stage is a grouping of steps so that a certain function is performed. The stage section is defined by the <strong class="source-inline">stage</strong> keyword and includes its steps under the <strong class="source-inline">steps</strong> keyword. Stages help define the grouped steps of a distinct phase such as build, test, packaging, and publishing. One use of stages may be in deployment where they can show you which part of a deployment failed and allow for the use of common environments and environment <a id="_idIndexMarker386"/>variables. An example of a stage is shown in the following <span class="No-Break">code snippet:</span></p>
+			<pre class="source-code">
+pipelines:
+   default:
+      - stage:
+          name: build/test
+          steps:
+            - step:
+                name: Build step
+                script:
+                   - sh ./build-app.sh
+            - step:
+                name: Unit-test
+                script:
+                   - sh ./run-unit-tests.sh</pre>			<p>The <strong class="source-inline">default</strong> section defines the steps to be run on a pipeline on every push to the repository unless the push occurs on a defined branch-specific pipeline or the push is based on a <strong class="source-inline">git tag</strong> operation. Let’s revisit an example of our one-step pipeline and see that because of the <strong class="source-inline">default</strong> keyword, it will <span class="No-Break">always run:</span></p>
+			<pre class="source-code">
+pipelines:
+   default:
+      - step:
+          script:
+             - echo "Running a command"</pre>			<p>Now that we understand the basic structure of our pipeline through the <strong class="source-inline">pipelines</strong>, <strong class="source-inline">parallel</strong>, <strong class="source-inline">stage</strong>, and <strong class="source-inline">step</strong> sections, let’s visit the use cases where we want the conditional execution of the <span class="No-Break">pipeline steps.</span></p>
+			<h2 id="_idParaDest-110"><a id="_idTextAnchor111"/>How to do it…</h2>
+			<p>The <em class="italic">Getting ready</em> section of this recipe showed us the pipeline structure inside of <strong class="source-inline">bitbucket-pipelines.yml</strong>. The <strong class="source-inline">pipelines</strong>, <strong class="source-inline">parallel</strong>, <strong class="source-inline">stage</strong>, and <strong class="source-inline">step</strong> sections allowed for the unconditional execution of <span class="No-Break">pipeline steps.</span></p>
+			<p>We now want to run different pipeline steps based on the following <span class="No-Break">use cases:</span></p>
+			<ul>
+				<li>Commit to a <span class="No-Break">specific branch</span></li>
+				<li>Creation of a <span class="No-Break">pull request</span></li>
+				<li>Creation of a <span class="No-Break">specific tag</span></li>
+			</ul>
+			<p>Bitbucket Pipelines <a id="_idIndexMarker387"/>allows these conditional use cases through additional sections, denoted with specific keywords. Let’s examine these keywords one <span class="No-Break">by one:</span></p>
+			<ul>
+				<li>The <strong class="source-inline">branches</strong> keyword allows the specification of the specific branches against which pipeline steps are to be performed. Branches can be identified by their name or grouped together using glob patterns. In this case, the <strong class="source-inline">default</strong> keyword identifies those steps to be performed against branches not defined in the <strong class="source-inline">branches</strong> section. The following code snippet illustrates a pipeline with different steps for any push to the main branch and any <span class="No-Break">feature branch:</span><pre class="source-code">
+pipelines:
+  default:
+    - step:
+        script:
+          - echo "This script runs on all branches that don't have any specific pipeline assigned in 'branches'."
+  branches:
+    main:
+      - step:
+          script:
+            - echo "This script runs only on commit to the main branch."
+    feature/*:
+      - step:
+          script:
+            - echo "This script runs only on commit to branches with names that match the feature/* pattern."</pre></li>				<li>Pull-request-specific pipelines are defined based on the working branch and the <strong class="source-inline">pull-requests</strong> keyword. These define the specific steps to run when the pull request to the destination branch is created. Working branches can be combined into<a id="_idIndexMarker388"/> similar branch categories using glob patterns. Executing the pull-requests pipeline merges the destination branch into the working branch before running. If the merge fails, the pipeline execution stops. Pipelines for pull requests to feature and hotfix branches are illustrated in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+pipelines:
+  pull-requests:
+    feature/*:
+      - step:
+          name: Build for pull request to feature branch
+          script:
+            - echo "feature branch PR!"
+    hotfix/*:
+      - step:
+          name: Build for pull request to hotfix branch
+          script:
+            - echo "hotfix PR!"
+    '**':
+      - step:
+          name: Build for all pull requests to other branches
+          script:
+            - echo "all other non-feature, non-hotfix pull request!"</pre></li>				<li>To set up a tag-specific pipeline, use the <strong class="source-inline">tags</strong> keyword to denote the section of steps to run when <strong class="source-inline">git tag</strong> matches the pattern defined in the <strong class="source-inline">tags</strong> section. Note that the glob patterns can be applied for the search parameters to broaden the tag <a id="_idIndexMarker389"/>search. The following code snippet runs pipeline operations depending on the tag matched in <span class="No-Break">the search:</span><pre class="source-code">
+pipelines:
+  tags:
+    '*-FirstTag':
+      - step:
+          name: Build for *-FirstTag tags
+          script:
+            - echo "First tag!"
+    '*-SecondTag':
+      - step:
+          name: Build for *-SecondTag tags
+          script:
+            - echo "Second tag!"
+    '*-ThirdTag':
+      - step:
+          name: Build for *-ThirdTag tags
+          script:
+            - echo "Third tag!"</pre></li>			</ul>
+			<p>We’ve now seen how to set up pipelines to conditionally run based on a branch, if a pull request is<a id="_idIndexMarker390"/> created, and if a tag <span class="No-Break">is created.</span></p>
+			<h2 id="_idParaDest-111"><a id="_idTextAnchor112"/>See also</h2>
+			<p>The following links add more details to the sections we have discussed in <span class="No-Break">this recipe:</span></p>
+			<ul>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/step-options/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/step-options/</span></a></li>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/stage-options/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/stage-options/</span></a></li>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/parallel-step-options/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/parallel-step-options/</span></a></li>
+			</ul>
+			<p>So far, we have talked about pipeline executions that are automatically run when a commit or pull request operation occurs. Can we run pipelines manually? We can! Let’s examine the means to do so in the <span class="No-Break">next recipe.</span></p>
+			<h1 id="_idParaDest-112"><a id="_idTextAnchor113"/>Manual execution</h1>
+			<p>Although normally, pipelines <a id="_idIndexMarker391"/>are executed automatically on commit or pull requests, it is possible to manually run pipelines. Not only can they be used to rerun automated pipelines, but you can also run pipelines that can only be <span class="No-Break">executed manually.</span></p>
+			<p>In addition, we can also specify that a single step in a pipeline should be executed manually. The execution of a pipeline will pause until action is completed by <span class="No-Break">the user.</span></p>
+			<p>Let’s look at defining <span class="No-Break">manual-only pipelines.</span></p>
+			<h2 id="_idParaDest-113"><a id="_idTextAnchor114"/>Getting ready</h2>
+			<p>You can set up pipelines that are intended to be only run manually. These pipelines are in their own section, denoted with the <strong class="source-inline">custom</strong> keyword. Each pipeline has a string that describes the name, as seen in the Bitbucket UI and its steps. The following code snippet describes two manual pipelines and an automated <span class="No-Break">branch pipeline:</span></p>
+			<pre class="source-code">
+pipelines:
+  custom: # Pipelines that are triggered manually
+    manual-sonar: # The name that is displayed in the list in the Bitbucket Cloud GUI
+      - step:
+          script:
+            - echo "triggering for Sonar!"
+    deployment-to-prod: # Another display name
+      - step:
+          script:
+            - echo "triggering for manual deployments to prod!"
+  branches:  # Pipelines that run automatically on a commit to a branch
+    staging:
+      - step:
+          script:
+            - echo "Auto execute for push to staging branch."</pre>			<p>A manual pipeline <a id="_idIndexMarker392"/>can also contain variables that are set or updated when that manual pipeline is run. Variables can be described with the <strong class="source-inline">variables</strong> keyword and can be described using the <span class="No-Break">following properties.</span></p>
+			<ul>
+				<li><strong class="source-inline">name</strong>: The variable’s name (this <span class="No-Break">is required)</span></li>
+				<li><strong class="source-inline">default</strong>: The default value for <span class="No-Break">the variable</span></li>
+				<li><strong class="source-inline">allowed-values</strong>: A list of <span class="No-Break">allowed values</span></li>
+				<li><strong class="source-inline">description</strong>: A summary of the variable’s purpose <span class="No-Break">and settings</span></li>
+			</ul>
+			<p>The following code snippet shows a manual pipeline with <span class="No-Break">its variables:</span></p>
+			<pre class="source-code">
+pipelines:
+  custom: # Pipelines that are triggered manually
+    us-build: # The name that is displayed in the list in the Bitbucket Cloud GUI
+      - variables:
+          - name: IAMRole
+            default: "admin"          # optionally provide a default variable value
+            description: "AWS user role"
+          - name: AWSRegion
+            default: "us-east-1"
+            allowed-values:           # optionally restrict variable values
+              - "us-east-1"
+              - "us-west-2"
+      - step:
+          script:
+            - echo "$IAMRole manually triggered for a build for $AWSRegion"</pre>			<p>We’ve now defined <a id="_idIndexMarker393"/>pipelines that can be run manually. Let’s now examine how to run these pipelines, as well as the normally <span class="No-Break">automated pipelines.</span></p>
+			<h2 id="_idParaDest-114"><a id="_idTextAnchor115"/>How to do it…</h2>
+			<p>Manually executing pipelines is done at the Bitbucket GUI. From the repository view, you can trigger a pipeline run in three places. Let’s look at <span class="No-Break">these options.</span></p>
+			<h3>Running from the Pipelines view</h3>
+			<p>Run the<a id="_idIndexMarker394"/> following steps to manually execute <a id="_idIndexMarker395"/>a pipeline from the <span class="No-Break"><strong class="bold">Pipelines</strong></span><span class="No-Break"> view:</span></p>
+			<ol>
+				<li>In the repository sidebar, select the <span class="No-Break"><strong class="bold">Pipelines</strong></span><span class="No-Break"> option.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer252">
+					<img alt="Figure 6.1 – Selecting the Pipelines view" src="image/B21937_06_01.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.1 – Selecting the Pipelines view</p>
+			<ol>
+				<li value="2">On the <strong class="bold">Pipelines</strong> screen, click the <strong class="bold">Run </strong><span class="No-Break"><strong class="bold">pipeline</strong></span><span class="No-Break"> button.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer253">
+					<img alt="Figure 6.2 – Click the Run pipeline button" src="image/B21937_06_02.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.2 – Click the Run pipeline button</p>
+			<ol>
+				<li value="3">In the window that appears, select the branch and the pipeline to run. <span class="No-Break">Click </span><span class="No-Break"><strong class="bold">Run</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer254">
+					<img alt="Figure 6.3 – Run Pipeline" src="image/B21937_06_03.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.3 – Run Pipeline</p>
+			<p>You have now <a id="_idIndexMarker396"/>manually run a pipeline from<a id="_idIndexMarker397"/> the <span class="No-Break"><strong class="bold">Pipelines</strong></span><span class="No-Break"> view.</span></p>
+			<h3>Running from the Commits view</h3>
+			<p>You can <a id="_idIndexMarker398"/>also<a id="_idIndexMarker399"/> manually run a pipeline from the <strong class="bold">Commits</strong> view. Follow these steps when in the <span class="No-Break">Bitbucket repository:</span></p>
+			<ol>
+				<li>Select <strong class="bold">Commits</strong> in the <span class="No-Break">repository sidebar.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer255">
+					<img alt="Figure 6.4 – Selecting the Commits view" src="image/B21937_06_04.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.4 – Selecting the Commits view</p>
+			<ol>
+				<li value="2">In<a id="_idIndexMarker400"/> the <strong class="bold">Commits</strong> screen, select<a id="_idIndexMarker401"/> a commit by clicking on <span class="No-Break">its hash.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer256">
+					<img alt="Figure 6.5 – Selecting a commit" src="image/B21937_06_05.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.5 – Selecting a commit</p>
+			<ol>
+				<li value="3">In the <strong class="bold">Details</strong> sidebar on the right, select <span class="No-Break"><strong class="bold">Run pipeline</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer257">
+					<img alt="Figure 6.6 – Select Run pipeline" src="image/B21937_06_06.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.6 – Select Run pipeline</p>
+			<ol>
+				<li value="4">In the<a id="_idIndexMarker402"/> window, select the pipeline<a id="_idIndexMarker403"/> to run and <span class="No-Break">click </span><span class="No-Break"><strong class="bold">Run</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer258">
+					<img alt="Figure 6.7 – Run pipeline for commit" src="image/B21937_06_07.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.7 – Run pipeline for commit</p>
+			<p>You have<a id="_idIndexMarker404"/> now manually run a pipeline<a id="_idIndexMarker405"/> against <span class="No-Break">a commit.</span></p>
+			<h3>Run pipeline from the Branches view</h3>
+			<p>The final <a id="_idIndexMarker406"/>place <a id="_idIndexMarker407"/>to manually run a pipeline is the <strong class="bold">Branches</strong> view. Let’s see how <span class="No-Break">that’s done:</span></p>
+			<ol>
+				<li>In the repository, select <strong class="bold">Branches</strong> from the <span class="No-Break">repository sidebar.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer259">
+					<img alt="Figure 6.8 – Select the Branches view" src="image/B21937_06_08.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.8 – Select the Branches view</p>
+			<ol>
+				<li value="2">On the <strong class="bold">Branches</strong> page, find the branch of interest, select <a id="_idIndexMarker408"/>the more actions icon (<strong class="bold">...</strong>), and <a id="_idIndexMarker409"/>select <strong class="bold">Run pipeline for </strong><span class="No-Break"><strong class="bold">a branch</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer260">
+					<img alt="Figure 6.9 – Select Run pipeline for a branch" src="image/B21937_06_09.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.9 – Select Run pipeline for a branch</p>
+			<ol>
+				<li value="3">In the window, select the pipeline to run and click the <span class="No-Break"><strong class="bold">Run</strong></span><span class="No-Break"> button.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer261">
+					<img alt="Figure 6.10 – Run pipeline for a branch" src="image/B21937_06_10.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.10 – Run pipeline for a branch</p>
+			<p>You have now manually run a pipeline against <span class="No-Break">a branch.</span></p>
+			<p>You can also <a id="_idIndexMarker410"/>manually run individual steps <a id="_idIndexMarker411"/>of a pipeline. Let’s explore how that’s done in the <span class="No-Break">next subsection.</span></p>
+			<h2 id="_idParaDest-115"><a id="_idTextAnchor116"/>There’s more...</h2>
+			<p>Any pipeline <a id="_idIndexMarker412"/>step that is not the first in the pipeline can be specified as a manual step, requiring an individual to trigger the execution of that step. Let’s see how to create <span class="No-Break">this configuration:</span></p>
+			<ol>
+				<li>On the step that is to be run manually, add the <strong class="source-inline">trigger: manual</strong> keyword. This tells Bitbucket Pipelines that this is a manual step. The following code snippet shows a manual step in between two normally run (<span class="No-Break">automatic) steps:</span><pre class="source-code">
+      - step:
+          name: 'First Automated Step'
+          script:
+            - echo "This step is automated"
+      - step:
+          name: 'Manual Step'
+          trigger: manual
+          script:
+            - echo "This step is manual"
+      - step:
+          name: 'Second Automated Step'
+          script:
+            - echo "This step is also automated"</pre></li>				<li>When running the<a id="_idIndexMarker413"/> pipeline, click into the pipeline execution from the <span class="No-Break"><strong class="bold">Pipelines</strong></span><span class="No-Break"> view.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer262">
+					<img alt="Figure 6.11 – Select pipeline execution" src="image/B21937_06_11.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.11 – Select pipeline execution</p>
+			<ol>
+				<li value="3">In the execution details, to run the manual step, click the <span class="No-Break"><strong class="bold">Run</strong></span><span class="No-Break"> button.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer263">
+					<img alt="Figure 6.12 – Running the manual step" src="image/B21937_06_12.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.12 – Running the manual step</p>
+			<p>We have now configured and executed a manual step in <span class="No-Break">our pipeline.</span></p>
+			<p>Another <a id="_idIndexMarker414"/>desirable feature of pipeline execution is scheduling the execution on a cadence. We will investigate how to do that in our <span class="No-Break">next recipe.</span></p>
+			<h1 id="_idParaDest-116"><a id="_idTextAnchor117"/>Scheduled execution</h1>
+			<p>Any pipeline <a id="_idIndexMarker415"/>defined in the <strong class="source-inline">bitbucket-pipelines.yml</strong> file can be set on a schedule to run on a regular cadence. Let’s see how to make <span class="No-Break">the configurations.</span></p>
+			<h2 id="_idParaDest-117"><a id="_idTextAnchor118"/>How to do it…</h2>
+			<p>Scheduling a pipeline is done on the Bitbucket UI, as seen in the <span class="No-Break">following instructions:</span></p>
+			<ol>
+				<li>In the Bitbucket repository, select the <strong class="bold">Pipelines</strong> option in the <span class="No-Break">repository sidebar.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer264">
+					<img alt="Figure 6.13 – Select the Pipelines view" src="image/B21937_06_13.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.13 – Select the Pipelines view</p>
+			<ol>
+				<li value="2">In<a id="_idIndexMarker416"/> the <strong class="bold">Pipelines</strong> view, click the <span class="No-Break"><strong class="bold">Schedules</strong></span><span class="No-Break"> button.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer265">
+					<img alt="Figure 6.14 – Click the Schedules button" src="image/B21937_06_14.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.14 – Click the Schedules button</p>
+			<ol>
+				<li value="3">To create a new schedule, click the <strong class="bold">New schedule</strong> button in the window <span class="No-Break">that appears.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer266">
+					<img alt="Figure 6.15 – The New schedule button" src="image/B21937_06_15.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.15 – The New schedule button</p>
+			<ol>
+				<li value="4">In the <strong class="bold">Create a schedule</strong> window, select a branch, select a pipeline, and select the<a id="_idIndexMarker417"/> frequency to run the pipeline. Frequency can be hourly, daily, weekly, or monthly. All times are referred to local time but will be executed on a UTC offset to avoid daylight saving time misconfigurations. Click on the <strong class="bold">Create</strong> button when the configuration <span class="No-Break">is complete.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer267">
+					<img alt="Figure 6.16 – Create a new schedule" src="image/B21937_06_16.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.16 – Create a new schedule</p>
+			<ol>
+				<li value="5">On an existing <a id="_idIndexMarker418"/>schedule, you can click on the slider to disable the schedule. To delete the schedule, hover on the schedule and click on the trash <span class="No-Break">can icon.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer268">
+					<img alt="Figure 6.17 – Disabling and deleting schedules" src="image/B21937_06_17.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.17 – Disabling and deleting schedules</p>
+			<p>We have now seen how to run our pipelines on a regular cadence <span class="No-Break">through scheduling.</span></p>
+			<p>In the chapter so far, we have looked at execution from conditional, to manual, to scheduled. We now pivot to looking at what we are executing and enhancements that make our pipelines more potent. The first step is showing how to integrate Bitbucket Pipelines with<a id="_idIndexMarker419"/> third-party tools. One way of doing that is using <strong class="bold">Pipes</strong>. Let’s see how to configure and use Pipes <span class="No-Break">to integrate.</span></p>
+			<h1 id="_idParaDest-118"><a id="_idTextAnchor119"/>Connecting to Bitbucket Pipes</h1>
+			<p>When we perform <a id="_idIndexMarker420"/>continuous integration on our build, we may want to perform testing or security scans to ensure our resulting build has high quality and is secure. Bitbucket Pipelines allows for testing and security scans through the use of integrations. The integrations between Bitbucket Pipelines and an external tool or environment are called <span class="No-Break">Bitbucket Pipes.</span></p>
+			<p>We are going to see what pipes are available to Bitbucket Pipelines for integrating with third-party tools and environments. We will also see how to add pipes to your <strong class="source-inline">bitbucket-pipelines.yml</strong> to integrate <span class="No-Break">our pipeline.</span></p>
+			<h2 id="_idParaDest-119"><a id="_idTextAnchor120"/>How to do it...</h2>
+			<p>The Bitbucket editor for <strong class="source-inline">bitbucket-pipelines.yml</strong> can display the Pipes available for use. The Pipes are then placed in the <strong class="source-inline">script</strong> section of the <strong class="source-inline">bitbucket-pipelines.yml</strong> file, as seen in the <span class="No-Break">following instructions:</span></p>
+			<ol>
+				<li>As we saw in the introduction to Bitbucket Pipelines in <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>, when you edit the <strong class="source-inline">bitbucket-pipelines.yml</strong> file in the Bitbucket GUI, it opens a special editor that adds features for Pipes, templates, guidance on steps, and variables. An illustration of the help panel is shown in the <span class="No-Break">following screenshot.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer269">
+					<img alt="Figure 6.18 – The bitbucket-pipelines.yml editor help panel" src="image/B21937_06_18.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.18 – The bitbucket-pipelines.yml editor help panel</p>
+			<ol>
+				<li value="2">Expand <a id="_idIndexMarker421"/>the <strong class="bold">Add Pipes (Integrations)</strong> section to view the <span class="No-Break">available Pipes.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer270">
+					<img alt="Figure 6.19 – Viewing a selection of Pipes" src="image/B21937_06_19.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.19 – Viewing a selection of Pipes</p>
+			<ol>
+				<li value="3">You can search by keyword or view by category when you select <strong class="bold">Explore more pipes</strong>, found at the bottom of the Pipes section, as seen in the <span class="No-Break">following illustration.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer271">
+					<img alt="Figure 6.20 – The Explore more pipes button" src="image/B21937_06_20.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.20 – The Explore more pipes button</p>
+			<ol>
+				<li value="4"> Selecting <strong class="bold">Explore more pipes</strong> will open the <strong class="bold">Discover pipes</strong> window seen in the<a id="_idIndexMarker422"/> <span class="No-Break">following illustration.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer272">
+					<img alt="Figure 6.21 – The Discover pipes window" src="image/B21937_06_21.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.21 – The Discover pipes window</p>
+			<ol>
+				<li value="5">Selecting a pipe will open a window for the pipe. This window will contain code snippets to paste into the script section of the step where you want the pipe to run, details about the pipe, and other information. We show an example of this in the <span class="No-Break">following illustration.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer273">
+					<img alt="Figure 6.22 – Pipe window" src="image/B21937_06_22.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.22 – Pipe window</p>
+			<p>We will see the application of pipes later in this chapter and <em class="italic">Chapters 8</em> <span class="No-Break">and </span><span class="No-Break"><em class="italic">9</em></span><span class="No-Break">.</span></p>
+			<p>Another feature <a id="_idIndexMarker423"/>that pipelines can use is variables. We started with defining variables in the <em class="italic">Enabling Bitbucket Pipelines</em> recipe in <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>. Let’s look at another place to set a variable and how to use variables in <span class="No-Break">your pipeline.</span></p>
+			<h1 id="_idParaDest-120"><a id="_idTextAnchor121"/>Defining variables</h1>
+			<p>Variables enhance the<a id="_idIndexMarker424"/> functionality of your pipelines by allowing you to store values such as names, needed parameters, and sometimes secrets. There are two ways you can define variables, the first of which was referenced in <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>. Let’s examine <span class="No-Break">these methods.</span></p>
+			<h2 id="_idParaDest-121"><a id="_idTextAnchor122"/>How to do it...</h2>
+			<p>As we saw in <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>, we can define variables from the editor for <strong class="source-inline">bitbucket-pipelines.yml</strong>. Let’s see how you can <span class="No-Break">do that:</span></p>
+			<ol>
+				<li>When editing <strong class="source-inline">bitbucket-pipelines.yml</strong>, select the <strong class="bold">Add </strong><span class="No-Break"><strong class="bold">variables</strong></span><span class="No-Break"> option.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer274">
+					<img alt="Figure 6.23 – Expand Add variables" src="image/B21937_06_23.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.23 – Expand Add variables</p>
+			<ol>
+				<li value="2">You can add<a id="_idIndexMarker425"/> variables for the repository, as well as any deployment environments you <span class="No-Break">have defined.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer275">
+					<img alt="Figure 6.24 – Add variables" src="image/B21937_06_24.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.24 – Add variables</p>
+			<ol>
+				<li value="3">To add a<a id="_idIndexMarker426"/> variable, give it a name, enter its value, and click <strong class="bold">Add</strong>. Make sure <strong class="bold">Secured</strong> is checked if you need a secured variable for storing passwords <span class="No-Break">or secrets.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer276">
+					<img alt="Figure 6.25 – Variable saved" src="image/B21937_06_25.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.25 – Variable saved</p>
+			<ol>
+				<li value="4">To use the variable in <strong class="source-inline">bitbucket-pipelines.yml</strong>, add the variable name to the <strong class="source-inline">script:</strong> section, appended by a dollar sign (<strong class="source-inline">$</strong>) character. This is shown in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+- step:
+          name: 'Build and Test'
+          script:
+            - echo "My variable is "$MY_NUMBER</pre></li>			</ol>
+			<p>We’ve seen how to add a variable from the <strong class="source-inline">bitbucket-pipelines.yml</strong> editor. Let’s see how <a id="_idIndexMarker427"/>to add variables from <strong class="bold">Repository settings</strong> in the <span class="No-Break">following subsection.</span></p>
+			<h2 id="_idParaDest-122"><a id="_idTextAnchor123"/>There’s more…</h2>
+			<p>Anyone with write access to<a id="_idIndexMarker428"/> the repository can create a repository variable. Let’s see how to do so from <span class="No-Break"><strong class="bold">Repository settings</strong></span><span class="No-Break">:</span></p>
+			<ol>
+				<li>At the repository, select <strong class="bold">Repository settings</strong> from the <span class="No-Break">repository sidebar.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer277">
+					<img alt="Figure 6.26 – Select Repository settings" src="image/B21937_06_26.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.26 – Select Repository settings</p>
+			<ol>
+				<li value="2">In the <strong class="bold">PIPELINES</strong> section of the <strong class="bold">Repository settings</strong> sidebar, select <span class="No-Break"><strong class="bold">Repository variables</strong></span><span class="No-Break">.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer278">
+					<img alt="Figure 6.27 – Select Repository variables" src="image/B21937_06_27.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.27 – Select Repository variables</p>
+			<ol>
+				<li value="3">To add a<a id="_idIndexMarker429"/> variable, give it a name, enter its value, and click <strong class="bold">Add</strong>. Make sure <strong class="bold">Secured</strong> is checked if you need a secured variable for storing passwords <span class="No-Break">or secrets.</span></li>
+			</ol>
+			<div>
+				<div class="IMG---Figure" id="_idContainer279">
+					<img alt="Figure 6.28 – Adding a repository variable" src="image/B21937_06_28.jpg"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.28 – Adding a repository variable</p>
+			<ol>
+				<li value="4">Just as in the previous section, to use the variable in <strong class="source-inline">bitbucket-pipelines.yml</strong>, add the variable name to the <strong class="source-inline">script:</strong> section, appended by a dollar sign (<strong class="source-inline">$</strong>) character. This is shown in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+- step:
+          name: 'Build and Test'
+          script:
+            - echo "My variable is "$MY_NUMBER</pre></li>			</ol>
+			<p>We’ve now seen <a id="_idIndexMarker430"/>how to add a variable in <span class="No-Break"><strong class="bold">Repository settings</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-123"><a id="_idTextAnchor124"/>See also</h2>
+			<p>The following link provides more information on variables, including pre-defined <span class="No-Break">Bitbucket </span><span class="No-Break"><a id="_idIndexMarker431"/></span><span class="No-Break">variables:</span></p>
+			<ul>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/variables-and-secrets/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/variables-and-secrets/</span></a></li>
+			</ul>
+			<p>We can specify which runners to use when executing a pipeline. Let’s explore <span class="No-Break">that now.</span></p>
+			<h1 id="_idParaDest-124"><a id="_idTextAnchor125"/>Defining a runner for a pipeline</h1>
+			<p>In <a href="B21937_05.xhtml#_idTextAnchor087"><span class="No-Break"><em class="italic">Chapter 5</em></span></a>, we<a id="_idIndexMarker432"/> saw how to define a self-hosted runner. Bitbucket Pipelines allows the use of self-hosted runners to ensure not only are we using the correct platforms for building, but by specifying our own resources, we can avoid the build time limits of <span class="No-Break">Bitbucket Cloud.</span></p>
+			<p>Now that we have runners defined, let’s see how to call them <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">bitbucket-pipelines.yml</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-125"><a id="_idTextAnchor126"/>How to do it...</h2>
+			<p>Your self-hosted runners can be defined on a step basis in your <strong class="source-inline">bitbucket-pipelines.yml</strong> file. Let’s see how <span class="No-Break">that’s done:</span></p>
+			<ol>
+				<li>For a given step, define the runner to use for that step by adding the <strong class="source-inline">runs-on</strong> keyword followed by all the applicable labels. The following code snippet shows such <span class="No-Break">an application:</span><pre class="source-code">
+pipelines:
+  custom:
+    customPipelineWithRunnerStep:
+      - step:
+          name: First Step
+          runs-on:
+            - 'self.hosted'
+            - 'my.label'
+          script:
+            - echo "This step will run on a self hosted runner that also has the my.label label.";</pre></li>				<li>Windows-specific runners are used when the <strong class="source-inline">windows</strong> label is added in the <span class="No-Break"><strong class="source-inline">runs-on</strong></span><span class="No-Break"> section:</span><pre class="source-code">
+      - step:
+          name: First Step
+          runs-on:
+            - 'self.hosted'
+            - 'windows'</pre></li>				<li>Mac-specific<a id="_idIndexMarker433"/> runners are used when the <strong class="source-inline">macos</strong> label is added in the <span class="No-Break"><strong class="source-inline">runs-on</strong></span><span class="No-Break"> section:</span><pre class="source-code">
+      - step:
+          name: First Step
+          runs-on:
+            - 'self.hosted'
+            - 'macos'</pre></li>				<li>Linux shell runners are used when the <strong class="source-inline">linux.shell</strong> label is added in the <span class="No-Break"><strong class="source-inline">runs-on</strong></span><span class="No-Break"> section:</span><pre class="source-code">
+      - step:
+          name: First Step
+          runs-on:
+            - 'self.hosted'
+            - 'linux.shell'</pre></li>				<li>Linux Docker ARM runners are used when the <strong class="source-inline">linux.arm64</strong> label is added in the <span class="No-Break"><strong class="source-inline">runs-on</strong></span><span class="No-Break"> section:</span><pre class="source-code">
+      - step:
+          name: First Step
+          runs-on:
+            - 'self.hosted'
+            - 'linux.arm64'</pre></li>				<li>If you don’t specify a platform label, Bitbucket Pipelines assumes the step should be run by a Linux <span class="No-Break">Docker runner.</span></li>
+				<li>If all the matching runners are busy, your step may wait until one becomes available. If the runners in your repository do not match any of the labels in the step, the step <span class="No-Break">will fail.</span></li>
+			</ol>
+			<p>We’re now <a id="_idIndexMarker434"/>ready to explore some real-life applications of testing steps in a pipeline that are part of continuous integration. Let’s see a testing <span class="No-Break">example now.</span></p>
+			<h1 id="_idParaDest-126"><a id="_idTextAnchor127"/>Testing steps in Bitbucket Pipelines</h1>
+			<p>A key step that <a id="_idIndexMarker435"/>may be done on a pipeline for continuous integration typically comes post-build. Testing immediately after the build allows for defects to be found and sorted out, guaranteeing better quality in the <span class="No-Break">code base.</span></p>
+			<p>The testing steps in this recipe utilize a category of testing <a id="_idIndexMarker436"/>called <strong class="bold">static analysis</strong>. With static analysis, the files in the build are scanned to see whether they contain logical errors, security vulnerabilities, or <span class="No-Break">other issues.</span></p>
+			<p><strong class="bold">Linting</strong> is another<a id="_idIndexMarker437"/> type of scanning technique that performs tests by evaluating the syntax and structure of the code base. It can also determine whether the code base being evaluated meets specific <span class="No-Break">coding standards.</span></p>
+			<p>We will examine different methods of invoking linting and scanning from <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<h2 id="_idParaDest-127"><a id="_idTextAnchor128"/>How to do it…</h2>
+			<p>Depending on the language, a linting utility may be part of the suite of tools for developing in that language. Let’s see how that works with <span class="No-Break">Bitbucket Pipelines:</span></p>
+			<ol>
+				<li>Tests that are part of a language’s development platform can be called as a part of the testing step’s <strong class="source-inline">script</strong> section. Execute the bundled tests by setting up steps inside the <strong class="source-inline">script</strong> section. The following code snippet features building and testing steps for a Node.js application using <strong class="bold">Node Package Manager</strong> (<strong class="bold">NPM</strong>) (note <a id="_idIndexMarker438"/>that the <strong class="source-inline">image</strong> section denotes a Docker image used as the build environment – we <a id="_idIndexMarker439"/>explain this in <a href="B21937_09.xhtml#_idTextAnchor185"><span class="No-Break"><em class="italic">Chapter 9</em></span></a><span class="No-Break">):</span><pre class="source-code">
+image: node:10.15.0
+pipelines:
+  default:
+    - step:
+        script:
+          - npm install
+          - npm test</pre></li>				<li>We can extend our testing by adding linting applications. The following code snippet includes the installation and execution of ESLint, a commonly used linting application for JavaScript in our <span class="No-Break">Node.js environment:</span><pre class="source-code">
+image: node:10.15.0
+pipelines:
+  default:
+    - step:
+        name: ESLint
+        script:
+          - npm install eslint --save-dev
+          - eslint --init
+    - step:
+        name: execute
+        script:
+          - npm install
+          - npm run lint
+          - npm test</pre></li>			</ol>
+			<p>We have now seen examples of running tests when a programming language’s development environment contains testing applications. Let’s look at integrating a third-party application <a id="_idIndexMarker440"/>into our Bitbucket Pipeline in the <span class="No-Break">next subsection.</span></p>
+			<h2 id="_idParaDest-128"><a id="_idTextAnchor129"/>There’s more…</h2>
+			<p>A popular application <a id="_idIndexMarker441"/>used for testing is <strong class="bold">SonarCloud</strong> from SonarSource. SonarCloud has a battery of tests to measure the security, reliability, and maintainability of a code base. After configuring SonarCloud to Bitbucket Cloud, you can set up test execution in Bitbucket Pipelines in the <span class="No-Break">following manner:</span></p>
+			<ol>
+				<li>SonarCloud Scan utilizes pipes to run the SonarCloud code analyzer from Bitbucket Pipelines. The following code snippet demonstrates the invocation of the pipe in the testing step’s <strong class="source-inline">script</strong> section. This sample includes all the optional variables for the pipe. Note that <strong class="source-inline">SONAR_TOKEN</strong> uses a <span class="No-Break">Bitbucket-secured variable:</span><pre class="source-code">
+- step:
+    name: SonarCloud
+    script:
+       - pipe: sonarsource/sonarcloud-scan:2.0.0
+            variables:
+               SONAR_TOKEN: $SONAR_TOKEN
+               EXTRA_ARGS: -Dsonar.projectDescription=\"Project with sonarcloud-scan pipe\" -Dsonar.eslint.reportPaths=\"report.json\"
+               SONAR_SCANNER_OPTS: -Xmx512m
+               DEBUG: "true"</pre></li>				<li>In addition to SonarCloud Scan, Bitbucket Pipelines can include a call to SonarCloud Quality Gate to perform checks against a defined quality gate before deployment or release. This call is also established as a pipe that can be added to a <strong class="source-inline">script</strong> section. The following code snippet shows the pipe with <span class="No-Break">optional variables:</span><pre class="source-code">
+- pipe: sonarsource/sonarcloud-quality-gate:0.1.6
+  variables:
+     SONAR_TOKEN: $SONAR_TOKEN
+    SONAR_QUALITY_GATE_TIMEOUT: 180  # 3 minutes</pre></li>			</ol>
+			<p>You’ve now seen<a id="_idIndexMarker442"/> how Bitbucket Pipelines connects with SonarCloud analyzers <span class="No-Break">using pipes.</span></p>
+			<h2 id="_idParaDest-129"><a id="_idTextAnchor130"/>See also</h2>
+			<p>This link includes the steps needed<a id="_idIndexMarker443"/> to connect a Bitbucket workspace to a SonarCloud <span class="No-Break">project: </span><a href="https://docs.sonarsource.com/sonarcloud/getting-started/bitbucket-cloud/"><span class="No-Break">https://docs.sonarsource.com/sonarcloud/getting-started/bitbucket-cloud/</span></a><span class="No-Break">.</span></p>
+			<p>A key tenet of DevSecOps is frequently running security scans and testing. Optimally, this should be part of continuous integration. Let’s look at an example of including security scanning in <span class="No-Break">Bitbucket Pipelines.</span></p>
+			<h1 id="_idParaDest-130"><a id="_idTextAnchor131"/>Security steps in Bitbucket Pipelines</h1>
+			<p>As of this writing, <strong class="bold">Snyk</strong> is the<a id="_idIndexMarker444"/> only security provider that can<a id="_idIndexMarker445"/> deeply integrate with Bitbucket Cloud. Adding Snyk as a security provider allows additional security scans into the repository as steps of the development workflow. Part of this workflow includes running security scans in Bitbucket Pipelines. Let’s see how <span class="No-Break">that’s done.</span></p>
+			<h2 id="_idParaDest-131"><a id="_idTextAnchor132"/>How to do it…</h2>
+			<p>Snyk uses pipes to integrate with pipelines defined in <strong class="source-inline">bitbucket-pipelines.yml</strong>. Let’s look at how to set <span class="No-Break">it up:</span></p>
+			<ol>
+				<li>Add the Snyk pipe to the <strong class="source-inline">script</strong> section of your testing step in the pipeline. Required variables include the Snyk token, the language used (<strong class="source-inline">node</strong>, <strong class="source-inline">ruby</strong>, <strong class="source-inline">composer</strong>, <strong class="source-inline">dotnet</strong>, or <strong class="source-inline">docker</strong>), and the image name if the language is set to <strong class="source-inline">docker</strong>. The following code snippet shows the usage for scanning a <span class="No-Break">Node.js application:</span><pre class="source-code">
+script:
+  - npm install
+  - npm test
+  - pipe: snyk/snyk-scan:1.0.1
+    variables:
+      SNYK_TOKEN: $SNYK_TOKEN
+      LANGUAGE: «node»</pre></li>				<li>You can also use the Snyk CLI to run a scan using <strong class="source-inline">snyk test</strong>. Installation of the Snyk CLI can be done through <strong class="source-inline">npm</strong>. This is illustrated in the following <span class="No-Break">code snippet:</span><pre class="source-code">
+script:
+  - mvn install
+  - npm install -g snyk # binary download also available
+  - snyk test --all-projects</pre></li>			</ol>
+			<p>You’ve now set <a id="_idIndexMarker446"/>up Snyk to run security scans as part of <span class="No-Break">a pipeline.</span></p>
+			<h2 id="_idParaDest-132"><a id="_idTextAnchor133"/>See also</h2>
+			<p>The following link details how to set <a id="_idIndexMarker447"/>up Snyk as a security provider for <span class="No-Break">Bitbucket Cloud:</span></p>
+			<ul>
+				<li><a href="https://support.atlassian.com/bitbucket-cloud/docs/add-and-configure-security-with-snyk/"><span class="No-Break">https://support.atlassian.com/bitbucket-cloud/docs/add-and-configure-security-with-snyk/</span></a></li>
+			</ul>
+			<p>On some tests, it’s possible for Bitbucket to detect the results output and display it. Our last recipe <span class="No-Break">explores this.</span></p>
+			<h1 id="_idParaDest-133"><a id="_idTextAnchor134"/>Reporting test results</h1>
+			<p>Test results that output in <a id="_idIndexMarker448"/>JUnit and Maven Surefire XML formats will be automatically detected by the pipelines. Bitbucket Pipelines then displays any failed test results in a <strong class="bold">Tests</strong> tab. Successful executions can be shown in the log view in the <strong class="bold">Build</strong> tab. Let’s see how to set <span class="No-Break">this up.</span></p>
+			<h2 id="_idParaDest-134"><a id="_idTextAnchor135"/>Getting ready</h2>
+			<p>When setting up test reporting, make sure the test results are generated in one of the <span class="No-Break">following locations:</span></p>
+			<ul>
+				<li><strong class="source-inline">./**/</strong><span class="No-Break"><strong class="source-inline">surefire-reports/**/*.xml</strong></span></li>
+				<li><strong class="source-inline">./**/</strong><span class="No-Break"><strong class="source-inline">failsafe-reports/**/*.xml</strong></span></li>
+				<li><strong class="source-inline">./**/</strong><span class="No-Break"><strong class="source-inline">test-results/**/*.xml</strong></span></li>
+				<li><strong class="source-inline">./**/</strong><span class="No-Break"><strong class="source-inline">test-reports/**/*.xml</strong></span></li>
+				<li><strong class="source-inline">./**/</strong><span class="No-Break"><strong class="source-inline">TestResults/**/*.xml</strong></span></li>
+			</ul>
+			<p>Let’s now take a look at how to configure testing results on <span class="No-Break">the pipeline.</span></p>
+			<h2 id="_idParaDest-135"><a id="_idTextAnchor136"/>How to do it…</h2>
+			<p>Depending on the language, there are a number of different steps to follow to generate test results. Let’s look at <span class="No-Break">each method:</span></p>
+			<ol>
+				<li>If you are using the Maven Surefire Plugin in your Maven build job, no special configuration <span class="No-Break">is needed.</span></li>
+				<li>If you are using PHP and testing with PHPUnit, you should include the <strong class="source-inline">--log-junit</strong> parameter to generate the log output. The following code snippet illustrates the <a id="_idIndexMarker449"/>proper <span class="No-Break">command setup:</span><pre class="source-code">
+image: php:7.1.1
+pipelines:
+  default:
+    - step:
+        script:
+          - apt-get update &amp;&amp; apt-get install -y unzip
+          - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          - composer require phpunit/phpunit
+          - vendor/bin/phpunit --log-junit ./test-reports/junit.xml</pre></li>				<li>If you are developing with .NET, you can use <strong class="source-inline">JUnitTestLogger</strong> to create the output in JUnit format. The following code snippet illustrates <span class="No-Break">the setup:</span><pre class="source-code">
+image: mcr.microsoft.com/dotnet/sdk
+pipelines:
+  default:
+    - step:
+        script:
+          - dotnet add package JUnitTestLogger --version 1.1.0
+          - dotnet test --logger "junit"</pre></li>				<li>.NET development could also use the <strong class="source-inline">trx2junit</strong> utility to convert the test result files from Visual Studio test result format (<strong class="source-inline">.trx</strong>) to JUnit format (<strong class="source-inline">.xml</strong>). This is shown in<a id="_idIndexMarker450"/> the following <span class="No-Break">code snippet:</span><pre class="source-code">
+image: mcr.microsoft.com/dotnet/sdk
+pipelines:
+  default:
+    - step:
+        script:
+          - dotnet tool install -g trx2junit
+          - dotnet test --logger 'trx;LogFileName=log.trx'
+        after-script:
+          - export PATH="$PATH:/root/.dotnet/tools"
+          - trx2junit ./TestResults/*.trx</pre></li>			</ol>
+			<p>You’ve now seen<a id="_idIndexMarker451"/> how to prepare test results so they appear automatically <span class="No-Break">in logs.</span></p>
+		</div>
+	</body></html>

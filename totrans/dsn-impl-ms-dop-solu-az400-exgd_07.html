@@ -1,0 +1,422 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer109">
+<h1 class="chapter-number" id="_idParaDest-160"><a id="_idTextAnchor453"/>7</h1>
+<h1 id="_idParaDest-161"><a id="_idTextAnchor454"/>Dependency Management</h1>
+<p>In part one of this book, you learned how to continuously deploy your application. In modern enterprise software development, applications are developed by cross-functional teams and involve complex solutions and projects. Complex solutions with hundreds of modules and functions have a greater probability of code duplication – that is, identical implementation for the same functionality within projects. Duplicated code is one of the cardinal sins of programming. You can solve problems by copying and pasting, but it usually creates maintenance nightmares later. <strong class="bold">Don’t Repeat Yourself</strong> (<strong class="bold">DRY</strong>) is a basic principle of software development aimed at reducing the repetition of information.</p>
+<p>For a small or a single project, you may be able to handle dependencies on your own, but for complex solutions, a team will descend into <strong class="bold">dependency hell</strong>. One approach to solve this is by introducing package management. Developers need to identify the components to reuse within internal projects or from open source. Reusing libraries will increase the development velocity and the quality of the solution. Instead of copying and pasting code from one project to another, you can create a shared library using it. In this chapter, you will learn how to identify shared components and how to make them reusable using Azure Artifacts. In addition to this, you will learn how you can use Azure Artifacts for storing pipeline artifacts when working in a heterogeneous architecture. Here, you will also work with other <strong class="bold">Continuous Integration</strong> (<strong class="bold">CI</strong>)/<strong class="bold">Continuous Deployment</strong> (<strong class="bold">CD</strong>) tools than just Azure DevOps. To do so, you will learn how to use Azure Artifacts for Universal Packages.</p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Identifying shared components</li>
+<li>Creating a feed for publishing packages </li>
+<li>Consuming packages</li>
+<li>Working with Universal Packages </li>
+<li>Exploring other tools</li>
+</ul>
+<h1 id="_idParaDest-162"><a id="_idTextAnchor455"/>Technical requirements</h1>
+<p>To experiment with the topics mentioned in this chapter, an Azure DevOps organization is required.</p>
+<h1 id="_idParaDest-163"><a id="_idTextAnchor456"/><a id="_idTextAnchor457"/><a id="_idTextAnchor458"/>Identifying shared components</h1>
+<p>Adopting<a id="_idIndexMarker578"/> DevOps practices, such as CI/CD, can greatly reduce the amount of time you have to spend on building and testing your applications. Besides building your applications, there are also many other concerns that you can address in your pipelines.</p>
+<p>When you start adding more and more tasks to your pipelines, you might run into a situation in which a single execution of your pipeline starts taking too long. In order to combat this, you might be interested in splitting your solution up into smaller builds and maybe even repositories. Splitting solutions into smaller builds is not viable with monolithic applications, since it would break the build process. Microservice applications or solutions, which have components decoupled into separate projects, could adopt this approach to split the build process. To do this, you could build parts of that application in isolation and then use the results of these builds in your main application as ready-built components.</p>
+<p>Componentization is a process to structure your projects into reusable components that application developers independently write and deploy. </p>
+<p>With source componentization, you split your solution into parts to use as shared projects. Imagine that you have two solutions that work closely together: one is a REST API and the other is a client package that you ship to your customers to work with that API. It is likely that in their source code, these two solutions share at least one project comprising common reusable objects, such as data models, that will serve as data contracts to exchange data between the two solutions. Here, you can also leverage package componentization and make a third solution with only the shared project, which you could then use as a package in your other solutions. Packages are rarely functional as a standalone unit.</p>
+<p>Alternatively, what if you work in a team that is responsible for maintaining a whole series of solutions, and you find that you have complete namespaces that are copied and pasted between these solutions? It is not a desirable situation and one that probably comes with a lot of issues. What if you could write all of this code just once, build it, package it, and then reuse it in all these solutions? To summarize, three reasons for starting to<a id="_idIndexMarker579"/> work with packages and artifact feeds are as follows:</p>
+<ul>
+<li>Extracting shared components into packages</li>
+<li>Building packages that are used by other teams</li>
+<li>Reducing build and CI times by splitting a larger solution into part<a id="_idTextAnchor459"/>s</li>
+</ul>
+<p class="callout-heading">Tip</p>
+<p class="callout">The three main aspects of dependency management are standardization, package formats and sources, and versioning.</p>
+<p>In the remainder of this chapter, you will learn techniques for doing this by building packages out of (parts of) your application code, hosting them in a centralized location, and reusing them in one or more solutions.</p>
+<p>In all three scenarios, you might be looking to increase the reusability of the code, but also to reduce the time taken between checking for a change and receiving feedback for that change in the form of automated test results. Before you start breaking up your application, remember that moving a part of your solution to a separate component does not always achieve this.</p>
+<p>If you break your application up into three components and one remaining main part, make sure that you can build and test these three components completely in isolation, or at least close to 100% isolation. If you cannot test a component of your application in isolation, creating a separate repository and build for that component will actually increase the time between checking for a change and receiving feedback to you as a developer. Both separate builds might run quicker, but now you need to wait for two builds before you receive any feedback.</p>
+<p class="callout-heading">Tip</p>
+<p class="callout">If you break your application up into separate components, make sure that each component can be built and tested in a high degree of isolation.</p>
+<p>As well as this, you have to make sure that making a reusable component out of part of your application makes sense from a conceptual point of view. For example, components <a id="_idIndexMarker580"/>that are addressing a cross-cutting concern such as logging libraries or database abstraction layers are great candidates for factoring out to shared libraries. (On a side note, after you have done so, you might also want to consider replacing your own general-purpose libraries with off-the-shelf alternatives – for example, for database abstraction, use Entity Framework, and for logging providers, use Serilog, NLog, and so on wherever possible.)</p>
+<p>However, if splitting your solution into components makes sense, it can bring great benefit<a id="_idTextAnchor460"/><a id="_idTextAnchor461"/><a id="_idTextAnchor462"/>s.</p>
+<h2 id="_idParaDest-164"><a id="_idTextAnchor463"/>Types of feeds</h2>
+<p>Once<a id="_idIndexMarker581"/> the solution has been separated into different components. some components will be reused by multiple teams and projects. A feed will be required to store, share, and manage these reusable components/packages.</p>
+<p>There are many types of package feeds that can be hosted in Azure Artifacts. How you will use an artifact feed depends on the language and ecosystem used by the application.</p>
+<p>The following<a id="_idIndexMarker582"/> ecosystems are supported in Azure Artifacts:</p>
+<ul>
+<li><strong class="bold">NuGet</strong>: When<a id="_idIndexMarker583"/> working with Microsoft .NET languages, the package management used is NuGet. Technically, a NuGet package is just a ZIP file that’s been renamed with the <strong class="source-inline">.nupkg</strong> extension and whose contents match certain conventions.</li>
+<li><strong class="bold">npm</strong>: The <a id="_idIndexMarker584"/>npm protocol is used when building applications with JavaScript or TypeScript.</li>
+<li><strong class="bold">Maven or Gradle</strong>: Maven<a id="_idIndexMarker585"/> and Gradle<a id="_idIndexMarker586"/> are used for the Java ecosystem. </li>
+<li><strong class="bold">pip and Twine</strong>: When working with Python packages, they can be obtained using these <a id="_idIndexMarker587"/>pip and<a id="_idIndexMarker588"/> Twine utilities.</li>
+<li><strong class="bold">Universal Packages</strong>: Universal Packages <a id="_idIndexMarker589"/>are not associated with a specific ecosystem but are a generic means for uploading and retrieving packages.</li>
+</ul>
+<p>Whenever a new feed is created, no type needs to be specified. In fact, every feed can be accessed using any protocol, even with different protocols over time. However, <a id="_idTextAnchor464"/>in general, this does not <a id="_idTextAnchor465"/>make sense.</p>
+<h1 id="_idParaDest-165"><a id="_idTextAnchor466"/>Creating a feed</h1>
+<p>Once<a id="_idIndexMarker590"/> you have identified one or more packages that you want to publish, you will need a place to store them. For this, you can use Azure Artifacts. The following diagram shows the structural makeup of Azure Artifacts:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer090">
+<img alt="Figure 7.1 – Azure Artifacts views " height="183" src="image/B18655_07_01.jpg" width="165"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.1 – Azure Arti<a id="_idTextAnchor467"/>facts views</p>
+<p>Within Azure Artifacts, you can create one or more feeds where you can store your packages. For each package, you can have multiple versions in a feed. The feed is the level at which you can set up authorizations for publishing packages. Within a feed, you can create one or more views that you can use for setting up authorizations for consuming packages. A specific version of any given package can be in more than one view <a id="_idTextAnchor468"/>at the same time. The following sections discuss all these concepts in m<a id="_idTextAnchor469"/>ore detail.</p>
+<h2 id="_idParaDest-166"><a id="_idTextAnchor470"/>Setting up a feed</h2>
+<p>Within<a id="_idIndexMarker591"/> Azure Artifacts, the feed is the location where your packages are stored. Each feed is a separate and fully isolated repository. To create a new feed, follow these steps:</p>
+<ol>
+<li>First, navigate to Azure Artifacts in the menu on the left and then click on the <strong class="bold">Create feed</strong> button (partially visible in the following screenshot behind the pane for creating a new feed):</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer091">
+<img alt="Figure 7.2 – Creating a new feed " height="290" src="image/B18655_07_02.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.2 – Creating a new feed</p>
+<ol>
+<li value="2">Specify a name for the feed. It should not contain any spaces and should preferably contain only letters and numbers, since it will become part of a URL.</li>
+<li>Next, it is possible to specify the initial settings for visibility. This determines which users can view the feed. This will be discussed in more detail in a later subsection, <em class="italic">Managing views<a id="_idTextAnchor471"/> on a feed</em>.</li>
+<li>Configure the use of upstream sources. This will also be covered in more detail in a later subsection, <em class="italic">Configuring upstream sources</em>.</li>
+<li>A few seconds after selecting <strong class="bold">Create</strong>, your feed will be available.</li>
+</ol>
+<p>Once the feed is created, you can configure various settings, such as hiding deleted packages, enabling package batches, and configuring retention policies. To learn how to do this, follow <a id="_idIndexMarker592"/>these steps:</p>
+<ol>
+<li value="1">After the feed is created, access the settings for the feed by clicking on the gearbox in the top-right corner.</li>
+<li>Choose <strong class="bold">Feed settings</strong> in the view shown in the following screenshot. In this view, you can configure a few more things:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer092">
+<img alt="Figure 7.3 – Feed settings " height="363" src="image/B18655_07_03.jpg" width="505"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.3 – Feed settings</p>
+<ol>
+<li value="3">Besides changing the name and adding a description, you can choose to hide deleted packages. When you do this, versions of a package that have been removed are no longer visible to administrators of the feed. Regular users are never able to view or use deleted packages, but this setting enables the same view logic as admi<a id="_idTextAnchor472"/>nistrators.</li>
+<li>Another setting you can enable is that of package badges. A package badge is a visual<a id="_idIndexMarker593"/> element with the name of a package and the latest available version. If you enable this option, Azure DevOps Feed management will provide a direct URL link to the package badge. Using this link, you can always reference the latest version of the package. This is useful for people who want to keep tabs on the latest version of a package.</li>
+<li>Finally, you can configure a retention policy. Here, you can configure the automated removal when the number of versions of a package exceeds a certain threshold. While this helps you to save disk space and therefore costs, this can have the unintended effect of breaking the code references to these specific versions for downstream users of the feed. To safeguard against this, you can prevent removing a package for <strong class="bold">x</strong> number of days after it has been downloaded for the last time. Furthermore, keep in mind that any package version that is currently a member of a feed will not be removed.</li>
+<li>Once done, click on the <strong class="bold">Save</strong> button.</li>
+</ol>
+<p>After you have created and configured your feed, it is time to specify whic<a id="_idTextAnchor473"/>h users have access to the feed and what permissions they have. Let’s learn how to d<a id="_idTextAnchor474"/>o that next.</p>
+<h3>Securing access</h3>
+<p>There are<a id="_idIndexMarker594"/> four roles you can assign to a user or group, where the rights of each successive role include the rights of the previous roles as well:</p>
+<ul>
+<li><strong class="bold">Readers</strong> are able <a id="_idIndexMarker595"/>to list all packages in a feed and can download them.</li>
+<li><strong class="bold">Collaborators</strong> are also <a id="_idIndexMarker596"/>able to use packages from upstream sources. </li>
+<li><strong class="bold">Contributors</strong> can<a id="_idIndexMarker597"/> also publish their own packages and unlist and deprecate packages.</li>
+<li>Finally, <strong class="bold">owners</strong> have <a id="_idIndexMarker598"/>full control over a feed and can also change permissions, rename the fe<a id="_idTextAnchor475"/>ed, or delete it.</li>
+</ul>
+<p>To change the<a id="_idIndexMarker599"/> permission of a user, follow these steps:</p>
+<ol>
+<li value="1">Navigate to the <strong class="bold">Permissions</strong> view that you can see in the following screenshot. In this view, you can see a list of every user or group that has permissions assigned:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer093">
+<img alt="Figure 7.4 – Feed settings – adding/removing permissions " height="205" src="image/B18655_07_04.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.4 – Feed settings – adding/removing permissions</p>
+<ol>
+<li value="2">To remove permissions, select the row and click on <strong class="bold">Delete</strong>.</li>
+<li>To add a new row, click on the <strong class="bold">Add users/groups</strong> button. This will open the view you see on the right.</li>
+</ol>
+<p>As an alternative to adding users or groups as a reader on the whole feed, it<a id="_idTextAnchor476"/> is also possible to create one or more views on the feed and set access<a id="_idTextAnchor477"/> rights per view.</p>
+<h2 id="_idParaDest-167"><a id="_idTextAnchor478"/>Managing views on a feed</h2>
+<p>A feed is a <a id="_idIndexMarker600"/>repository of packages that you can publish and download packages to and from. However, there are many cases where you do not want every uploaded package to be available for download. Often, you might find that you want to control who can use which versions of a package – for example, when you are implementing the CD of a shared library but want to share only stable versions with the rest of your organization.</p>
+<p>To do this, you can create views. A view is a subset of the package versions within a feed. As a consumer, when working with a view, it behaves just as <a id="_idTextAnchor479"/>if it were a feed.</p>
+<p>Views can <a id="_idIndexMarker601"/>be managed as follows:</p>
+<ol>
+<li value="1">Navigate and click on <strong class="bold">Views</strong>; you should see something similar to the following screenshot:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer094">
+<img alt="Figure 7.5 – Feed settings – managing views " height="213" src="image/B18655_07_05.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.5 – Feed settings – managing views</p>
+<ol>
+<li value="2">Here, you can see a list of all the current views and remove any views by selecting the row and clicking on <strong class="bold">Delete</strong>.</li>
+<li>Adding new views can be done using the <strong class="bold">Add view</strong> button, which opens the view you see on the right.</li>
+<li>You can set permissions for reading from a view here as well. You can allow read access to your whole Azure DevOps organization, or specify specific users. Any user or group you add here will get reader permissions on this view only.</li>
+<li>Editing permissions can be done by selecting any row and choosing <strong class="bold">Edit</strong>.</li>
+</ol>
+<p>Once one or more views are available, packages can be prom<a id="_idTextAnchor480"/>oted to a view for consu<a id="_idTextAnchor481"/>mption through it.</p>
+<h2 id="_idParaDest-168"><a id="_idTextAnchor482"/>Configuring upstream sources</h2>
+<p>The final<a id="_idIndexMarker602"/> thing that you can configure on your feed is the upstream sources. Azure Artifacts feeds give you a repository where you can publish your own packages for reuse from one<a id="_idTextAnchor483"/> or more locations.</p>
+<p>However, you will probably also use packages that are publicly available on repositories such as <strong class="source-inline">NuGet.org</strong> or <strong class="source-inline">npmjs.org</strong>. In this case, you could use a combination of an Artifacts feed and <strong class="source-inline">NuGet.org</strong>, but you can also configure your feed to serve packages from <strong class="source-inline">NuGet.org</strong> as well. If you do this, <strong class="source-inline">NuGet.org</strong> is called an upstream source.</p>
+<p>Along with simplicity, this gives you the added benefit of having one central location where you can see all the packages you are using in your solution(s). This enables you to quickly check which packages and versions you are using, which can be useful for compliance or security checks. Using the different permissions between the reader and collaborator roles, you can also configure which users are authorized to pull packages from <strong class="source-inline">NuGet.org</strong> to your feed and which users are not.</p>
+<p>Of course, you can do this for any repository that is accessible over the internet and implements one of the protocols that Azure Artifacts supports. To configure upstream sources, follow these steps:</p>
+<ol>
+<li value="1">Upstream sources can be configured after navigating to the following screen:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer095">
+<img alt="Figure 7.6 – Configuring upstream sources " height="140" src="image/B18655_07_06.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.6 – Configuring upstream sources</p>
+<ol>
+<li value="2">Upstream sources are configured in the same way as permissions and views. You can delete upstream sources using the <strong class="bold">Delete</strong> button in the menu bar.</li>
+<li>Adding upstream sources is done by clicking on the <strong class="bold">Add upstream source</strong> button, which opens the view on the right.</li>
+</ol>
+<p class="callout-heading">Important Note</p>
+<p class="callout">A final thing to note about the use of upstream sources is that it is not possible to have the same version of a package published to your own feed if it is already available on an upstream source.</p>
+<p class="callout">For instance, when you enable the <strong class="source-inline">NuGet.org</strong> upstream, you cannot publish the <strong class="source-inline">Newtonsoft.Json</strong> 10.0.3 package because that same package version is already present on <strong class="source-inline">NuGet.org</strong>.</p>
+<p>This section<a id="_idIndexMarker603"/> discussed how to create and connect feeds. Now that these are in place, we will learn how to publish packages to those feeds i<a id="_idTextAnchor484"/><a id="_idTextAnchor485"/><a id="_idTextAnchor486"/>n the next section.</p>
+<h1 id="_idParaDest-169"><a id="_idTextAnchor487"/>Publishing packages</h1>
+<p>Now <a id="_idIndexMarker604"/>that you know how to create and manage feeds, it is time to learn how to publish packages to them. If you have experience of publishing packages to public feeds, you will see that publishing to Azure Artifacts works in precisely the same way. There are two ways in which you can publish packages to a feed:</p>
+<ul>
+<li>Manually from your own computer </li>
+<li>By u<a id="_idTextAnchor488"/>sing Azure Pipelines</li>
+</ul>
+<p>Both options are explored in the<a id="_idTextAnchor489"/> following sections.</p>
+<h2 id="_idParaDest-170"><a id="_idTextAnchor490"/>Publishing packages manually</h2>
+<p>To <a id="_idIndexMarker605"/>upload packages manually, the following steps need to be performed:</p>
+<ol>
+<li value="1">First, you will have to retrieve the URL to your feed. To do this, click on <strong class="bold">Connect to feed</strong> for any of your feeds, as shown in the following screenshot:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer096">
+<img alt="Figure 7.7 – Connect to feed " height="228" src="image/B18655_07_07.jpg" width="474"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.7 – Connect to feed</p>
+<ol>
+<li value="2">In<a id="_idIndexMarker606"/> the list on the left, select the protocol to use for accessing the feed.</li>
+<li>Select the correct view to use. Remember that for publishing packages, the full feed URL needs to be used, since<a id="_idTextAnchor491"/> views are read-only.</li>
+<li>After making the correct selections, copy the correct URL to the clipboard using the <strong class="bold">Copy</strong> button.</li>
+<li>Execute the following command to create a NuGet package from a regular <strong class="source-inline">.csproj</strong> file. If you do not have the <strong class="source-inline">NuGet.exe</strong> tool already available, you can download it using the link provided at the end of this chapter:<p class="source-code"><strong class="bold">nuget.exe pack DemoSolution\MyPackage.csproj -Version 1.1.0</strong></p></li>
+<li>Execute the final command for uploading the package to NuGet:<p class="source-code"><strong class="bold">nuget.exe push</strong></p><p class="source-code"><strong class="bold">  - Source “{feedUrl}” “MyPackage.1.1.0.nupkg”</strong></p></li>
+</ol>
+<p>After executing the final command, the package will be published and<a id="_idTextAnchor492"/> becomes av<a id="_idTextAnchor493"/>ailable in your feed.</p>
+<h2 id="_idParaDest-171"><a id="_idTextAnchor494"/>Publishing packages from a pipeline</h2>
+<p>Uploading<a id="_idIndexMarker607"/> a package manually is not a convenient solution if you need to do it more than once. In cases where you want to frequently generate and publish a new version of a library, you can use an Azure pipeline. As well as the automation that this gives you, it is also a great way to introduce repeatability and reliability, since you can now use all of the benefits that pipelines offer you.</p>
+<p>You can find a possible build definition for creating and publishing an <strong class="source-inline">npm</strong> package, as shown in the following example. The sources for this build are from an open source Microsoft GitHub repository called <strong class="source-inline">tfs-cli</strong>.</p>
+<p>In this pipeline, there are three usages of the built-in <strong class="source-inline">npm</strong> task:</p>
+<ul>
+<li>The first occurrence is an <strong class="source-inline">npm install</strong> command. This command is used for installing the dependencies for this package:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer097">
+<img alt="Figure 7.8 – Publishing an npm package through an Azure pipeline   " height="317" src="image/B18655_07_08.jpg" width="412"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.8 – Publishing an npm package through an Azure pipeline  </p>
+<ul>
+<li>The second occurrence is running a custom command, <strong class="source-inline">build</strong>. This command is defined in the source code itself using <strong class="source-inline">package.json</strong> and is used for transpiling the source<a id="_idIndexMarker608"/> files from TypeScript to JavaScript:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer098">
+<img alt="Figure 7.9 – Building the npm package command in an Azure pipeline  " height="270" src="image/B18655_07_09.jpg" width="241"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.9 – Building the npm package command <a id="_idTextAnchor495"/>in an Azure pipeline </p>
+<ul>
+<li>The final and third task is running the <strong class="source-inline">npm publish</strong> command to publish the generated package to an <strong class="source-inline">npm</strong> feed. In this instance, there is no external feed selected but a built-in target registry, the Azure Artifacts feed:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer099">
+<img alt="Figure 7.10 – Publishing an npm package in an Azure pipeline  " height="411" src="image/B18655_07_10.jpg" width="441"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.10 – Publishing an npm package i<a id="_idTextAnchor496"/>n an Azure pipeline </p>
+<p>After running <a id="_idIndexMarker609"/>this build, your package is av<a id="_idTextAnchor497"/>ailable in your feed.</p>
+<h3>Versioning packages</h3>
+<p>One thing<a id="_idIndexMarker610"/> that is not done automatically when using the tasks to upload an <strong class="source-inline">npm</strong> package, or most types of packages for that matter, is managing the version number. Of course, there are many ways in which you can make sure your packages have proper versions, but a common approach is setting (part of) the version number during t<a id="_idTextAnchor498"/>he build of a package.</p>
+<p class="callout-heading">Tip</p>
+<p class="callout">Semantic versioning, also known as SemVer, is the most common practice to use within a versioning system.</p>
+<h2 id="_idParaDest-172"><a id="_idTextAnchor499"/>Version basics</h2>
+<p>Applications <a id="_idIndexMarker611"/>adopting <strong class="bold">Semantic Versioning</strong> (<strong class="bold">SemVer</strong>) will have a<a id="_idIndexMarker612"/> version number naming standard in the <strong class="source-inline">Major.Minor.Patch[-Suffix]</strong> form. The SemVer standard constructs a version in four parts and has the following meanings:</p>
+<ul>
+<li><strong class="bold">Major</strong>: This <a id="_idIndexMarker613"/>indicates that this release includes breaking changes or incompatible changes with previous versions. </li>
+<li><strong class="bold">Minor</strong>: This indicates that this release includes new features but is compatible with a previous version – that is, backward-compatible.</li>
+<li><strong class="bold">Patch</strong>: This indicates that this release is backward-compatible but only for minor bug fixes.</li>
+<li><strong class="bold">Suffix (optional)</strong>: This <a id="_idIndexMarker614"/>is a hyphen followed by a string, denoting a pre-release version.</li>
+</ul>
+<p>A recommended <a id="_idIndexMarker615"/>approach is to publish a new version of the package with an updated version number in the <strong class="source-inline">package.json</strong> file.</p>
+<p>Expanding on the <strong class="source-inline">npm</strong> package build that we demonstrated before, three changes can be made to the build definition:</p>
+<ol>
+<li value="1">First, the build number format for the build definition is updated to the following: <strong class="source-inline">1.0$(Rev:.rrr)</strong>. This guarantees that a unique number is automatically generated for every build. The <strong class="source-inline">Ref:.rrr</strong> variable will generate a number with three positions, leading with zeros if needed. The first time, this number will be <strong class="source-inline">000</strong>, and it will increase by one every time the rest of the build number is not changed.</li>
+<li>Second, a task is added to replace the version number that is currently specified in the source control, using the <strong class="source-inline">{#Build.BuildNumber#}</strong> token. This is a reference to the build variable with the name <strong class="source-inline">Build.BuildNumber</strong>, which contains <a id="_idIndexMarker616"/>the build number that was specified in <em class="italic">step 1</em>.</li>
+<li>Finally, a <strong class="bold">Replace Tokens</strong> task is added to the build before all other tasks. A possible configuration to replace the fixed-version number with the automatic version number for this task is shown as follows:</li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer100">
+<img alt="Figure 7.11 – Replace Tokens tasks " height="281" src="image/B18655_07_11.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.11 – Replace Tokens tasks</p>
+<p>This task can be configured to replace the tokens in one or more target files (<strong class="bold">1</strong> in the preceding screenshot). It will look for any series of characters starting with <strong class="source-inline">{#</strong> and ending in <strong class="source-inline">#}</strong>, take the text between these two markers, and then replace the whole text with the value of the corresponding variable.</p>
+<p>For example, if we send the following <strong class="source-inline">json</strong> file as input, it will replace the <strong class="source-inline">variable1</strong> pipeline variable values within the tag:</p>
+<pre class="source-code">
+{
+  “property1”: “{#Variable1#}”
+}</pre>
+<p>If the value is configured as <strong class="source-inline">Variable1: “validToken”</strong>, then the output <strong class="source-inline">json</strong> file will<a id="_idIndexMarker617"/> be as follows:</p>
+<pre class="source-code">
+{
+  “property1”: “validToken”
+}</pre>
+<p>With this in place, every package that is built using the definition will have a unique and ever-increasing patch version number. Whenever the major or minor version number needs to be <a id="_idIndexMarker618"/>updated, this can be done by updating the build number format.</p>
+<p>As an alternative to this approach, there are many tasks available from the extensions marketplace that can help with versioning, including more complex scenarios.</p>
+<p>This section discussed how to publish packages to a feed. With packages published to a feed, the next section will detail how these can be used wi<a id="_idTextAnchor500"/>th either Visual<a id="_idTextAnchor501"/> Studio or an Azure pipeline.</p>
+<h1 id="_idParaDest-173"><a id="_idTextAnchor502"/>Restoring packages</h1>
+<p>Uploading<a id="_idIndexMarker619"/> packages to an Azure Artifacts feed or repository makes them available for use in many different scenarios. Two common scenarios are using your own packages with Visual Studio or from Azure Pipelines. Both scenarios wil<a id="_idTextAnchor503"/>l be detai<a id="_idTextAnchor504"/>led in the following sections.</p>
+<h2 id="_idParaDest-174"><a id="_idTextAnchor505"/>Restoring packages from Visual Studio</h2>
+<p>Once you <a id="_idIndexMarker620"/>have your shared libraries available as NuGet packages in an Azure Artifacts feed, you can start using them from Visual Studio. Before you can do this, you will have to register your feed in your Visual Studio instance.</p>
+<p>To do this, you first have to grab the URL of your feed. In order to do this, refer to the <em class="italic">Publishing packages manually</em> section. Once you have your URL ready, go to manage NuGet files for your solution, as you would do normally. If you are not familiar with working with NuGet packages in Visual Studio, you can find this option in the Solution Explorer on the solution and project headers:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer101">
+<img alt="Figure 7.12 – Configuring the NuGet package sources " height="380" src="image/B18655_07_12.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.12 – Configu<a id="_idTextAnchor506"/>ring the NuGet package sources</p>
+<p>Once you <a id="_idIndexMarker621"/>are here, follow the following steps:</p>
+<ol>
+<li value="1">Click on the small gearbox in the top-right corner to open the dialog where you can configure which NuGet feeds to use.</li>
+<li>Add a new feed.</li>
+<li>Fill in both the name and the source of your own feed.</li>
+<li>After doing so, do not forget to click on <strong class="bold">Update</strong>; otherwise, your changes to the <strong class="bold">Name</strong> and <strong class="bold">Source</strong> fields will not be saved, and there will be no warning prompting you that you have unsaved changes.</li>
+<li>After you have made these changes, you can now select your feed as the package <a id="_idIndexMarker622"/>source at the top right of the screen.</li>
+</ol>
+<p>From here onward, it is possible to work with these packages from your own feed, just as you <a id="_idTextAnchor507"/><a id="_idTextAnchor508"/><a id="_idTextAnchor509"/>do with packages from <strong class="source-inline">NuGet.org</strong>.</p>
+<h2 id="_idParaDest-175"><a id="_idTextAnchor510"/>Restoring packages from a pipeline</h2>
+<p>Once you <a id="_idIndexMarker623"/>start using your packages in Visual Studio, it is very likely you will need them in Azure Pipelines as well. This is in order to perform CI/CD on the dependent application that uses your packages.</p>
+<p>Fortunately, this can be achieved with a small configuration change on your NuGet restore task, as shown in the following screenshot. The following screenshot relates to the NuGet restore task that can be used with both the Visual Studio build tasks and the .NET Core build tasks. Both contain the same interface and can be used in the same way:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer102">
+<img alt="Figure 7.13 – Restoring the NuGet package feed configuration " height="153" src="image/B18655_07_13.jpg" width="377"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.13 – Restoring the NuGet package feed configuration</p>
+<p>By default, only the radio button for using packages from NuGet is checked; therefore, to include packages from your own feeds as well, you need to select the correct feed in the drop-down list.</p>
+<p>If you ever find the need to include packages from more than one feed, you will be forced to create one aggregator feed and use the other feeds as upstream sources for it.</p>
+<p>This section covered how to consume component packa<a id="_idTextAnchor511"/>ges from Visual Studio. The next section will dive into working with Universal Packages t<a id="_idTextAnchor512"/>o share general binary packages.</p>
+<h1 id="_idParaDest-176"><a id="_idTextAnchor513"/>Working with Universal Packages</h1>
+<p>The <a id="_idIndexMarker624"/>previous sections have all focused on using Azure Artifacts as a means for redistributing application packages, such as libraries or other shared components. However, there is also another important use for Azure Artifacts<a id="_idTextAnchor514"/> – to maintain Universal Packages.</p>
+<p>A Universal Packages feed can be used to store different types of packages other than those widely used, such <a id="_idIndexMarker625"/>as <strong class="bold">NuGet</strong> for .NET, <strong class="bold">npm</strong> for<a id="_idIndexMarker626"/> Node.js, <strong class="bold">pypi</strong> for<a id="_idIndexMarker627"/> Python, and <strong class="bold">Maven</strong> for <a id="_idIndexMarker628"/>Java application development. </p>
+<p>You can use Universal Packages for storing and serving your build artifacts in sizes up to 4 TB. Packaging build artifacts into a Universal Package enables quick rollback to the desired version. Packages can be published and retrieved to and from Artifacts feeds using the Azure CLI or Azure Pipelines.</p>
+<p class="callout-heading">Tip</p>
+<p class="callout">Universal Packages are only available in Azure DevOps services.</p>
+<p>To use Universal Packages for staging your build artifacts in a heterogeneous architecture, there are four basic operations you should understand: uploading and downloading Universal Packages from an Azure pipeline and uploading and downloading Universal Packages using the Azure CLI. The latter one you can invoke from other tools.</p>
+<p>Universal Packages are a lightweight, easy-to-use, and efficient way to transfer files with dependency management. Universal Packages provide client- and server-side deduplication, which can substantially reduce the network traffic you’re using to move files around. These Universal Packages are managed as part of feeds in package management, so y<a id="_idTextAnchor515"/>ou can easily control access to them.</p>
+<h2 id="_idParaDest-177"><a id="_idTextAnchor516"/>Uploading and downloading Universal Packages from Azure Pipelines</h2>
+<p>Uploading<a id="_idIndexMarker629"/> build artifacts to a Universal Packages<a id="_idIndexMarker630"/> feed works<a id="_idIndexMarker631"/> in a <a id="_idIndexMarker632"/>similar way as uploading a regular build artifact. There are two changes you need to consider.</p>
+<p>Firstly, you have to use another task for performing the upload. Instead of using the <em class="italic">publish build artifact</em> or <em class="italic">publish pipeline artifact</em> tasks, you have to use the task named <strong class="bold">Universal Packages</strong>. When using this task, you can still give a name to the artifact and specify a location on the filesystem of the build agent to upload it from. Next, you can specify a target feed and a version to use. This version can be either automatically incremented whenever a new package is uploaded or specified using a build variable.</p>
+<p>Secondly, you<a id="_idIndexMarker633"/> have to consider the fact that<a id="_idIndexMarker634"/> the uploaded package is not associated directly with the build that produced it – as is standard with <a id="_idIndexMarker635"/>regular build or pipeline <a id="_idIndexMarker636"/>artifacts. This means that no matter where you are using the package that has been uploaded, you have to find anothe<a id="_idTextAnchor517"/>r way to find the correct version to download.</p>
+<p>To perform the actual download, you can use the <strong class="bold">Universal Packages</strong> task again, as shown in the following screenshot:</p>
+<div>
+<div class="IMG---Figure" id="_idContainer103">
+<img alt="Figure 7.14 – The Universal Packages download " height="405" src="image/B18655_07_14.jpg" width="571"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.14 – The Universal Packages download</p>
+<p>Refer to the <a id="_idIndexMarker637"/>screenshot and follow these <a id="_idIndexMarker638"/>steps:</p>
+<ol>
+<li value="1">After adding<a id="_idIndexMarker639"/> the task, you can toggle it between <strong class="bold">Upload</strong> and <strong class="bold">Download</strong>.</li>
+<li>You can<a id="_idIndexMarker640"/> also specify a directory that is uploaded as the artifact for the <strong class="bold">Upload</strong> command. Alternatively, for the <strong class="bold">Download</strong> command, you can specify where the artifacts should be downloaded. </li>
+<li>Furthermore, the name of the feed needs to be specified.</li>
+<li>Also, specify the name of the package.</li>
+<li>Specify the version to be either an upload or a download.</li>
+</ol>
+<p class="callout-heading">Important Note</p>
+<p class="callout">Note that you can also use feeds that are not part of your own organization by choosing to use another feed at <em class="italic">step 5</em>. If you do so, you will need <a id="_idTextAnchor518"/><a id="_idTextAnchor519"/><a id="_idTextAnchor520"/>to create a service endpoint to reach that feed.</p>
+<h2 id="_idParaDest-178"><a id="_idTextAnchor521"/>Uploading and downloading Universal Packages using the Azure CLI</h2>
+<p>When<a id="_idIndexMarker641"/> you want to work with Universal packages <a id="_idIndexMarker642"/>from a product other than<a id="_idIndexMarker643"/> Azure Pipelines, you will have to<a id="_idIndexMarker644"/> use the Azure CLI. To do this, perform the following steps:</p>
+<ol>
+<li value="1">The first thing you have to do to work with Universal Packages using the Azure CLI is to install the CLI itself. The link to the CLI can be found at the end of this chapter.</li>
+<li>Next, it is time to install the extension for Azure DevOps. This can be done using the following command:<p class="source-code"><strong class="bold">az extension add –name azure-devops</strong></p></li>
+<li>After making the extension for Azure DevOps available, you have to log in using the a ccount that you also use to work within the Azure DevOps UI. You can log in by giving the following command:<p class="source-code"><strong class="bold">az login</strong></p></li>
+<li>Once logged in, you can upload a file as an artifact using the following command:<p class="source-code"><strong class="bold">az artifacts universal publish</strong></p><p class="source-code"><strong class="bold">  --feed {yourFeedName}</strong></p><p class="source-code"><strong class="bold">  --name {yourPackageName}</strong></p><p class="source-code"><strong class="bold">  --version {yourVersion}</strong></p><p class="source-code"><strong class="bold">  --organization https://dev.azure.com/{yourOrganizationName}</strong></p><p class="source-code"><strong class="bold">  --path {sourceFileName}</strong></p></li>
+<li>To download <a id="_idIndexMarker645"/>a particular version of an artifact again, you can use the following:<p class="source-code"><strong class="bold">az artifacts universal download</strong></p><p class="source-code"><strong class="bold">  --feed {yourFeedName}</strong></p><p class="source-code"><strong class="bold">  --name {yourPackageName}</strong></p><p class="source-code"><strong class="bold">  --version {yourVersion}</strong></p><p class="source-code"><strong class="bold">  --organization https://dev.azure.com/{yourOrganizationName}</strong></p><p class="source-code"><strong class="bold">  --path {targetFileName}</strong></p></li>
+</ol>
+<p>Using<a id="_idIndexMarker646"/> the <a id="_idIndexMarker647"/>CLI and these commands, you can use Azure Artifacts as a means<a id="_idIndexMarker648"/> to share build artifacts between multiple tools. When working with a number of tools on the same project, Universal Packages are a great tool for moving binaries around.</p>
+<p>In the next section, other <a id="_idTextAnchor522"/><a id="_idTextAnchor523"/><a id="_idTextAnchor524"/>tools available for package management will be explored.</p>
+<h1 id="_idParaDest-179"><a id="_idTextAnchor525"/>Exploring other tools</h1>
+<p>There are many other tools available to do binary management. Four commonly used products are MyGet, Artifactory, GitHub Package<a id="_idTextAnchor526"/>s, and <strong class="bold">Azure Container Registry</strong> (<strong class="bold">ACR</strong>). The <a id="_idIndexMarker649"/>features they deliver do overlap, <a id="_idTextAnchor527"/>but they also have unique attributes at which they excel.</p>
+<h2 id="_idParaDest-180"><a id="_idTextAnchor528"/>MyGet</h2>
+<p>MyGet is <a id="_idIndexMarker650"/>an alternative location for hosting your NuGet packages and allows you to create both public and private feeds that are managed by you. It also supports defining upstream sources and delivers built-in dependency scanning to give you continuous feedback on the level of security of your dependencies.</p>
+<p>Since <a id="_idIndexMarker651"/>MyGet is an im<a id="_idTextAnchor529"/>plementation of the NuGet protocol, you can publish and use p<a id="_idTextAnchor530"/>ackages using the default NuGet tasks from Azure Pipelines.</p>
+<h2 id="_idParaDest-181"><a id="_idTextAnchor531"/>Artifactory</h2>
+<p>Artifactory, a<a id="_idIndexMarker652"/> product by JFrog, is another tool that you can use to host your package feeds. Artifactory was originally an on-premises product, but it is now also available<a id="_idIndexMarker653"/> as a <strong class="bold">Software as a Service</strong> (<strong class="bold">SaaS</strong>) offering. Just like Azure Artifacts, it supports multiple protocols to interact with package feeds. At the time of writing, Artifactory supports more repository protocols than Azure Artifacts. Examples <a id="_idIndexMarker654"/>of this include PHP Composer and <strong class="bold">Red Hat Package Manager</strong> (<strong class="bold">RPM</strong>).</p>
+<p>JFrog has<a id="_idTextAnchor532"/> published<a id="_idTextAnchor533"/> an Azure Pipelines extension to download and upload packages.</p>
+<h2 id="_idParaDest-182"><a id="_idTextAnchor534"/>Azure Container Registry</h2>
+<p>Another type <a id="_idIndexMarker655"/>of storage for reusable packages is ACR. This was designed specifically for container images and was developed with the layering of containers in mind. This allows it to receive only partial uploads when a new version of an image becomes available if not all of the layers have changed. This makes ACR a very good location for storing container images. Uploads are faster and ACR storage is cheaper than Azure Artifacts storage. This is a big benefit, since container images can be large.</p>
+<p>You can integrate with AC<a id="_idTextAnchor535"/>R from Azure Pipelines using the Docker integration extensions.</p>
+<h1 id="_idParaDest-183"><a id="_idTextAnchor536"/>Summary</h1>
+<p>In this chapter, you learned how to identify shared components in your solutions – pieces of code that appear not only in multiple locations but that are also logical units for reuse. You learned how to use Azure Artifacts feeds for hosting packages that contain these libraries. Furthermore, you learned how to use these hosted packages to build dependent solutions using both Visual Studio and Azure Pipelines. You also learned about using Universal Packages to share build artifacts between Azure Pipelines and other tools that you might use for CI/CD.</p>
+<p>With this knowledge, you will now be able to identify shared components in your solutions. Once you have identified such a component, you will also be able to isolate it in source control, build it, and publish it to an artifact feed. From here, you can distribute it to one or more consuming solutions. Finally, you are now also capable of using Artifacts feeds to share build artifacts between different CI/CD products.</p>
+<p>In the next chapter, you will learn about infrastructure and configuration as code. This is one of the fundamental DevOps practices that allows you to have your infrastructure definition i<a id="_idTextAnchor537"/>n source control and use that as part of your release pipeline.</p>
+<h1 id="_idParaDest-184"><a id="_idTextAnchor538"/>Questions</h1>
+<p>As we conclude, here is a list of questions for you to test your knowledge regarding this chapter’s material. You will find the answers in the <em class="italic">Assessments</em> section of the <em class="italic">Appendix</em>:</p>
+<ol>
+<li value="1">True or false: Any version of a package can be deployed to only one view within a feed.</li>
+<li>True or false: Pipeline artifacts can be used for sharing build outcomes (packages) from Azure DevOps to other products.</li>
+<li>True or false: Azure Artifacts feeds with Universal Packages can be used to share build outcomes (packages) from Azure DevOps to other products.</li>
+<li>True or false: <strong class="bold">Standardization</strong>, <strong class="bold">package formats and sources</strong>, and <strong class="bold">versioning</strong> are valid aspects of a dependency management strategy. </li>
+<li>Which of the following is needed to enable building a solution that uses packages from an Azure Artifacts feed in Visual Studio? (You can select more than one option.)<ol><li>Adding the full package URL to your project dependencies, instead of only the package name</li><li>Having at least <em class="italic">reader</em> access to the feed or one of the views in the feed</li><li>Having at least <em class="italic">consumer</em> access to the feed</li><li>Configuring the location of the feed as a package source for Visual Studio</li></ol></li>
+<li>What are some reasons for splitting a solution i<a id="_idTextAnchor539"/>nto multiple parts that are separated by Azure Artifacts feeds?</li>
+</ol>
+<h1 id="_idParaDest-185"><a id="_idTextAnchor540"/>Exercises </h1>
+<ul>
+<li>Let’s create a shared component to maintain model classes and extract it as a package. This package, as it has model classes, can be used with multiple projects, such as mobile, API, or website projects.</li>
+<li>Add a <strong class="bold">New Class Library</strong> project template in the same solution folder created in <a href="B18655_05.xhtml#_idTextAnchor177"><em class="italic">Chapter 5</em></a><em class="italic">, Moving to Continuous Integration</em>, and name it <strong class="source-inline">packtbookslibrary.Shared.Models.</strong></li>
+<li>Add a new class for the <strong class="source-inline">Book</strong> model as follows:<p class="source-code"><strong class="bold">namespace packtbookslibrary.Models</strong></p><p class="source-code"><strong class="bold">{</strong></p><p class="source-code"><strong class="bold">    public class Book</strong></p><p class="source-code"><strong class="bold">    {</strong></p><p class="source-code"><strong class="bold">        public string? Id { get; set; }</strong></p><p class="source-code"><strong class="bold">        public string? ISBNNumber { get; set; }</strong></p><p class="source-code"><strong class="bold">        public string? Title { get; set; }</strong></p><p class="source-code"><strong class="bold">        public string? Description { get; set; }</strong></p><p class="source-code"><strong class="bold">        public string? Author { get; set; }</strong></p><p class="source-code"><strong class="bold">        public string? AuthorName { get; set; }</strong></p><p class="source-code"><strong class="bold">    }</strong></p><p class="source-code"><strong class="bold">}</strong></p></li>
+<li>In Azure Artifacts, create a <strong class="source-inline">PacktBooksLibraryFeed</strong> feed.</li>
+<li>Under <strong class="bold">Feed Permission,</strong> provide a contributor to the <strong class="source-inline">[PacktBookLibrary]</strong> group named <strong class="bold">Build Administrators</strong>.</li>
+<li>Alternatively, set the <strong class="bold">Project Collection Build Service</strong> identity to be a contributor on your feed:<div class="IMG---Figure" id="_idContainer104"><img alt="Figure 7.15 – The PacktBooksLibraryFeed settings " height="368" src="image/B18655_07_15.jpg" width="675"/></div></li>
+</ul>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.15 – The PacktBooksLibraryFeed settings</p>
+<ul>
+<li>Now, create a <strong class="source-inline">packtbookslibrary-Shared-Models-ci-pipeline.yaml</strong> pipeline to create a NuGet package for our <strong class="source-inline">packtbookslibrary.Shared.Models</strong> class library project.</li>
+<li>Add the YAML code from the file present in the following directory in <strong class="source-inline">packtbookslibrary-Shared-Models-ci-pipeline.yaml</strong>: <a href="https://github.com/PacktPublishing/Designing-and-Implementing-Microsoft-DevOps-Solutions-AZ-400-Exam-Guide">https://github.com/PacktPublishing/Designing-and-Implementing-Microsoft-DevOps-Solutions-AZ-400-Exam-Guide</a></li>
+</ul>
+<p> To push a package, run <strong class="source-inline">packtbookslibrary-Shared-Models-ci-pipeline.yaml</strong>.</p>
+<ul>
+<li>Once the package is successfully executed, you will see a new entry in the list for <strong class="source-inline">packtbookslibrary.Shared.Models</strong>:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer105">
+<img alt="Figure 7.16 – The shared model package published in Azure Artifacts " height="301" src="image/B18655_07_16.jpg" width="1067"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.16 – The shared model package published in Azure Artifacts</p>
+<ul>
+<li>Now, add this NuGet feed to your project by navigating to  <strong class="bold">Manage NuGet packages</strong> and <strong class="bold">Settings</strong>:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer106">
+<img alt="Figure 7.17 – Managing the NuGet package sources for packtbooklibrary-api " height="617" src="image/B18655_07_17.jpg" width="1583"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.17 – Managing the NuGet package sources for packtbooklibrary-api</p>
+<ul>
+<li>Select the package and install it in your project:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer107">
+<img alt="Figure 7.18 – Installing the package in the packtbooklibrary-api project " height="498" src="image/B18655_07_18.jpg" width="1497"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.18 – Installing the package in the packtbooklibrary-api project</p>
+<ul>
+<li>You can use this package in <strong class="source-inline">BookController.cs</strong> as follows:</li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer108">
+<img alt="Figure 7.19 – The shared model package in packtbooklibrary-api " height="711" src="image/B18655_07_19.jpg" width="1499"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.19 – The shared model package in packtbooklibrary-api</p>
+<h1 id="_idParaDest-186"><a id="_idTextAnchor541"/>Further reading</h1>
+<ul>
+<li>Exercises for practicing with Azure Artifacts can be found at <a href="https://docs.microsoft.com/en-us/learn/modules/manage-build-dependencies/">https://docs.microsoft.com/en-us/learn/modules/manage-build-dependencies/</a>.</li>
+<li>You can find and download <strong class="source-inline">NuGet.exe</strong> from <a href="https://www.nuget.org/downloads.%0D">https://www.nuget.org/downloads.</a></li>
+<li>More information on creating a package can be found at <a href="https://docs.microsoft.com/en-us/nuget/create-packages/creating-a-package">https://docs.microsoft.com/en-us/nuget/create-packages/creating-a-package</a>.</li>
+<li>Information on downloading and installing the Azure CLI can be found at <a href="https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest">https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest</a>.</li>
+<li>More information about JFrog Artifactory is available at <a href="https://jfrog.com/artifactory/">https://jfrog.com/artifactory/</a>.</li>
+<li>The extension for Azure Pipelines can be found at <a href="https://marketplace.visualstudio.com/items?itemName=JFrog.jfrog-artifactory-vsts-extension">https://marketplace.visualstudio.com/items?itemName=JFrog.jfrog-artifactory-vsts-extension</a>.</li>
+<li>More information about ACR is available at <a href="https://azure.microsoft.com/en-in/services/container-registry/">https://azure.microsoft.com/en-in/services/container-registry/</a>.</li>
+<li>You can find the Docker extensions for Azure Pipelines at <a href="https://marketplace.visualstudio.com/items?itemName=ms-vscs-rm.docker">https://marketplace.visualstudio.com/items?itemName=ms-vscs-rm.docker</a>.</li>
+<li>More information on semantic versioning can be found at <a href="https://semver.org/">https://semver.org/</a>.</li>
+<li>More information on <strong class="source-inline">tfs-cli</strong> is available at <a href="https://github.com/microsoft/tfs-cli">https://github.com/microsoft/tfs-cli</a>.</li>
+<li>More information on Universal Packages can be found at <a href="https://docs.microsoft.com/en-us/azure/devops/pipelines/artifacts/universal-packages?toc=%2Fazure%2Fdevops%2Fartifacts%2Ftoc.json&amp;bc=%2Fazure%2Fdevops%2Fartifacts%2Fbreadcrumb%2Ftoc.json&amp;view=azure-devops&amp;tabs=yaml">https://docs.microsoft.com/en-us/azure/devops/pipelines/artifacts/universal-packages?toc=%2Fazure%2Fdevops%2Fartifacts%2Ftoc.json&amp;bc=%2Fazure%2Fdevops%2Fartifacts%2Fbreadcrumb%2Ftoc.json&amp;view=azure-devops&amp;tabs=yaml</a>.</li>
+</ul>
+</div>
+<div>
+<div id="_idContainer110">
+</div>
+</div>
+</div></body></html>

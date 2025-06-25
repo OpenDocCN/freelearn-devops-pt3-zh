@@ -1,0 +1,1064 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer012">
+			<p><a id="_idTextAnchor165"/></p>
+			<h1 id="_idParaDest-70"><a id="_idTextAnchor166"/>Chapter 2: Go Language Essentials</h1>
+			<p>In the previous chapter, we covered the basics of the Go language. While some of the syntax is new in relation to other languages, most of the concepts in that chapter are familiar to programmers coming from other languages.</p>
+			<p>This isn't to say that the way Go uses those concepts doesn't lead to code that is easier to read and reason about—it's just that most of it doesn't stand out from other languages.</p>
+			<p>In this chapter, we will be discussing the essential parts of Go that make it stand out from other languages, from Go's more pragmatic error handling to its core concurrency concept, the goroutine, and the newest feature of the Go language, generics.</p>
+			<p>Here are the main topics that will be covered: </p>
+			<ul>
+				<li>Handling errors in Go</li>
+				<li>Utilizing Go constants </li>
+				<li>Using <strong class="source-inline">defer</strong>, <strong class="source-inline">panic</strong>, and <strong class="source-inline">recover</strong></li>
+				<li>Utilizing goroutines for concurrency </li>
+				<li>Understanding Go's <strong class="source-inline">Context</strong> type</li>
+				<li>Utilizing Go's testing framework</li>
+				<li>Generics—the new kid on the block</li>
+			</ul>
+			<p>Now, let's get the essentials down and get you on your way!</p>
+			<h1 id="_idParaDest-71"><a id="_idTextAnchor167"/><a id="_idTextAnchor168"/><a id="_idTextAnchor169"/>Handling errors in Go</h1>
+			<p>Many of you will come from languages<a id="_idIndexMarker165"/> that handle <em class="italic">errors</em> using <em class="italic">exceptions</em>. Go took a different approach, treating errors like our other data types. This prevents common problems that exception-based models have, such as exceptions escaping up the stack.</p>
+			<p>Go has a built-in error type called <strong class="source-inline">error</strong>. <strong class="source-inline">error</strong> is based on the <strong class="source-inline">interface</strong> type, with the following<a id="_idIndexMarker166"/> definition: </p>
+			<p class="source-code">type error interface {</p>
+			<p class="source-code">     Error() string</p>
+			<p class="source-code">}</p>
+			<p>Now, let's look at how we can create an error<a id="_idTextAnchor170"/>.</p>
+			<h2 id="_idParaDest-72"><a id="_idTextAnchor171"/>Creating an error</h2>
+			<p>The most common way to create<a id="_idIndexMarker167"/> errors is using either the <strong class="source-inline">errors</strong> package's <strong class="source-inline">New()</strong> method or the <strong class="source-inline">fmt</strong> package's <strong class="source-inline">Errorf()</strong> method. Use <strong class="source-inline">errors.New()</strong> when you don't need to do variable substitution and <strong class="source-inline">fmt.Errorf()</strong> when you do. You can see both methods in the following code snippet:</p>
+			<p class="source-code">err := errors.New("this is an error")</p>
+			<p class="source-code">err := fmt.Errorf("user %s had an error: %s", user, msg)</p>
+			<p>In both the preceding examples, <strong class="source-inline">err</strong> will be of type <strong class="source-inline">erro<a id="_idTextAnchor172"/>r</strong>.</p>
+			<h2 id="_idParaDest-73"><a id="_idTextAnchor173"/>Using an error</h2>
+			<p>The most common<a id="_idIndexMarker168"/> way to use an error is as the last return value on a function or method call. The caller can then test if the returned error is <strong class="source-inline">nil</strong>, indicating there is no error.</p>
+			<p>Let's say we want a function that divides a number, and we want to detect if the divisor is zero. In that case, we want to return an error because a computer cannot divide a number by zero. This is how it might look:</p>
+			<p class="source-code">func Divide(num int, div int) (int, error) {</p>
+			<p class="source-code">	if div == 0 {</p>
+			<p class="source-code">		// We return the zero value of int (0) and an error.</p>
+			<p class="source-code">		return 0, errors.New("cannot divide by 0")</p>
+			<p class="source-code">	}</p>
+			<p class="source-code">	return num / div, nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">	divideBy := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}</p>
+			<p class="source-code">	for _, div := range divideBy {</p>
+			<p class="source-code">		res, err := Divide(100, div)</p>
+			<p class="source-code">		if err != nil {</p>
+			<p class="source-code">			fmt.Printf("100 by %d error: %s\n", div, err)</p>
+			<p class="source-code">			continue</p>
+			<p class="source-code">		}</p>
+			<p class="source-code">		fmt.Printf("100 divided by %d = %d\n", div, res)</p>
+			<p class="source-code">	}</p>
+			<p class="source-code">}</p>
+			<p>The preceding example uses Go's multiple<a id="_idIndexMarker169"/> return ability to return two values: <strong class="bold">the result</strong> and <strong class="bold">the error</strong>. </p>
+			<p>In our <strong class="source-inline">main</strong> package, we can now divide our numbers and check the returned <strong class="source-inline">error</strong> type to see if it is not <strong class="source-inline">nil</strong>. If it is, we know we had an error and should ignore the return value. If not, we know the operation completed successfu<a id="_idTextAnchor174"/>lly.</p>
+			<h2 id="_idParaDest-74"><a id="_idTextAnchor175"/>Creating named errors</h2>
+			<p>Sometimes, you want to create errors<a id="_idIndexMarker170"/> that indicate a specific type of error—say, a network error<a id="_idIndexMarker171"/> versus an incorrect argument. This can be done by creating specific types of errors using the <strong class="source-inline">var</strong> keyword and <strong class="source-inline">errors.New()</strong> or <strong class="source-inline">fmt.Errorf()</strong>, as illustrated in the following code snippet:</p>
+			<p class="source-code">var (</p>
+			<p class="source-code">     ErrNetwork = errors.New("network error")</p>
+			<p class="source-code">     ErrInput = errors.New("input error")</p>
+			<p class="source-code">)</p>
+			<p>We can use the <strong class="source-inline">errors</strong> package's <strong class="source-inline">Is()</strong> function to detect the error type and retry on <strong class="source-inline">ErrNetwork</strong> and not on other errors, as follows:</p>
+			<p class="source-code">// The loop is for retrying if we have an ErrNetwork.</p>
+			<p class="source-code">for {</p>
+			<p class="source-code">     err := someFunc("data")</p>
+			<p class="source-code">     if err == nil {</p>
+			<p class="source-code">          // Success so exit the loop</p>
+			<p class="source-code">          break</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     if errors.Is(err, ErrNetwork) {</p>
+			<p class="source-code">          log.Println("recoverable network error")</p>
+			<p class="source-code">          time.Sleep(1 * time.Second)</p>
+			<p class="source-code">          continue</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     log.Println("unrecoverable error")</p>
+			<p class="source-code">     break // exit loop, as retrying is useless</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">someFunc()</strong> is not defined here. You can view a full example here: </p>
+			<p><a href="https://play.golang.org/p/iPwwwmIBcAG">https://play.golang.org/p/iPwwwm<span id="_idTextAnchor176"/>IBcAG</a></p>
+			<h2 id="_idParaDest-75"><a id="_idTextAnchor177"/>Custom errors</h2>
+			<p>Because the <strong class="source-inline">error</strong> type is simply<a id="_idIndexMarker172"/> an interface, you can implement your own<a id="_idIndexMarker173"/> custom errors. Here is a more in-depth network error that we could use:</p>
+			<p class="source-code">const (</p>
+			<p class="source-code">     UnknownCode = 0</p>
+			<p class="source-code">     UnreachableCode = 1</p>
+			<p class="source-code">     AuthFailureCode = 2</p>
+			<p class="source-code">)</p>
+			<p class="source-code">type ErrNetwork struct {</p>
+			<p class="source-code">     Code int</p>
+			<p class="source-code">     Msg string</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (e ErrNetwork) Error() string { </p>
+			<p class="source-code">    return fmt.Sprintf("network error(%d): %s", e.Code, e.msg)</p>
+			<p class="source-code">} </p>
+			<p>We can now return a custom network error for something such as an authentication failure, as follows:</p>
+			<p class="source-code">return ErrNetwork{</p>
+			<p class="source-code">     Code: AuthFailureCode, </p>
+			<p class="source-code">     Msg: "user unrecognized",</p>
+			<p class="source-code">}</p>
+			<p>When we receive an error from a call, we can detect<a id="_idIndexMarker174"/> if it was a network error<a id="_idIndexMarker175"/> using the <strong class="source-inline">errors.As()</strong> function, as follows:</p>
+			<p class="source-code">var netErr ErrNetwork</p>
+			<p class="source-code">if errors.As(err, &amp;netErr) {</p>
+			<p class="source-code">     if netErr.Code == AuthFailureCode {</p>
+			<p class="source-code">          log.Println("unrecoverable auth failure: ", err)</p>
+			<p class="source-code">          break</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     log.Println("recoverable error: %s", netErr)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">log.Println("unrecoverable error: %s", err)</p>
+			<p class="source-code">break</p>
+			<p>You can also view this here: <a href="https://play.golang.org/p/gZ5AK8-o4zA">https://play.golang.org/p/gZ5AK8-o4zA</a>.</p>
+			<p>The preceding code detects if the network error is unrecoverable, such as an authentication failure. Any other network error is recoverable. If it is not a network error, it is unre<a id="_idTextAnchor178"/>coverable.</p>
+			<h2 id="_idParaDest-76"><a id="_idTextAnchor179"/>Wrapping errors</h2>
+			<p>Many times, there is an error <a id="_idIndexMarker176"/>chain where we want to <strong class="bold">wrap an error</strong> received by a lower-level package with information from an upper layer package. For example, you might be making a <strong class="bold">REpresentational State Transfer</strong> (<strong class="bold">REST</strong>) call that sends some data and you receive<a id="_idIndexMarker177"/> an error from the <strong class="source-inline">net/http</strong> package. In that case, you might want to put information about which REST call you were making with the underlying error.</p>
+			<p>We can <strong class="bold">wrap errors</strong> so that not only can we include more specific information, but we can also keep the underlying error for extraction later.</p>
+			<p>We do this using <strong class="source-inline">fmt.Errorf()</strong> with <strong class="source-inline">%w</strong> for variable substitution of our error type. Let's say we want to call <strong class="source-inline">someFunc()</strong> from another function called <strong class="source-inline">restCall()</strong> and add more information, as illustrated in the following code snippet:</p>
+			<p class="source-code">func restCall(data) error {</p>
+			<p class="source-code">     if err := someFunc(data); err != nil {</p>
+			<p class="source-code">          return fmt.Errorf("restCall(%s) had an error: %w", data, err)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>Someone using <strong class="source-inline">restCall()</strong> can detect and extract an <strong class="source-inline">ErrNetwork</strong> using <strong class="source-inline">errors.As()</strong>, just as we did before. The following code<a id="_idIndexMarker178"/> snippet provides an illustration of this:</p>
+			<p class="source-code">for {</p>
+			<p class="source-code">     if err := restCall(data); err != nil {</p>
+			<p class="source-code">          var netErr ErrNetwork</p>
+			<p class="source-code">          if errors.As(err, &amp;netErr) {</p>
+			<p class="source-code">               log.Println("network error: ", err)</p>
+			<p class="source-code">               time.Sleep(1 * time.Second)</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          log.Println("unrecoverable: ", err)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>The preceding code extracts the <strong class="source-inline">ErrNetwork</strong> from the wrapped <strong class="source-inline">error</strong> it was contained in. This will work no matter how many layers of wrapping the error was contained in.</p>
+			<p>In this section, you have learned how Go handles errors and about Go's <strong class="source-inline">error</strong> type and how to create basic<a id="_idIndexMarker179"/> errors, how to create custom errors, how to detect specific error types, and how to wrap/unwrap errors. As good <strong class="source-inline">error</strong> handling is the basis of reliable software, this knowledge will be useful in every Go prog<a id="_idTextAnchor180"/>ram you write.</p>
+			<h1 id="_idParaDest-77"><a id="_idTextAnchor181"/>Utilizing Go constants </h1>
+			<p><strong class="bold">Constants</strong> provide values that are set<a id="_idIndexMarker180"/> at compile time and cannot change. This is in contrast to variables, which store values that can be set at runtime and can be altered. This provides types that cannot accidentally be changed by a user and are allocated for use in the software on startup, providing some speed advantages and safety over variable declarations. </p>
+			<p>Constants can be used to store the following:</p>
+			<ul>
+				<li>Booleans</li>
+				<li>Runes</li>
+				<li>Integer types (<strong class="source-inline">int</strong>, <strong class="source-inline">int8</strong>, <strong class="source-inline">uint16</strong>, and so on)</li>
+				<li>Floating-point types (<strong class="source-inline">float32</strong>/<strong class="source-inline">float64</strong>)</li>
+				<li>Complex data types</li>
+				<li>Strings</li>
+			</ul>
+			<p>In this section, we will discuss how to <strong class="bold">declare constants</strong> and common us<a id="_idTextAnchor182"/>e in your code.</p>
+			<h2 id="_idParaDest-78"><a id="_idTextAnchor183"/>Declaring a constant</h2>
+			<p>Constants are declared using the <strong class="source-inline">const</strong> keyword, as illustrated<a id="_idIndexMarker181"/> in the following code snippet:</p>
+			<p class="source-code">const str = "hello world"</p>
+			<p class="source-code">const num = 3</p>
+			<p class="source-code">const num64 int64 = 3</p>
+			<p>Constants are different from variable types in that they come in two flavors, as follows:</p>
+			<ul>
+				<li><strong class="bold">Untyped constants</strong></li>
+				<li><strong class="bold">Typed constants</strong></li>
+			</ul>
+			<p>This is going to seem a little weird <a id="_idIndexMarker182"/>because constants store a typed value. But if you don't declare the exact type (as in the third example, <strong class="source-inline">num64</strong>, where we declared it to be an <strong class="source-inline">int64</strong> type), the constant can be used for any type that has the same base type or family<a id="_idIndexMarker183"/> of types (such as integers). This is called an <strong class="bold">untyped constant</strong>.</p>
+			<p>For example, <strong class="source-inline">num</strong> can be used to set the value of an <strong class="source-inline">int8</strong>, <strong class="source-inline">int16</strong>, <strong class="source-inline">int32</strong>, <strong class="source-inline">int64</strong>, <strong class="source-inline">uint8</strong>, <strong class="source-inline">uint16</strong>, <strong class="source-inline">uint32</strong>, or <strong class="source-inline">uint64</strong> type. So, the following will work:</p>
+			<p class="source-code">func add(x, y int8) int8 {</p>
+			<p class="source-code">     return x + y</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     fmt.Println(add(num, num))  // Print: 6</p>
+			<p class="source-code">}</p>
+			<p>While we didn't discuss it earlier, that is what happens when we wrote code such as <strong class="source-inline">add (3,</strong> <strong class="source-inline">3)</strong>—<strong class="source-inline">3</strong> is actually an untyped constant. If the signature of <strong class="source-inline">add</strong> changed to <strong class="source-inline">add(x,</strong> <strong class="source-inline">y</strong> <strong class="source-inline">int64)</strong>, <strong class="source-inline">add(3,</strong> <strong class="source-inline">3)</strong> works because of this property of an untyped constant.</p>
+			<p>This extends to any type based on that basic type. Have a look at the following example:</p>
+			<p class="source-code">type specialStr string</p>
+			<p class="source-code">func printSpecial(str specialStr)</p>
+			<p class="source-code">     fmt.Println(string(str))</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() { </p>
+			<p class="source-code">    const constHelloWorld = "hello world" </p>
+			<p class="source-code">    var varHelloWorld = "hello world" </p>
+			<p class="source-code">    printSpecial(varHelloWorld) // Won't compile </p>
+			<p class="source-code">    printSpecial(constHelloWorld) // Will compile </p>
+			<p class="source-code">    printSpecial("hello world") // Will compile </p>
+			<p class="source-code">} </p>
+			<p>From the preceding code, you will receive the following output:</p>
+			<p class="source-code">./prog.go:18:14: cannot use varHelloWorld (type string) as type specialStr in argument to printSpecial</p>
+			<p>This is because <strong class="source-inline">varHelloWorld</strong> is a <strong class="source-inline">string</strong> type and not a <strong class="source-inline">specialStr</strong> type. But the unique properties of an untyped constant <a id="_idIndexMarker184"/>allow for <strong class="source-inline">constHelloWorld</strong> to satisfy any ty<a id="_idTextAnchor184"/>pe based on <strong class="source-inline">string</strong>.</p>
+			<h2 id="_idParaDest-79"><a id="_idTextAnchor185"/>Enumeration via constants</h2>
+			<p>Many languages provide an <strong class="bold">enumerated type</strong> that gives a readable name to some value that cannot<a id="_idIndexMarker185"/> be changed. This is most commonly done for integer constants, though<a id="_idIndexMarker186"/> you can do this for any type of constant.</p>
+			<p>For integer constants specifically, there is a special <strong class="source-inline">iota</strong> keyword that can be used to generate constants. It increments the value by <strong class="source-inline">1</strong> for each constant defined in the grouping, as illustrated in the following code snippet:</p>
+			<p class="source-code">const (</p>
+			<p class="source-code">     a = iota // 0</p>
+			<p class="source-code">     b = iota // 1</p>
+			<p class="source-code">     d = iota // 2</p>
+			<p class="source-code">)</p>
+			<p>This can also be shortened to have only the first value use <strong class="source-inline">iota</strong>, and the following values would also automatically be set. The value can also be set to a formula in which <strong class="source-inline">iota</strong> uses a multiplier or other mathematical operation. Here is an example of both those concepts: </p>
+			<p class="source-code">const (</p>
+			<p class="source-code">     a = iota *2 // 0</p>
+			<p class="source-code">     b // 2</p>
+			<p class="source-code">     d // 4</p>
+			<p class="source-code">)</p>
+			<p>Enumeration with <strong class="source-inline">iota</strong> is great, as long as the values will never be stored on disk or sent to another process<a id="_idIndexMarker187"/> that is local or remote. The value of constants is controlled by the order of the constants<a id="_idIndexMarker188"/> in the code. Here, look what happens if we insert <strong class="source-inline">c</strong> into our first example:</p>
+			<p class="source-code">const (</p>
+			<p class="source-code">     a = iota // 0</p>
+			<p class="source-code">     b        // 1</p>
+			<p class="source-code">     c        // 2</p>
+			<p class="source-code">     d        // 3</p>
+			<p class="source-code">)</p>
+			<p>Notice that <strong class="source-inline">d</strong> now has the value of <strong class="source-inline">3</strong>?  This would cause serious errors if the code needed to read back values that were written to disk and needed to be read back in.  In cases where these values could be used by another process, it is best practice to statically define enumeration values.</p>
+			<p>Enumerators in Go can be hard to interpret when printed. Maybe you are using them for error codes and would prefer to have the constant's name printed<a id="_idIndexMarker189"/> when printing the <em class="italic">value</em> to logs or <strong class="bold">standard output</strong> (<strong class="bold">stdout</strong>). Let's have a look at how <a id="_idTextAnchor186"/>we can get better output.</p>
+			<h2 id="_idParaDest-80"><a id="_idTextAnchor187"/>Printing enumerators</h2>
+			<p>Enumerators are much easier to use when displaying<a id="_idIndexMarker190"/> a value as the enumerated name instead of the value. This can be done easily when the constant is a string such as <strong class="source-inline">const toyota = "toyota"</strong>, but for other more efficient enumerator types such as integers, printing the value simply outputs a number.</p>
+			<p>Go has the concept of code generation built into the tooling. This is a more far-reaching subject than we will cover here (read about it here: <a href="https://blog.golang.org/generate">https://blog.golang.org/generate</a>). </p>
+			<p>However, we will borrow from the linked document to show how this can be used to set up an enumerator to a string value for printing<a id="_idIndexMarker191"/> automatically, as follows:</p>
+			<p class="source-code">//go:generate stringer -type=Pill</p>
+			<p class="source-code">type Pill int</p>
+			<p class="source-code">const (</p>
+			<p class="source-code">    Placebo Pill = iota</p>
+			<p class="source-code">    Aspirin</p>
+			<p class="source-code">    Ibuprofen</p>
+			<p class="source-code">    Paracetamol</p>
+			<p class="source-code">    Acetaminophen = Paracetamol</p>
+			<p class="source-code">)</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">This requires the Go <strong class="source-inline">stringer</strong> binary to be installed.</p>
+			<p><strong class="source-inline">//go:generate stringer -type=Pill</strong> is a special syntax that indicates that when the <strong class="source-inline">go generate</strong> command is run for this package, it should call the <strong class="source-inline">stringer</strong> tool and pass it the <strong class="source-inline">-type=Pill</strong> flag, which indicates to read our package code and generate a method that reverses the constants based on type <strong class="source-inline">Pill</strong> to a string. This will be placed in a file called <strong class="source-inline">pill_string.go</strong>.</p>
+			<p>Before running the command, <strong class="source-inline">fmt.Println(Aspirin)</strong> would print <strong class="source-inline">1</strong>; after, it would print <strong class="source-inline">Aspirin</strong>.</p>
+			<p>In this section, you have learned how constants can provide non-changeable values for use in your code, how you can create enumerators with them, and finally, how you can generate textual printed output for enumerators for better logging. In the next section, we will explore how to use <strong class="source-inline">defer</strong>, <a id="_idTextAnchor188"/><strong class="source-inline">panic</strong>, and <strong class="source-inline">recover</strong> methods.</p>
+			<h1 id="_idParaDest-81"><a id="_idTextAnchor189"/>Using defer, panic, and recover</h1>
+			<p>Modern programming<a id="_idIndexMarker192"/> languages have a need to provide some method of running routines when<a id="_idIndexMarker193"/> a section of code ends. This is useful when you need to guarantee<a id="_idIndexMarker194"/> a file closure or unlock a mutex. In addition, there are times when a program needs to stop execution and exit. This can be caused by loss of access to a critical resource, a security issue, or another need. </p>
+			<p>We also require the ability to recover from a premature program exit caused by a package that contains code we do not control. This section will cover each of the abilities i<a id="_idTextAnchor190"/>n Go and their interrelations.</p>
+			<h2 id="_idParaDest-82"><a id="_idTextAnchor191"/>defer</h2>
+			<p>The <strong class="source-inline">defer</strong> keyword allows you to execute a function<a id="_idIndexMarker195"/> when the function that contains <strong class="source-inline">defer</strong> exits. If there are multiple <strong class="source-inline">defer</strong> statements, they execute last to first. </p>
+			<p>This can be useful for debugging, unlocking mutexes, decrementing counters, and so on. Here's an example:</p>
+			<p class="source-code">func printStuff() (value string) {</p>
+			<p class="source-code">     defer fmt.Println("exiting")</p>
+			<p class="source-code">     defer func() {</p>
+			<p class="source-code">          value = "we returned this"</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     fmt.Println("I am printing stuff")</p>
+			<p class="source-code">     return ""</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     v := printStuff()</p>
+			<p class="source-code">     fmt.Println(v)</p>
+			<p class="source-code">}</p>
+			<p>This outputs the following:</p>
+			<p class="source-code">I am printing stuff</p>
+			<p class="source-code">exiting</p>
+			<p class="source-code">we returned this</p>
+			<p>You can also see it at the following link:</p>
+			<p><a href="https://play.golang.org/p/DaoP9M79E_J">https://play.golang.org/p/DaoP9M79E_J</a></p>
+			<p>If you run this example, you will notice<a id="_idIndexMarker196"/> that our <strong class="source-inline">defer</strong> statements execute after the rest of <strong class="source-inline">printStuff()</strong> has run. We use a deferred anonymous function to set our named return <strong class="source-inline">value</strong> before exiting. You will see <strong class="source-inline">defer</strong> use<a id="_idTextAnchor192"/>d frequently in future chapters.</p>
+			<h2 id="_idParaDest-83"><a id="_idTextAnchor193"/>panic</h2>
+			<p>The <strong class="source-inline">panic</strong> keyword is used to cause<a id="_idIndexMarker197"/> the execution of the program to stop and exit while displaying some text and a stack trace.</p>
+			<p>Using <strong class="source-inline">panic</strong> is as simple as calling the following:</p>
+			<p class="source-code">panic("ran into some bug")</p>
+			<p><strong class="source-inline">panic</strong> is intended to be used when a program cannot or should not continue to execute. This might be because there is a security issue, or on startup, you cannot connect to a required data source.</p>
+			<p>In most circumstances, a user should return an <strong class="source-inline">error</strong> and not <strong class="source-inline">panic</strong>.</p>
+			<p>As a general rule, on<a id="_idTextAnchor194"/>ly use <strong class="source-inline">panic</strong> in the <strong class="source-inline">main</strong> package.</p>
+			<h2 id="_idParaDest-84"><a id="_idTextAnchor195"/>recover</h2>
+			<p>There are rare circumstances<a id="_idIndexMarker198"/> in which a program might panic due to an unforeseen bug or a package that unnecessarily panics. After more than 10 years of programming in Go, I can count on my fingers the number of times I have needed to recover from a panic.</p>
+			<p><strong class="bold">Remote Procedure Call</strong> (<strong class="bold">RPC</strong>) frameworks such as <strong class="bold">Google RPC</strong> (<strong class="bold">gRPC</strong>) (<a href="https://grpc.io/docs/what-is-grpc/">https://grpc.io/docs/what-is-grpc/</a>) use <strong class="source-inline">recover</strong> to prevent<a id="_idIndexMarker199"/> a server<a id="_idIndexMarker200"/> crash when an RPC call panics<a id="_idIndexMarker201"/> and then signals the caller of the issue.</p>
+			<p>If, like the RPC framework, you need to catch<a id="_idIndexMarker202"/> a panic that is occurring or protect against potential panics, you can use the <strong class="source-inline">recover</strong> keyword with the <strong class="source-inline">defer</strong> keyword. Here is an example of this:</p>
+			<p class="source-code">func someFunc() {</p>
+			<p class="source-code">     defer func() {</p>
+			<p class="source-code">        if r := recover(); r != nil {</p>
+			<p class="source-code">            log.Printf("called recover, panic was: %q", r)</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">    }()</p>
+			<p class="source-code">    panic("oh no!!!")</p>
+			<p class="source-code">}</p>
+			<p>You can also see this here: <a href="https://play.golang.org/p/J8RfjOe1dMh">https://play.golang.org/p/J8RfjOe1dMh</a>.</p>
+			<p>This has similarities to other languages' exception types, but you should not confuse the two. Go does not intend for you to use <strong class="source-inline">panic</strong>/<strong class="source-inline">defer</strong>/<strong class="source-inline">recover</strong> in that way—it will simply cause you problems in the future.</p>
+			<p>Now that you have completed this section, you have learned how to defer the execution of a function, cause a panic within the <strong class="source-inline">main</strong> package, how to recover from a misbehaving package, and when these should be used. Let's hop onto the next topic relevant to this chapter: <em class="italic">goroutines</em>. </p>
+			<h1 id="_idParaDest-85"><a id="_idTextAnchor196"/>Utilizing goroutines for concurrency</h1>
+			<p>In the modern era of computers, <strong class="bold">concurrency</strong> is the name of the game. In the years before 2005 or so, computers<a id="_idIndexMarker203"/> used Moore's law to double<a id="_idIndexMarker204"/> the speed of a single <strong class="bold">central processing unit</strong> (<strong class="bold">CPU</strong>) every 18 months. Multiple CPU consumer systems were rare and there was one core per CPU in the system. Software that utilized multiple cores efficiently was rare.</p>
+			<p>Over time, it became more expensive<a id="_idIndexMarker205"/> to increase single-core speed and multi-core CPUs<a id="_idIndexMarker206"/> have become the norm. Each core on a CPU supports a number of hardware threads and <strong class="bold">operating systems</strong> (<strong class="bold">OSs</strong>) provide OS threads that are mapped to hardware threads that are then shared between processes. </p>
+			<p>Languages can utilize these OS threads to run functions in their language <em class="italic">concurrently</em> instead of <em class="italic">serially</em> as we have been doing in all of our code so far.</p>
+			<p>Starting an OS thread is an expensive operation and to fully utilize the thread's time requires paying a lot of attention to what you are doing. </p>
+			<p>Go takes this to another level than most languages with <strong class="bold">goroutines</strong>. Go has built a runtime scheduler that maps these goroutines onto OS threads and switches which routine is running on which thread to optimize CPU utilization.</p>
+			<p>This produces concurrency that is easy and cheap to use, requi<a id="_idTextAnchor197"/>ring less mental burden on the developer. </p>
+			<h2 id="_idParaDest-86"><a id="_idTextAnchor198"/>Starting a goroutine</h2>
+			<p>Go gets its name from the <strong class="source-inline">go</strong> keyword<a id="_idIndexMarker207"/> that is used to spawn a goroutine. By applying <strong class="source-inline">go</strong> before a function call, you can cause that function to execute concurrently with the rest of the code. Here is an example that causes 10 goroutines to be created, with each printing out a number:</p>
+			<p class="source-code">for i := 0; i &lt; 10; i++ {     </p>
+			<p class="source-code">     go fmt.Println(x) // This happens concurrently</p>
+			<p class="source-code">}</p>
+			<p class="source-code">fmt.Println("hello")</p>
+			<p class="source-code">// This is used to prevent the program from exiting</p>
+			<p class="source-code">// before our goroutines above run. We will talk about</p>
+			<p class="source-code">// this later in the chapter.</p>
+			<p class="source-code">select{} </p>
+			<p>The output will look similar to, but not necessarily in the same order as, what is shown next. <strong class="source-inline">...</strong> indicates more numbers <a id="_idIndexMarker208"/>follow, but have been omitted for brevity:</p>
+			<p class="source-code">Hello</p>
+			<p class="source-code">2</p>
+			<p class="source-code">0</p>
+			<p class="source-code">5</p>
+			<p class="source-code">3</p>
+			<p class="source-code">...</p>
+			<p class="source-code">fatal error: all goroutines are asleep - deadlock!</p>
+			<p>You can see the preceding example here: </p>
+			<p><a href="https://play.golang.org/p/RBD3yuBA3Gd">https://play.golang.org/p/RBD3yuBA3Gd</a></p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">You will also notice that this panics with an error after running. This is because the program will have no running goroutines, which means the program is effectively dead. It is killed by Go's deadlock detector. We will handle this more gracefully in the next chapter.</p>
+			<p>Running this will print out the numbers in random order. Why random? Once you are running concurrently, you cannot be sure when a scheduled function will execute. At any given moment, there will be between 0 and 10 goroutines executing <strong class="source-inline">fmt.Println(x)</strong>, and another one executing <strong class="source-inline">fmt.Println("hello")</strong>. That's right—the <strong class="source-inline">main()</strong> function is its own goroutine. </p>
+			<p>Once the <strong class="source-inline">for</strong> loop ends, <strong class="source-inline">fmt.Println("hello")</strong> will execute. <strong class="source-inline">hello</strong> might be printed out before any of the numbers, somewhere in the middle, or after all the numbers. This is because they are all executing at the same time like horses on a racetrack. We know all the horses will reach the end<a id="_idTextAnchor199"/>, but we don't know which one will be first.</p>
+			<h2 id="_idParaDest-87"><a id="_idTextAnchor200"/>Synchronization</h2>
+			<p>When doing <strong class="bold">concurrent programming</strong>, there is a simple<a id="_idIndexMarker209"/> rule: <em class="italic">You can read a variable concurrently without synchronization, but a single writer requires synchronization.</em></p>
+			<p>These are the<a id="_idIndexMarker210"/> most common methods<a id="_idIndexMarker211"/> of synchronization in Go:</p>
+			<ul>
+				<li>The <strong class="source-inline">channel</strong> data type to exchange data between goroutines</li>
+				<li><strong class="source-inline">Mutex</strong> and <strong class="source-inline">RWMutex</strong> from the <strong class="source-inline">sync</strong> package to lock data access</li>
+				<li><strong class="source-inline">WaitGroup</strong> from the <strong class="source-inline">sync</strong> package to track access</li>
+			</ul>
+			<p>These can be used to prevent multiple goroutines from reading and writing to variables at the same time. It is undefined what happens if you try to read and write to the same variable from multiple goroutines simultaneously (in other words, <em class="italic">that is a bad idea</em>).</p>
+			<p>Reading and writing to the same variable<a id="_idIndexMarker212"/> concurrently is called a <strong class="bold">data race</strong>. Go has a data race detector not covered in this book to uncover these types of problems. You can read about it here<a id="_idTextAnchor201"/>: <a href="https://golang.org/doc/articles/race_detector">https://golang.org/doc/articles/race_detector</a>.</p>
+			<h2 id="_idParaDest-88"><a id="_idTextAnchor202"/>WaitGroups</h2>
+			<p>A <strong class="source-inline">WaitGroup</strong> is a synchronization counter<a id="_idIndexMarker213"/> that only has positive values starting at 0. It is most often used to<a id="_idIndexMarker214"/> indicate when some set of tasks is finished before executing code that relies on those tasks.</p>
+			<p>A <strong class="source-inline">WaitGroup</strong> has a few methods, as outlined here:</p>
+			<ul>
+				<li><strong class="source-inline">.Add(int)</strong>: Used to add some number to the <strong class="source-inline">WaitGroup</strong></li>
+				<li><strong class="source-inline">.Done()</strong>: Subtract 1 from the <strong class="source-inline">WaitGroup</strong></li>
+				<li><strong class="source-inline">.Wait()</strong>: Block until <strong class="source-inline">WaitGroup</strong> is 0</li>
+			</ul>
+			<p>In our previous section on goroutines, we had an example that <em class="italic">panicked</em> after running. This was due to having all goroutines stopped. We used a <strong class="source-inline">select</strong> statement (covered in this chapter) to block forever to prevent the program from exiting before the goroutines could run, but we can use a <strong class="source-inline">WaitGroup</strong> to wait for our goroutines to end and exit gracefully.</p>
+			<p>Let's do it again, as follows:</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     wg := sync.WaitGroup{}</p>
+			<p class="source-code">     for i := 0; i &lt; 10; i++ {</p>
+			<p class="source-code">          wg.Add(1)</p>
+			<p class="source-code">          go func(n int) {</p>
+			<p class="source-code">               defer wg.Done()</p>
+			<p class="source-code">               fmt.Println(n)</p>
+			<p class="source-code">          }(i)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     wg.Wait()</p>
+			<p class="source-code">     fmt.Println("All work done")</p>
+			<p class="source-code">}</p>
+			<p>You can also see this here: <a href="https://play.golang.org/p/cwA3kC-d3F6">https://play.golang.org/p/cwA3kC-d3F6</a>.</p>
+			<p>This example uses a <strong class="source-inline">WaitGroup</strong> to track<a id="_idIndexMarker215"/> the number of goroutines that are outstanding. We add 1 to <strong class="source-inline">wg</strong> before<a id="_idIndexMarker216"/> we launch our goroutine (<em class="italic">do not add it inside the goroutine</em>). When the goroutine exits, the <strong class="source-inline">defer</strong> statement is called, which subtracts 1 from the counter.</p>
+			<p class="callout-heading">Important Note </p>
+			<p class="callout">A <strong class="source-inline">WaitGroup</strong> can only have positive values. If you call <strong class="source-inline">.Done()</strong> when the <strong class="source-inline">WaitGroup</strong> is at 0, it will cause a panic. Because of the way they are used, the creators knew that any attempt to reach a negative value would be a critical bug that needs to be caught early.</p>
+			<p><strong class="source-inline">wg.Wait()</strong> waits for all the goroutines to finish, and calling <strong class="source-inline">defer wg.Done()</strong>causes our counter to decrement until it reaches 0. At that point, <strong class="source-inline">Wait()</strong> stops blocking and the program exits the <strong class="source-inline">main()</strong> function.</p>
+			<p class="callout-heading">Important Note </p>
+			<p class="callout">If passing a <strong class="source-inline">WaitGroup</strong> in a function or method call, you need to use a <strong class="source-inline">wg := &amp;sync.WaitGroup{}</strong> pointer. Otherwise, each function is operating on a copy, not the same value. If used in a struct, either<a id="_idIndexMarker217"/> the struct <a id="_idTextAnchor203"/>or the field holding the <strong class="source-inline">WaitGroup</strong> must be<a id="_idIndexMarker218"/> a pointer.</p>
+			<h2 id="_idParaDest-89"><a id="_idTextAnchor204"/>Channels</h2>
+			<p><strong class="bold">Channels</strong> provide a synchronization primitive in which data is inserted into a channel by a goroutine and removed by another<a id="_idIndexMarker219"/> goroutine. A channel can be buffered, meaning<a id="_idIndexMarker220"/> it can hold a certain amount of data before blocking, or unbuffered, where a sender and receiver must both be present for the data to transfer between goroutines.</p>
+			<p>A common analogy for a channel is a pipe in which water flows. Water is inserted into a pipe and flows out the far side. The amount of water that can be held in the pipe is the buffer. Here, you can see a representation of goroutine communication using a channel:</p>
+			<div>
+				<div id="_idContainer011" class="IMG---Figure">
+					<img src="Images/B17626_02_001.jpg" alt="Figure 2.1 – Goroutine communication using a channel &#13;&#10;" width="1170" height="554"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 2.1 – Goroutine communication using a channel </p>
+			<p>Channels are used to pass data from one goroutine to another, where the goroutine that passed the data stops using it. This allows you to pass <em class="italic">control</em> from one goroutine to another, giving access to a single goroutine at a time. This provides synchronization.</p>
+			<p>Channels are typed, so only data of that type can go into the channel. Because channels are a pointer-scoped type such as <strong class="source-inline">map</strong> and <strong class="source-inline">slice</strong>, we use <strong class="source-inline">make()</strong> to create them, as follows:</p>
+			<p class="source-code">ch := make(chan string, 1)</p>
+			<p>The preceding statement <a id="_idIndexMarker221"/>creates a channel called <strong class="source-inline">ch</strong> that holds a <strong class="source-inline">string</strong> type with a buffer<a id="_idIndexMarker222"/> <a id="_idTextAnchor205"/>of 1. Leaving "<strong class="source-inline">,</strong> <strong class="source-inline">1</strong>" off will make it an unbuffered channel.</p>
+			<h2 id="_idParaDest-90"><a id="_idTextAnchor206"/>Sending/receiving</h2>
+			<p>Sending to a channel is done with the <strong class="source-inline">&lt;-</strong> syntax. To send a <strong class="source-inline">string</strong> type to the preceding channel, we could<a id="_idIndexMarker223"/> do the following: <strong class="source-inline">ch &lt;- "word"</strong>. This attempts to put the "<strong class="source-inline">word"</strong> string into the <strong class="source-inline">ch</strong> channel. If the channel has an available buffer, we continue<a id="_idIndexMarker224"/> execution in this goroutine. If the buffer is full, this blocks until either buffer becomes available or—in the case of unbuffered channels—a goroutine tries to pull from the channel.</p>
+			<p>Receiving is similar using the same syntax but on the opposite side of the channel. The goroutine trying to pull from the channel would do this: <strong class="source-inline">str := &lt;-ch</strong>. This assigns the next value on the channel to the <strong class="source-inline">str</strong> variable. </p>
+			<p>More commonly when receiving variables, the <strong class="source-inline">for range</strong> syntax is used. This allows us to pull all values out of a channel. An example using our preceding channel might look like this:</p>
+			<p class="source-code">for val := range ch { // Acts like a &lt;-ch</p>
+			<p class="source-code">     fmt.Println(val)</p>
+			<p class="source-code">}</p>
+			<p>Channels can be closed so that no more data will be sent to them. This is done with the <strong class="source-inline">close</strong> keyword. To close the preceding channel, we could do <strong class="source-inline">close(ch)</strong>. This should <em class="italic">always</em> be done by the sender. Closing a channel will cause a <strong class="source-inline">for range</strong> loop to exit once all values on the channel have been removed.</p>
+			<p>Let's use a channel to send words from one goroutine to another, as follows:</p>
+			<p class="source-code">func main() { </p>
+			<p class="source-code">    ch := make(chan string, 1) </p>
+			<p class="source-code">    go func() { </p>
+			<p class="source-code">        for _, word := range []string{"hello", "world"} { </p>
+			<p class="source-code">            ch &lt;- word</p>
+			<p class="source-code">            close(ch) </p>
+			<p class="source-code">        } </p>
+			<p class="source-code">    }() </p>
+			<p class="source-code">    for word := range ch { </p>
+			<p class="source-code">        fmt.Println(word) </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">} </p>
+			<p>You can also<a id="_idIndexMarker225"/> see the preceding example<a id="_idIndexMarker226"/> here: </p>
+			<p><a href="https://go.dev/play/p/9km80Jz6f26">https://go.dev/play/p/9km80Jz6f26</a></p>
+			<p class="callout-heading">Important Note</p>
+			<p class="callout">After a channel is closed, sending a value on a channel will cause a panic.</p>
+			<p class="callout">Receiving from a closed channel will return the zero value of the type the channel holds.</p>
+			<p class="callout">A channel can be <strong class="source-inline">nil</strong>. Sending or receiving from a <strong class="source-inline">nil</strong> channel can block forever. It is a common bug<a id="_idTextAnchor207"/> for developers to forget to initialize channels in a struct.</p>
+			<h2 id="_idParaDest-91"><a id="_idTextAnchor208"/>select statements</h2>
+			<p>A <strong class="source-inline">select</strong> statement<a id="_idIndexMarker227"/> is similar to a <strong class="source-inline">switch</strong> statement but is geared toward listening to multiple<a id="_idIndexMarker228"/> channels. This allows us to receive and act on multiple inputs at the same time. </p>
+			<p>The following example will listen to several channels and execute a <strong class="source-inline">case</strong> statement whenever it receives a value on one of them. In the example cases, we spin off a goroutine to do something with the value so that we can continue the execution of our loop for the next value. If no value is present on the channel, this blocks until one is. If values are on more than one channel, <strong class="source-inline">select</strong> uses a pseudo-random method to select which case to execute: </p>
+			<p class="source-code">for {</p>
+			<p class="source-code">     select {</p>
+			<p class="source-code">     case v := &lt;-inCh1:</p>
+			<p class="source-code">          go fmt.Println("received(inCh1): ", v)</p>
+			<p class="source-code">     case v := &lt;-inCh2:</p>
+			<p class="source-code">          go fmt.Println("received(inCh2): ", v)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>With a <strong class="source-inline">select</strong> statement, we sometimes<a id="_idIndexMarker229"/> only want to check if a value<a id="_idIndexMarker230"/> is on a channel, but if it is not, then we want to move on. In those cases, we can use a <strong class="source-inline">default</strong> statement. <strong class="source-inline">default</strong> executes if no other case statement can execute (versus the previous behavior of waiting for channel data indefinitely). You can see an example of this in the following code snippet:</p>
+			<p class="source-code">select {</p>
+			<p class="source-code">case s := &lt;-ch:</p>
+			<p class="source-code">     fmt.Printf("had a string(%s) on the channel\n", s)</p>
+			<p class="source-code">default:</p>
+			<p class="source-code">     fmt.Println("channel was empty")</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">select</strong> has one more use we saw before but it wasn't explained. <strong class="source-inline">select{}</strong> has no case statements and no default statement; therefore, it blocks forever. This is often used by servers that want to run forever to prevent the <strong class="source-inline">main()<a id="_idTextAnchor209"/></strong> function from exiting, which stops the execution of the program.</p>
+			<h2 id="_idParaDest-92"><a id="_idTextAnchor210"/>Channels as an event signal</h2>
+			<p>One common use of channels<a id="_idIndexMarker231"/> is to use them to send a signal to another<a id="_idIndexMarker232"/> goroutine. Often, this is an indication to exit a loop<a id="_idIndexMarker233"/> or some other execution.</p>
+			<p>In the <strong class="source-inline">select</strong> example from before where we used the <strong class="source-inline">for</strong> loop, the loop will continue forever, but we can use a channel to signal that we want to exit, as follows: </p>
+			<p class="source-code">func printWords(in1, in2 chan string, exit chan struct{}, wg *sync.WaitGroup) {</p>
+			<p class="source-code">     defer wg.Done()</p>
+			<p class="source-code">     for {</p>
+			<p class="source-code">          select{</p>
+			<p class="source-code">          case &lt;-exit:</p>
+			<p class="source-code">               fmt.Println("exiting")</p>
+			<p class="source-code">               return</p>
+			<p class="source-code">          case str := &lt;-in1:</p>
+			<p class="source-code">               fmt.Println("in1: ", str)</p>
+			<p class="source-code">          case str := &lt;-in2:</p>
+			<p class="source-code">               fmt.Println("in2: ", str)</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">printWords()</strong> reads input off of three channels. If the input is on <strong class="source-inline">in1</strong> or <strong class="source-inline">in2</strong>, it prints the channel name and what string was sent on the channel. If it is the <strong class="source-inline">exit</strong> channel, it prints that it is exiting and returns. When returning, <strong class="source-inline">wg</strong> will have <strong class="source-inline">.Done()</strong> called on it, which will decrement the it by 1:</p>
+			<p class="source-code">func main() { </p>
+			<p class="source-code">    in1 := make(chan string) </p>
+			<p class="source-code">    in2 := make(chan string) </p>
+			<p class="source-code">    wg := &amp;sync.WaitGroup{} </p>
+			<p class="source-code">    exit := make(chan struct{}) </p>
+			<p class="source-code">    wg.Add(1) </p>
+			<p class="source-code">    go printWords(in1, in2, exit, wg) </p>
+			<p class="source-code">    in1 &lt;- "hello" </p>
+			<p class="source-code">    in2 &lt;- "world" </p>
+			<p class="source-code">    close(exit) </p>
+			<p class="source-code">    </p>
+			<p class="source-code">    wg.Wait() </p>
+			<p class="source-code">} </p>
+			<p>Here we create all the channels<a id="_idIndexMarker234"/> required for <strong class="source-inline">printWords()</strong> and spin <strong class="source-inline">printWords</strong> off in a goroutine. We then send input<a id="_idIndexMarker235"/> on our input channels<a id="_idIndexMarker236"/> and once that is completed, we close the <strong class="source-inline">exit</strong> channel to signal there is no further input to <strong class="source-inline">printWords</strong>. The <strong class="source-inline">wg.Wait()</strong> call prevents <strong class="source-inline">main()</strong> from exiting until <strong class="source-inline">printWords</strong> has exited.</p>
+			<p>The output looks like this:</p>
+			<p class="source-code">in1:  hello</p>
+			<p class="source-code">in2:  world</p>
+			<p class="source-code">exiting</p>
+			<p>You can also see the preceding example at the following link: </p>
+			<p><a href="https://play.golang.org/p/go7Klf5JNQn">https://play.golang.org/p/go7Klf5JNQn</a></p>
+			<p><strong class="source-inline">exit</strong> is used in this example to signal to <strong class="source-inline">printWords()</strong> that we want to exit the <strong class="source-inline">for</strong> loop. This is made possible because receiving on a closed channel returns the zero value of the type that the channel holds. We use a blank <strong class="source-inline">struct{}</strong> instance because it doesn't cost memory. We do not store the returned value in a varia<a id="_idTextAnchor211"/>ble because it is the signal that the channel closed that is important.</p>
+			<h2 id="_idParaDest-93"><a id="_idTextAnchor212"/>Mutexes</h2>
+			<p>A <strong class="bold">mutex</strong> is a <strong class="bold">synchronization primitive</strong> (also known as a <strong class="bold">lock</strong>) that can only be locked by one owner<a id="_idIndexMarker237"/> at a time. If another<a id="_idIndexMarker238"/> would-be owner<a id="_idIndexMarker239"/> attempts to lock a mutex while it is locked by another owner, the code blocks<a id="_idIndexMarker240"/> until the mutex is unlocked and the new owner can take possession. Go provides a mutex type in the <strong class="source-inline">sync</strong> package called <strong class="source-inline">Mutex</strong>.</p>
+			<p>This is used to protect a variable or set of variables from being accessed by multiple goroutines. Remember—if one goroutine tries to write to a value at the same time another wants to read or write to that value, the variable must be protected by a synchronization primitive.</p>
+			<p>In the following example, we will spin off 10 goroutines to add a number to a <strong class="source-inline">sum</strong> value. The <strong class="source-inline">sum</strong> value must be protected as we are reading and writing from multiple goroutines:</p>
+			<p class="source-code">type sum struct {</p>
+			<p class="source-code">     mu  sync.Mutex</p>
+			<p class="source-code">     sum int</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *sum) get() int {</p>
+			<p class="source-code">     s.mu.Lock()</p>
+			<p class="source-code">     defer s.mu.Unlock()</p>
+			<p class="source-code">     return s.sum</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *sum) add(n int) {</p>
+			<p class="source-code">     s.mu.Lock()</p>
+			<p class="source-code">     defer s.mu.Unlock()</p>
+			<p class="source-code">     s.sum += n</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     mySum := &amp;sum{}</p>
+			<p class="source-code">     wg := sync.WaitGroup{}</p>
+			<p class="source-code">     for i := 0; i &lt; 100; i++ {</p>
+			<p class="source-code">          wg.Add(1)</p>
+			<p class="source-code">          go func(x int) {</p>
+			<p class="source-code">               defer wg.Done()</p>
+			<p class="source-code">               mySum.add(x)</p>
+			<p class="source-code">          }(i)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     wg.Wait()</p>
+			<p class="source-code">     fmt.Println("final sum: ", mySum.get())</p>
+			<p class="source-code">}</p>
+			<p>You can also see this example at the following link: </p>
+			<p><a href="https://play.golang.org/p/mXUk8PCzBI7">https://play.golang.org/p/mXUk8PCzBI7</a></p>
+			<p>This code uses a Mutex named <strong class="source-inline">mu</strong> that is part of the <strong class="source-inline">sum</strong> struct to control access to the <strong class="source-inline">get()</strong> and <strong class="source-inline">add()</strong> methods. As each<a id="_idIndexMarker241"/> is locked, only one of those may execute at a time. We use the <strong class="source-inline">defer</strong> statement to unlock the Mutex when the function exits. Th<a id="_idTextAnchor213"/>is protects us from forgetting to unlock the Mutex when a function gets long.</p>
+			<h2 id="_idParaDest-94"><a id="_idTextAnchor214"/>RWMutex</h2>
+			<p>Along with <strong class="source-inline">sync.Mutex</strong> is <strong class="source-inline">sync.RWMutex</strong>. This distinguishes<a id="_idIndexMarker242"/> itself by providing a read and write lock. Any number of <strong class="source-inline">mu.RLock()</strong> read locks may be held<a id="_idIndexMarker243"/> at a time, but a single <strong class="source-inline">mu.Lock()</strong> write lock waits for all existing read locks to complete (new <strong class="source-inline">Rlock()</strong> attempts block) and then provides the writer with exclusive access.</p>
+			<p>This proves to be faster when there are lots of concurrent readers and writing happens infrequently. However, the standard <strong class="source-inline">Mutex</strong> is faster in the generalized case because its implementation is less complicated.</p>
+			<p>In this section, you have gained basic skills in using goroutines for concurrent operations, learned what synchronization<a id="_idIndexMarker244"/> is and when you must use it, and learned about Go's various methods<a id="_idIndexMarker245"/> for synchronizat<a id="_idTextAnchor215"/>ion and signaling. Let's dive into understanding another type, known as <strong class="source-inline">context</strong>. </p>
+			<h1 id="_idParaDest-95"><a id="_idTextAnchor216"/>Understanding Go's Context type</h1>
+			<p>Go provides a package called <strong class="source-inline">context</strong> that is useful for two purposes, as outlined here:</p>
+			<ul>
+				<li>Canceling a chain of function calls after some event (such as a timeout)</li>
+				<li>Passing information through a chain of function calls (such as user information)</li>
+			</ul>
+			<p>A <strong class="source-inline">Context</strong> object is usually created in either <strong class="source-inline">main()</strong> or at the point of ingestion of some request (such as an RPC or <strong class="bold">HyperText Transfer Protocol</strong> (<strong class="bold">HTTP</strong>) request). A basic <strong class="source-inline">Context</strong> object is created from our background <strong class="source-inline">Context</strong> object, as follows:</p>
+			<p class="source-code">import "context" </p>
+			<p class="source-code">func main() { </p>
+			<p class="source-code">     ctx := context.Background()</p>
+			<p class="source-code">}</p>
+			<p>The <strong class="source-inline">context</strong> package and the <strong class="source-inline">Context</strong> type is an advanced subject, but<a id="_idTextAnchor217"/> I want to introduce it here as you will see it used throughout the Go ecosystem.</p>
+			<h2 id="_idParaDest-96"><a id="_idTextAnchor218"/>Using a Context to signal a timeout</h2>
+			<p><strong class="source-inline">Context</strong> is often used to communicate<a id="_idIndexMarker246"/> a timer state or to terminate a wait condition—for<a id="_idIndexMarker247"/> example, when your program is waiting for a network response.</p>
+			<p>Let's say we want to call a function to get some data, but we don't want to wait longer than 5 seconds for the call to complete. We can signal this via a <strong class="source-inline">Context</strong>, as follows:</p>
+			<p class="source-code">ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)</p>
+			<p class="source-code">data, err := GatherData(ctx, args)</p>
+			<p class="source-code">cancel()</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">context.WithTimeout()</strong> creates a new <strong class="source-inline">Context</strong> that will automatically be canceled after 5 seconds and a function that will cancel the <strong class="source-inline">Context</strong> (<strong class="source-inline">context.CancelFunc</strong>) when called.</p>
+			<p>Every <strong class="source-inline">Context</strong> is said to be derived<a id="_idIndexMarker248"/> from another <strong class="source-inline">Context</strong>. Here, we derive<a id="_idIndexMarker249"/> our <strong class="source-inline">ctx</strong> object from <strong class="source-inline">context.Background()</strong>. <strong class="source-inline">context.Background()</strong> is our parent <strong class="source-inline">Context</strong>. New <strong class="source-inline">context</strong> objects can be derived from <strong class="source-inline">ctx</strong> forming a chain, and those new <strong class="source-inline">Context</strong> objects can have different timeouts.</p>
+			<p>Canceling a <strong class="source-inline">Context</strong> either directly via <strong class="source-inline">cancel()</strong> or with a timeout or deadline causes that <strong class="source-inline">Context</strong> and its children to also be canceled.</p>
+			<p>The preceding code does the following:</p>
+			<ul>
+				<li>Creates a <strong class="source-inline">Context</strong> that is canceled after 5 seconds.</li>
+				<li>Calls <strong class="source-inline">GatherData()</strong> and passes the <strong class="source-inline">Context</strong>.</li>
+				<li>Once the call is complete, we cancel the <strong class="source-inline">Context</strong> if not alr<a id="_idTextAnchor219"/>eady canceled.</li>
+			</ul>
+			<p>Now, we need to set up <strong class="source-inline">GatherData()</strong> to honor our <strong class="source-inline">Context</strong> cancellation.</p>
+			<h2 id="_idParaDest-97"><a id="_idTextAnchor220"/>Honoring a context when receiving</h2>
+			<p>If we are executing the <strong class="source-inline">GatherData()</strong> function, we need<a id="_idIndexMarker250"/> to honor this context. There are a few ways to do that with a basic call to <strong class="source-inline">ctx.Err()</strong>, as follows:</p>
+			<p class="source-code">func GatherData(ctx context.Context, args Args) ([]file, error) { </p>
+			<p class="source-code">    if ctx.Err() != nil { </p>
+			<p class="source-code">        return nil, err </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    localCtx, localCancel := context.WithTimeout(ctx, 2 * time.Second) </p>
+			<p class="source-code">    local, err := getFilesLocal(localCtx, args.local) </p>
+			<p class="source-code">    localCancel() </p>
+			<p class="source-code">    if err != nil { </p>
+			<p class="source-code">        return nil, err </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    remoteCtx, remoteCancel := context.WithTimeout(ctx, 3 * time.Second) </p>
+			<p class="source-code">    remote, err := getFilesRemote(remoteCtx, args.remote) </p>
+			<p class="source-code">    remoteCancel() </p>
+			<p class="source-code">    if err != nil { </p>
+			<p class="source-code">        return nil, err </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    return append(local, remote), nil </p>
+			<p class="source-code">} </p>
+			<p><strong class="source-inline">GatherData()</strong> looks at <strong class="source-inline">ctx.Err()</strong> and checks the value to see if it returns an error. If so, we know the <strong class="source-inline">Context</strong> has been canceled and simply return.</p>
+			<p>In this example, we derive<a id="_idIndexMarker251"/> two new <strong class="source-inline">Context</strong> objects that share the parent of <strong class="source-inline">ctx</strong>. If <strong class="source-inline">ctx</strong> is canceled, <strong class="source-inline">localCtx</strong> and <strong class="source-inline">remoteCtx</strong> are canceled. Canceling <strong class="source-inline">localCtx</strong> or <strong class="source-inline">remoteCtx</strong> has no effect on <strong class="source-inline">ctx</strong>. In most circumstances, passing <strong class="source-inline">ctx</strong> instead of deriving new <strong class="source-inline">Context</strong> objects is done, but we wanted to show how you derive new <strong class="source-inline">Context</strong> objects.</p>
+			<p><strong class="source-inline">Context</strong> also supports a <strong class="source-inline">.Done()</strong> method in case you need to check for cancellation inside a <strong class="source-inline">select</strong> statement. <strong class="source-inline">.Done()</strong> returns a channel that, if closed, indicates cancellation. Using it is simple, as we can see here:</p>
+			<p class="source-code">select {</p>
+			<p class="source-code">case &lt;-ctx.Done():</p>
+			<p class="source-code">     return ctx.Err()</p>
+			<p class="source-code">case data := &lt;-ch:</p>
+			<p class="source-code">     return date, nil</p>
+			<p class="source-code">}</p>
+			<p>Now that we have shown you how you should add <strong class="source-inline">Context</strong> to your functions, let's talk about how this <a id="_idTextAnchor221"/>works in the standard<a id="_idIndexMarker252"/> library and why it is not the same as the examples we have shown.</p>
+			<h2 id="_idParaDest-98"><a id="_idTextAnchor222"/>Context in the standard library</h2>
+			<p>The <strong class="source-inline">context</strong> package<a id="_idIndexMarker253"/> was added in <strong class="bold">Go 1.7</strong>, well after the<a id="_idIndexMarker254"/> introduction of Go's standard library. Unfortunately, this meant that it had to be hacked into the standard library packages in order to avoid breaking Go's version 1.0-compatibility promise.</p>
+			<p>This is the one thing added to Go that has added some real ugliness. Previously, we showed you how when using <strong class="source-inline">Context</strong> it should be the first argument of a function called <strong class="source-inline">ctx</strong>. However, the standard library cannot do this.</p>
+			<p>A common pattern you will see when using <strong class="source-inline">Context</strong> in the standard library will be to add it via a method. Here is an example of using <strong class="source-inline">Context</strong> for <strong class="source-inline">http.Client</strong> to fetch <strong class="source-inline">www.golang.org</strong> and print it to the screen:</p>
+			<p class="source-code">client := &amp;http.Client{}</p>
+			<p class="source-code">req, err := http.NewRequest("GET", "http://www.golang.org", nil)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">        fmt.Println("error: ", err)</p>
+			<p class="source-code">        return</p>
+			<p class="source-code">}</p>
+			<p class="source-code">ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)</p>
+			<p class="source-code">// Attach it to our request.</p>
+			<p class="source-code">req = req.WithContext(ctx)</p>
+			<p class="source-code">// Get our resp.</p>
+			<p class="source-code">resp, err := client.Do(req)</p>
+			<p class="source-code">cancel() </p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">        fmt.Println("error: ", err)</p>
+			<p class="source-code">        return</p>
+			<p class="source-code">}</p>
+			<p class="source-code">// Print the page to stdout</p>
+			<p class="source-code">io.Copy(os.Stdout, resp.Body)</p>
+			<p>In this code<a id="_idIndexMarker255"/> we do the following:</p>
+			<ul>
+				<li>Create an <strong class="source-inline">HTTP</strong> client</li>
+				<li>Create a <strong class="source-inline">*http.Request (req)</strong> to get the page at <a href="http://www.golang.org">www.golang.org</a></li>
+				<li>Create <strong class="source-inline">Context</strong> (<strong class="source-inline">ctx</strong>) and <strong class="source-inline">CancelFunc</strong> (cancel) where the <strong class="source-inline">Context</strong> is cancelled after 3 seconds</li>
+				<li>Attach <strong class="source-inline">ctx</strong> to <strong class="source-inline">req</strong> to prevent <strong class="source-inline">*http.Request</strong> from taking longer than 3 seconds</li>
+				<li>Uses <strong class="source-inline">cancel()</strong> to cancel the Context's internal goroutine that is tracking the timeout once the <strong class="source-inline">client.Do()</strong> call has completed</li>
+			</ul>
+			<p>So far, we have talked about how to use C<strong class="source-inline">ontext</strong> for can<a id="_idTextAnchor223"/>cellation. Now let's talk about another use of <strong class="source-inline">Context</strong>—passing<a id="_idIndexMarker256"/> values through a call chain.</p>
+			<h2 id="_idParaDest-99"><a id="_idTextAnchor224"/>Context to pass values</h2>
+			<p>A Context's other main<a id="_idIndexMarker257"/> use is to pass a value through a <strong class="bold">call chain</strong>. You should only use a <strong class="source-inline">Context</strong><a id="_idIndexMarker258"/> to pass values that are useful on a per-call basis, not as generalized storage.</p>
+			<p>These are the two best uses for passing<a id="_idIndexMarker259"/> values on a <strong class="source-inline">Context</strong>:</p>
+			<ul>
+				<li>Security information about a user making a call.</li>
+				<li>Telemetry information such as the data types used with <em class="italic">OpenTelemetry</em>.</li>
+			</ul>
+			<p>In the case of security information, you are informing the system<a id="_idIndexMarker260"/> who the user is, probably with <strong class="bold">OpenID Connect</strong> (<strong class="bold">OIDC</strong>) information. This allows the call stack to make authorization checks.</p>
+			<p>For telemetry, this allows a service to record information related to this specific call to track function execution times, database latency, input, and errors. This can be dialed up or down to debug service issues. We discuss telemetry in future chapters.</p>
+			<p>Passing a value to a <strong class="source-inline">Context</strong> requires a little care. Values stored in a context are key-value pairs, and to prevent overwriting of keys between multiple packages, we need to create our own custom key type that can only be implemented by our package. In this way, keys from different packages will have different types. The code to achieve this is shown in the following snippet:</p>
+			<p class="source-code">type key int</p>
+			<p class="source-code">const claimsKey key = 0 </p>
+			<p class="source-code">func NewContext(ctx context.Context, claims Claims)</p>
+			<p class="source-code">context.Context {</p>
+			<p class="source-code">    return context.WithValue(ctx, claimsKey, claims)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func ClaimsFromContext(ctx context.Context) (Claims, bool) </p>
+			<p class="source-code">{</p>
+			<p class="source-code">    // ctx.Value returns nil if ctx has no value for the key;</p>
+			<p class="source-code">    // the Claims type assertion returns ok=false for nil.</p>
+			<p class="source-code">    claims, ok := ctx.Value(userIPKey).(Claims)</p>
+			<p class="source-code">    return claims, ok</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Defines a type called <strong class="source-inline">key</strong> that<a id="_idIndexMarker261"/> is private, which prevents other packages from implementing it</li>
+				<li>Defines a <strong class="source-inline">claimsKey</strong> constant of type <strong class="source-inline">key</strong>. This is used as the key for a value that holds an OIDC <strong class="source-inline">IDToken</strong> claim</li>
+				<li><strong class="source-inline">NewContext()</strong> provides a function that attaches a <strong class="source-inline">Claim</strong> to our <strong class="source-inline">Context</strong></li>
+				<li><strong class="source-inline">ClaimsFromContext()</strong> provides a function that extracts <strong class="source-inline">Claims</strong> from a <strong class="source-inline">Context</strong> and indicates if <strong class="source-inline">Claims</strong> were found</li>
+			</ul>
+			<p>The preceding code might <a id="_idIndexMarker262"/>exist in a security package for <strong class="bold">Open Authorization</strong> (<strong class="bold">OAuth</strong>)/<strong class="bold">OIDC</strong> (a widely used authentication system). <strong class="source-inline">Claims</strong> would represent user data we have validated. <strong class="source-inline">NewContext()</strong> would allow us to add this information to a context in some middleware, <a id="_idTextAnchor225"/>and <strong class="source-inline">ClaimsFromContext()</strong> would allow us to extract it anywhere in the call chain that was required.</p>
+			<h2 id="_idParaDest-100"><a id="_idTextAnchor226"/>Best practices</h2>
+			<p>I recommend that all public functions and methods<a id="_idIndexMarker263"/> have an initial argument of <strong class="source-inline">ctx context.Context</strong>. This allows you to add  future-proofing to your public functions/methods/interfaces if you need to add capabilities that <strong class="source-inline">Context</strong> provides at a later date, even if you aren't using it now. </p>
+			<p class="callout-heading">Important Note</p>
+			<p class="callout">Future-proofing methods/functions/interfaces is a practice of adding arguments and return values that are not used at the moment in order to prevent breaking them (and users) at some future date—for example, adding a returned <strong class="source-inline">error</strong> for a constructor that cannot currently return an error, but might in the future.</p>
+			<p>Maybe you won't need to handle cancellations (execution is too fast or can't be canceled), but something such as adding telemetry might come in handy later.</p>
+			<p>In this section, you learned<a id="_idIndexMarker264"/> about Go's <strong class="source-inline">Context</strong> object and how it is used to signal cancellation and to pass values through the call stack. You will see this used in many of the third-party packages you will use in your <a id="_idTextAnchor227"/>code. The final topic of this chapter will be about<em class="italic"> Go's testing package</em>. Let's dive right into it. </p>
+			<h1 id="_idParaDest-101"><a id="_idTextAnchor228"/>Utilizing Go's testing framework</h1>
+			<p><strong class="bold">Testing</strong> is one of the most important and least loved<a id="_idIndexMarker265"/> parts of any language. Testing provides a developer with the knowledge that something works as expected. I cannot count the times that writing unit tests has proven that a function or method did not work the way I expected. This saved countless hours of debugging.</p>
+			<p>To this end, tests need to have the following attributes:</p>
+			<ul>
+				<li>Easy to write</li>
+				<li>Fast to execute</li>
+				<li>Simple to refactor</li>
+				<li>Effortless to understand</li>
+			</ul>
+			<p>To satisfy these needs, Go tackles tests by doing the following:</p>
+			<ul>
+				<li>Breaking tests into their own files</li>
+				<li>Providing a simple <strong class="source-inline">testing</strong> package</li>
+				<li>Using a testing<a id="_idIndexMarker266"/> methodology called <strong class="bold">table-driven tests</strong> (<strong class="bold">TDTs</strong>)</li>
+			</ul>
+			<p>In this section, we will cover how to write basic tests, Go's standard TDT methodology, creating fakes with interfaces, and—finally<a id="_idTextAnchor229"/>—some third-party packages that I used and others<a id="_idIndexMarker267"/> that are popular, but I don't necessarily recommend.</p>
+			<h2 id="_idParaDest-102"><a id="_idTextAnchor230"/>Creating a basic test file</h2>
+			<p>Go tests are contained in package files with a <strong class="source-inline">_test.go</strong> suffix. These files have the same package name, and you can include<a id="_idIndexMarker268"/> as many test files as needed. The usual rule<a id="_idIndexMarker269"/> is to write a test file per package file you want to test so that there is a 1:1 association for clarity.</p>
+			<p>Each test in a test file is a function whose name is prefixed with <strong class="source-inline">Test</strong> and has a single argument, <strong class="source-inline">t *testing.T</strong>, with no returns. This is how it looks:</p>
+			<p class="source-code">func TestFuncName(t *testing.T) {</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">t</strong> is passed by the <strong class="source-inline">go test</strong> command and provides the necessary utilities for our tests. The primary methods used are listed here:</p>
+			<ul>
+				<li><strong class="source-inline">t.Error()</strong></li>
+				<li><strong class="source-inline">t.Errorf()</strong></li>
+				<li><strong class="source-inline">t.Fatalf()</strong></li>
+				<li><strong class="source-inline">t.Log()</strong></li>
+				<li><strong class="source-inline">t.Logf()</strong></li>
+			</ul>
+			<p>When a test is executed, if the test ends without <strong class="source-inline">panic</strong>/<strong class="source-inline">Error</strong>/<strong class="source-inline">Errorf</strong>/<strong class="source-inline">Fatal</strong>/<strong class="source-inline">Fatalf</strong> called, the test is considered passed. If any of these are called, then the test fails. With <strong class="source-inline">Error</strong>/<strong class="source-inline">Errorf</strong>, the test continues executing and accumulates these error messages for the test. With <strong class="source-inline">Fatal</strong>/<strong class="source-inline">Fatalf</strong>, the test fails immediately.</p>
+			<p><strong class="source-inline">Log()</strong>/<a id="_idTextAnchor231"/><strong class="source-inline">Logf()</strong> calls are informative and are only displayed on failure or when other flags are passed for a test.</p>
+			<h2 id="_idParaDest-103"><a id="_idTextAnchor232"/>Creating a simple test</h2>
+			<p>Borrowing<a id="_idIndexMarker270"/> from <strong class="source-inline">golang.org</strong> tutorials (<a href="https://golang.org/doc/tutorial/add-a-test">https://golang.org/doc/tutorial/add-a-test</a>), let's create a simple test<a id="_idIndexMarker271"/> for a function called <strong class="source-inline">Greeter()</strong> that takes a name as an argument and returns <strong class="source-inline">"Hello [name]"</strong>. The code is illustrated in the following snippet:</p>
+			<p class="source-code">package greetings </p>
+			<p class="source-code">import ( </p>
+			<p class="source-code">"testing" </p>
+			<p class="source-code">)</p>
+			<p class="source-code">func TestGreet(t *testing.T) { </p>
+			<p class="source-code">     name := "Bob"</p>
+			<p class="source-code">     want := "Hello Bob"</p>
+			<p class="source-code">     got, err := Greet(name)</p>
+			<p class="source-code">     if got != want || err != nil {</p>
+			<p class="source-code">          t.Fatalf("TestGreet(%s): got %q/%v, want %q/nil", name, got, err, want)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>You can also see this example here: <a href="https://play.golang.org/p/vjAhW0hfwHq">https://play.golang.org/p/vjAhW0hfwHq</a>.</p>
+			<p>To run the test, we need to simply run <strong class="source-inline">go test</strong> inside the package directory. If the test is successful, we should see the following:</p>
+			<p class="source-code">=== RUN   TestGreet</p>
+			<p class="source-code">--- PASS: TestGreet (0.00s)</p>
+			<p class="source-code">PASS</p>
+			<p>To show what a failure looks like, I changed <strong class="source-inline">want</strong> to be <strong class="source-inline">Hello Sarah</strong> while leaving the name <strong class="source-inline">Bob</strong>, as illustrated here:</p>
+			<p class="source-code">=== RUN   TestGreet</p>
+			<p class="source-code">    prog.go:21: TestGreet(Bob): got "Hello Bob"/&lt;nil&gt;, want "Hello Sarah"/nil</p>
+			<p class="source-code">--- FAIL: TestGreet (0.00s)</p>
+			<p class="source-code">FAIL</p>
+			<p>It is important to include enough<a id="_idIndexMarker272"/> information to debug your test. I like to include the following:</p>
+			<ul>
+				<li>The name of the test</li>
+				<li>If table-driven, the description of the table row executed</li>
+				<li>What I r<a id="_idTextAnchor233"/>eceived (called <strong class="source-inline">got</strong>)</li>
+				<li>What I wanted (called <strong class="source-inline">want</strong>)</li>
+			</ul>
+			<p>Now, let's talk about Go's preferred style of testing—TDTs.</p>
+			<h2 id="_idParaDest-104"><a id="_idTextAnchor234"/>Table Driven Tests (TDT)</h2>
+			<p>For very simple tests, the preceding<a id="_idIndexMarker273"/> methodology works fine, but often, you need to test a function<a id="_idIndexMarker274"/> for multiple types of success and failure, such as in the following scenarios:</p>
+			<ul>
+				<li>What if they send a bad argument?</li>
+				<li>What if the network has a problem and returns an error?</li>
+				<li>What if the data isn't on disk?</li>
+			</ul>
+			<p>Writing a test per condition creates a lot of churns in a test file that is harder to read and understand. TDTs to the rescue! A TDT uses the non-named struct concept we talked about in <a href="B17626_01.xhtml#_idTextAnchor013"><em class="italic">Chapter 1</em></a>, <em class="italic">Go Language Basics</em>. This is the one place where it is common to see them. </p>
+			<p>The concept is to create a list of structs where each struct entry represents a set of test conditions and results that we want to see. We execute each struct entry one at a time to test the function.</p>
+			<p>Let's convert our preceding test to a TDT. In this case, there are only two expected ways for our <strong class="source-inline">Greet()</strong> function to react, as outlined here:</p>
+			<ul>
+				<li>We pass an empty string for <strong class="source-inline">name</strong>, which results in an error</li>
+				<li>Anything else results in <strong class="source-inline">"Hello"</strong>  and the name</li>
+			</ul>
+			<p> Let's write<a id="_idIndexMarker275"/> a TDT that handles<a id="_idIndexMarker276"/> both these cases, as follows:</p>
+			<p class="source-code">func TestGreet(t *testing.T) {</p>
+			<p class="source-code">     tests := []struct{</p>
+			<p class="source-code">          desc string // What we are testing</p>
+			<p class="source-code">          name string // The name we will pass</p>
+			<p class="source-code">          want string // What we expect to be returned</p>
+			<p class="source-code">          expectErr bool // Do we expect an error</p>
+			<p class="source-code">     }{</p>
+			<p class="source-code">          {</p>
+			<p class="source-code">               desc: "Error: name is an empty string",</p>
+			<p class="source-code">               expectErr: true,</p>
+			<p class="source-code">               // name and want are "", the zero value for string</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">          {</p>
+			<p class="source-code">               desc: "Success",</p>
+			<p class="source-code">               name: "John",</p>
+			<p class="source-code">               want: "Hello John",</p>
+			<p class="source-code">               // expectErr is set to the zero value, false</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     // Executes each test.</p>
+			<p class="source-code">     for _, test := range tests {</p>
+			<p class="source-code">          got, err := Greet(test.name)</p>
+			<p class="source-code">          switch {</p>
+			<p class="source-code">          // We did not get an error, but expected one</p>
+			<p class="source-code">          case err == nil &amp;&amp; test.expectErr:</p>
+			<p class="source-code">               t.Errorf("TestGreet(%s): got err == nil, want err != nil", test.desc)</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          // We got an error but did not expect one</p>
+			<p class="source-code">          case err != nil &amp;&amp; !test.expectErr:</p>
+			<p class="source-code">               t.Errorf("TestGreet(%s): got err == %s, want err == nil", test.desc, err)</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          // We got an error we expected, so just go to the next test</p>
+			<p class="source-code">          case err != nil:</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          // We did not get the result we expected</p>
+			<p class="source-code">          if got != test.want {</p>
+			<p class="source-code">               t.Errorf("TestGreet(%s): got result %q, want %q", test.desc, got, test.want)</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>This example can<a id="_idIndexMarker277"/> also be found<a id="_idIndexMarker278"/> at the following link: <a href="https://play.golang.org/p/vYWW-GiyT-M">https://play.golang.org/p/vYWW-GiyT-M</a>.</p>
+			<p>As you can see, TDT tests are longer but have clearly defined test parameters and clear error output. </p>
+			<p>Unlike the previous example, this tests<a id="_idIndexMarker279"/> that our error condition occurs when <strong class="source-inline">name == ""</strong>. Using a TDT is overkill for somethin<a id="_idTextAnchor235"/>g so simple but becomes a powerful tool in the toolbox when writing tests against more complicated functions in Go.</p>
+			<h2 id="_idParaDest-105"><a id="_idTextAnchor236"/>Creating fakes with interfaces</h2>
+			<p>Tests should generally<a id="_idIndexMarker280"/> be hermetic, meaning that tests<a id="_idIndexMarker281"/> should not use resources that are not located locally<a id="_idIndexMarker282"/> on a machine.</p>
+			<p>If we are testing a client to a REST service, it should not actually call out to the REST service. There are integration tests that should test the basic connectivity to a test version of a service, but those should be small and rare tests that we are not going to cover here.</p>
+			<p>To test the behaviors of remote<a id="_idIndexMarker283"/> resources, we create what are called <strong class="bold">fakes</strong> using interfaces. Let's write a client that talks to a service via a network client to get a user record. We don't want to test the logic of the server (the kind of logic we tested previously), but instead, want to test what happens if the REST client has an error or we get back the wrong record from the service.</p>
+			<p>First, let's say we use a <strong class="source-inline">Fetch</strong> client in a <strong class="source-inline">client</strong> package that looks like this:</p>
+			<p class="source-code">type Fetch struct{</p>
+			<p class="source-code">     // Some internals, like an http.Client</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (f *Fetch) Record(name string) (Record, error){</p>
+			<p class="source-code">     // Some code to talk to the server</p>
+			<p class="source-code">}</p>
+			<p>We use <strong class="source-inline">Fetch</strong> in a function called <strong class="source-inline">Greeter()</strong> to get information we might use to change our responses to the person, as follows: </p>
+			<p class="source-code">func Greeter(name string, fetch *client.Fetch) (string, error) { </p>
+			<p class="source-code">    rec, err := fetch.Record(name) </p>
+			<p class="source-code">    if err != nil { </p>
+			<p class="source-code">        return "", err </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    if rec.Name != name {</p>
+			<p class="source-code">          return "", fmt.Errorf("server returned record for %s, not %s", rec.Name, name)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     if rec.Age &lt; 18 {</p>
+			<p class="source-code">          return "Greetings young one", nil</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return fmt.Sprintf("Greetings %s", name), nil</p>
+			<p class="source-code">}</p>
+			<p>This is hard to test<a id="_idIndexMarker284"/> hermetically because <strong class="source-inline">Fetch</strong> is a concrete type that talks<a id="_idIndexMarker285"/> to a service. However, we can change<a id="_idIndexMarker286"/> this to an interface that <strong class="source-inline">Fetch</strong> implements and then use a fake. Firstly, let's add the interface and change the <strong class="source-inline">Greeter</strong> argument, as follows:</p>
+			<p class="source-code">type recorder interface {</p>
+			<p class="source-code">     Record(name string) (Record, error)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func Greeter(name string, fetch recorder) (string, error) {</p>
+			<p>Now, we can pass a <strong class="source-inline">*client.Fetch</strong> instance or we can pass anything else that implements <strong class="source-inline">recorder</strong>. Let's create a fake that implements <strong class="source-inline">recorder</strong> that we can cause to return results useful for testing, as follows:</p>
+			<p class="source-code">type fakeRecorder struct {</p>
+			<p class="source-code">     data Record</p>
+			<p class="source-code">     err bool</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (f fakeRecorder) Record(name string) (Record, error) {</p>
+			<p class="source-code">     if f.err  {</p>
+			<p class="source-code">          return "", errors.New("error")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return f.data, nil</p>
+			<p class="source-code">}</p>
+			<p>Now, let's integrate<a id="_idIndexMarker287"/> this into<a id="_idIndexMarker288"/> a TDT, like<a id="_idIndexMarker289"/> this:</p>
+			<p class="source-code">func TestGreeter(t *testing.T) {</p>
+			<p class="source-code">     tests := []struct{</p>
+			<p class="source-code">          desc string</p>
+			<p class="source-code">          name string</p>
+			<p class="source-code">          recorder recorder</p>
+			<p class="source-code">          want string</p>
+			<p class="source-code">          expectErr bool</p>
+			<p class="source-code">     }{</p>
+			<p class="source-code">          {</p>
+			<p class="source-code">               desc: "Error: recorder had some server error",</p>
+			<p class="source-code">               name: "John",</p>
+			<p class="source-code">               recorder: fakeRecorder{err: true},</p>
+			<p class="source-code">               expectErr: true,</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">          {</p>
+			<p class="source-code">               desc: "Error: server returned wrong name",</p>
+			<p class="source-code">               name: "John",</p>
+			<p class="source-code">               recorder: fakeRecorder{</p>
+			<p class="source-code">                    Record: Record{Name: "Bob", Age: 20},</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">               expectErr: true,</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">          {</p>
+			<p class="source-code">               desc: "Success",</p>
+			<p class="source-code">               name: "John",</p>
+			<p class="source-code">               recorder: fakeRecorder{</p>
+			<p class="source-code">                    Record: Record{Name: "John", Age: 20},</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">               want: "Greetings John",</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     for _, test := range tests {</p>
+			<p class="source-code">          got, err := Greeter(test.name)</p>
+			<p class="source-code">          switch {</p>
+			<p class="source-code">          case err == nil &amp;&amp; test.expectErr:</p>
+			<p class="source-code">               t.Errorf("TestGreet(%s): got err == nil, want err != nil", test.desc)</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          case err != nil &amp;&amp; !test.expectErr:</p>
+			<p class="source-code">               t.Errorf("TestGreet(%s): got err == %s, want err == nil", test.desc, err)</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          case err != nil:</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          if got != test.want {</p>
+			<p class="source-code">               t.Errorf("TestGreet(%s): got result %q, want %q", test.desc, got, want)</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>This example<a id="_idIndexMarker290"/> can be found here: <a href="https://play.golang.org/p/fjj2WrbGlKY">https://play.golang.org/p/fjj2WrbGlKY</a>.</p>
+			<p>We now are simply faking the response<a id="_idIndexMarker291"/> that would come from our real client, <strong class="source-inline">Fetch</strong>. In code using <strong class="source-inline">Greeter()</strong>, they can simply pass the real client<a id="_idIndexMarker292"/> and in our tests, we pass our <strong class="source-inline">fakeRecorder</strong> instance. This allows us to control our environment to test that our function handles each type of response in the way we expect. This test is missing a test that check<a id="_idTextAnchor237"/>s the result when a <strong class="source-inline">Record</strong> instance is returned where the <strong class="source-inline">Age</strong> value is set to <strong class="source-inline">&lt; 18</strong>. We leave<a id="_idIndexMarker293"/> this as an exercise<a id="_idIndexMarker294"/> for you.</p>
+			<h2 id="_idParaDest-106"><a id="_idTextAnchor238"/>Third-party testing packages</h2>
+			<p>When I'm writing<a id="_idIndexMarker295"/> tests, there is really<a id="_idIndexMarker296"/> only one tool I reach for:<span class="hidden"> </span><a href="https://pkg.go.dev/github.com/kylelemons/godebug/pretty?utm_source=godoc">https://pkg.go.dev/github.com/kylelemons/godebug/pretty?utm_source=godoc</a>.</p>
+			<p><strong class="source-inline">pretty</strong> allows me to easily test if two complicated structs/maps/slices are equivalent. Using it in a test is simple, as illustrated here:</p>
+			<p class="source-code">if diff := pretty.Compare(want, got); diff != "" {</p>
+			<p class="source-code">     t.Errorf("TestSomeFunc(%s): -want/+got:\n%s", diff)</p>
+			<p class="source-code">}</p>
+			<p>This outputs a readable format showing what is missing (prepended with <strong class="source-inline">-</strong>) and what was received (prepended with <strong class="source-inline">+</strong>). For more control over what is compared, the package offers a <strong class="source-inline">Config</strong> type that can be customized.</p>
+			<p>This code doesn't get updated often because it just works, but Kyle does answer bug requests, so the project is still alive.</p>
+			<p>Many in the Go community use the <strong class="source-inline">github.com/stretchr/testify</strong> set of packages, specifically the <strong class="source-inline">assert</strong> and <strong class="source-inline">mock</strong> packages.</p>
+			<p>I list them here because they are popular in the Go community; however, I would give the following warnings:</p>
+			<ul>
+				<li>Using asserts in Go for many years was considered bad practice</li>
+				<li>Mocking frameworks in Go often have terrible corner cases</li>
+			</ul>
+			<p>The original authors of Go thought that using asserts was a bad practice for the language and unneeded. The current Go team has relaxed this stance. Mocking frameworks in Go tend to rely heavily on <strong class="source-inline">interface{}</strong> and have some sharp corner cases. I find using mocks results in testing behavior that is not important (call order or which calls were executed) versus testing that a given input causes an expected output. This is less burdensome and fragile to code changes. </p>
+			<p>The original mocking framework (<a href="https://github.com/golang/mock">https://github.com/golang/mock</a>) was considered unsafe at Google and its use was restricted. </p>
+			<p>To sum this section up, we have learned about Go's <strong class="source-inline">testing</strong> package, how to use that package to write tests, the TDT methodology, and my (<em class="italic">John Doak's</em>) thoughts on third-party testing packages.</p>
+			<p>Now that you<a id="_idTextAnchor239"/> have an understanding<a id="_idIndexMarker297"/> of how to do testing, we are going to look at a major addition to Go that was added in version 1.18—generics.</p>
+			<h1 id="_idParaDest-107"><a id="_idTextAnchor240"/>Generics – the new kid on the block</h1>
+			<p>Generics are a new feature in Go 1.18 that looks<a id="_idIndexMarker298"/> to have vast ramifications for Go's future. Generics provide a way to represent multiple types with a new feature called a <strong class="source-inline">type </strong>parameter to allow functions to operate on multiple types.</p>
+			<p>This differs from the standard <strong class="source-inline">interface{}</strong> where these types of operations always happen at runtime and where you must convert <strong class="source-inline">interface{}</strong> to the concrete type to do work.</p>
+			<p>Generics are a new feature, so we are only going to give a very general overview. The Go community and Go authors at this time do not have a set of best practices that have been rigorously tested. This comes with experience in u<a id="_idTextAnchor241"/>sing a feature, and we are only at the early stages of generics at this time, with more features around generics coming in the future.</p>
+			<h2 id="_idParaDest-108"><a id="_idTextAnchor242"/>Type parameters</h2>
+			<p>Type parameters can be added to functions <a id="_idIndexMarker299"/>or <strong class="source-inline">struct</strong> types to support a generic type. However, a key gotcha is that they cannot be used on methods! This is the most requested feature; however, it poses certain challenges to the language that the language authors are not sure how to deal with (or if they can be dealt with).</p>
+			<p>Type parameters are defined after the function name within brackets. Let's look at a basic one here:</p>
+			<p class="source-code">func sortInts[I int8 |int16 |int32 |int64](slice []I) {</p>
+			<p>This creates a function that can sort any of our signed integer types. <strong class="source-inline">I</strong> is the type<a id="_idIndexMarker300"/> parameter and it is limited to the types listed in the bracket. The <strong class="source-inline">|</strong> pipe character acts as an <strong class="source-inline">or</strong> statement saying <strong class="source-inline">I</strong> can be an <strong class="source-inline">int8</strong> or an <strong class="source-inline">int16</strong> type, and so on. </p>
+			<p>Once <strong class="source-inline">I</strong> is defined, we can use it as a type in our arguments. Our function will operate on a slice type of <strong class="source-inline">I</strong>. It should be noted that all values in <strong class="source-inline">I</strong> must be the same type; it cannot be a mix of say <strong class="source-inline">int8</strong> and <strong class="source-inline">int64</strong> values.</p>
+			<p>Let's look at how that might work with a simple bubble-sort implementation, as follows:</p>
+			<p class="source-code">func sortInts[I int8 |int16 |int32 |int64](slice []I) {</p>
+			<p class="source-code">     sorted := false</p>
+			<p class="source-code">     for !sorted {</p>
+			<p class="source-code">          sorted = true</p>
+			<p class="source-code">          for i := range slice[:len(slice)-1] {</p>
+			<p class="source-code">               if slice[i] &gt; slice[i+1] {</p>
+			<p class="source-code">                    sorted = false</p>
+			<p class="source-code">                    slice[i], slice[i+1] = slice[i+1], slice[i]</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>You can see this example here: <a href="https://go.dev/play/p/jly7i9hz0YT">https://go.dev/play/p/jly7i9hz0YT</a>.</p>
+			<p>We now have a function that can be used to sort any type of signed integer. If we were to do this without generics, it would require an argument of <strong class="source-inline">interface{}</strong> that would need to be type switched on the slice type. Then, we would need to write functions to handle each type. You can see an example of what that would look like here: <a href="https://go.dev/play/p/lqVUk9GQFPX">https://go.dev/play/p/lqVUk9GQFPX</a>.</p>
+			<p>The other option would be to use runtime reflection using the <strong class="source-inline">reflect</strong> package, which is slow and unwieldy. <strong class="source-inline">reflect</strong> is an advanced package that has lots of gotchas and should be avoided unless absolutely necessary. Here is an example of this method: <a href="https://go.dev/play/p/3euBYL9dcsU">https://go.dev/play/p/3euBYL9dcsU</a>.</p>
+			<p>As you can see, the generic version is much simpler to implement <a id="_idTextAnchor243"/>and can significantly reduce your code base.</p>
+			<p>Let's have a look at how we could make this slightly easier to read using type<a id="_idIndexMarker301"/> constraints.</p>
+			<h2 id="_idParaDest-109"><a id="_idTextAnchor244"/>Using type constraints</h2>
+			<p>In our last example, <strong class="source-inline">int8 |int16 |int32 |int64</strong> was our type constraint. It limited the types<a id="_idIndexMarker302"/> that we could use for our <strong class="source-inline">I</strong> value type parameter, but typing that all the time is burdensome, so we can also define named type constraints.</p>
+			<p>This is where the addition of generics is likely to create some confusion. Type constraints are made using the <strong class="source-inline">interface</strong> type. Here's an example of a type constraint containing what we had previously:</p>
+			<p class="source-code">type SignedInt interface {</p>
+			<p class="source-code">     int8 |int16 |int32 |int64</p>
+			<p class="source-code">}</p>
+			<p>We can now use that in our previous code, as follows:</p>
+			<p class="source-code">func sortInts[I SignedInt](slice []I) {</p>
+			<p>This reduces the amount of boilerplate we need. It is important to note that <strong class="source-inline">SignedInt</strong> is a type constraint and not a type. <strong class="source-inline">I</strong> is a defined type parameter that acts as a type. I've often found myself writing code like this:</p>
+			<p class="source-code">func sortInts[I SignedInt](slice[]SignedInt) {</p>
+			<p>However, that syntax is incorrect. <strong class="source-inline">SignedInt</strong> here is simply the definition of a constraint, not a type to be used. <strong class="source-inline">I</strong> is the type to be used in the generic function.</p>
+			<p>Another gotcha is that <strong class="source-inline">SignedInt</strong> can only be used on the exact basic types defined here. You might create<a id="_idIndexMarker303"/> your own type, like this:</p>
+			<p class="source-code">type myInt8 int8</p>
+			<p>If you do so, you cannot use this as a <strong class="source-inline">SignedInt</strong> type constraint. But not to worry—if we want this to work on any type based on signed integers, we can change this to the following:</p>
+			<p class="source-code">type SignedInt interface {</p>
+			<p class="source-code">     ~int8 |~int16 |~int32 |~int64</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">~</strong> signals that we <a id="_idTextAnchor245"/>want to allow any type based on this type.</p>
+			<p>Now, let's look at how we can write our sort function to handle more than just signed integers. </p>
+			<h2 id="_idParaDest-110"><a id="_idTextAnchor246"/>We could do better with constraints</h2>
+			<p>What we are doing here can be applied to more than just signed integers. We could make changes to which types<a id="_idIndexMarker304"/> we support, and our function would work exactly the same on a larger set of slice types.</p>
+			<p>The only thing that a type must have for our function to work is that the type must be able to use <strong class="source-inline">&gt;</strong> on two variables that share the same type. That is what allows the <strong class="source-inline">if slice[i] &gt; slice[i+1]</strong> statement to work.</p>
+			<p>The current Go version, as of this writing, does not define a few basic type constraints that are planned for a future release. This future package, which will likely be called <strong class="source-inline">constraints</strong>, is being developed here: <a href="https://pkg.go.dev/golang.org/x/exp/constraints">https://pkg.go.dev/golang.org/x/exp/constraints</a>.</p>
+			<p>It includes a type constraint that looks like this:</p>
+			<p class="source-code">type Ordered interface {</p>
+			<p class="source-code">     ~int | ~int8 | ~int16 | ~int32 | ~int64 |</p>
+			<p class="source-code">          ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |</p>
+			<p class="source-code">          ~float32 | ~float64 |</p>
+			<p class="source-code">          ~string</p>
+			<p class="source-code">}</p>
+			<p>We will borrow <a id="_idIndexMarker305"/>that here and change our function signature, as follows:</p>
+			<p class="source-code">func sortSlice[O constraints.Ordered](sli<a id="_idTextAnchor247"/>ce[]O) {</p>
+			<p>Now, our function can sort any type of slice that can be compared using <strong class="source-inline">&gt; &lt;</strong>. See it at work here: <a href="https://go.dev/play/p/PwrXXLk5rOT">https://go.dev/play/p/PwrXXLk5rOT</a>.</p>
+			<h2 id="_idParaDest-111"><a id="_idTextAnchor248"/>Current built-in constraints</h2>
+			<p>Go has two constraints<a id="_idIndexMarker306"/> that are currently built in, as follows:</p>
+			<ul>
+				<li><strong class="source-inline">comparable</strong></li>
+				<li><strong class="source-inline">any</strong></li>
+			</ul>
+			<p><strong class="source-inline">comparable</strong> contains all types that support <strong class="source-inline">==</strong> or <strong class="source-inline">!=</strong> operators. This is particularly useful when writing generics that use <strong class="source-inline">map</strong> types. The key to a <strong class="source-inline">map</strong> type is always the <strong class="source-inline">comparable</strong> type. </p>
+			<p><strong class="source-inline">any</strong> is an alias for <strong class="source-inline">interface{}</strong>. The Go team has changed all references to <strong class="source-inline">interface{}</strong> in the Go standard library to <strong class="source-inline">any</strong>. You may use them interchangeably, and <strong class="source-inline">any</strong> as a type constraint allows any type.</p>
+			<p>Here is an example of a function that extracts all keys from a <strong class="source-inline">map</strong> type using these constraints:</p>
+			<p class="source-code">func ExtractMapKeys[K comparable, V any](m map[K]V) []K {</p>
+			<p class="source-code">    var keys = make([]K, 0, len(m))</p>
+			<p class="source-code">    for k := range m {</p>
+			<p class="source-code">        keys = append(keys, k)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return keys</p>
+			<p class="source-code">}</p>
+			<p>Here it is running in the playground, so give it a try: <a href="https://go.dev/play/p/h8aKwoTaOLj">https://go.dev/play/p/<span id="_idTextAnchor249"/>h8aKwoTaOLj</a>.</p>
+			<p>Let's look at what happens<a id="_idIndexMarker307"/> if we do type constraining and we constrain a type such as a standard interface by requiring a method.</p>
+			<h2 id="_idParaDest-112"><a id="_idTextAnchor250"/>Type constraints with methods</h2>
+			<p>A type constraint can act like a standard<a id="_idIndexMarker308"/> interface in that it can require methods<a id="_idIndexMarker309"/> to be attached to the type. Here is an example:</p>
+			<p class="source-code">type StringPrinter interface {</p>
+			<p class="source-code">     ~string</p>
+			<p class="source-code">     Print()</p>
+			<p class="source-code">}</p>
+			<p>This type constraint can only be satisfied by a type based on <strong class="source-inline">string</strong> and that has the <strong class="source-inline">Print()</strong> method defined.</p>
+			<p>A key requirement here is that we use <strong class="source-inline">~string</strong> and not <strong class="source-inline">string</strong>. A standard <strong class="source-inline">string</strong> type can never have the <strong class="source-inline">Print()</strong> method, and therefore this type constraint could never be satisfied.</p>
+			<p>Here is a simple use of this constraint:</p>
+			<p class="source-code">func PrintStrings[S StringPrinter](slice []S) {<a id="_idTextAnchor251"/></p>
+			<p class="source-code">     for _, s := range slice {</p>
+			<p class="source-code">          s.Print()</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>Now, let's take a look at why you might want to add type parameters to struct types.</p>
+			<h2 id="_idParaDest-113"><a id="_idTextAnchor252"/>Adding type parameters to struct types</h2>
+			<p>Earlier, we wrote a generic function<a id="_idIndexMarker310"/> for sorting slices called <strong class="source-inline">SortSlice()</strong>, but that has some limitations<a id="_idIndexMarker311"/> in that it can only handle slices that are based on types that meet the constraints in <strong class="source-inline">constraints.Ordered</strong>. Oftentimes, we might want to handle slices that might contain types based on <strong class="source-inline">struct</strong>—say, for example, this type:</p>
+			<p class="source-code">type Record struct {</p>
+			<p class="source-code">     First, Last string</p>
+			<p class="source-code">}</p>
+			<p>Our <strong class="source-inline">SortSlice()</strong> function could not handle a <strong class="source-inline">[]Record</strong>, so we need to do something different to handle these types of cases. </p>
+			<p>For this example, we want to use Go's built-in <strong class="source-inline">sort.Sort()</strong> function. This is a highly optimized sort that uses multiple sorting algorithms, depending on slice size.</p>
+			<p>To use it, you need a type that implements the <strong class="source-inline">sort.Interface</strong> type. That <strong class="source-inline">interface</strong> type is defined as follows:</p>
+			<p class="source-code">type Interface interface {</p>
+			<p class="source-code">     Len() int</p>
+			<p class="source-code">     Less(i, j int) bool</p>
+			<p class="source-code">     Swap(i, j int)</p>
+			<p class="source-code">}</p>
+			<p>Before Go generics, you would have needed to implement an adapter type to implement these for every type you wanted to sort. For example, here is an adapter to sort <strong class="source-inline">[]int</strong>:</p>
+			<p class="source-code">type intAdapter struct {</p>
+			<p class="source-code">     sl []int</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (in intAdapter) Len() int {</p>
+			<p class="source-code">     return len(in.sl)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (in intAdapter) Swap(i, j int) {</p>
+			<p class="source-code">     in.sl[i], in.sl[j] = in.sl[j], in.sl[i]</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (in intAdapter) Less(i, j int) bool {</p>
+			<p class="source-code">     return in.sl[i] &lt; in.sl[j]</p>
+			<p class="source-code">}</p>
+			<p>And you could use it like so:</p>
+			<p class="source-code">ints := []int{5, 3, 7, 1}</p>
+			<p class="source-code">sort.Sort(intAdapter{ints})</p>
+			<p>You can see that running here: <a href="https://go.dev/play/p/Yl6Al9ylEhd">https://go.dev/play/p/Yl6Al9ylEhd</a>.</p>
+			<p>You would then need <a id="_idIndexMarker312"/>to do this for every other signed type or other types<a id="_idIndexMarker313"/> you wanted to sort. Imagine doing this for all <strong class="source-inline">int8</strong>, <strong class="source-inline">int16</strong>, <strong class="source-inline">int32</strong>, and <strong class="source-inline">int64</strong> signed integer types. You would also need to do that for every other type you want to sort.</p>
+			<p>So, what we want to do is use generics to give us a single adapter type that can be used for a slice with any element type.</p>
+			<p>Let's use a <strong class="source-inline">type</strong> parameter on a struct to allow us to create a generic adapter so that we can adapt any slice to the <strong class="source-inline">sort.Interface</strong> type, as follows:</p>
+			<p class="source-code">type sortableSlice[T any] struct { </p>
+			<p class="source-code">    slice []T </p>
+			<p class="source-code">    less func(T, T) bool </p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s sortableSlice[T]) Len() int { </p>
+			<p class="source-code">    return len(s.slice) </p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s sortableSlice[T]) Swap(i, j int) { </p>
+			<p class="source-code">    s.slice[i], s.slice[j] = s.slice[j], s.slice[i] </p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s sortableSlice[T]) Less(i, j int) bool { </p>
+			<p class="source-code">    return s.less(s.slice[i], s.slice[j]) </p>
+			<p class="source-code">} </p>
+			<p>This is very similar to <strong class="source-inline">intAdapter</strong> from before, with two distinctions, as follows:</p>
+			<ul>
+				<li>The slice elements are a <strong class="source-inline">T</strong> type parameter that can be any value</li>
+				<li>We added a <strong class="source-inline">less</strong> field, which is a function that does the comparison when <strong class="source-inline">Less()</strong> is called</li>
+			</ul>
+			<p>Let's create a function<a id="_idIndexMarker314"/> that can implement <strong class="source-inline">func(T, T) bool</strong> for our <strong class="source-inline">Record</strong> type. This compares the full name with the last<a id="_idIndexMarker315"/> name being considered first. The code is illustrated in the following snippet:</p>
+			<p class="source-code">func recordLess(a, b Record) bool {</p>
+			<p class="source-code">     aCmp := a.Last + a.First</p>
+			<p class="source-code">     bCmp := b.Last + b.First</p>
+			<p class="source-code">     return aCmp &lt; bCmp</p>
+			<p class="source-code">}</p>
+			<p>Finally, we can use <strong class="source-inline">sortableSlice</strong> to write a generic sort function that uses the existing <strong class="source-inline">sort.Sort()</strong> function to sort any slice that we can do comparisons on. Here's the code we need to execute:</p>
+			<p class="source-code">func SortSlice[T any](slice []T, less func(T, T) bool) {</p>
+			<p class="source-code">     sort.Sort(sortableSlice[T]{slice: slice, less: less})</p>
+			<p class="source-code">}</p>
+			<p>Here is this in action: <a href="https://go.dev/play/p/6Gd7DLgVQ_y">https://go.dev/play/p/6Gd7DLgVQ_y</a>.</p>
+			<p>You will notice that<a id="_idIndexMarker316"/> when we create our <strong class="source-inline">sortableSlice</strong> instance, we have <strong class="source-inline">[T]</strong> in the syntax. This is used to tell Go what type <strong class="source-inline">T</strong> will be, which<a id="_idIndexMarker317"/> in this case is the generic <strong class="source-inline">T</strong> type passed in <strong class="source-inline">SortSlice</strong>. If you try to remove <strong class="source-inline">[T]</strong>, you will get the following message:</p>
+			<p class="source-code">cannot use generic type sortableSlice[T any] without instantiation</p>
+			<p>We will talk about this in our next section.</p>
+			<p>Of course, if you want to do a generic sort without using the <strong class="source-inline">sort.Sort()</strong> function,</p>
+			<p>this can be done with less complication. Here is a generic version of the quicksort algorithm that uses <a id="_idTextAnchor253"/>generics: <a href="https://go.dev/play/p/gvPl9jHtAS4">https://go.dev/play/p/gvPl9jHtAS4</a>.</p>
+			<p>Now, we will look at calling a generic function when Go cannot infer a type for the generic function to use.</p>
+			<h2 id="_idParaDest-114"><a id="_idTextAnchor254"/>Specifying the type when calling a generic function</h2>
+			<p>So far, all the generic cases up until the <strong class="source-inline">sortableSlice</strong> function have allowed the Go compiler to infer which type<a id="_idIndexMarker318"/> would be used and therefore how to deal with invoking the function.</p>
+			<p>But Go cannot always infer which type it needs to use. We can see in our last section where we told <strong class="source-inline">sortableSlice</strong> it would be using the <strong class="source-inline">T</strong> generic type we defined.</p>
+			<p>Let's create a function that can be used with <strong class="source-inline">SortSlice()</strong> to do our less comparison whenever the types are of type <strong class="source-inline">constraints.Ordered</strong>. The code is illustrated in the following snippet:</p>
+			<p class="source-code">func orderedCmp[O constraints.Ordered](a O, b O) bool {</p>
+			<p class="source-code">     return a &lt; b</p>
+			<p class="source-code">}</p>
+			<p>With this, we can call <strong class="source-inline">SortSlice()</strong> and pass in any slice of types contained in <strong class="source-inline">constraints.Ordered</strong> and our new <strong class="source-inline">orderedCmp</strong> generic function to sort a slice.</p>
+			<p>Let's give it a try, as follows:</p>
+			<p class="source-code">strings := []string{"hello", "I", "must", "be", "going"}</p>
+			<p class="source-code">SortSlice(strings, orderedCmp)</p>
+			<p>Uh oh—Go can't seem<a id="_idIndexMarker319"/> to get that to work, as we receive the following message:</p>
+			<p class="source-code">cannot use generic function orderedCmp without instantiation</p>
+			<p>This is because we are passing the function and not invoking the function. Go's inference only currently happens by looking at the call types it receives. It doesn't infer inside <strong class="source-inline">SortSlice()</strong> where <strong class="source-inline">orderedCmp()</strong> will be called and passed a <strong class="source-inline">string</strong> type. So, to use it, we need to tell it which type it will be working on when it is called.</p>
+			<p>In contrast, <strong class="source-inline">SortSlice()</strong> doesn't require this because it is being invoked directly and can infer that <strong class="source-inline">T</strong> will be a <strong class="source-inline">string</strong> type from looking at the passed argument, <strong class="source-inline">strings</strong>.</p>
+			<p>By using <strong class="source-inline">[string]</strong>, we can give <strong class="source-inline">orderedCmp</strong> a little more information for this to work, as follows:</p>
+			<p class="source-code">SortSlice(strings, orderedCmp[string])</p>
+			<p>Now that it knows that we will be comparing <strong class="source-inline">string</strong> types, it is ready to rock and roll, as you can see here: <a href="https://go.dev/play/p/kd6sylV17Jz">https://go.dev/play/p/kd6sylV17Jz</a>.</p>
+			<p>If we wanted to be very verbose, we coul<a id="_idTextAnchor255"/>d do the following:</p>
+			<p class="source-code">SortSlice[string](strings, orderedCmp[string])</p>
+			<p>Now, let's take a look at some common gotchas you might run into when trying to use generics.</p>
+			<h2 id="_idParaDest-115"><a id="_idTextAnchor256"/>Gotchas to watch for</h2>
+			<p>When you are playing with generics, there<a id="_idIndexMarker320"/> are a lot of gotchas where the error messages are not yet clear. So, let's talk about some of them so that you can avoid the mistakes that I've made.</p>
+			<p>First up, impossible type constraints. See if you can spot the problem in the following code:</p>
+			<p class="source-code">type Values interface {</p>
+			<p class="source-code">     int8 | int16 | int32 |int64</p>
+			<p class="source-code">     string | []byte</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func Print[V Values](v V) {</p>
+			<p class="source-code">     fmt.Println(v)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     Print[string]("hello")</p>
+			<p class="source-code">}</p>
+			<p>If you were to run this, you would<a id="_idIndexMarker321"/> get the following: </p>
+			<p class="source-code">cannot implement Values (empty type set)</p>
+			<p>This is because <strong class="source-inline">Values</strong> is incorrectly defined. I forgot to put <strong class="source-inline">|</strong> after <strong class="source-inline">int64</strong>. Without that, the constraint says the value must be <strong class="source-inline">int8</strong> or <strong class="source-inline">int16</strong> or <strong class="source-inline">int32</strong> or <strong class="source-inline">int64</strong> <strong class="bold">AND</strong> a <strong class="source-inline">string</strong> or <strong class="source-inline">[]byte</strong> type. That is an impossible type, which means nothing can implement it. You can see this here: <a href="https://go.dev/play/p/Nxsz4HKxdc4">https://go.dev/play/p/Nxsz4HKxdc4</a>.</p>
+			<p>The next gotcha is instantiation when returning <strong class="source-inline">struct</strong> types that implement type parameters. Here's an example of this:</p>
+			<p class="source-code">type ValueType interface {</p>
+			<p class="source-code">     string | bool | int</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type Value[T ValueType] struct {</p>
+			<p class="source-code">     val T</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New[T ValueType](v T) Value { </p>
+			<p class="source-code">     return Value[T]{val: v}</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (v Value[T]) Value() T {</p>
+			<p class="source-code">     return v.val</p>
+			<p class="source-code">}</p>
+			<p>An attempt to compile this code will give you the following message:</p>
+			<p class="source-code">cannot use generic type Value[T ValueType] without instantiation</p>
+			<p>It was not clear to me what the problem <a id="_idIndexMarker322"/>was here for a while. It turns out that I needed to add the <strong class="source-inline">type</strong> parameter on the return value as well. Here is the change:</p>
+			<p class="source-code">func New[T ValueType](v T) Value[T] {</p>
+			<p>With this change, everything works fine. Try the broken version (<a href="https://go.dev/play/p/EGTr2zd7qZW">https://go.dev/play/p/EGTr2zd7qZW</a>) and fix it with the aforementioned change to familiarize yourself.</p>
+			<p>I expect that we will see better error messages and better det<a id="_idTextAnchor257"/>ection in our development tools in the near future.</p>
+			<p>Now that we have covered the basics of generics, let's talk about when you should consider using generics.</p>
+			<h2 id="_idParaDest-116"><a id="_idTextAnchor258"/>When to use generics</h2>
+			<p>The only guideline<a id="_idIndexMarker323"/> at this time is taken from the creator of Go's generics feature, Ian Taylor, as presented here:</p>
+			<p>"<em class="italic">If you find yourself writing the exact same code multiple times where the only difference between the copies is that the code uses different types, consider whether you can use a type parameter.</em>"</p>
+			<p>I have found this translates to the following: </p>
+			<p><em class="italic">If your function needs a switch statement on the generic type, you should probably be using standard interfaces instead of generics.</em></p>
+			<p>To close out on generics, I would leave you with the thought that this is a new language feature, and the jury is still out on the best ways for this to be used. The best advice I can give is to be reserved<a id="_idIndexMarker324"/> in your use of this feature.</p>
+			<h1 id="_idParaDest-117"><a id="_idTextAnchor259"/>Summary</h1>
+			<p>In this chapter, you have learned the essential parts of the <strong class="bold">Go</strong> language. This has included handling errors, using Go concurrency, taking advantage of Go's testing framework, and an introduction to Go's newest feature, generics. The skills acquired in this chapter are essential for all future chapters. </p>
+			<p>You should now possess the ability to read Go code contained in the rest of the book. In addition, this chapter has given you the necessary skills to write your own Go code. We will use these skills to manipulate files in the filesystem, execute commands on remote machines, and build RPC services that can do a myriad of tasks. You will build chatbots in order to do <strong class="bold">chat-based operations</strong> (<strong class="bold">ChatOps</strong>) and write software to extend Kubernetes. The learnings here are truly foundational.</p>
+			<p>Next, we will look at how to setup your Go environment to compile code locally on your machine. Let’s get started! </p>
+		</div>
+	</div></body></html>

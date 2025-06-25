@@ -1,0 +1,587 @@
+<html><head></head><body>
+<div epub:type="chapter" id="_idContainer060">
+<h1 class="chapter-number" id="_idParaDest-224"><a id="_idTextAnchor224"/><span class="koboSpan" id="kobo.1.1">8</span></h1>
+<h1 id="_idParaDest-225"><a id="_idTextAnchor225"/><span class="koboSpan" id="kobo.2.1">Don’t Get Lost in the Data Jungle</span></h1>
+<p><span class="koboSpan" id="kobo.3.1">Data is at the crux of everything we do. </span><span class="koboSpan" id="kobo.3.2">Most operations in cloud native applications relate to generating, consuming, and modifying data in myriad forms. </span><span class="koboSpan" id="kobo.3.3">Choosing the right places to store our data in the cloud, knowing how to ingest data, and maintaining data integrity are paramount. </span><span class="koboSpan" id="kobo.3.4">While much of the value of the applications we produce lives in the business logic, fundamentally, that business logic operates on data. </span><span class="koboSpan" id="kobo.3.5">Therefore, the way we store data is instrumental in the operation of our application. </span><span class="koboSpan" id="kobo.3.6">Unlike traditional on-premise services, cloud native services present new and exciting opportunities that can reduce our operational and maintenance overhead significantly. </span><span class="koboSpan" id="kobo.3.7">However, when used incorrectly, these services can just as quickly hamper our efforts through some </span><span class="No-Break"><span class="koboSpan" id="kobo.4.1">insidious anti-patterns.</span></span></p>
+<p><span class="koboSpan" id="kobo.5.1">In this chapter, we are going to cover the following main anti-patterns that are present when persisting data in </span><span class="No-Break"><span class="koboSpan" id="kobo.6.1">the cloud:</span></span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.7.1">Picking the wrong database </span><span class="No-Break"><span class="koboSpan" id="kobo.8.1">or storage</span></span></li>
+<li><span class="koboSpan" id="kobo.9.1">Data replication from production </span><span class="No-Break"><span class="koboSpan" id="kobo.10.1">to development</span></span></li>
+<li><span class="koboSpan" id="kobo.11.1">Backup and recovery should </span><span class="No-Break"><span class="koboSpan" id="kobo.12.1">theoretically work</span></span></li>
+<li><span class="koboSpan" id="kobo.13.1">Manual </span><span class="No-Break"><span class="koboSpan" id="kobo.14.1">data ingestion</span></span></li>
+<li><span class="koboSpan" id="kobo.15.1">No observability for data </span><span class="No-Break"><span class="koboSpan" id="kobo.16.1">transfer errors</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.17.1">By the end of this chapter, you will have a solid understanding of cloud native data storage options for operational purposes and the trade-offs </span><span class="No-Break"><span class="koboSpan" id="kobo.18.1">between them.</span></span></p>
+<h1 id="_idParaDest-226"><a id="_idTextAnchor226"/><span class="koboSpan" id="kobo.19.1">Picking the wrong database or storage</span></h1>
+<p><span class="koboSpan" id="kobo.20.1">“</span><em class="italic"><span class="koboSpan" id="kobo.21.1">When all you have is a hammer, everything looks like a nail</span></em><span class="koboSpan" id="kobo.22.1">” is a refrain commonly used to describe overreliance on the same tool for every job. </span><span class="koboSpan" id="kobo.22.2">Having preferences is acceptable, but when teams pick a database or storage solution, we often see the same developers repeatedly reaching for the same tools. </span><span class="koboSpan" id="kobo.22.3">While familiarity with a particular toolset might be advantageous for rapid onboarding and development, it can lead to suboptimal solutions and anti-patterns. </span><span class="koboSpan" id="kobo.22.4">Cloud native applications have a wide range of databases and storage methods, so a well-rounded cloud application should consider all the available options. </span><span class="koboSpan" id="kobo.22.5">Before we dive into these options, let’s explore some required background knowledge to frame </span><span class="No-Break"><span class="koboSpan" id="kobo.23.1">our conversations.</span></span></p>
+<h2 id="_idParaDest-227"><a id="_idTextAnchor227"/><span class="koboSpan" id="kobo.24.1">Framing the conversation</span></h2>
+<p><span class="koboSpan" id="kobo.25.1">When discussing </span><a id="_idIndexMarker883"/><span class="koboSpan" id="kobo.26.1">databases, it is essential to start by exploring the </span><strong class="bold"><span class="koboSpan" id="kobo.27.1">consistency, availability, and partition tolerance</span></strong><span class="koboSpan" id="kobo.28.1"> (</span><strong class="bold"><span class="koboSpan" id="kobo.29.1">CAP</span></strong><span class="koboSpan" id="kobo.30.1">) theorem, normal forms, and time complexity. </span><span class="koboSpan" id="kobo.30.2">These three concepts explain the trade-offs and approaches to designing data models for </span><span class="No-Break"><span class="koboSpan" id="kobo.31.1">myriad solutions.</span></span></p>
+<h3><span class="koboSpan" id="kobo.32.1">CAP theorem</span></h3>
+<p><span class="koboSpan" id="kobo.33.1">As </span><a id="_idIndexMarker884"/><span class="koboSpan" id="kobo.34.1">previously mentioned, the CAP theorem stands for </span><a id="_idIndexMarker885"/><span class="koboSpan" id="kobo.35.1">consistency, availability, and partition tolerance, specifically concerning distributed datastores. </span><span class="koboSpan" id="kobo.35.2">The consensus is that a distributed database solution can only genuinely address two of these </span><span class="No-Break"><span class="koboSpan" id="kobo.36.1">capabilities simultaneously:</span></span></p>
+<ul>
+<li><strong class="bold"><span class="koboSpan" id="kobo.37.1">Consistency</span></strong><span class="koboSpan" id="kobo.38.1"> ensures </span><a id="_idIndexMarker886"/><span class="koboSpan" id="kobo.39.1">that when a database read occurs, it will return the database state that results from all actions committed before we request the read. </span><span class="koboSpan" id="kobo.39.2">Strongly consistent databases maintain this paradigm, whereas eventually consistent databases will return a state that may or may not have all applied writes propagated; it represents the state of the database from some point in </span><span class="No-Break"><span class="koboSpan" id="kobo.40.1">the past.</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.41.1">Availability</span></strong><span class="koboSpan" id="kobo.42.1"> means</span><a id="_idIndexMarker887"/><span class="koboSpan" id="kobo.43.1"> that every request received by a valid database node must return a non-error response. </span><span class="koboSpan" id="kobo.43.2">In the context of a distributed datastore, this might conflict with the guarantee of consistency. </span><span class="koboSpan" id="kobo.43.3">How can we ensure that our system has received all transactions from all other nodes, especially in scenarios where we might have network partitions or delays? </span><span class="koboSpan" id="kobo.43.4">This brings us to </span><span class="No-Break"><span class="koboSpan" id="kobo.44.1">partition tolerance.</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.45.1">Partition tolerance</span></strong><span class="koboSpan" id="kobo.46.1"> guarantees </span><a id="_idIndexMarker888"/><span class="koboSpan" id="kobo.47.1">that the system will continue operating despite unreliable or late message delivery between nodes. </span><span class="koboSpan" id="kobo.47.2">If one of our nodes suffers catastrophic network failure, our datastore should keep operating. </span><span class="koboSpan" id="kobo.47.3">This is primarily an issue in distributed databases with multi-master configurations, such as some of the high-availability options discussed later in </span><span class="No-Break"><span class="koboSpan" id="kobo.48.1">the chapter.</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.49.1">In an ideal</span><a id="_idIndexMarker889"/><span class="koboSpan" id="kobo.50.1"> world, our chosen datastore would have all three of these properties, and some recent developments in this space push the limits of this exclusivity. </span><span class="koboSpan" id="kobo.50.2">However, this pattern is generally closely reflected </span><span class="No-Break"><span class="koboSpan" id="kobo.51.1">in reality.</span></span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer059">
+<span class="koboSpan" id="kobo.52.1"><img alt="" role="presentation" src="image/B22364_08_1.jpg"/></span>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.53.1">Figure 8.1 – Euler diagram for exclusivity of the CAP theorem elements</span></p>
+<h3><span class="koboSpan" id="kobo.54.1">Normal forms</span></h3>
+<p><strong class="bold"><span class="koboSpan" id="kobo.55.1">Normal forms</span></strong><span class="koboSpan" id="kobo.56.1"> refer </span><a id="_idIndexMarker890"/><span class="koboSpan" id="kobo.57.1">to how we construct data in our database systems. </span><span class="koboSpan" id="kobo.57.2">Fundamentally, normal forms are a measure of normalization in our </span><a id="_idIndexMarker891"/><span class="koboSpan" id="kobo.58.1">database. </span><span class="koboSpan" id="kobo.58.2">We will quickly review normal forms and use a common theme to provide examples for each. </span><span class="koboSpan" id="kobo.58.3">One point to keep in mind as we go through this section is that even though it may appear that the higher our normal form is, the better our database design is, in most cases, we also need to consider the performance and querying of our data and access patterns. </span><span class="koboSpan" id="kobo.58.4">We will only discuss the first three normal forms here as, typically, this is where most of the differences between cloud native </span><span class="No-Break"><span class="koboSpan" id="kobo.59.1">databases lie:</span></span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.60.1">The first normal form of data (</span><strong class="bold"><span class="koboSpan" id="kobo.61.1">1NF</span></strong><span class="koboSpan" id="kobo.62.1">) defines </span><a id="_idIndexMarker892"/><span class="koboSpan" id="kobo.63.1">each cell as a unit that only contains a single value, and the names of columns in our data storage should be unique. </span><span class="koboSpan" id="kobo.63.2">Many storage solutions that support nested or unstructured data </span><a id="_idIndexMarker893"/><span class="koboSpan" id="kobo.64.1">already fail this criterion. </span><span class="koboSpan" id="kobo.64.2">The following table shows a first normal form dataset for </span><span class="No-Break"><span class="koboSpan" id="kobo.65.1">order information:</span></span></li>
+</ul>
+<table class="No-Table-Style _idGenTablePara-1" id="table001-3">
+<colgroup>
+<col/>
+<col/>
+<col/>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style" colspan="5">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.66.1">InvoiceItems</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.67.1">InvoiceId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.68.1">ItemId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.69.1">Qty</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.70.1">SalespersonID</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.71.1">Salesperson</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.72.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.73.1">312</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.74.1">10</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.75.1">10</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.76.1">Aiden</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.77.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.78.1">432</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.79.1">5</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.80.1">10</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.81.1">Aiden</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.82.1">456</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.83.1">321</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.84.1">20</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.85.1">8</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.86.1">Gerald</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.87.1">789</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.88.1">432</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.89.1">10</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.90.1">8</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.91.1">Gerald</span></span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.92.1">Table 8.1 – Invoices, items, and salespeople stored in a single table</span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.93.1">The </span><a id="_idIndexMarker894"/><span class="koboSpan" id="kobo.94.1">second normal form (</span><strong class="bold"><span class="koboSpan" id="kobo.95.1">2NF</span></strong><span class="koboSpan" id="kobo.96.1">) states that all </span><a id="_idIndexMarker895"/><span class="koboSpan" id="kobo.97.1">record non-key attributes must depend on the primary key. </span><span class="koboSpan" id="kobo.97.2">For example, if we have a sales record with a key consisting of an invoice ID and an item ID, we store the salesperson’s name against the invoice for each record. </span><span class="koboSpan" id="kobo.97.3">However, in our fictitious scenario, an invoice only has one salesperson attached, but we store it multiple times in the </span><strong class="source-inline"><span class="koboSpan" id="kobo.98.1">Salesperson</span></strong><span class="koboSpan" id="kobo.99.1"> column in the first table. </span><span class="koboSpan" id="kobo.99.2">In this scenario, our result only depends on the part of the key, the </span><span class="No-Break"><span class="koboSpan" id="kobo.100.1">invoice ID.</span></span></li>
+</ul>
+<table class="No-Table-Style _idGenTablePara-1" id="table002-1">
+<colgroup>
+<col/>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style" colspan="3">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.101.1">InvoiceItems</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.102.1">InvoiceId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.103.1">ItemId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.104.1">Qty</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.105.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.106.1">312</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.107.1">10</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.108.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.109.1">432</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.110.1">5</span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.111.1">456</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.112.1">321</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.113.1">20</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.114.1">789</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.115.1">432</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.116.1">10</span></span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.117.1">Table 8.2 – Invoices and items; note we have removed two columns in this table</span></p>
+<p><span class="koboSpan" id="kobo.118.1">Let’s add a</span><a id="_idIndexMarker896"/><span class="koboSpan" id="kobo.119.1"> new table to satisfy the second normal form by </span><a id="_idIndexMarker897"/><span class="koboSpan" id="kobo.120.1">storing salespeople against </span><span class="No-Break"><span class="koboSpan" id="kobo.121.1">invoice IDs:</span></span></p>
+<table class="No-Table-Style _idGenTablePara-1" id="table003-1">
+<colgroup>
+<col/>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style" colspan="3">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.122.1">InvoiceSalesperson</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.123.1">InvoiceId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.124.1">SalespersonID</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.125.1">Salesperson</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.126.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.127.1">10</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.128.1">Aiden</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.129.1">456</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.130.1">8</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.131.1">Gerald</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.132.1">789</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.133.1">8</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.134.1">Gerald</span></span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.135.1">Table 8.3 – Invoices and their relation to salespeople; note that we are storing less data now but can reconstruct the same level of detail</span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.136.1">The third normal form (</span><strong class="bold"><span class="koboSpan" id="kobo.137.1">3NF</span></strong><span class="koboSpan" id="kobo.138.1">) states that all elements must give information about the key</span><a id="_idIndexMarker898"/><span class="koboSpan" id="kobo.139.1"> and nothing but the key. </span><span class="koboSpan" id="kobo.139.2">There should be no transitive dependencies in the data. </span><span class="koboSpan" id="kobo.139.3">For example, we still violate this rule in our fictitious scenario, as our </span><strong class="source-inline"><span class="koboSpan" id="kobo.140.1">InvoiceSalesperson</span></strong><span class="koboSpan" id="kobo.141.1"> table is based on the </span><strong class="source-inline"><span class="koboSpan" id="kobo.142.1">InvoiceId</span></strong><span class="koboSpan" id="kobo.143.1"> key. </span><span class="koboSpan" id="kobo.143.2">However, the salesperson’s name depends on </span><strong class="source-inline"><span class="koboSpan" id="kobo.144.1">SalespersonID</span></strong><span class="koboSpan" id="kobo.145.1">, which is a transitive dependency. </span><span class="koboSpan" id="kobo.145.2">To rectify this, let’s add a </span><strong class="source-inline"><span class="koboSpan" id="kobo.146.1">Salesperson</span></strong><span class="koboSpan" id="kobo.147.1"> table (</span><span class="No-Break"><em class="italic"><span class="koboSpan" id="kobo.148.1">Table 8.5</span></em></span><span class="No-Break"><span class="koboSpan" id="kobo.149.1">):</span></span></li>
+</ul>
+<table class="No-Table-Style _idGenTablePara-1" id="table004-1">
+<colgroup>
+<col/>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style" colspan="3">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.150.1">InvoiceItems</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.151.1">InvoiceId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.152.1">ItemId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.153.1">Qty</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.154.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.155.1">312</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.156.1">10</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.157.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.158.1">432</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.159.1">5</span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.160.1">456</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.161.1">321</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.162.1">20</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.163.1">789</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.164.1">432</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.165.1">10</span></span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.166.1">Table 8.4 – Invoices and items; this scenario is unchanged from our previous example</span></p>
+<p><span class="koboSpan" id="kobo.167.1">We then</span><a id="_idIndexMarker899"/><span class="koboSpan" id="kobo.168.1"> have the same invoice salesperson mapping; however, we use an identifier rather than the </span><span class="No-Break"><span class="koboSpan" id="kobo.169.1">salesperson’s name.</span></span></p>
+<table class="No-Table-Style _idGenTablePara-1" id="table005-1">
+<colgroup>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style" colspan="2">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.170.1">InvoiceSalesperson</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.171.1">InvoiceId (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.172.1">SalespersonID</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.173.1">123</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.174.1">10</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.175.1">456</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.176.1">8</span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.177.1">789</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.178.1">8</span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.179.1">Table 8.5 – Invoices and their relation to salespeople; however, we have removed the transitive dependency</span></p>
+<p><span class="koboSpan" id="kobo.180.1">Finally, we </span><a id="_idIndexMarker900"/><span class="koboSpan" id="kobo.181.1">add a table with each of the</span><a id="_idIndexMarker901"/><span class="koboSpan" id="kobo.182.1"> salespeople </span><span class="No-Break"><span class="koboSpan" id="kobo.183.1">in it:</span></span></p>
+<table class="No-Table-Style _idGenTablePara-1" id="table006-1">
+<colgroup>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style" colspan="2">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.184.1">Salesperson</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.185.1">SalespersonID (key)</span></strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold"><span class="koboSpan" id="kobo.186.1">Salesperson</span></strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.187.1">10</span></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.188.1">Aiden</span></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="koboSpan" id="kobo.189.1">8</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><span class="koboSpan" id="kobo.190.1">Gerald</span></span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US"><span class="koboSpan" id="kobo.191.1">Table 8.6 – Maps salespeople IDs to their names; this once again reduces the data we store but can still be reconstructed with the right access patterns</span></p>
+<p><span class="koboSpan" id="kobo.192.1">Our solution has now evolved to comply with the third normal form. </span><span class="koboSpan" id="kobo.192.2">As you can see, high levels of normalization require increasing dependence on relationships but provide greater consistency in </span><span class="No-Break"><span class="koboSpan" id="kobo.193.1">our data.</span></span></p>
+<h3><span class="koboSpan" id="kobo.194.1">Time complexity</span></h3>
+<p><span class="koboSpan" id="kobo.195.1">Finally, we </span><a id="_idIndexMarker902"/><span class="koboSpan" id="kobo.196.1">need to discuss time complexity and Big O notation. </span><span class="koboSpan" id="kobo.196.2">Big O notation describes the upper bound of a system’s execution time in relation to the size of the dataset being processed. </span><span class="koboSpan" id="kobo.196.3">A system with a constant lookup time for a record, regardless of its dataset, is </span><em class="italic"><span class="koboSpan" id="kobo.197.1">O(1)</span></em><span class="koboSpan" id="kobo.198.1">. </span><span class="koboSpan" id="kobo.198.2">A system that linearly scales its lookup time with the number of items in our dataset </span><span class="No-Break"><span class="koboSpan" id="kobo.199.1">is </span></span><span class="No-Break"><em class="italic"><span class="koboSpan" id="kobo.200.1">O(n)</span></em></span><span class="No-Break"><span class="koboSpan" id="kobo.201.1">.</span></span></p>
+<p><span class="koboSpan" id="kobo.202.1">A good example</span><a id="_idIndexMarker903"/><span class="koboSpan" id="kobo.203.1"> is a naive database implementation that checks every row in a database to see whether it matches our selection criteria. </span><span class="koboSpan" id="kobo.203.2">In this case, the implementation would be </span><em class="italic"><span class="koboSpan" id="kobo.204.1">O(n)</span></em><span class="koboSpan" id="kobo.205.1"> complexity; as the number of records grows, so does the number of checks we need to make on each lookup linearly. </span><span class="koboSpan" id="kobo.205.2">In reality, most database solutions will lie somewhere between these values. </span><span class="koboSpan" id="kobo.205.3">Complexity can scale at rates greater than </span><em class="italic"><span class="koboSpan" id="kobo.206.1">O(n)</span></em><span class="koboSpan" id="kobo.207.1">, but you should find another one if a database ever offers </span><span class="No-Break"><span class="koboSpan" id="kobo.208.1">that complexity.</span></span></p>
+<h2 id="_idParaDest-228"><a id="_idTextAnchor228"/><span class="koboSpan" id="kobo.209.1">The right database for the right purpose</span></h2>
+<p><span class="koboSpan" id="kobo.210.1">We see four key types </span><a id="_idIndexMarker904"/><span class="koboSpan" id="kobo.211.1">of databases utilized in cloud native systems for bulk data storage: relational, NoSQL, key-value, and graph (there are many other solutions, such as ledger/blockchain databases, hierarchical databases, and vector databases, but they are outside the scope of this section). </span><span class="koboSpan" id="kobo.211.2">Each has advantages and is useful for different data types but requires different approaches. </span><span class="koboSpan" id="kobo.211.3">A common anti-pattern is developers choosing the wrong cloud databases for </span><span class="No-Break"><span class="koboSpan" id="kobo.212.1">their applications.</span></span></p>
+<h3><span class="koboSpan" id="kobo.213.1">Relational databases</span></h3>
+<p><strong class="bold"><span class="koboSpan" id="kobo.214.1">Relational databases</span></strong><span class="koboSpan" id="kobo.215.1"> are</span><a id="_idIndexMarker905"/><span class="koboSpan" id="kobo.216.1"> the tried-and-true traditional database solution. </span><span class="koboSpan" id="kobo.216.2">They allow you to establish records and model the relationships </span><a id="_idIndexMarker906"/><span class="koboSpan" id="kobo.217.1">between them. </span><span class="koboSpan" id="kobo.217.2">In this solution, the database usually conforms to a strict, predefined set of relationships and structures defined as a part of its schema. </span><span class="koboSpan" id="kobo.217.3">However, more and more relational database engines are providing the ability to store semi-structured and unstructured data. </span><span class="koboSpan" id="kobo.217.4">Due to their highly structured data models, relational databases make it very easy to maintain consistency and integrity of the data. </span><span class="koboSpan" id="kobo.217.5">Their inbuilt support of relationships makes it easy to query normalized data. </span><span class="koboSpan" id="kobo.217.6">In the cloud world, these databases are often offered as a </span><em class="italic"><span class="koboSpan" id="kobo.218.1">service</span></em><span class="koboSpan" id="kobo.219.1"> and may even have “</span><em class="italic"><span class="koboSpan" id="kobo.220.1">serverless</span></em><span class="koboSpan" id="kobo.221.1">” offerings (more on why that’s quoted in a few paragraphs); however, we run into issues when we try to scale these systems. </span><span class="koboSpan" id="kobo.221.2">Typically, the scaling model involves adding additional capacity to these services through </span><span class="No-Break"><span class="koboSpan" id="kobo.222.1">vertical scaling.</span></span></p>
+<p><span class="koboSpan" id="kobo.223.1">Some newer solutions provide automated, transparent sharding capability priced at a premium. </span><span class="koboSpan" id="kobo.223.2">At vast scales, with massive datasets, this can cause issues that can result in higher cloud bills. </span><span class="koboSpan" id="kobo.223.3">It’s also essential to note that in these systems, we’re typically limited to certain index types, such as binary trees, which have a time complexity of </span><em class="italic"><span class="koboSpan" id="kobo.224.1">O(log(n))</span></em><span class="koboSpan" id="kobo.225.1">. </span><span class="koboSpan" id="kobo.225.2">When we query data in a relational database, a typical pattern is to join records and perform aggregations to return the result in the format we want. </span><span class="koboSpan" id="kobo.225.3">This pattern can be instrumental in scenarios where you know the structure of the data you want to store but not the </span><a id="_idIndexMarker907"/><span class="koboSpan" id="kobo.226.1">access patterns of how you will query that data. </span><span class="koboSpan" id="kobo.226.2">The</span><a id="_idIndexMarker908"/><span class="koboSpan" id="kobo.227.1"> flexible access patterns allow you to expand your offerings without significant changes to the underlying database. </span><span class="koboSpan" id="kobo.227.2">You can provide new insights with </span><span class="No-Break"><span class="koboSpan" id="kobo.228.1">new queries.</span></span></p>
+<p><span class="koboSpan" id="kobo.229.1">The services that provide relational databases in the hyperscalers cover all familiar SQL flavors, such as MySQL, PostgreSQL, and SQL Server. </span><span class="koboSpan" id="kobo.229.2">Typically, these solutions focus on being consistent and partition-tolerant. </span><span class="koboSpan" id="kobo.229.3">However, many new services by hyperscalers also provide </span><span class="No-Break"><span class="koboSpan" id="kobo.230.1">high availability.</span></span></p>
+<h3><span class="koboSpan" id="kobo.231.1">NoSQL databases</span></h3>
+<p><strong class="bold"><span class="koboSpan" id="kobo.232.1">NoSQL databases</span></strong><span class="koboSpan" id="kobo.233.1"> provide</span><a id="_idIndexMarker909"/><span class="koboSpan" id="kobo.234.1"> an alternative to traditional </span><a id="_idIndexMarker910"/><span class="koboSpan" id="kobo.235.1">relational databases. </span><span class="koboSpan" id="kobo.235.2">They are denormalized to some degree, and rather than allowing for flexible access patterns, they rely on access patterns designed into the data </span><span class="No-Break"><span class="koboSpan" id="kobo.236.1">model itself.</span></span></p>
+<p><span class="koboSpan" id="kobo.237.1">All the hyperscalers have offerings in this space: Azure has Cosmos DB, GCP has Firestore, and AWS has DynamoDB. </span><span class="koboSpan" id="kobo.237.2">Unlike our strictly formatted SQL tables, NoSQL databases have no enforced schema. </span><span class="koboSpan" id="kobo.237.3">Columns can mix data types, and data can be deeply nested. </span><span class="koboSpan" id="kobo.237.4">There are compelling arguments for why you should do away with separate tables and instead put all your data into one big table. </span><span class="koboSpan" id="kobo.237.5">These services offer extreme scalability and performance at a low price point. </span><span class="koboSpan" id="kobo.237.6">However, they require fundamental shifts in thinking from the traditional relational </span><span class="No-Break"><span class="koboSpan" id="kobo.238.1">database model.</span></span></p>
+<p><span class="koboSpan" id="kobo.239.1">We must design our access patterns upfront to get the best value from our NoSQL database solution. </span><span class="koboSpan" id="kobo.239.2">This requirement can make development slightly more complicated because adding a new access pattern is more than just a case of writing a new query. </span><span class="koboSpan" id="kobo.239.3">We may require significant changes to our database design. </span><span class="koboSpan" id="kobo.239.4">Some database solutions in the NoSQL space (such as DynamoDB, Firestore, and Cosmos DB) can achieve close to </span><em class="italic"><span class="koboSpan" id="kobo.240.1">O(1)</span></em><span class="koboSpan" id="kobo.241.1"> complexity for properly structured access patterns but incur a penalty of </span><em class="italic"><span class="koboSpan" id="kobo.242.1">O(n)</span></em><span class="koboSpan" id="kobo.243.1"> complexity for improperly structured access patterns. </span><span class="koboSpan" id="kobo.243.2">Many of these solutions allow you to prioritize availability and partition tolerance or consistency and </span><span class="No-Break"><span class="koboSpan" id="kobo.244.1">partition tolerance.</span></span></p>
+<h3><span class="koboSpan" id="kobo.245.1">Key-value stores</span></h3>
+<p><strong class="bold"><span class="koboSpan" id="kobo.246.1">Key-value stores</span></strong><span class="koboSpan" id="kobo.247.1"> are a</span><a id="_idIndexMarker911"/><span class="koboSpan" id="kobo.248.1"> straightforward type of database. </span><span class="koboSpan" id="kobo.248.2">Essentially, we</span><a id="_idIndexMarker912"/><span class="koboSpan" id="kobo.249.1"> provide a way to address (key) our stored data (value). </span><span class="koboSpan" id="kobo.249.2">NoSQL databases still allow for complex access patterns. </span><span class="koboSpan" id="kobo.249.3">Our key-value store has one access pattern: use the key to get the value stored at an address. </span><span class="koboSpan" id="kobo.249.4">These are typically high-performance in-memory datastores that may or may not offer some form of persistence. </span><span class="koboSpan" id="kobo.249.5">The typical use case for these datastores is a cache for complex queries or computational outputs from other systems. </span><span class="koboSpan" id="kobo.249.6">They can be helpful in our cloud arsenal when we have complex requests with </span><span class="No-Break"><span class="koboSpan" id="kobo.250.1">low cardinality.</span></span></p>
+<h3><span class="koboSpan" id="kobo.251.1">Graph databases</span></h3>
+<p><span class="koboSpan" id="kobo.252.1">The</span><a id="_idIndexMarker913"/><span class="koboSpan" id="kobo.253.1"> final database type we will discuss is </span><strong class="bold"><span class="koboSpan" id="kobo.254.1">graph databases</span></strong><span class="koboSpan" id="kobo.255.1">. </span><span class="koboSpan" id="kobo.255.2">These</span><a id="_idIndexMarker914"/><span class="koboSpan" id="kobo.256.1"> are useful when we have highly relational, semi-structured data. </span><span class="koboSpan" id="kobo.256.2">In relational databases, you can define a relation as a property on an object. </span><span class="koboSpan" id="kobo.256.3">For example, an </span><strong class="source-inline"><span class="koboSpan" id="kobo.257.1">OrderID</span></strong><span class="koboSpan" id="kobo.258.1"> field is referenced on the order record, the shipping manifest, and the payment record. </span><span class="koboSpan" id="kobo.258.2">The shipping manifest and payment record contain foreign keys to the order record; however, the actual relationship is stored on the records themselves. </span><span class="koboSpan" id="kobo.258.3">In a graph database, the relationships are first-class objects. </span><span class="koboSpan" id="kobo.258.4">We have our objects (vertices) and our relationships (edges), and the data model is optimized for extremely fast traversal of relationships, allowing us to follow paths through our dataset in a performant way. </span><span class="koboSpan" id="kobo.258.5">This property can be advantageous when objects interact with each other in arbitrary ways, for example, with users on a social media site, interacting with other users, posts, communities, and </span><span class="No-Break"><span class="koboSpan" id="kobo.259.1">so on.</span></span></p>
+<h3><span class="koboSpan" id="kobo.260.1">Other database types</span></h3>
+<p><span class="koboSpan" id="kobo.261.1">Exploring </span><a id="_idIndexMarker915"/><span class="koboSpan" id="kobo.262.1">other supporting services or nonstandard database types can also be advantageous. </span><span class="koboSpan" id="kobo.262.2">A key type of database that is often ignored is time-series databases. </span><span class="koboSpan" id="kobo.262.3">These might be implemented as standalone products or extensions to the previous database types. </span><span class="koboSpan" id="kobo.262.4">These databases are optimized for chronological access patterns and storage rather than the structures mentioned previously. </span><span class="koboSpan" id="kobo.262.5">Another common type of database or database extension is spatial databasing, specifically looking at geometric and geographic properties in queries. </span><span class="koboSpan" id="kobo.262.6">The key here is not to limit yourself to the preceding database structures but to also explore the options available for your </span><span class="No-Break"><span class="koboSpan" id="kobo.263.1">edge cases.</span></span></p>
+<p><span class="koboSpan" id="kobo.264.1">In one example I worked on, the client used a Postgres database to store a list of customer addresses and identifiers. </span><span class="koboSpan" id="kobo.264.2">However, this system’s access patterns are unsuitable for a relational database. </span><span class="koboSpan" id="kobo.264.3">First, the data was not relational; each record was wholly independent, and second, the Postgres keyword </span><strong class="source-inline"><span class="koboSpan" id="kobo.265.1">LIKE</span></strong><span class="koboSpan" id="kobo.266.1"> was significantly used within the database’s query patterns. </span><span class="koboSpan" id="kobo.266.2">The client’s quick solution was to put a </span><strong class="bold"><span class="koboSpan" id="kobo.267.1">generalized inverted index</span></strong><span class="koboSpan" id="kobo.268.1"> (</span><strong class="bold"><span class="koboSpan" id="kobo.269.1">GIN</span></strong><span class="koboSpan" id="kobo.270.1">) on </span><a id="_idIndexMarker916"/><span class="koboSpan" id="kobo.271.1">every column. </span><span class="koboSpan" id="kobo.271.2">This enabled searching on arbitrary strings but made modifying the database unwieldy. </span><span class="koboSpan" id="kobo.271.3">Using a search service such as OpenSearch</span><a id="_idIndexMarker917"/><span class="koboSpan" id="kobo.272.1"> to store the queriable documents would have been straightforward, likely resulting in a lower cloud bill and </span><span class="No-Break"><span class="koboSpan" id="kobo.273.1">better performance.</span></span></p>
+<h2 id="_idParaDest-229"><a id="_idTextAnchor229"/><span class="koboSpan" id="kobo.274.1">Manual, managed, serverless, and truly serverless databases</span></h2>
+<p><span class="koboSpan" id="kobo.275.1">When </span><a id="_idIndexMarker918"/><span class="koboSpan" id="kobo.276.1">choosing databases, we must establish the need for the database types discussed earlier and the method by which we are going to consume the database in </span><span class="No-Break"><span class="koboSpan" id="kobo.277.1">the cloud.</span></span></p>
+<p><span class="koboSpan" id="kobo.278.1">The naive </span><a id="_idIndexMarker919"/><span class="koboSpan" id="kobo.279.1">approach to this from the on-premises mindset might be that we simply need to provision a cloud VM, install a database, and be good to go. </span><span class="koboSpan" id="kobo.279.2">While this manual approach will work, it must present a compelling value proposition. </span><span class="koboSpan" id="kobo.279.3">In this scenario, you are solely responsible for backups, patching the DB version and OS, and provisioning new machines. </span><span class="koboSpan" id="kobo.279.4">How you install, run, and maintain databases is unlikely to be a value differentiator for your business. </span><span class="koboSpan" id="kobo.279.5">Therefore, this manual option is generally considered an anti-pattern unless you need specific functionality or configurations that aren’t available in managed services. </span><span class="koboSpan" id="kobo.279.6">Instead, the baseline deployment of a database is typically as a </span><span class="No-Break"><span class="koboSpan" id="kobo.280.1">managed service.</span></span></p>
+<p><span class="koboSpan" id="kobo.281.1">This deployment method is where we see most companies start their cloud database adoption, as these managed services provide a way for them to use familiar tools (Postgres, MySQL, and SQL Server) while allowing the cloud provider to take care of backups, patching, and maintenance using battle tested and resilient methodologies. </span><span class="koboSpan" id="kobo.281.2">Many companies never find a compelling reason to leave this level, which is perfectly acceptable. </span><span class="koboSpan" id="kobo.281.3">We can also start to set up resilient architectures in this development mode with read replicas, automated failover, and </span><span class="No-Break"><span class="koboSpan" id="kobo.282.1">multi-master configurations.</span></span></p>
+<p><span class="koboSpan" id="kobo.283.1">In the managed system, we typically see applications that have consistent, predictable patterns. </span><span class="koboSpan" id="kobo.283.2">However, some businesses have unpredictable traffic and usage, so you should move to a more scalable solution. </span><span class="koboSpan" id="kobo.283.3">This situation is where “serverless” solutions come into play. </span><span class="koboSpan" id="kobo.283.4">I use quotes in this scenario because they are serverless (i.e., they will automatically scale). </span><span class="koboSpan" id="kobo.283.5">Still, they do not scale down to zero, which many people consider true serverless. </span><span class="koboSpan" id="kobo.283.6">An anti-pattern we commonly see in this space is people migrating to these “serverless” solutions without considering non-relational </span><span class="No-Break"><span class="koboSpan" id="kobo.284.1">data models.</span></span></p>
+<p><span class="koboSpan" id="kobo.285.1">Finally, we have </span><a id="_idIndexMarker920"/><span class="koboSpan" id="kobo.286.1">truly serverless databases. </span><span class="koboSpan" id="kobo.286.2">These are typically NoSQL or document databases (such as DynamoDB, Firestore, and Cosmos DB in the major cloud providers in the </span><strong class="bold"><span class="koboSpan" id="kobo.287.1">online transaction processing</span></strong><span class="koboSpan" id="kobo.288.1"> (</span><strong class="bold"><span class="koboSpan" id="kobo.289.1">OLTP</span></strong><span class="koboSpan" id="kobo.290.1">) space) that make trade-offs in ease of use for extreme</span><a id="_idIndexMarker921"/><span class="koboSpan" id="kobo.291.1"> scalability, cost-effectiveness, and performance. </span><span class="koboSpan" id="kobo.291.2">The anti-pattern we often see in this space is teams seeing this option and holding it as the pinnacle of achievement to build a system that utilizes this cloud native unique option without considering the downsides. </span><span class="koboSpan" id="kobo.291.3">Namely, your data is less portable, will be harder to hire for, and requires upfront knowledge of your access patterns. </span><span class="koboSpan" id="kobo.291.4">This combination can lead to bad initial experiences that cause teams to return to the familiar land of relational databases and not consider these databases for use cases where they would be a </span><span class="No-Break"><span class="koboSpan" id="kobo.292.1">good fit.</span></span></p>
+<h2 id="_idParaDest-230"><a id="_idTextAnchor230"/><span class="koboSpan" id="kobo.293.1">Ignoring storage requirements</span></h2>
+<p><span class="koboSpan" id="kobo.294.1">A common</span><a id="_idIndexMarker922"/><span class="koboSpan" id="kobo.295.1"> anti-pattern is using traditional storage mechanisms in the cloud without considering other options. </span><span class="koboSpan" id="kobo.295.2">Conventional filesystems evolved out of the need for on-device storage and provide considerable functionality. </span><span class="koboSpan" id="kobo.295.3">Network filesystems, such as FTP and NFS, became the de facto projection of these services into a multi-machine environment. </span><span class="koboSpan" id="kobo.295.4">The core principle in these systems is that a central server is responsible for coordinating access to the underlying storage. </span><span class="koboSpan" id="kobo.295.5">A common theme in this book is that centralization is usually </span><span class="No-Break"><span class="koboSpan" id="kobo.296.1">an anti-pattern.</span></span></p>
+<p><span class="koboSpan" id="kobo.297.1">When we start to design a system that utilizes storage in the cloud, the first question we should ask is, “</span><em class="italic"><span class="koboSpan" id="kobo.298.1">Can we use blob storage?</span></em><span class="koboSpan" id="kobo.299.1">” </span><strong class="bold"><span class="koboSpan" id="kobo.300.1">Blob storage</span></strong><span class="koboSpan" id="kobo.301.1"> is </span><a id="_idIndexMarker923"/><span class="koboSpan" id="kobo.302.1">decentralized and scales horizontally, with much higher resiliency and durability than conventional network filesystems. </span><span class="koboSpan" id="kobo.302.2">In Azure, this service is Azure Blob Storage, GCP has Cloud Storage, and AWS </span><span class="No-Break"><span class="koboSpan" id="kobo.303.1">has S3.</span></span></p>
+<p><span class="koboSpan" id="kobo.304.1">You can think of blob storage as a key-value store that can store enormous values. </span><span class="koboSpan" id="kobo.304.2">For most cloud native use cases, this provides more than enough capability. </span><span class="koboSpan" id="kobo.304.3">Do you still need metadata? </span><span class="koboSpan" id="kobo.304.4">Put it in your database. </span><span class="koboSpan" id="kobo.304.5">Do you need locks? </span><span class="koboSpan" id="kobo.304.6">Use your database. </span><span class="koboSpan" id="kobo.304.7">Need backups? </span><span class="koboSpan" id="kobo.304.8">Use version history. </span><span class="koboSpan" id="kobo.304.9">Blob storage is likely the answer to your storage needs. </span><span class="koboSpan" id="kobo.304.10">There are cases where specialized or traditional filesystems still provide benefits, such as in high-performance computing, low-latency applications, and conventional filesystem migrations. </span><span class="koboSpan" id="kobo.304.11">So, remember that no one tool is the right solution to </span><span class="No-Break"><span class="koboSpan" id="kobo.305.1">every problem.</span></span></p>
+<h2 id="_idParaDest-231"><a id="_idTextAnchor231"/><span class="koboSpan" id="kobo.306.1">Ignoring the life cycle and archive policy</span></h2>
+<p><span class="koboSpan" id="kobo.307.1">Storing </span><a id="_idIndexMarker924"/><span class="koboSpan" id="kobo.308.1">data is easy. </span><span class="koboSpan" id="kobo.308.2">We send a request to our storage provider of choice and then forget about it until we need to use it. </span><span class="koboSpan" id="kobo.308.3">Therein lies the anti-pattern: failing to maintain the life cycle of your data appropriately can lead to </span><span class="No-Break"><span class="koboSpan" id="kobo.309.1">severe consequences.</span></span></p>
+<p><span class="koboSpan" id="kobo.310.1">However, we might want to save some money here because we don’t necessarily want to access this data; we just want to keep it on file. </span><span class="koboSpan" id="kobo.310.2">This requirement is where the concept of storage tiers comes </span><span class="No-Break"><span class="koboSpan" id="kobo.311.1">into play.</span></span></p>
+<p><span class="koboSpan" id="kobo.312.1">Let’s take an example: we work at a large firm that has an internal tax function. </span><span class="koboSpan" id="kobo.312.2">Throughout the year, people upload receipts. </span><span class="koboSpan" id="kobo.312.3">We must access these receipts repeatedly during tax time as various functions perform their duties. </span><span class="koboSpan" id="kobo.312.4">Then, after the tax period, we just need to keep a copy in case of discrepancies. </span><span class="koboSpan" id="kobo.312.5">In all cloud providers, we can group their storage tiers into one of three </span><span class="No-Break"><span class="koboSpan" id="kobo.313.1">broad categories:</span></span></p>
+<ul>
+<li><strong class="bold"><span class="koboSpan" id="kobo.314.1">Hot</span></strong><span class="koboSpan" id="kobo.315.1"> is for data </span><a id="_idIndexMarker925"/><span class="koboSpan" id="kobo.316.1">that needs to be accessed regularly and available at a moment’s notice. </span><span class="koboSpan" id="kobo.316.2">Typically, this tier strikes a good balance between cost to store and cost to retrieve. </span><span class="koboSpan" id="kobo.316.3">Consider this where we want our receipts to be at </span><span class="No-Break"><span class="koboSpan" id="kobo.317.1">tax time.</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.318.1">Cold</span></strong><span class="koboSpan" id="kobo.319.1"> is for data</span><a id="_idIndexMarker926"/><span class="koboSpan" id="kobo.320.1"> that needs to be accessed at a moment’s notice but is unlikely to be accessed often. </span><span class="koboSpan" id="kobo.320.2">We pay a little more when we want to access items in this tier but reap the benefits of our infrequent access with lower storage costs. </span><span class="koboSpan" id="kobo.320.3">This tier might be where we store all of our receipts during the year as </span><span class="No-Break"><span class="koboSpan" id="kobo.321.1">they’re submitted.</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.322.1">Archive</span></strong><span class="koboSpan" id="kobo.323.1"> is for data</span><a id="_idIndexMarker927"/><span class="koboSpan" id="kobo.324.1"> that we want to keep but do not have specific access speed requirements. </span><span class="koboSpan" id="kobo.324.2">This tier offers the most cost-effective storage solution with the highest access cost and slowest retrieval time (this might be on the order of hours rather than milliseconds). </span><span class="koboSpan" id="kobo.324.3">When we are done with all of our receipts for the year and just need to keep a record for posterity, we will move them to </span><span class="No-Break"><span class="koboSpan" id="kobo.325.1">this tier.</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.326.1">Some data may need to be retained to comply with regulatory requirements, while other data may only need to be stored short-term as its validity rapidly decreases. </span><span class="koboSpan" id="kobo.326.2">We accomplish these use cases through data life cycles. </span><span class="koboSpan" id="kobo.326.3">Life cycle policy and management tools allow us to automate </span><span class="No-Break"><span class="koboSpan" id="kobo.327.1">this process.</span></span></p>
+<p><span class="koboSpan" id="kobo.328.1">Typically, we </span><a id="_idIndexMarker928"/><span class="koboSpan" id="kobo.329.1">take two actions in life cycle policies: we either change the storage tier of our data or delete our data. </span><span class="koboSpan" id="kobo.329.2">A life cycle policy might mix these two actions. </span><span class="koboSpan" id="kobo.329.3">For example, imagine we work for a company that creates detailed financial reports. </span><span class="koboSpan" id="kobo.329.4">Every month, we release a new report that is accessed frequently, then infrequently, and then it needs to be archived for six years. </span><span class="koboSpan" id="kobo.329.5">Our life cycle policy might look </span><span class="No-Break"><span class="koboSpan" id="kobo.330.1">like this:</span></span></p>
+<ol>
+<li><span class="koboSpan" id="kobo.331.1">Create a file in the </span><span class="No-Break"><span class="koboSpan" id="kobo.332.1">hot tier.</span></span></li>
+<li><span class="koboSpan" id="kobo.333.1">Wait 31 days (</span><span class="No-Break"><span class="koboSpan" id="kobo.334.1">report cycle).</span></span></li>
+<li><span class="koboSpan" id="kobo.335.1">Move the file to the </span><span class="No-Break"><span class="koboSpan" id="kobo.336.1">cold tier.</span></span></li>
+<li><span class="koboSpan" id="kobo.337.1">Wait </span><span class="No-Break"><span class="koboSpan" id="kobo.338.1">334 days.</span></span></li>
+<li><span class="koboSpan" id="kobo.339.1">Move the file to the </span><span class="No-Break"><span class="koboSpan" id="kobo.340.1">archive tier.</span></span></li>
+<li><span class="koboSpan" id="kobo.341.1">Wait </span><span class="No-Break"><span class="koboSpan" id="kobo.342.1">six years.</span></span></li>
+<li><span class="koboSpan" id="kobo.343.1">Delete </span><span class="No-Break"><span class="koboSpan" id="kobo.344.1">the file.</span></span></li>
+</ol>
+<p><span class="koboSpan" id="kobo.345.1">If we kept our file in the hot tier, we would be paying for the convenience of frequent access without actually accessing the file. </span><span class="koboSpan" id="kobo.345.2">Therefore, our life cycle policy has allowed us to optimize our cloud </span><span class="No-Break"><span class="koboSpan" id="kobo.346.1">storage spending.</span></span></p>
+<h1 id="_idParaDest-232"><a id="_idTextAnchor232"/><span class="koboSpan" id="kobo.347.1">Data replication from production to development</span></h1>
+<p><span class="koboSpan" id="kobo.348.1">We all </span><a id="_idIndexMarker929"/><span class="koboSpan" id="kobo.349.1">need data to ensure that the systems we build in our development environment match all the weird and wonderful types of data that our users generate </span><span class="No-Break"><span class="koboSpan" id="kobo.350.1">in production.</span></span></p>
+<p><span class="koboSpan" id="kobo.351.1">This section is one of the few sections with an anti-pattern that is serious enough to name the entire section after. </span><span class="koboSpan" id="kobo.351.2">Under no circumstance should you copy user-generated data from production to development environments. </span><span class="koboSpan" id="kobo.351.3">While it may seem easy to get real-world use cases for your lower environment, lower environments typically have more lax security controls and broader access to developers. </span><span class="koboSpan" id="kobo.351.4">A few recent data breaches have directly involved this anti-pattern; real-world user data was available on test systems, and these test systems were breached. </span><span class="koboSpan" id="kobo.351.5">Instead, in this section, we will go through some</span><a id="_idIndexMarker930"/><span class="koboSpan" id="kobo.352.1"> alternatives to testing on production data and some common anti-patterns in creating data for </span><span class="No-Break"><span class="koboSpan" id="kobo.353.1">test environments.</span></span></p>
+<h2 id="_idParaDest-233"><a id="_idTextAnchor233"/><span class="koboSpan" id="kobo.354.1">But we mask our production data</span></h2>
+<p><span class="koboSpan" id="kobo.355.1">The first anti-pattern</span><a id="_idIndexMarker931"/><span class="koboSpan" id="kobo.356.1"> we will discuss is using masked data from production systems in test environments. </span><span class="koboSpan" id="kobo.356.2">This procedure is only marginally better than using production data directly. </span><span class="koboSpan" id="kobo.356.3">The fallacy in this scenario is that we are coming from an insecure position (unmasked production data), applying a transform (our masking procedure), and assuming the output is secure (masked data). </span><span class="koboSpan" id="kobo.356.4">To illustrate why this is a problem, let us look at a parallel example, one based on FaaS. </span><span class="koboSpan" id="kobo.356.5">I was working with a client who had produced an authentication and logging wrapper for lambda functions. </span><span class="koboSpan" id="kobo.356.6">The wrapper applied some functionality that could be enabled with flags in the lambda function code. </span><span class="koboSpan" id="kobo.356.7">One of the flags enabled authentication. </span><span class="koboSpan" id="kobo.356.8">This pattern meant that, fundamentally, any created lambda functions started as insecure functions and then had to opt in to become secure. </span><span class="koboSpan" id="kobo.356.9">Instead, we inverted that dependency. </span><span class="koboSpan" id="kobo.356.10">We made all of the functions secure by default, and you could use a flag to turn authentication off for unauthenticated functions. </span><span class="koboSpan" id="kobo.356.11">This change made being insecure a conscious choice rather than an unconscious mistake. </span><span class="koboSpan" id="kobo.356.12">When we mask data, we risk making unconscious mistakes because we start from an insecure position. </span><span class="koboSpan" id="kobo.356.13">The solution is to start from a secure position and explicitly make any insecure additions to our data choices. </span><span class="koboSpan" id="kobo.356.14">So, we have to start from a secure position, which means we need to know our schema and generate data that tests </span><span class="No-Break"><span class="koboSpan" id="kobo.357.1">its limits.</span></span></p>
+<h2 id="_idParaDest-234"><a id="_idTextAnchor234"/><span class="koboSpan" id="kobo.358.1">Getting started with synthetic data</span></h2>
+<p><span class="koboSpan" id="kobo.359.1">As we</span><a id="_idIndexMarker932"/><span class="koboSpan" id="kobo.360.1"> discussed earlier, the easiest way to ensure that the data you use is safe for lower environments is to </span><a id="_idIndexMarker933"/><span class="koboSpan" id="kobo.361.1">ensure it doesn’t originate from production systems. </span><span class="koboSpan" id="kobo.361.2">Therefore, we need a reliable way to generate fake data for our system. </span><span class="koboSpan" id="kobo.361.3">Luckily, we are not the first people to have this issue! </span><span class="koboSpan" id="kobo.361.4">A multitude of open source libraries exist with the sole purpose of generating completely fake data. </span><span class="koboSpan" id="kobo.361.5">Usually, for cloud projects, JavaScript is used at some point in the development cycle, be it for frontend applications or backend servers with a runtime such as Node.js, Bun, or Deno, so it usually forms a good baseline language. </span><span class="koboSpan" id="kobo.361.6">In this case, the Faker.js (</span><a href="http://fakerjs.dev"><span class="koboSpan" id="kobo.362.1">fakerjs.dev</span></a><span class="koboSpan" id="kobo.363.1">) library </span><a id="_idIndexMarker934"/><span class="koboSpan" id="kobo.364.1">provides a comprehensive set of generators to create fake data for testing. </span><span class="koboSpan" id="kobo.364.2">The other common language we see in testing frameworks is Python, which also has its own </span><a id="_idIndexMarker935"/><span class="koboSpan" id="kobo.365.1">Faker </span><span class="No-Break"><span class="koboSpan" id="kobo.366.1">library (</span></span><a href="https://faker.readthedocs.io/en/master/"><span class="No-Break"><span class="koboSpan" id="kobo.367.1">https://faker.readthedocs.io/en/master/</span></span></a><span class="No-Break"><span class="koboSpan" id="kobo.368.1">).</span></span></p>
+<p><span class="koboSpan" id="kobo.369.1">These libraries </span><a id="_idIndexMarker936"/><span class="koboSpan" id="kobo.370.1">form an excellent foundation upon which to build. </span><span class="koboSpan" id="kobo.370.2">These allow us to create bulk data to see </span><a id="_idIndexMarker937"/><span class="koboSpan" id="kobo.371.1">how our system handles when under heavy load. </span><span class="koboSpan" id="kobo.371.2">We can use our production system’s utilization metrics to develop synthetic data. </span><span class="koboSpan" id="kobo.371.3">Synthetic data retains the schema and structure of our production data, but the contents of the records are pure fiction, making it great for functional testing. </span><span class="koboSpan" id="kobo.371.4">This approach allows us to load a similar amount of data present in production into lower environments, ensuring that the conditions we are testing under in our lower environments are similar to those under our higher environment. </span><span class="koboSpan" id="kobo.371.5">A common anti-pattern we see here is attempting to use only a small data set in lower environments. </span><span class="koboSpan" id="kobo.371.6">This anti-pattern is an issue because you first test the system at the production scale when you deploy it to production. </span><span class="koboSpan" id="kobo.371.7">Under this paradigm, scenarios and edge behaviors that only become present at the scale of the production system remain hidden during testing. </span><span class="koboSpan" id="kobo.371.8">These problems might be a poorly optimized SQL query or a missing index on a column. </span><span class="koboSpan" id="kobo.371.9">In these scenarios, small datasets are unlikely to be exposed to </span><span class="No-Break"><span class="koboSpan" id="kobo.372.1">the issue.</span></span></p>
+<h2 id="_idParaDest-235"><a id="_idTextAnchor235"/><span class="koboSpan" id="kobo.373.1">Perfect synthetic data</span></h2>
+<p><span class="koboSpan" id="kobo.374.1">When</span><a id="_idIndexMarker938"/><span class="koboSpan" id="kobo.375.1"> creating synthetic data, it can be easy to fall into the anti-pattern of developing </span><em class="italic"><span class="koboSpan" id="kobo.376.1">perfect synthetic data</span></em><span class="koboSpan" id="kobo.377.1">. </span><span class="koboSpan" id="kobo.377.2">This </span><a id="_idIndexMarker939"/><span class="koboSpan" id="kobo.378.1">anti-pattern only injects the data, formats, and usage patterns we expect to see in our production systems. </span><span class="koboSpan" id="kobo.378.2">While this might test our systems’ happy path, unfortunately, users are fantastic at stressing our systems in ways we never intended. </span><span class="koboSpan" id="kobo.378.3">What happens if the user signs up with an address and then that address is deleted or gets subdivided into an A/B block or any other myriad of problems? </span><span class="koboSpan" id="kobo.378.4">We can take a leaf from the domain of chaos engineering here. </span><span class="koboSpan" id="kobo.378.5">Instead of creating perfect data, we make data with a certain amount of corruption, usually expressed as a percentage of the total synthetic data. </span><span class="koboSpan" id="kobo.378.6">Perfect data only addresses usage by perfectly homogenous users, and we all know that our user base consists of a wildly different collection </span><span class="No-Break"><span class="koboSpan" id="kobo.379.1">of individuals.</span></span></p>
+<p><span class="koboSpan" id="kobo.380.1">There are some simple guidelines for creating synthetic data that I like to follow. </span><span class="koboSpan" id="kobo.380.2">I generally split</span><a id="_idIndexMarker940"/><span class="koboSpan" id="kobo.381.1"> these into two layers: one for structured data (SQL and Parquet) and one for unstructured/semi-structured data (NoSQL, CSV, JSON, and TXT). </span><span class="koboSpan" id="kobo.381.2">The unstructured data corruptions </span><a id="_idIndexMarker941"/><span class="koboSpan" id="kobo.382.1">should be treated as an extension of the </span><span class="No-Break"><span class="koboSpan" id="kobo.383.1">structured corruptions.</span></span></p>
+<p><span class="koboSpan" id="kobo.384.1">Structured data can be </span><a id="_idIndexMarker942"/><span class="koboSpan" id="kobo.385.1">corrupted in the </span><span class="No-Break"><span class="koboSpan" id="kobo.386.1">following ways:</span></span></p>
+<ul>
+<li><strong class="bold"><span class="koboSpan" id="kobo.387.1">Missing records</span></strong><span class="koboSpan" id="kobo.388.1">: What happens if we receive a partial object in a request to our service? </span><span class="koboSpan" id="kobo.388.2">What if a dependency is missing? </span><span class="koboSpan" id="kobo.388.3">What if the dependency existed when we created the record but manually deleted </span><span class="No-Break"><span class="koboSpan" id="kobo.389.1">it afterward?</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.390.1">Unreachable state</span></strong><span class="koboSpan" id="kobo.391.1">: We may have transitive dependencies that are unreachable from a code perspective but permissible from a database perspective. </span><span class="koboSpan" id="kobo.391.2">What happens if we reach </span><span class="No-Break"><span class="koboSpan" id="kobo.392.1">this state?</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.393.1">Corrupted records</span></strong><span class="koboSpan" id="kobo.394.1">: This is data that fundamentally does not make sense but is permissible by the system. </span><span class="koboSpan" id="kobo.394.2">What if the user accidentally entered their credit card number in the cardholder name field? </span><span class="koboSpan" id="kobo.394.3">What if one row of our CSV has an unescaped comma in </span><span class="No-Break"><span class="koboSpan" id="kobo.395.1">a string?</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.396.1">Large records</span></strong><span class="koboSpan" id="kobo.397.1">: What happens when a user connects an infinite number of monkeys with an endless number of typewriters to your </span><span class="No-Break"><span class="koboSpan" id="kobo.398.1">profanity filter?</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.399.1">Unstructured data can</span><a id="_idIndexMarker943"/><span class="koboSpan" id="kobo.400.1"> be corrupted in the following </span><span class="No-Break"><span class="koboSpan" id="kobo.401.1">additional ways:</span></span></p>
+<ul>
+<li><strong class="bold"><span class="koboSpan" id="kobo.402.1">Duplicate records</span></strong><span class="koboSpan" id="kobo.403.1">: What happens when we try to insert duplicate records, or multiple records that represent the </span><span class="No-Break"><span class="koboSpan" id="kobo.404.1">same object?</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.405.1">Extra fields</span></strong><span class="koboSpan" id="kobo.406.1">: What happens when our system receives extra data from the client that it </span><span class="No-Break"><span class="koboSpan" id="kobo.407.1">wasn’t expecting?</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.408.1">Missing fields</span></strong><span class="koboSpan" id="kobo.409.1">: What happens when our system doesn’t receive data from the client that it </span><span class="No-Break"><span class="koboSpan" id="kobo.410.1">was expecting?</span></span></li>
+<li><strong class="bold"><span class="koboSpan" id="kobo.411.1">Syntactically incorrect data</span></strong><span class="koboSpan" id="kobo.412.1">: This is data that doesn’t agree with the rules of the data medium in use (for example, not valid CSV or JSON). </span><span class="koboSpan" id="kobo.412.2">Missing a column? </span><span class="koboSpan" id="kobo.412.3">Forgot a </span><span class="No-Break"><span class="koboSpan" id="kobo.413.1">curly brace?</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.414.1">From this, we see that </span><a id="_idIndexMarker944"/><span class="koboSpan" id="kobo.415.1">perfect testing data should be imperfect by design. </span><span class="koboSpan" id="kobo.415.2">This allows us to discover our system’s edge behavior. </span><span class="koboSpan" id="kobo.415.3">Our test data should identify issues we might encounter before encountering them in production. </span><span class="koboSpan" id="kobo.415.4">However, it is impossible to be perfectly prophetic about the data issues we might see in production. </span><span class="koboSpan" id="kobo.415.5">The best type of corrupted</span><a id="_idIndexMarker945"/><span class="koboSpan" id="kobo.416.1"> data is when we find something in production. </span><span class="koboSpan" id="kobo.416.2">In that case, copy the methodology of the corrupted data (not the data itself!) into your synthetic data generation tool. </span><span class="koboSpan" id="kobo.416.3">This process allows us to find other ways in which this might impact production. </span><span class="koboSpan" id="kobo.416.4">For example, we have an issue where an invalid card number is entered. </span><span class="koboSpan" id="kobo.416.5">Then, the customer could rectify the card number, and all is good. </span><span class="koboSpan" id="kobo.416.6">If we add the pattern to our synthetic data, we can see how that data would have affected our system if it had been allowed to flow through to our billing run system or other </span><span class="No-Break"><span class="koboSpan" id="kobo.417.1">application areas.</span></span></p>
+<h1 id="_idParaDest-236"><a id="_idTextAnchor236"/><span class="koboSpan" id="kobo.418.1">Backup and recovery should theoretically work</span></h1>
+<p><span class="koboSpan" id="kobo.419.1">“</span><em class="italic"><span class="koboSpan" id="kobo.420.1">The best-laid plans of mice and men oft go awry</span></em><span class="koboSpan" id="kobo.421.1">,” goes the famous line from Robert Burns’ “To a Mouse.” </span><span class="koboSpan" id="kobo.421.2">The nugget of wisdom here is that no matter how carefully we plan for </span><a id="_idIndexMarker946"/><span class="koboSpan" id="kobo.422.1">every eventuality, we cannot be confident of its success until we execute it. </span><span class="koboSpan" id="kobo.422.2">We touched on this topic in </span><a href="B22364_07.xhtml#_idTextAnchor198"><span class="No-Break"><em class="italic"><span class="koboSpan" id="kobo.423.1">Chapter 7</span></em></span></a><span class="koboSpan" id="kobo.424.1"> when we discussed ignoring reliability. </span><span class="koboSpan" id="kobo.424.2">We will go into this topic in more detail and explore how to address this anti-pattern with a specific focus on data. </span><span class="koboSpan" id="kobo.424.3">As discussed before, not testing your data resiliency will lead to unwanted downtime when you least expect it. </span><span class="koboSpan" id="kobo.424.4">Let’s dive into some ways to </span><span class="No-Break"><span class="koboSpan" id="kobo.425.1">mitigate this.</span></span></p>
+<h2 id="_idParaDest-237"><a id="_idTextAnchor237"/><span class="koboSpan" id="kobo.426.1">Have a plan</span></h2>
+<p><span class="koboSpan" id="kobo.427.1">Having a plan is</span><a id="_idIndexMarker947"/><span class="koboSpan" id="kobo.428.1"> the first step toward resilient data architectures, and the key to that plan is understanding the shared responsibility model. </span><span class="koboSpan" id="kobo.428.2">If you are running your data solution self-hosted in the cloud against the recommendations of the first section of this chapter, then you are responsible for everything yourself. </span><span class="koboSpan" id="kobo.428.3">We often come across a disconnect when people shift to managed services. </span><span class="koboSpan" id="kobo.428.4">Inevitably, someone will find a checkbox on their managed cloud database instance that says </span><strong class="bold"><span class="koboSpan" id="kobo.429.1">Enable backups</span></strong><span class="koboSpan" id="kobo.430.1"> and see that it is ticked. </span><span class="koboSpan" id="kobo.430.2">Then, they will rest easy at night, thinking their data is safe because it is nebulously “handled by the cloud.” </span><span class="koboSpan" id="kobo.430.3">If this sounds all too familiar (even if it doesn’t), you probably need to consider putting together a </span><a id="_idIndexMarker948"/><span class="koboSpan" id="kobo.431.1">recovery action plan. </span></p>
+<p><span class="koboSpan" id="kobo.432.1">Some key factors need to be considered when creating this plan, </span><span class="No-Break"><span class="koboSpan" id="kobo.433.1">as follows:</span></span></p>
+<ol>
+<li><span class="koboSpan" id="kobo.434.1">Define your </span><strong class="bold"><span class="koboSpan" id="kobo.435.1">recovery time objective</span></strong><span class="koboSpan" id="kobo.436.1"> (</span><strong class="bold"><span class="koboSpan" id="kobo.437.1">RTO</span></strong><span class="koboSpan" id="kobo.438.1">) and </span><strong class="bold"><span class="koboSpan" id="kobo.439.1">recovery point objective</span></strong><span class="koboSpan" id="kobo.440.1"> (</span><strong class="bold"><span class="koboSpan" id="kobo.441.1">RPO</span></strong><span class="koboSpan" id="kobo.442.1">). </span><span class="koboSpan" id="kobo.442.2">Respectively, these two measures are the answers to the </span><span class="No-Break"><span class="koboSpan" id="kobo.443.1">following questions:</span></span><ul><li><span class="koboSpan" id="kobo.444.1">How much time can I afford for my service to </span><span class="No-Break"><span class="koboSpan" id="kobo.445.1">be down?</span></span></li><li><span class="koboSpan" id="kobo.446.1">How much data can I afford to lose when the service </span><span class="No-Break"><span class="koboSpan" id="kobo.447.1">goes down?</span></span></li></ul><p class="list-inset"><span class="koboSpan" id="kobo.448.1">A common anti-pattern here is to answer “None” and “Nothing.” </span><span class="koboSpan" id="kobo.448.2">Realistically, the costs of maintaining such a strategy are incongruent with reality. </span><span class="koboSpan" id="kobo.448.3">Typically, the question is answered in an order of magnitude, such as seconds, minutes, hours, </span><span class="No-Break"><span class="koboSpan" id="kobo.449.1">or days.</span></span></p></li>
+<li><span class="koboSpan" id="kobo.450.1">Once you’ve outlined the parameters for your recovery plan, you must design an architectural solution to achieve this. </span><span class="koboSpan" id="kobo.450.2">Suppose the scales we are looking at involve second or minute granularity. </span><span class="koboSpan" id="kobo.450.3">In that case, you likely need to look into live read replicas that can take over as the main DB in the case of failure or even multi-master DB configurations for ultra-low downtime applications. </span><span class="koboSpan" id="kobo.450.4">A solid incremental backup system is enough if we look at the order of hours or days (in the first scenario, we’d still have this requirement for resilience in depth). </span><span class="koboSpan" id="kobo.450.5">We can test our resilience architecture by detailing stressors our system may experience, such as a failure in a database instance or an entire cloud region going down. </span><span class="koboSpan" id="kobo.450.6">We then draft the system response when that stressor occurs, making changes to our architecture as required. </span><span class="koboSpan" id="kobo.450.7">There is an interesting parallel here between the stressors we choose to simulate and the actual resilience of our system. </span><span class="koboSpan" id="kobo.450.8">In the research and subsequent book by Barry O’Reilly, </span><em class="italic"><span class="koboSpan" id="kobo.451.1">Residues: Time, Change, and Uncertainty in Software Architecture</span></em><span class="koboSpan" id="kobo.452.1">, he states that often our stressors do not exist in mutual exclusivity; for example, a network failure and a tsunami wiping out a data center are likely to have commonalities in the way our architecture will respond. </span><span class="koboSpan" id="kobo.452.2">Therefore, our stressor list does not need to be exhaustive. </span><span class="koboSpan" id="kobo.452.3">We just need to list and simulate stressors until our resultant architecture no longer requires any changes to support recovery from </span><span class="No-Break"><span class="koboSpan" id="kobo.453.1">the stressor.</span></span></li>
+<li><span class="koboSpan" id="kobo.454.1">Once we </span><a id="_idIndexMarker949"/><span class="koboSpan" id="kobo.455.1">design the resilience architecture, we can start reviewing the action plan. </span><span class="koboSpan" id="kobo.455.2">The action plan is a detailed step-by-step manual for restoring service; think of it as the user guide to your resilient architecture. </span><span class="koboSpan" id="kobo.455.3">Identifying all the functional and non-functional requirements needed to complete the operation is essential. </span><span class="koboSpan" id="kobo.455.4">Some good questions to ask yourself are </span><span class="No-Break"><span class="koboSpan" id="kobo.456.1">the following:</span></span><ul><li><span class="koboSpan" id="kobo.457.1">Who is going </span><span class="No-Break"><span class="koboSpan" id="kobo.458.1">to act?</span></span></li><li><span class="koboSpan" id="kobo.459.1">Where will they get </span><span class="No-Break"><span class="koboSpan" id="kobo.460.1">the credentials?</span></span></li><li><span class="koboSpan" id="kobo.461.1">What are the resource identifiers that they will be </span><span class="No-Break"><span class="koboSpan" id="kobo.462.1">acting on?</span></span></li><li><span class="koboSpan" id="kobo.463.1">What are the impacts on customers going </span><span class="No-Break"><span class="koboSpan" id="kobo.464.1">to be?</span></span></li><li><span class="koboSpan" id="kobo.465.1">What steps will they need </span><span class="No-Break"><span class="koboSpan" id="kobo.466.1">to perform?</span></span></li></ul></li>
+<li><span class="koboSpan" id="kobo.467.1">The final step is to run through your action plan. </span><span class="koboSpan" id="kobo.467.2">This dry run can be in a lower environment or a copy of production. </span><span class="koboSpan" id="kobo.467.3">Still, it’s essential to carry out the operations in your action plan to identify any gaps in the documentation. </span><span class="koboSpan" id="kobo.467.4">Ideally, you would do this with team members who are not involved in designing the action plan. </span><span class="koboSpan" id="kobo.467.5">This process prevents the team from performing the actions based on intent rather than the documentation itself. </span><span class="koboSpan" id="kobo.467.6">You can do this as often as required to refine the action plan until everyone </span><span class="No-Break"><span class="koboSpan" id="kobo.468.1">is comfortable.</span></span></li>
+</ol>
+<h2 id="_idParaDest-238"><a id="_idTextAnchor238"/><span class="koboSpan" id="kobo.469.1">Game day</span></h2>
+<p><span class="koboSpan" id="kobo.470.1">When soldiers </span><a id="_idIndexMarker950"/><span class="koboSpan" id="kobo.471.1">train for combat, they don’t do it solely in a classroom or through reading copious, possibly outdated documentation. </span><span class="koboSpan" id="kobo.471.2">A core part of their readiness comes from training activities that simulate real-world scenarios as closely as possible. </span><span class="koboSpan" id="kobo.471.3">This regime means that when they respond to situations, they don’t just know what to do in theory; they have real-world knowledge. </span><span class="koboSpan" id="kobo.471.4">Your team should practice responding to incidents similarly, using conditions close to </span><span class="No-Break"><span class="koboSpan" id="kobo.472.1">real-world scenarios.</span></span></p>
+<p><span class="koboSpan" id="kobo.473.1">The first stage with any game day is planning. </span><span class="koboSpan" id="kobo.473.2">At its inception, the game day should have a clearly defined scope and boundaries to ensure the safety of the scenario. </span><span class="koboSpan" id="kobo.473.3">The last thing you want is a hypothetical incident response becoming an actual incident! </span><span class="koboSpan" id="kobo.473.4">The planning should</span><a id="_idIndexMarker951"/><span class="koboSpan" id="kobo.474.1"> include a scenario that tests a specific action plan. </span><span class="koboSpan" id="kobo.474.2">These scenarios can be as real or as fake as you want, and your list of stressors from designing your architecture might be an excellent place to start. </span><span class="koboSpan" id="kobo.474.3">Some of my favorites are </span><span class="No-Break"><span class="koboSpan" id="kobo.475.1">the following:</span></span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.476.1">A senior engineer with too many permissions (does this sound familiar from </span><a href="B22364_06.xhtml#_idTextAnchor165"><span class="No-Break"><em class="italic"><span class="koboSpan" id="kobo.477.1">Chapter 6</span></em></span></a><span class="koboSpan" id="kobo.478.1">?) had production database access. </span><span class="koboSpan" id="kobo.478.2">They accidentally dropped one of our tables. </span><span class="koboSpan" id="kobo.478.3">How can we get the </span><span class="No-Break"><span class="koboSpan" id="kobo.479.1">data back?</span></span></li>
+<li><span class="koboSpan" id="kobo.480.1">Your database needs critical security updates that require a database restart. </span><span class="koboSpan" id="kobo.480.2">How will you </span><span class="No-Break"><span class="koboSpan" id="kobo.481.1">ensure continuity?</span></span></li>
+<li><span class="koboSpan" id="kobo.482.1">Someone scheduled the deletion of the blob storage encryption key. </span><span class="koboSpan" id="kobo.482.2">Did we detect it? </span><span class="koboSpan" id="kobo.482.3">How will we </span><span class="No-Break"><span class="koboSpan" id="kobo.483.1">prevent it?</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.484.1">Even though the scenarios may be fake, the tools and processes used should be the same as those we use in a real incident. </span><span class="koboSpan" id="kobo.484.2">The response should be as close as possible to the required </span><span class="No-Break"><span class="koboSpan" id="kobo.485.1">real-world response.</span></span></p>
+<p><span class="koboSpan" id="kobo.486.1">Remember those RTO and RPO goals we defined when formulating the plan? </span><span class="koboSpan" id="kobo.486.2">The game day is a perfect litmus test for those goals. </span><span class="koboSpan" id="kobo.486.3">Going into the event, everyone should be aware of these objectives, the deadline should be enforced, and, ideally, meeting the objective should </span><span class="No-Break"><span class="koboSpan" id="kobo.487.1">be incentivized.</span></span></p>
+<p><span class="koboSpan" id="kobo.488.1">A game day is a great way to build inter-team communication and break down silos within the business. </span><span class="koboSpan" id="kobo.488.2">Involve all affected teams, even non-technical teams. </span><span class="koboSpan" id="kobo.488.3">How will sales operate with missing data? </span><span class="koboSpan" id="kobo.488.4">Does the marketing team need to create a statement? </span><span class="koboSpan" id="kobo.488.5">The implications of an actual event likely spread beyond the confines of the technical team, so why not utilize your simulated event to manage the complete response? </span><span class="koboSpan" id="kobo.488.6">Your technical team will need additional technical-only game days, but a full-scale game day can be highly productive to test your entire </span><span class="No-Break"><span class="koboSpan" id="kobo.489.1">business’s resilience.</span></span></p>
+<p><span class="koboSpan" id="kobo.490.1">Executing the game day is fun: set up your simulated scenario, inform your operational team of the situation, and then watch them perform the recovery strategy. </span><span class="koboSpan" id="kobo.490.2">Make sure that the team is aware of the scope and boundaries of the game day before they begin executing to avoid the consequences we mentioned earlier. </span><span class="koboSpan" id="kobo.490.3">While testing your incident response, you should document your team’s actions. </span><span class="koboSpan" id="kobo.490.4">This process enables you to identify gaps in your existing action plan and refine it for future game days or an </span><span class="No-Break"><span class="koboSpan" id="kobo.491.1">actual incident.</span></span></p>
+<p><span class="koboSpan" id="kobo.492.1">This process should be</span><a id="_idIndexMarker952"/><span class="koboSpan" id="kobo.493.1"> followed by a healthy and blameless postmortem for both the simulated event (e.g., how did this theoretical event occur in the first place? </span><span class="koboSpan" id="kobo.493.2">How can we stop it from happening in the real world?) and the actual response itself (e.g., did we meet our RTO and RPO? </span><span class="koboSpan" id="kobo.493.3">Was our </span><span class="No-Break"><span class="koboSpan" id="kobo.494.1">procedure efficient?).</span></span></p>
+<p><span class="koboSpan" id="kobo.495.1">We will use the documentation generated during the execution phase after the event for a post-game day retrospective. </span><span class="koboSpan" id="kobo.495.2">This retrospective can follow the standard Agile </span><span class="No-Break"><span class="koboSpan" id="kobo.496.1">retrospective format:</span></span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.497.1">What </span><span class="No-Break"><span class="koboSpan" id="kobo.498.1">went well?</span></span></li>
+<li><span class="koboSpan" id="kobo.499.1">What </span><span class="No-Break"><span class="koboSpan" id="kobo.500.1">went wrong?</span></span></li>
+<li><span class="koboSpan" id="kobo.501.1">What did </span><span class="No-Break"><span class="koboSpan" id="kobo.502.1">we learn?</span></span></li>
+<li><span class="koboSpan" id="kobo.503.1">What changes can we make to do better </span><span class="No-Break"><span class="koboSpan" id="kobo.504.1">next time?</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.505.1">We can usually separate the points raised through this retrospective into two </span><span class="No-Break"><span class="koboSpan" id="kobo.506.1">distinct categories:</span></span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.507.1">Points about the execution of the </span><span class="No-Break"><span class="koboSpan" id="kobo.508.1">recovery plan</span></span></li>
+<li><span class="koboSpan" id="kobo.509.1">Points about the execution of the game </span><span class="No-Break"><span class="koboSpan" id="kobo.510.1">day itself</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.511.1">Both are important to collect, but use the first set to feed into improving your recovery plan and the second set to host an even better game day </span><span class="No-Break"><span class="koboSpan" id="kobo.512.1">next time!</span></span></p>
+<h2 id="_idParaDest-239"><a id="_idTextAnchor239"/><span class="koboSpan" id="kobo.513.1">The real thing</span></h2>
+<p><span class="koboSpan" id="kobo.514.1">If you follow the preceding advice when an actual incident occurs, the response should be that of a well-oiled machine rolling into action. </span><span class="koboSpan" id="kobo.514.2">That does not absolve you of your surrounding responsibilities. </span><span class="koboSpan" id="kobo.514.3">You should still do </span><span class="No-Break"><span class="koboSpan" id="kobo.515.1">the following:</span></span></p>
+<ul>
+<li><span class="koboSpan" id="kobo.516.1">Execute according </span><span class="No-Break"><span class="koboSpan" id="kobo.517.1">to procedure</span></span></li>
+<li><span class="koboSpan" id="kobo.518.1">Document all </span><span class="No-Break"><span class="koboSpan" id="kobo.519.1">actions taken</span></span></li>
+<li><span class="koboSpan" id="kobo.520.1">Try to achieve RTO and </span><span class="No-Break"><span class="koboSpan" id="kobo.521.1">RPO targets</span></span></li>
+<li><span class="koboSpan" id="kobo.522.1">Conduct a postmortem </span><span class="No-Break"><span class="koboSpan" id="kobo.523.1">and retrospective</span></span></li>
+</ul>
+<p><span class="koboSpan" id="kobo.524.1">You will (hopefully!) get very few of these opportunities to execute the recovery plan for real, so this is where you will get your most </span><span class="No-Break"><span class="koboSpan" id="kobo.525.1">valuable data.</span></span></p>
+<h1 id="_idParaDest-240"><a id="_idTextAnchor240"/><span class="koboSpan" id="kobo.526.1">Manual data ingestion</span></h1>
+<p><span class="koboSpan" id="kobo.527.1">When</span><a id="_idIndexMarker953"/><span class="koboSpan" id="kobo.528.1"> talking to other engineers about problems they experience when writing code, they will often say that the computer is not doing what they are telling it to do. </span><span class="koboSpan" id="kobo.528.2">My answer is usually the same: “</span><em class="italic"><span class="koboSpan" id="kobo.529.1">Computers will do exactly what you tell them to do</span></em><span class="koboSpan" id="kobo.530.1">.” </span><span class="koboSpan" id="kobo.530.2">There is an old joke that illustrates this point very well. </span><span class="koboSpan" id="kobo.530.3">A programmer’s partner asks them to go to the shops and pick up a loaf of bread, and if they have eggs, get a dozen. </span><span class="koboSpan" id="kobo.530.4">The programmer returns with a dozen loaves of bread. </span><span class="koboSpan" id="kobo.530.5">When questioned why, they reply, “</span><em class="italic"><span class="koboSpan" id="kobo.531.1">Well, they had eggs</span></em><span class="koboSpan" id="kobo.532.1">.” </span><span class="koboSpan" id="kobo.532.2">Computers are literal, but when you finally have the computer exhibiting the behavior that you want, the good news is that it will execute the actions precisely the same ad infinitum, barring some external influence. </span><span class="koboSpan" id="kobo.532.3">The downside is that computers are bad at performing actions that we haven’t predicted. </span><span class="koboSpan" id="kobo.532.4">On the other hand, humans have evolved to excel at performing in situations we haven’t anticipated. </span><span class="koboSpan" id="kobo.532.5">However, you lose the perfect execution criteria </span><span class="No-Break"><span class="koboSpan" id="kobo.533.1">of computers.</span></span></p>
+<p><span class="koboSpan" id="kobo.534.1">What does this have to do with data? </span><span class="koboSpan" id="kobo.534.2">What would you choose if we want our data to be ingested the same way every time? </span><span class="koboSpan" id="kobo.534.3">A fallible human who might be able to sort out the edge cases on the fly or a significantly less fallible automated system that is deterministic in the way that the same input will always produce the </span><span class="No-Break"><span class="koboSpan" id="kobo.535.1">same output?</span></span></p>
+<h2 id="_idParaDest-241"><a id="_idTextAnchor241"/><span class="koboSpan" id="kobo.536.1">The first data ingestion pipeline</span></h2>
+<p><span class="koboSpan" id="kobo.537.1">The</span><a id="_idIndexMarker954"/><span class="koboSpan" id="kobo.538.1"> first stage of shifting to an automated data ingestion system is to define the happy path. </span><span class="koboSpan" id="kobo.538.2">We discussed this concept when talking about synthetic data. </span><span class="koboSpan" id="kobo.538.3">How would you want the system to operate if all your data was perfect? </span><span class="koboSpan" id="kobo.538.4">This allows you to feed perfect data into the system and receive perfect results. </span><span class="koboSpan" id="kobo.538.5">In an ideal world, we wouldn’t need to ever progress beyond this state. </span><span class="koboSpan" id="kobo.538.6">In my experience, I have never encountered a data source that met the perfect criteria. </span><span class="koboSpan" id="kobo.538.7">So, let us start pushing data through our pipeline, and if our data doesn’t hit our perfect criteria, we can deal with the issues as they arise. </span><span class="koboSpan" id="kobo.538.8">This might involve removing invalid records from the source dataset or manipulating the data to meet our perfect </span><span class="No-Break"><span class="koboSpan" id="kobo.539.1">data criteria.</span></span></p>
+<p><span class="koboSpan" id="kobo.540.1">This has enabled us to combine the best of both worlds. </span><span class="koboSpan" id="kobo.540.2">Our automated system processes all of our well-formatted data to produce deterministic results, and our human operators</span><a id="_idIndexMarker955"/><span class="koboSpan" id="kobo.541.1"> can intervene when the computerized system cannot process the records. </span><span class="koboSpan" id="kobo.541.2">This allows the human element to exercise their judgment when required to allow all records to be correctly ingested. </span><span class="koboSpan" id="kobo.541.3">However, this setup still has one key issue: cloud services can quickly ingest our data, processing millions of records per second. </span><span class="koboSpan" id="kobo.541.4">On the other hand, while being more versatile, humans move at a </span><span class="No-Break"><span class="koboSpan" id="kobo.542.1">glacial pace.</span></span></p>
+<h2 id="_idParaDest-242"><a id="_idTextAnchor242"/><span class="koboSpan" id="kobo.543.1">Failure granularity</span></h2>
+<p><span class="koboSpan" id="kobo.544.1">When </span><a id="_idIndexMarker956"/><span class="koboSpan" id="kobo.545.1">ingesting data, we want to ensure we choose the correct failure granularity for our data ingestion pipeline. </span><span class="koboSpan" id="kobo.545.2">A naive approach would be to fail the pipeline whenever an error is encountered. </span><span class="koboSpan" id="kobo.545.3">As our datasets grow and our ingestion pipelines become more complex, the chances of the pipeline not experiencing a failure rapidly approaches zero. </span><span class="koboSpan" id="kobo.545.4">It is an infrequent case, in my experience, that a data pipeline provides value through an </span><span class="No-Break"><span class="koboSpan" id="kobo.546.1">all-or-nothing approach.</span></span></p>
+<p><span class="koboSpan" id="kobo.547.1">Typically, an incomplete dataset still offers more value than no data at all, and that is where this naive approach falls over. </span><span class="koboSpan" id="kobo.547.2">This is where it is crucial to consider your failure granularity. </span><span class="koboSpan" id="kobo.547.3">This means we need to discover the smallest unit of data that becomes non-functional when there is an error. </span><span class="koboSpan" id="kobo.547.4">This might mean we fail a single file, row/column, or cell in our dataset. </span><span class="koboSpan" id="kobo.547.5">By constraining the failure to the smallest unit of non-functional data, we can still leverage our dataset for other purposes, collect the failing units of data, and then process those failures asynchronously, enhancing the dataset as time goes on by using human judgment to deal with these </span><span class="No-Break"><span class="koboSpan" id="kobo.548.1">edge cases.</span></span></p>
+<p><span class="koboSpan" id="kobo.549.1">This might consist of an automatic prefiltering stage that determines whether the data matches our specifications. </span><span class="koboSpan" id="kobo.549.2">Records that do match are passed onto our data ingestion pipeline, and records that do not match our specification are passed to a dead letter queue for </span><span class="No-Break"><span class="koboSpan" id="kobo.550.1">later triaging.</span></span></p>
+<h2 id="_idParaDest-243"><a id="_idTextAnchor243"/><span class="koboSpan" id="kobo.551.1">Scaling the pipeline</span></h2>
+<p><span class="koboSpan" id="kobo.552.1">Human labor for </span><a id="_idIndexMarker957"/><span class="koboSpan" id="kobo.553.1">mundane tasks will always be the most expensive to scale. </span><span class="koboSpan" id="kobo.553.2">The human requirement to scale experiences hysteresis with the time required to hire, onboard, and train new resources. </span><span class="koboSpan" id="kobo.553.3">With the adoption of cloud native services, we barely even have to lift a finger to increase our throughput. </span><span class="koboSpan" id="kobo.553.4">In fact, with auto-scaling, even those few mouse clicks and keyboard strokes may </span><span class="No-Break"><span class="koboSpan" id="kobo.554.1">be redundant!</span></span></p>
+<p><span class="koboSpan" id="kobo.555.1">Once the </span><a id="_idIndexMarker958"/><span class="koboSpan" id="kobo.556.1">initial pipeline is built, the dead letter queue becomes a valuable resource. </span><span class="koboSpan" id="kobo.556.2">As we fix issues with data in the dead letter queue, we understand the types of problems we expect to see with our data. </span><span class="koboSpan" id="kobo.556.3">By analyzing how our human experts, with domain knowledge, rectify this problem, we can begin to provide edge case automation for these cases, codifying their knowledge into instructions that our pipeline can execute. </span><span class="koboSpan" id="kobo.556.4">As our pipeline scales, this automation allows it to improve its resilience, allowing our adaptable human element to deal with new problems requiring </span><span class="No-Break"><span class="koboSpan" id="kobo.557.1">their expertise.</span></span></p>
+<p><span class="koboSpan" id="kobo.558.1">Automating these cases also allows us to increase the recency of our data. </span><span class="koboSpan" id="kobo.558.2">Rather than waiting for a human to come and rectify these errors after they have been detected as errors, we have extended our specification to include these types </span><span class="No-Break"><span class="koboSpan" id="kobo.559.1">of data.</span></span></p>
+<h2 id="_idParaDest-244"><a id="_idTextAnchor244"/><span class="koboSpan" id="kobo.560.1">Making the jump to streaming</span></h2>
+<p><span class="koboSpan" id="kobo.561.1">As</span><a id="_idIndexMarker959"/><span class="koboSpan" id="kobo.562.1"> our pipeline becomes increasingly automatic, and if our upstream data sources support it, we can increase the frequency of our data ingestion to be closer to real time. </span><span class="koboSpan" id="kobo.562.2">Instead of a manual ingestion process performed once a week due to human limitations, we can shift to running our pipeline much more frequently. </span><span class="koboSpan" id="kobo.562.3">We have seen clients achieve a shift from monthly data ingestions to hourly data ingestions with </span><span class="No-Break"><span class="koboSpan" id="kobo.563.1">this process.</span></span></p>
+<p><span class="koboSpan" id="kobo.564.1">The final stage is rather than a schedule-driven process that pulls all data that has occurred in a period, we shift to a streaming model where the presence of new data kicks off the ingestion pipeline. </span><span class="koboSpan" id="kobo.564.2">The advantage of using cloud native services in this space is that, often, the scheduled pipelines you have already created can be run as streaming pipelines with </span><span class="No-Break"><span class="koboSpan" id="kobo.565.1">minimal changes.</span></span></p>
+<h1 id="_idParaDest-245"><a id="_idTextAnchor245"/><span class="koboSpan" id="kobo.566.1">No observability for data transfer errors</span></h1>
+<p><span class="koboSpan" id="kobo.567.1">I will repeat the mantra used countless times throughout this book, “</span><em class="italic"><span class="koboSpan" id="kobo.568.1">You can’t fix what you can’t measure</span></em><span class="koboSpan" id="kobo.569.1">.” </span><span class="koboSpan" id="kobo.569.2">The same is valid for data transfer. </span><span class="koboSpan" id="kobo.569.3">You need to be able to view the state of your data transfers so you can make informed decisions based on the data you have. </span><span class="koboSpan" id="kobo.569.4">The observability method is up to the user, but it is important to note that simply getting the observability data is half the battle. </span><span class="koboSpan" id="kobo.569.5">The other half is getting it in front of the eyes that will most impact the quality of your </span><span class="No-Break"><span class="koboSpan" id="kobo.570.1">data pipeline.</span></span></p>
+<h2 id="_idParaDest-246"><a id="_idTextAnchor246"/><span class="koboSpan" id="kobo.571.1">The data integrity dependency</span></h2>
+<p><span class="koboSpan" id="kobo.572.1">Let me pose a </span><a id="_idIndexMarker960"/><span class="koboSpan" id="kobo.573.1">hypothetical scenario we have seen play out at clients all too often. </span><span class="koboSpan" id="kobo.573.2">You have a successful app with a great dev team. </span><span class="koboSpan" id="kobo.573.3">To better understand your customers, you create a new data team to track how users interact with your application. </span><span class="koboSpan" id="kobo.573.4">To accomplish this, your developers quickly cobble together some cloud native data pipeline tools to feed data to the data team. </span><span class="koboSpan" id="kobo.573.5">The data team struggles to make progress because the data coming through is of poor quality, so the data team spends excessive time simply getting the data to a usable state. </span><span class="koboSpan" id="kobo.573.6">This causes the data team to be less effective due to both lack of time and lack of good quality data. </span><span class="koboSpan" id="kobo.573.7">The development team is just throwing data over the metaphorical fence and letting the data team deal with the fallout. </span><span class="koboSpan" id="kobo.573.8">The development team is the beneficiary of the data, as they will be the ones who can consume the data artifacts that the data team produces to understand better what they are building. </span><span class="koboSpan" id="kobo.573.9">Here, we see the dichotomy: the data team is rarely the team that will benefit from the data, but they are the ones who need to ensure that the data is correct to show that they are doing </span><span class="No-Break"><span class="koboSpan" id="kobo.574.1">their jobs.</span></span></p>
+<h2 id="_idParaDest-247"><a id="_idTextAnchor247"/><span class="koboSpan" id="kobo.575.1">Inverting the dependency</span></h2>
+<p><span class="koboSpan" id="kobo.576.1">I worked</span><a id="_idIndexMarker961"/><span class="koboSpan" id="kobo.577.1"> for a client previously in a company with a very large (non-software) engineering function. </span><span class="koboSpan" id="kobo.577.2">These engineers are tasked with ensuring that specific safety parameters are met. </span><span class="koboSpan" id="kobo.577.3">Part of that included ingesting sensor data from the field. </span><span class="koboSpan" id="kobo.577.4">One data engineer was responsible for maintaining the data pipeline. </span><span class="koboSpan" id="kobo.577.5">This configuration is all good in a static environment, but as we all know thanks to Werner Vogels, “</span><em class="italic"><span class="koboSpan" id="kobo.578.1">Everything fails all the time</span></em><span class="koboSpan" id="kobo.579.1">.” </span><span class="koboSpan" id="kobo.579.2">What happened was that some sensors, data loggers, or even networking equipment would fail and be replaced, changing the topology of the data. </span><span class="koboSpan" id="kobo.579.3">The data would then show up as unrecognized, and the data engineer would go and chase down the responsible engineer for the correct parameters to ingest the data correctly. </span><span class="koboSpan" id="kobo.579.4">In this scenario, the data engineer did not benefit from the data but was responsible for reactively fixing the data. </span><span class="koboSpan" id="kobo.579.5">Alongside this client, we designed a solution that monitored pipeline health, found inconsistencies, and told the engineer responsible that the data was not being appropriately ingested. </span><span class="koboSpan" id="kobo.579.6">They could then log in to a UI to fix the data topology so it would be ingested correctly on the next run. </span><span class="koboSpan" id="kobo.579.7">As the responsibility for this data sat with the engineer, we noticed that not only did they </span><a id="_idIndexMarker962"/><span class="koboSpan" id="kobo.580.1">reactively fix the data they were responsible for but they proactively went and updated the topology to prevent future pipeline failures. </span><span class="koboSpan" id="kobo.580.2">We had inverted </span><span class="No-Break"><span class="koboSpan" id="kobo.581.1">the dependency!</span></span></p>
+<p><span class="koboSpan" id="kobo.582.1">This is the power of having the right eyes on the observability data and empowering the beneficiaries to maintain it themselves. </span><span class="koboSpan" id="kobo.582.2">This lets our data engineers focus instead on the bigger picture and deal with problems in the data domain rather than playing catchup with </span><span class="No-Break"><span class="koboSpan" id="kobo.583.1">other domains.</span></span></p>
+<h2 id="_idParaDest-248"><a id="_idTextAnchor248"/><span class="koboSpan" id="kobo.584.1">Maintaining the dependency</span></h2>
+<p><span class="koboSpan" id="kobo.585.1">Now</span><a id="_idIndexMarker963"/><span class="koboSpan" id="kobo.586.1"> that we have inverted the data dependency between our producers and consumers, we can start to examine how to preserve the integrity of the link. </span><span class="koboSpan" id="kobo.586.2">As developers move forward, they rarely stop to think about their changes’ impact on the broader data ecosystem, of which their data is only a tiny part. </span><span class="koboSpan" id="kobo.586.3">The key to negotiating this minefield is typically through data contracts. </span><span class="koboSpan" id="kobo.586.4">A data contract is a specification that defines the format of the data that the application will produce. </span><span class="koboSpan" id="kobo.586.5">These specifications represent a mutual understanding of the underlying schema between data producers and consumers. </span><span class="koboSpan" id="kobo.586.6">If we use a common specification framework, such as JSON Schema, we can add tests for conformity of our data as part of the definition of done. </span><span class="koboSpan" id="kobo.586.7">This definition allows us to identify when we will cause breaking changes and preemptively notify downstream users that the schema </span><span class="No-Break"><span class="koboSpan" id="kobo.587.1">is changing.</span></span></p>
+<p><span class="koboSpan" id="kobo.588.1">Mature operations in this space also allow for the adoption of more modern tools, such as data catalogs. </span><span class="koboSpan" id="kobo.588.2">These catalogs will enable us to register the data and its schema so that it can be utilized by anyone who needs it within the organization. </span><span class="koboSpan" id="kobo.588.3">It is also vital to centrally track these new dependencies as they grow so that we know who to notify when a data contract requires a </span><span class="No-Break"><span class="koboSpan" id="kobo.589.1">breaking change.</span></span></p>
+<p><span class="koboSpan" id="kobo.590.1">So, now we have a solid understanding of how data observability is important for reacting to pipeline failures, preemptively acting, and treating our data services as first-class citizens in our </span><span class="No-Break"><span class="koboSpan" id="kobo.591.1">application stack.</span></span></p>
+<h1 id="_idParaDest-249"><a id="_idTextAnchor249"/><span class="koboSpan" id="kobo.592.1">Summary</span></h1>
+<p><span class="koboSpan" id="kobo.593.1">The cloud offers all new ways for us to manage one of our most important assets: our data! </span><span class="koboSpan" id="kobo.593.2">However, falling into the anti-patterns in this chapter can not only have implications for your bottom line but also for the durability, availability, and security of your data. </span><span class="koboSpan" id="kobo.593.3">By understanding the concepts in this chapter, you are well equipped to navigate the cloud native data jungle and build effective architectures. </span><span class="koboSpan" id="kobo.593.4">Next, we will look at how we can connect all the parts of our </span><span class="No-Break"><span class="koboSpan" id="kobo.594.1">architecture together.</span></span></p>
+</div>
+</body></html>

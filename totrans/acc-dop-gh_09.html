@@ -1,0 +1,263 @@
+<html><head></head><body>
+		<div id="_idContainer117">
+			<h1 id="_idParaDest-176"><em class="italic"><a id="_idTextAnchor175"/>Chapter 7</em>: Running Your Workflows</h1>
+			<p>In this chapter, I’ll show you the different options for <a id="_idIndexMarker448"/>running your <strong class="bold">workflows</strong>. We’ll investigate hosted and self-hosted runners, and I’ll explain how you can tackle hybrid-cloud scenarios or hardware-in-the-loop tests using the different hosting options. I’ll also show you how to set up, manage, and scale self-hosted runners, and I’ll show you how you can approach monitoring and troubleshooting.</p>
+			<p>The following are the core topics that we will cover in this chapter:</p>
+			<ul>
+				<li>Hosted runners</li>
+				<li>Self-hosted runners</li>
+				<li>Managing access with runner groups</li>
+				<li>Using labels</li>
+				<li>Scaling your self-hosted runners</li>
+				<li>Monitoring and troubleshooting</li>
+			</ul>
+			<h1 id="_idParaDest-177"><a id="_idTextAnchor176"/>Hosted runners</h1>
+			<p>We already <a id="_idIndexMarker449"/>used <strong class="bold">hosted runners</strong> in the previous chapter. Hosted runners are GitHub-hosted virtual machines that can be used to run your workflows. The runners are available for <strong class="bold">Linux</strong>, <strong class="bold">Windows</strong>, and <strong class="bold">macOS</strong> operating systems. </p>
+			<h2 id="_idParaDest-178"><a id="_idTextAnchor177"/>Isolation and privileges</h2>
+			<p>Each job in a <a id="_idIndexMarker450"/>workflow executes in a fresh instance of the virtual machine and is completely isolated. You have <em class="italic">full admin access</em> (<strong class="bold">passwordless sudo</strong> on Linux), and<a id="_idIndexMarker451"/> the <strong class="bold">user account control</strong> (<strong class="bold">UAC</strong>) is disabled on Windows machines. That <a id="_idIndexMarker452"/>means you can install any tools you might need in your workflow (this just comes with the price of build time).</p>
+			<p>The runner can <a id="_idIndexMarker453"/>also access <strong class="bold">user interface</strong> (<strong class="bold">UI</strong>) elements. This enables you to <a id="_idIndexMarker454"/>execute <strong class="bold">UI tests</strong> such<a id="_idIndexMarker455"/> as <strong class="bold">Selenium</strong> inside the runner without the need to do this through another virtual machine.</p>
+			<h2 id="_idParaDest-179"><a id="_idTextAnchor178"/>Hardware</h2>
+			<p>GitHub hosts Linux and Windows runners <a id="_idIndexMarker456"/>on <strong class="bold">Standard_DS2_v2</strong> virtual machines<a id="_idIndexMarker457"/> in <strong class="bold">Microsoft Azure</strong>. The <a id="_idIndexMarker458"/>hardware specifications<a id="_idIndexMarker459"/> for Windows and Linux virtual machines are as follows:</p>
+			<ul>
+				<li>2-core CPU</li>
+				<li>7 GB of RAM</li>
+				<li>14 GB of SSD disk space</li>
+			</ul>
+			<p>MacOS runners are hosted on GitHub's macOS cloud and have the following hardware specifications:</p>
+			<ul>
+				<li>3-core CPU</li>
+				<li>14 GB of RAM</li>
+				<li>14 GB of SSD disk space</li>
+			</ul>
+			<h2 id="_idParaDest-180"><a id="_idTextAnchor179"/>Software</h2>
+			<p>In <em class="italic">Table 7.1</em>, you can <a id="_idIndexMarker460"/>see a list of the currently available images:</p>
+			<div>
+				<div id="_idContainer110" class="IMG---Figure">
+					<img src="image/Table_012.jpg" alt="Table 7.1 – The currently available images for hosted runners&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Table 7.1 – The currently available images for hosted runners</p>
+			<p>You can<a id="_idIndexMarker461"/> find the current list and all included software at <a href="https://github.com/actions/virtual-environments">https://github.com/actions/virtual-environments</a>.</p>
+			<p>This is also the<a id="_idIndexMarker462"/> repository you can raise an issue in if you would like to request a new tool to be installed as a default tool. This repository also contains announcements about all major software updates on the runners, and you can use the <em class="italic">watch</em> feature of GitHub repositories to get notified if new releases are created.</p>
+			<h2 id="_idParaDest-181"><a id="_idTextAnchor180"/>Networks</h2>
+			<p>The IP<a id="_idIndexMarker463"/> addresses that are used by the hosted runners change from time to time. You can get the current list using the GitHub API:</p>
+			<pre class="source-code">curl \</pre>
+			<pre class="source-code">  -H "Accept: application/vnd.github.v3+json" \</pre>
+			<pre class="source-code">  https://api.github.com/meta</pre>
+			<p>More information on this can be found at <a href="https://docs.github.com/en/rest/reference/meta#get-github-meta-information">https://docs.github.com/en/rest/reference/meta#get-github-meta-information</a>.</p>
+			<p>You can use this information if you require an allow-list to prevent access to your internal resources from the internet. But remember that everyone can use the hosted runners and execute code! Blocking other IP addresses does not make your resources safe. Do not oppose internal systems to these IP addresses that are not secured in a way that you would trust them to be accessed from the public internet! This means the systems must be patched and have secure authentication in place. If this is not the case, you have to use self-hosted runners.</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">If you use an <em class="italic">IP address allow list</em> for your GitHub organization or enterprise account, you cannot use GitHub-hosted runners and must instead use self-hosted runners.</p>
+			<h2 id="_idParaDest-182"><a id="_idTextAnchor181"/>Pricing</h2>
+			<p>The usage <a id="_idIndexMarker464"/>of hosted runners is free for public repositories. Depending on your GitHub edition, you will have an allotted storage amount and monthly free build minutes (see <em class="italic">Table 7.2</em>):</p>
+			<div>
+				<div id="_idContainer111" class="IMG---Figure">
+					<img src="image/Table_021.jpg" alt="Table 7.2 – The included storage and build minutes for different GitHub editions&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Table 7.2 – The included storage and build minutes for different GitHub editions</p>
+			<p>If you have <a id="_idIndexMarker465"/>purchased <strong class="bold">GitHub Enterprise</strong> through your <strong class="bold">Microsoft Enterprise Agreement</strong>, you<a id="_idIndexMarker466"/> can connect your <strong class="bold">Azure</strong> <strong class="bold">Subscription ID</strong> to <a id="_idIndexMarker467"/>your <a id="_idIndexMarker468"/>GitHub Enterprise account. This enables you to pay for extra <strong class="bold">GitHub Actions</strong> usage, in addition to what is included with your GitHub edition.</p>
+			<p>Jobs that run on Windows and macOS runners consume more build minutes than Linux! Windows consumes minutes with <em class="italic">factor 2</em> and macOS with <em class="italic">factor 10</em>. That means using 1,000 Windows minutes would consume 2,000 of the minutes included in your account, whereas using 1,000 macOS minutes would consume 10,000 minutes included in your account.</p>
+			<p>That's because the build minutes are more expensive. You can pay for additional minutes on top of those included in your GitHub edition. These are the build minute costs for each operating system:</p>
+			<ul>
+				<li>On Linux: $0.008</li>
+				<li>On macOS: $0.08</li>
+				<li>On Windows: $0.016<p class="callout-heading">Tip</p><p class="callout">You should use as much Linux for your workflows as possible and reduce macOS and Windows to a minimum to reduce your build costs. Linux also has the best starting performance.</p></li>
+			</ul>
+			<p>The costs for additional storage are the same for all runners, which is $0.25 per GB.</p>
+			<p>If you are a<a id="_idIndexMarker469"/> monthly-billed customer, your account will have a default spending limit of $0 (USD). This prevents additional build minutes or storage from being used. If you pay by invoice, your account will have an unlimited spending limit by default.</p>
+			<p>If you configure a spending limit higher than $0, you will be billed for any additional minutes or storage beyond the included amounts in your account until the spending limit is reached.</p>
+			<h1 id="_idParaDest-183"><a id="_idTextAnchor182"/>Self-hosted runners</h1>
+			<p>If you need more <a id="_idIndexMarker470"/>control than GitHub-hosted runners allow for hardware, operating systems, software, and network access, you can host the runners yourself. <strong class="bold">Self-hosted runners</strong> can be installed on physical machines, virtual machines, or in a container. They can run on-premises or in any public cloud environment.</p>
+			<p>Self-hosted runners allow for easy migration from other build environments. If you already have automated builds, you just install the runner on the machines and your code should build. But if your build machines are still the ped-like machines that are manually maintained – sometimes positioned physically beyond the desk of a developer – then this is not a permanent solution. Keep in mind that building and hosting a dynamically scaling environment needs expertise and costs money, whether it is hosted in the cloud or on-premises. So, if you can use hosted runners, it is always the easier option. However, if you need a self-hosted solution, make sure to make it an elastically scalable solution.</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Hosting your own runners enables you to build and deploy safely in your on-premises environment from <a id="_idIndexMarker471"/>within <strong class="bold">GitHub Enterprise Cloud</strong>. This allows you to run GitHub in a <em class="italic">hybrid mode</em> – that is, you can use GitHub Enterprise in the cloud together with hosted runners for basic automation and deployments to cloud environments, but use self-hosted runners to build or deploy applications that are hosted on-premises. This can be a cheaper and simpler solution than running <strong class="bold">GitHub Enterprise Server</strong> and<a id="_idIndexMarker472"/> the build environments <em class="italic">for all of your builds and deployments yourself</em>.</p>
+			<p>If you are <a id="_idIndexMarker473"/>depending on hardware to test your software (for example, when using hardware-in-the-loop tests), there is no way around using self-hosted runners. This is because there is no way to attach hardware to the GitHub-hosted runners.</p>
+			<h2 id="_idParaDest-184"><a id="_idTextAnchor183"/>The runner software</h2>
+			<p>The runner is<a id="_idIndexMarker474"/> open source and can be found at <a href="https://github.com/actions/runner">https://github.com/actions/runner</a>. It supports x64 processor architecture on Linux, macOS, and Windows. It also supports ARM64 and ARM32 architecture, but only on Linux. The runner supports <a id="_idIndexMarker475"/>many operating systems<a id="_idIndexMarker476"/>, including <strong class="bold">Ubuntu</strong>, <strong class="bold">Red Hat Enterprise Linux</strong> <strong class="bold">7</strong> or<a id="_idIndexMarker477"/> later, <strong class="bold">Debian</strong> <strong class="bold">9</strong> or later, <strong class="bold">Windows</strong> <strong class="bold">7</strong>/<strong class="bold">8</strong>/<strong class="bold">10</strong> and <strong class="bold">Windows Server</strong>, <strong class="bold">macOS</strong> <strong class="bold">10.13</strong> or <a id="_idIndexMarker478"/>later, and many more. For a <a id="_idIndexMarker479"/>complete<a id="_idIndexMarker480"/> list, see the documentation at <a href="https://docs.github.com/en/actions/hosting-your-own-runners/about-self-hosted-runners#supported-architectures-and-operating-systems-for-self-hosted-runners">https://docs.github.com/en/actions/hosting-your-own-runners/about-self-hosted-runners#supported-architectures-and-operating-systems-for-self-hosted-runners</a>.</p>
+			<p>The runner <a id="_idIndexMarker481"/>auto-updates itself, so you don't have to take care of this.</p>
+			<h2 id="_idParaDest-185"><a id="_idTextAnchor184"/>Communication between the runner and GitHub</h2>
+			<p>The runner <a id="_idIndexMarker482"/>software polls GitHub<a id="_idIndexMarker483"/> using <strong class="bold">HTTPS long polling</strong> over port <strong class="source-inline">443</strong>, using an outbound connection. It opens a connection for 50 seconds and times out if no response is received.</p>
+			<p>You must ensure that the machine has appropriate network access to the following URLs:</p>
+			<pre class="source-code">github.com</pre>
+			<pre class="source-code">api.github.com</pre>
+			<pre class="source-code">*.actions.githubusercontent.com</pre>
+			<pre class="source-code">github-releases.githubusercontent.com</pre>
+			<pre class="source-code">github-registry-files.githubusercontent.com</pre>
+			<pre class="source-code">codeload.github.com</pre>
+			<pre class="source-code">*.pkg.github.com</pre>
+			<pre class="source-code">pkg-cache.githubusercontent.com</pre>
+			<pre class="source-code">pkg-containers.githubusercontent.com</pre>
+			<pre class="source-code">pkg-containers-az.githubusercontent.com</pre>
+			<pre class="source-code">*.blob.core.windows.net</pre>
+			<p>You don't have<a id="_idIndexMarker484"/> to open any inbound ports on your firewall. All communication runs through the client. If you use an IP address allow list for your GitHub organization or enterprise, you must add the IP address range of your self-hosted runners to that allow list.</p>
+			<h2 id="_idParaDest-186"><a id="_idTextAnchor185"/>Using self-hosted runners behind a proxy server</h2>
+			<p>If you <a id="_idIndexMarker485"/>need to run the self-hosted runner behind a proxy server, you can do so. But be aware that this can cause a lot of problems. The runner itself can communicate fine – however, package management, container registries, and everything that is executed by the runner and needs to access resources creates an overhead. If you can avoid this, I advise you to do so. But if you must run the workflows behind a proxy server, you can configure the runner with the following environment variables:</p>
+			<ul>
+				<li><strong class="source-inline">https_proxy</strong>: This<a id="_idIndexMarker486"/> includes the proxy URL for HTTPS (port <strong class="source-inline">443</strong>) traffic. You can also include basic authentication (such as <strong class="source-inline">https://user:password@proxy.local</strong>).</li>
+				<li><strong class="source-inline">http_proxy</strong>: This<a id="_idIndexMarker487"/> includes the proxy URL for HTTP (port <strong class="source-inline">80</strong>) traffic. You can also include basic authentication (such as <strong class="source-inline">http://user:password@proxy.local</strong>).</li>
+				<li><strong class="source-inline">no_proxy</strong>: This<a id="_idIndexMarker488"/> includes a comma-separated list of hosts that should bypass the proxy server.</li>
+			</ul>
+			<p>If you change the environment variables, you have to restart the runner for the changes to take effect.</p>
+			<p>An alternative <a id="_idIndexMarker489"/>to using environment variables is to use a <strong class="source-inline">.env</strong> file. Save a file with the name <strong class="source-inline">.env</strong> in the application folder of the runner. After that, the syntax is the same as the environment variables:</p>
+			<pre class="source-code">https_proxy=http://proxy.local:8081</pre>
+			<pre class="source-code">no_proxy=example.com,myserver.local:443</pre>
+			<p>Next, let's have a look at how to add self-hosted runners to GitHub.</p>
+			<h2 id="_idParaDest-187"><a id="_idTextAnchor186"/>Adding self-hosted runners to GitHub</h2>
+			<p>You can <a id="_idIndexMarker490"/>add runners at different levels in GitHub: repository, organization and enterprise. If you add runners at the repository level, they <a id="_idIndexMarker491"/>are dedicated to that single repository. Organization-level runners can process jobs for multiple repositories in an organization and enterprise-level runners can be assigned to multiple organizations in your enterprise.</p>
+			<p>Installing the runner and registering it on your GitHub instance is easy. Just go to <strong class="bold">Settings</strong> | <strong class="bold">Actions</strong> | <strong class="bold">Runners</strong> at the level you want to add them. Then, select the operating system and processor architecture (see <em class="italic">Figure 7.1</em>):</p>
+			<div>
+				<div id="_idContainer112" class="IMG---Figure">
+					<img src="image/B17827_07_01.jpg" alt="Figure 7.1 – Installing a self-hosted runner&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 7.1 – Installing a self-hosted runner</p>
+			<p>This generates a script for you that does the following:</p>
+			<ol>
+				<li>Downloads and unpacks the runner</li>
+				<li>Configures the runner with the corresponding values</li>
+				<li>Starts the runner</li>
+			</ol>
+			<p>The <a id="_idIndexMarker492"/>first <a id="_idIndexMarker493"/>part of the script always creates a folder called <strong class="source-inline">actions-runner</strong> and then changes the working directory to that folder:</p>
+			<pre class="source-code">$ <strong class="bold">mkdir</strong> actions-runner &amp;&amp; <strong class="bold">cd</strong> actions-runner</pre>
+			<p>Downloading the latest runner package is done on Linux and macOS with the <strong class="source-inline">curl</strong> command and on Windows with <strong class="source-inline">Invoke-WebRequest</strong>:</p>
+			<pre class="source-code"># Linux and macOS:</pre>
+			<pre class="source-code">$ <strong class="bold">curl</strong> -o actions-runner-<strong class="bold">&lt;ver&gt;</strong>.tar.gz -L https://github.com/actions/runner/releases/download/<strong class="bold">&lt;ver&gt;</strong>/actions-runner-<strong class="bold">&lt;ver&gt;</strong>.tar.gz</pre>
+			<pre class="source-code"># Windows:</pre>
+			<pre class="source-code">$ <strong class="bold">Invoke-WebRequest</strong> -Uri https://github.com/actions/runner/releases/download/<strong class="bold">&lt;ver&gt;</strong>/actions-runner-<strong class="bold">&lt;ver&gt;</strong>.zip -OutFile actions-runner-<strong class="bold">&lt;ver&gt;</strong>.zip</pre>
+			<p>For security reasons, the hash of the downloaded package is validated to ensure the package has not been compromised:</p>
+			<pre class="source-code"># Linux and macOS:</pre>
+			<pre class="source-code">$ echo "<strong class="bold">&lt;hash&gt;</strong> actions-runner-<strong class="bold">&lt;ver&gt;</strong>.tar.gz" | <strong class="bold">shasum</strong> -a 256 -c</pre>
+			<pre class="source-code"># Windows:</pre>
+			<pre class="source-code">$ if((Get-FileHash -Path actions-runner-<strong class="bold">&lt;ver&gt;</strong>.zip -Algorithm SHA256).Hash.ToUpper() -ne '<strong class="bold">&lt;hash&gt;</strong>'.ToUpper()){ throw 'Computed checksum did not match' }</pre>
+			<p>Then, the runner gets extracted from the ZIP/TAR file:</p>
+			<pre class="source-code"># Linux and macOS:</pre>
+			<pre class="source-code">$ tar xzf ./actions-runner-<strong class="bold">&lt;ver&gt;</strong>.tar.gz</pre>
+			<pre class="source-code"># Windows:</pre>
+			<pre class="source-code">$ Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/actions-runner-<strong class="bold">&lt;ver&gt;</strong>.zip", "$PWD")</pre>
+			<p>The configuration<a id="_idIndexMarker494"/> is done using the <strong class="source-inline">config.sh</strong> / <strong class="source-inline">config.cmd</strong> script and the URL and token are automatically created by GitHub for you:</p>
+			<pre class="source-code"># Linux and macOS:</pre>
+			<pre class="source-code">$ ./config.sh --url https://github.com/<strong class="bold">org</strong> --token <strong class="bold">token</strong></pre>
+			<pre class="source-code"># Widows:</pre>
+			<pre class="source-code">$ ./config.cmd --url https://github.com/<strong class="bold">org</strong> --token <strong class="bold">token</strong></pre>
+			<p>The <a id="_idIndexMarker495"/>configuration asks for the runner group (where the default is the <strong class="source-inline">Default</strong> group), the name of the runner (where the default is the machine name), and additional labels. Default labels are applied to describe the self-hosted status, the operating system, and the processor architecture (for example, <strong class="source-inline">self-hosted</strong>, <strong class="source-inline">Linux</strong>, and <strong class="source-inline">X64</strong>, respectively). The default working folder is <strong class="source-inline">_work</strong> and should not be changed. On Windows, you can also choose to run the action runner as a service. On Linux and macOS, you have to install the service using another script after the configuration:</p>
+			<pre class="source-code">$ sudo ./svc.sh install</pre>
+			<pre class="source-code">$ sudo ./svc.sh start</pre>
+			<p>If you don't want to run the runner as a service, you can run it interactively using the <strong class="source-inline">run</strong> script:</p>
+			<pre class="source-code">$ ./run.sh</pre>
+			<pre class="source-code">$ ./run.cmd</pre>
+			<p>If the runner is up and running, you can see it listed under <strong class="bold">Settings</strong> | <strong class="bold">Actions</strong> | <strong class="bold">Runners</strong> with its<a id="_idIndexMarker496"/> status and tags (see <em class="italic">Figure 7.2</em>):</p>
+			<div>
+				<div id="_idContainer113" class="IMG---Figure">
+					<img src="image/B17827_07_02.jpg" alt="Figure 7.2 – Self-hosted runners with their tags and status&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 7.2 – Self-hosted runners with their tags and status</p>
+			<p>Let's now learn how to remove these self-hosted runners from GitHub.</p>
+			<h2 id="_idParaDest-188"><a id="_idTextAnchor187"/>Removing self-hosted runners</h2>
+			<p>If you want to<a id="_idIndexMarker497"/> reconfigure or remove a runner from GitHub, you have to use the <strong class="source-inline">config</strong> script with the <strong class="source-inline">remove</strong> option. If you open the details of the runner by clicking its name, you see a <strong class="bold">Remove</strong> button (see <em class="italic">Figure 7.2</em>). If you click this button, it generates the script and token for you.</p>
+			<div>
+				<div id="_idContainer114" class="IMG---Figure">
+					<img src="image/B17827_07_03.jpg" alt="Figure 7.3 – The runner details&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 7.3 – The runner details</p>
+			<p>The script looks like this for the different operating systems:</p>
+			<pre class="source-code"># Linux and macOS</pre>
+			<pre class="source-code">./config.sh remove --token &lt;token&gt;</pre>
+			<pre class="source-code"># Windows</pre>
+			<pre class="source-code">./config.cmd remove --token &lt;token&gt;</pre>
+			<p>Always remove the runners before destroying your machines! If you forget to do this, you can still use the <strong class="bold">Force remove this runner</strong> button in the <strong class="bold">Remove</strong> dialog. But this should <a id="_idIndexMarker498"/>only be used as a last resort.</p>
+			<h1 id="_idParaDest-189"><a id="_idTextAnchor188"/>Managing access with runner groups</h1>
+			<p>If you register <a id="_idIndexMarker499"/>your runners at the organization or enterprise level, <strong class="bold">runner groups</strong> are used to control access to the self-hosted runners. Enterprise administrators can configure access policies that control which organizations in an enterprise have access to runner groups, and organization administrators can<a id="_idIndexMarker500"/> configure access policies that control which repositories in the organization have access to runner groups. Every enterprise and every organization has a default runner group named <strong class="source-inline">Default</strong> that cannot be deleted.</p>
+			<p class="callout-heading">Note </p>
+			<p class="callout">A runner can only be in one runner group at a time.</p>
+			<p>To manage access, open <strong class="bold">Policies</strong> at the enterprise level or <strong class="bold">Settings</strong> at the organization level and locate <strong class="bold">Actions</strong> | <strong class="bold">Runner Groups</strong> in the menu. Here, you can create a new runner group or click on an existing one to adjust its access settings. Depending on whether your level is enterprise or organization, you can either allow access to specific organizations or repositories (see <em class="italic">Figure 7.3</em>):</p>
+			<div>
+				<div id="_idContainer115" class="IMG---Figure">
+					<img src="image/B17827_07_04.jpg" alt="Figure 7.4 – Options for runner groups&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 7.4 – Options for runner groups</p>
+			<p class="callout-heading">Warning</p>
+			<p class="callout">Access for public repositories is disabled by default. Leave this! You should not use self-hosted runners with public repositories! Forks may execute malicious code on your runners, so this is a risk. If you need self-hosted runners for a public repository, make sure to use <em class="italic">ephemeral</em> and <em class="italic">hardened</em> runners that don't have access to your internal resources. This might be the case if you need a special tooling for an open source project that takes too long to install on the hosted runners. But these are rare cases and you should try to avoid them.</p>
+			<p>When you<a id="_idIndexMarker501"/> register a new runner, you are asked for the <a id="_idIndexMarker502"/>name of the runner group. You can also pass this as an argument to the <strong class="source-inline">config</strong> script:</p>
+			<pre class="source-code">$ ./config.sh --runnergroup <strong class="bold">&lt;group&gt;</strong></pre>
+			<p>Now that we've learned to manage access with runner groups, we will learn to use labels.</p>
+			<h1 id="_idParaDest-190"><a id="_idTextAnchor189"/>Using labels</h1>
+			<p>GitHub Actions <a id="_idIndexMarker503"/>matches your workflow with your runners by searching for the correct labels. The labels are applied when you register a runner. You can also pass them to the <strong class="source-inline">config</strong> script as an argument:</p>
+			<pre class="source-code">$ ./config.sh --labels self-hosted,x64,linux</pre>
+			<p>You can later modify the labels and create new labels in the details of the runner by pressing the gear icon next to <strong class="bold">Labels</strong> (see <em class="italic">Figure 7.4</em>):</p>
+			<div>
+				<div id="_idContainer116" class="IMG---Figure">
+					<img src="image/B17827_07_05.jpg" alt="Figure 7.5 – Creating new labels for a runner&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 7.5 – Creating new labels for a runner</p>
+			<p>If your workflows have specific demands, you can create custom labels for them. An example of a custom label could be adding a tag for a tool such as <strong class="source-inline">matLab</strong> or necessary <strong class="source-inline">gpu</strong> access.</p>
+			<p>All self-hosted runners have the <strong class="source-inline">self-hosted</strong> tag by default.</p>
+			<p>To use the runners in your workflows, you specify the demands in the form of tags:</p>
+			<pre class="source-code">runs-on: [self-hosted, linux, X64, <strong class="bold">matlab</strong>, <strong class="bold">gpu</strong>]</pre>
+			<p>This way, your workflow finds the corresponding runner that fulfills the necessary demands.</p>
+			<h1 id="_idParaDest-191"><a id="_idTextAnchor190"/>Scaling your self-hosted runners</h1>
+			<p>Installing<a id="_idIndexMarker504"/> the action runner on existing build machines allows for easy migration to GitHub. But this is not a long-term solution! If you can't use the hosted runners, you should build an elastically scaling build environment yourself.</p>
+			<h2 id="_idParaDest-192"><a id="_idTextAnchor191"/>Ephemeral runners</h2>
+			<p>If you build an<a id="_idIndexMarker505"/> elastic scaling solution for your build machines or container, you should use ephemeral runners. This means you use a virtual machine or <strong class="bold">Docker</strong> image from a blank image and install a temporary runner. Then, everything gets erased after the run. An elastic scaling solution with persistent runners is not recommended!</p>
+			<p>To configure your runner to be <em class="italic">ephemeral</em>, you pass the following argument to the <strong class="source-inline">config</strong> script:</p>
+			<pre class="source-code">$ ./config.sh <strong class="bold">--ephemeral</strong></pre>
+			<h2 id="_idParaDest-193"><a id="_idTextAnchor192"/>Scaling up and down with GitHub webhooks</h2>
+			<p>To scale <a id="_idIndexMarker506"/>your virtual environments up and down, you<a id="_idIndexMarker507"/> can use <strong class="bold">GitHub</strong> <strong class="bold">webhooks</strong>. The <strong class="source-inline">workflow_job</strong> webhook gets called with the <strong class="source-inline">queued</strong> action key if a new workflow is queued. You can use this event to spin up a new build machine and add it to the pool of machines. The <strong class="source-inline">workflow_job</strong> webhook is called with the <strong class="source-inline">completed</strong> action if the workflow run has finished. You can use this event to clean up and destroy the machine.</p>
+			<p>For more information, see the documentation at <a href="https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#workflow_job">https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#workflow_job</a>.</p>
+			<h2 id="_idParaDest-194"><a id="_idTextAnchor193"/>Existing solutions</h2>
+			<p>Building <a id="_idIndexMarker508"/>an elastic virtual build environment in <strong class="bold">Kubernetes</strong>, <strong class="bold">AWS EC2</strong>, or <strong class="bold">OpenShift</strong> is <a id="_idIndexMarker509"/>beyond <a id="_idIndexMarker510"/>the scope of this book. GitHub does not provide<a id="_idIndexMarker511"/> a solution for this itself, but there are many open source solutions on GitHub that can save you a lot of time and effort if you want to utilize them. Johannes Nicolai (<strong class="source-inline">@jonico</strong>) has curated a matrix with all of the solutions out there. You can find the repository at <a href="https://github.com/jonico/awesome-runners">https://github.com/jonico/awesome-runners</a>. The matrix is more readable in the form of GitHub pages, so you might prefer to visit <a href="https://jonico.github.io/awesome-runners">https://jonico.github.io/awesome-runners</a>. The matrix compares the solutions based on their target platform, whether they have GitHub Enterprise support, their automatic scaling<a id="_idIndexMarker512"/> capabilities, their cleanup factors, and other criteria.</p>
+			<p class="callout-heading">Tip</p>
+			<p class="callout">Keep in mind that building and running a scalable build environment with your custom images takes a lot of time and effort that can also be spent on other things. Using hosted runners is the cheaper and more sustainable solution. Make sure if you really need to make this investment in your own platform before doing so. Often, there are other options to hosting your own runners – such as bringing your own Docker images into GitHub Actions or using a bot to automate deployments to your on-premises resources.</p>
+			<h1 id="_idParaDest-195"><a id="_idTextAnchor194"/>Monitoring and troubleshooting</h1>
+			<p>If you have<a id="_idIndexMarker513"/> problems with your self-hosted runners, there <a id="_idIndexMarker514"/>are several things that can help you when troubleshooting.</p>
+			<h2 id="_idParaDest-196"><a id="_idTextAnchor195"/>Checking the status of the runners</h2>
+			<p>You can<a id="_idIndexMarker515"/> check the status of your runners under <strong class="bold">Settings</strong> | <strong class="bold">Actions</strong> | <strong class="bold">Runners</strong>. The status of a runner can be <strong class="source-inline">Idle</strong>, <strong class="source-inline">Active</strong>, or <strong class="source-inline">Offline</strong>. If the runner status is <strong class="source-inline">Offline</strong>, the machine could be down or not connected to the network, or the self-hosted runner application might not be running on the machine.</p>
+			<h2 id="_idParaDest-197"><a id="_idTextAnchor196"/>Reviewing the application log files</h2>
+			<p>Log files are <a id="_idIndexMarker516"/>kept on the runner in the <strong class="source-inline">_diag</strong> folder in the runner's root directory. You can review the runner <strong class="bold">application log files</strong> in <strong class="source-inline">_diag</strong>. The application log filenames begin with <strong class="source-inline">Runner_</strong> and have<a id="_idIndexMarker517"/> a UTC timestamp appended to them:</p>
+			<pre class="source-code">Runner_20210927-065249-utc.log</pre>
+			<h2 id="_idParaDest-198"><a id="_idTextAnchor197"/>Reviewing the job log files</h2>
+			<p>The <strong class="bold">job log files</strong> are <a id="_idIndexMarker518"/>also located in <strong class="source-inline">_diag</strong>. Each job has its own log. The application log filenames begin with <strong class="source-inline">Worker_</strong> and also have a UTC timestamp appended:</p>
+			<pre class="source-code">Worker_20210927-101349-utc.log</pre>
+			<h2 id="_idParaDest-199"><a id="_idTextAnchor198"/>Checking the service status</h2>
+			<p>If your runner<a id="_idIndexMarker519"/> runs as a service, you can check the service status, depending on your operating system.</p>
+			<h3>Linux</h3>
+			<p>On Linux, you<a id="_idIndexMarker520"/> can get the name <a id="_idIndexMarker521"/>of your service from the <strong class="source-inline">.service</strong> file in your runner's folder. Use the <strong class="source-inline">journalctl</strong> tool to monitor the real-time activity of your runner service:</p>
+			<pre class="source-code">$ sudo journalctl -u $(cat ~/actions-runner/.service) -f </pre>
+			<p>The configuration for your service can be checked and customized under <strong class="source-inline">/etc/systemd/systemd/</strong>:</p>
+			<pre class="source-code">$ cat /etc/systemd/system/$(cat ~/actions-runner/.service)</pre>
+			<h3>macOS</h3>
+			<p>On <a id="_idIndexMarker522"/>macOS, you <a id="_idIndexMarker523"/>can use the <strong class="source-inline">svc.sh</strong> script to check the status of the service:</p>
+			<pre class="source-code">$ ./svc.sh status</pre>
+			<p>The output of the preceding script contains the <em class="italic">service name</em> and the <em class="italic">process ID</em>.</p>
+			<p>To check the service configuration, locate the file in the following location:</p>
+			<pre class="source-code">$ cat /Users/<strong class="bold">&lt;user_name&gt;</strong>/Library/LaunchAgents/<strong class="bold">&lt;service_name&gt;</strong></pre>
+			<h3>Windows</h3>
+			<p>On <a id="_idIndexMarker524"/>Windows, you can use <strong class="bold">PowerShell</strong> to<a id="_idIndexMarker525"/> retrieve information about your service:</p>
+			<pre class="source-code">$ Get-Service "action*"</pre>
+			<p>Use <strong class="source-inline">EventLog</strong> to monitor the recent activities of your service:</p>
+			<pre class="source-code">Get-EventLog -LogName Application -Source ActionsRunnerService</pre>
+			<h2 id="_idParaDest-200"><a id="_idTextAnchor199"/>Monitoring the runner update process</h2>
+			<p>The runner should <a id="_idIndexMarker526"/>update itself automatically. If this fails, the runner will not be able to run workflows. You can check its update activity in the <strong class="source-inline">Runner_*</strong> log files in the <strong class="source-inline">_diag</strong> directory.</p>
+			<h1 id="_idParaDest-201"><a id="_idTextAnchor200"/>Case study</h1>
+			<p>The two pilot teams at <em class="italic">Tailwind Gears</em> start their first sprints on the new platform. The first thing they automate is the build process so that all of their pull requests can be built before <a id="_idIndexMarker527"/>merging. Tailwind Gears tries to use the GitHub-hosted runners as much as possible. Most of the software builds just fine. However, some of the code written in <strong class="bold">C</strong> uses an older compiler version and has some other dependencies installed on the current build machines. The code is currently built on two<a id="_idIndexMarker528"/> local <strong class="bold">Jenkins</strong> servers that are maintained by the developers themselves. These servers are also attached to hardware that is used for hardware-in-the-loop testing. For an easy transition, self-hosted runners are installed on these machines and the build runs fine. The IT department wants to get rid of the local servers anyway, so they work together with their GitHub partner to build an elastic, scalable, container-based solution that can run custom images that have access to the attached hardware.</p>
+			<h1 id="_idParaDest-202"><a id="_idTextAnchor201"/>Summary</h1>
+			<p>In this chapter, you learned about two hosting options for running your workflows:</p>
+			<ul>
+				<li>GitHub-hosted runners</li>
+				<li>Self-hosted runners</li>
+			</ul>
+			<p>We explained how self-hosted runners allow you to run GitHub in a hybrid-cloud scenario. You learned how to set up self-hosted runners and where you can find information to help you build your own elastic scalable build environment.</p>
+			<p>In the next chapter, you will learn how you can manage your code dependencies using <strong class="bold">GitHub Packages</strong>.</p>
+			<h1 id="_idParaDest-203"><a id="_idTextAnchor202"/>Further reading</h1>
+			<p>For more information about the topics in this chapter, you can refer to the following resources:</p>
+			<ul>
+				<li><em class="italic">Using GitHub-hosted runners</em>: <a href="https://docs.github.com/en/actions/using-github-hosted-runners">https://docs.github.com/en/actions/using-github-hosted-runners</a></li>
+				<li><em class="italic">Hosting your own runners</em>: <a href="https://docs.github.com/en/actions/hosting-your-own-runners">https://docs.github.com/en/actions/hosting-your-own-runners</a></li>
+				<li><em class="italic">awesome-runners – A curated list of awesome self-hosted GitHub Action runner solutions in a large comparison matrix</em>: <a href="https://jonico.github.io/awesome-runners">https://jonico.github.io/awesome-runners</a></li>
+			</ul>
+		</div>
+	</body></html>

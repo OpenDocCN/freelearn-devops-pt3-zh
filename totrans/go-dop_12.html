@@ -1,0 +1,930 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer042">
+			<h1 id="_idParaDest-241"><a id="_idTextAnchor496"/>Chapter <a id="_idTextAnchor497"/>10: Automating Workflows with GitHub Actions</h1>
+			<p>Have you ever been part of a project that required the completion of routine, monotonous tasks? Have you ever sat down to release software and read over the project wiki page, only to find 15 manual steps that you needed to cut, paste, and pray? What did it feel like when it was your turn to complete those tasks?</p>
+			<p>Tasks such as these are referred to as <strong class="bold">toil</strong> – <em class="italic">slow</em> and <em class="italic">difficult</em>. This kind of work reduces our teams' development velocity and, just as critically, grinds away the morale of the DevOps or <strong class="bold">Site-Reliability Engineering</strong> (<strong class="bold">SRE</strong>) team over time. Toilsome tasks are manual, and by their nature, manual tasks are error-prone. If we don't try to replace these tasks with appropriate automation, more will accumulate, worsening the situation. </p>
+			<p>As a DevOps engineer, you are the anti-entropy force driving automation and reducing toilsome work. In this chapter, we will learn how to use GitHub Actions to automate workflows to reduce toil and increase project velocity.</p>
+			<p>GitHub Actions provides a powerful platform for creating customizable automation workflows and is free for any open source project. GitHub Actions pairs a robust, customizable workflow engine with an equally powerful event model to trigger automation. The patterns and practices used in this chapter will leverage GitHub Actions but are transferable to many other developer workflow automation tools such as Jenkins and GitLab CI. The choice to use GitHub Actions is driven by the ubiquitous access for open source developers and the access to a wide community of contributed actions that amplify productivity.</p>
+			<p><a id="_idTextAnchor498"/>In this chapter, you will start off by learning the basics of GitHub Actions. You will use these skills to build a continuous integration workflow to validate a pull request. Then, you will extend the workflow to add release automation to publish GitHub releases. Finally, you will build your own custom GitHub Action using Go and publish it to GitHub Marketplace.</p>
+			<p>We will cover the following topics in this chapter:</p>
+			<ul>
+				<li>Understanding the basics of GitHub Actions</li>
+				<li>Building a continuous integration workflow</li>
+				<li>Building a release workflow</li>
+				<li>Creating a custom GitHub Action using Go</li>
+				<li>Publishing a custom Go GitHub Action</li>
+			</ul>
+			<h1 id="_idParaDest-242"><a id="_idTextAnchor499"/>Technical requirements</h1>
+			<p>In this chapter, you need to have Docker, Git, and the Go tools installed on your machine. The code for this chapter is located at <a href="https://github.com/PacktPublishing/B18275-09-Automating-Workflows-with-GitHub-Actions-Code-Files">https://github.com/PacktPublishing/B18275-09-Automating-Workflows-with-GitHub-Actions-Code-Files</a>.</p>
+			<p>The code files for this chapter can be downloaded from <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/10">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/10</a></p>
+			<p>Let's get started building our first GitHub Action. <a id="_idTextAnchor500"/></p>
+			<h1 id="_idParaDest-243"><a id="_idTextAnchor501"/>Understanding the basics of GitHub Actions</h1>
+			<p>GitHub Actions are event-driven automation<a id="_idIndexMarker987"/> tasks that live within a GitHub repository. An event like a pull request can trigger a set of tasks to be executed. An example is a pull request triggering a set of tasks to clone the Git repository and execute <strong class="source-inline">go test</strong> to run Go tests.</p>
+			<p>GitHub Actions is extremely flexible, enabling developers to author a wide variety of automations, even some that you might not normally associate with a traditional continuous integration/release pipeline. Actions are also composable, enabling groups of tasks to be packaged together as a published action and used in workflows together with other actions.<a id="_idTextAnchor502"/></p>
+			<p>In this section, you will learn about the components of a GitHub Action: workflows, events, context and expressions, jobs, steps, and actions. After you have been introduced to these components, we'll build and trigger our first GitHub Action.<a id="_idTextAnchor503"/></p>
+			<h2 id="_idParaDest-244"><a id="_idTextAnchor504"/>Exploring the components of a GitHub Action</h2>
+			<p>Understanding the components<a id="_idIndexMarker988"/> of a GitHub Action, their relationships, and how they interact is the key to understanding how to compose your own automation. Let's get started with exploring the components of an action<a id="_idTextAnchor505"/>.</p>
+			<h3>Workflows</h3>
+			<p>A workflow is an automation file written in YAML<a id="_idIndexMarker989"/> that lives in a GitHub repository in the <strong class="source-inline">./github/workflows/</strong> folder. A workflow consists of one or more jobs and can be scheduled or triggered by an event. A workflow is the highest-level component of a GitHub Action.</p>
+			<h4>Workflow syntax</h4>
+			<p>Workflows require a developer<a id="_idIndexMarker990"/> to specify the events that will trigger automation via the <strong class="source-inline">on</strong> key and the jobs that automation will execute when it is triggered by the <strong class="source-inline">jobs</strong> key. Often, a name is also specified by the <strong class="source-inline">name</strong> keyword. Otherwise, the workflow will take the short name of the file that contains the workflow YAML. For example, the workflow defined in <strong class="source-inline">./github/workflows/foo.yaml</strong> will have the default name of <strong class="source-inline">f<a id="_idTextAnchor506"/>oo</strong>.</p>
+			<h4>An example of a workflow structure</h4>
+			<p>The following is an example<a id="_idIndexMarker991"/> of a named workflow with the minimum set of keys defined. However, this is not a valid workflow, as we have not yet defined any events to trigger the workflow, nor any jobs to be executed once triggered:</p>
+			<p class="source-code">name: my-workflow # (optional) The name of your workflow; </p>
+			<p class="source-code">                               # defaults to the file name. </p>
+			<p class="source-code">on:                 # Events that will trigger the workflow</p>
+			<p class="source-code">jobs:               # Jobs to run when the event is triggered</p>
+			<p>Next, let's discuss how to trigger workfl<a id="_idTextAnchor507"/>ows.</p>
+			<h3>Events</h3>
+			<p>An event is a trigger that causes a workflow<a id="_idIndexMarker992"/> to start executing. Events come in a variety of flavors: webhook events, scheduled events, and manually dispatched events.</p>
+			<p>Webhook events can originate from an activity within the repository. Examples of triggering activities are pushing a commit, creating a pull request, or creating a new issue. Events raised from repository interactions are the most common triggers for workflows. Webhook events can also be created through external systems and relayed to GitHub through the repository dispatch Webhook.</p>
+			<p>Scheduled events are similar to cron jobs. These events trigger workflows on a defined schedule. Schedule events are a way to automate repetitive tasks, such as performing issue maintenance on older issues in GitHub or running a nightly reporting job.</p>
+			<p>Manual dispatch events are not triggered through repository activities but rather manually. For example, a project may have a Twitter account associated with it, and project maintainers may want to be able to send a tweet about a new feature but do not want to share the Twitter authentication secrets. An ad hoc event would enable automation to send out the tweet on behalf of the project.</p>
+			<h4>Event syntax</h4>
+			<p>Events require a developer<a id="_idIndexMarker993"/> to specify the type of events for the <strong class="source-inline">on:</strong> key in the workflow. Event types generally have child key-value pairs that define their behavior.</p>
+			<h4>A single event example</h4>
+			<p>A single event<a id="_idIndexMarker994"/> can be specified to trigger automation:</p>
+			<p class="source-code"># the workflow will be triggered when a commit</p>
+			<p class="source-code"># is pushed to any branch</p>
+			<p class="source-code">on: push</p>
+			<p class="source-code">on: push</p>
+			<h4>A multiple events example</h4>
+			<p>Multiple events<a id="_idIndexMarker995"/> can be specified to trigger automation:</p>
+			<p class="source-code"># the workflow will execute when a commit is pushed </p>
+			<p class="source-code"># to any branch or pull request is opened</p>
+			<p class="source-code">on: [push, pull_request]</p>
+			<h4>A scheduled event example</h4>
+			<p>Scheduled<a id="_idIndexMarker996"/> event schedules<a id="_idIndexMarker997"/> are specified using <strong class="bold">Portable Operating System Interface</strong> (<strong class="bold">POSIX</strong>) cron syntax:</p>
+			<p class="source-code">on: </p>
+			<p class="source-code">  scheduled:</p>
+			<p class="source-code">    - cron: '0,1,*,*,*'   # run every day at 01:00:00</p>
+			<h4>A manual event example</h4>
+			<p>Manual events<a id="_idIndexMarker998"/> are triggered through user interaction and can include input fields:</p>
+			<p class="source-code"># a manually triggered event with a </p>
+			<p class="source-code"># single "message" user input field</p>
+			<p class="source-code">on: </p>
+			<p class="source-code">  workflow_dispatch:</p>
+			<p class="source-code">    inputs:</p>
+			<p class="source-code">      message:</p>
+			<p class="source-code">        description: 'message you want to tweet'</p>
+			<p class="source-code">        req<a id="_idTextAnchor508"/>uired: true</p>
+			<h3>Context and expressions</h3>
+			<p>GitHub Actions exposes a rich set of context<a id="_idIndexMarker999"/> variables, expressions, functions, and conditionals to provide expressiveness in your workflows. This will not be an exhaustive study of all of these items, but we will highlight the most critical items.</p>
+			<h4>Context variables</h4>
+			<p>Context variables provide<a id="_idIndexMarker1000"/> a way to access information about workflow runs, environment, steps, secrets, and so on. The most common context variables are <strong class="source-inline">github</strong>, <strong class="source-inline">env</strong>, <strong class="source-inline">secrets</strong>, and <strong class="source-inline">matrix</strong>. These variables are treated as maps and can be indexed using variable names and property names. For example, <strong class="source-inline">env['foo']</strong> resolves to the value of the <strong class="source-inline">foo</strong> environment key.</p>
+			<p>The <strong class="source-inline">github</strong> context variable provides information about the workflow run and contains information such as the <strong class="source-inline">ref</strong> that the workflow is executing on. This is useful if you would like to use that information to inject a version into an application at build time. You can access this information by indexing the <strong class="source-inline">github</strong> variable with <strong class="source-inline">github['ref']</strong> or <strong class="source-inline">github.ref</strong>. </p>
+			<p>The <strong class="source-inline">env</strong> context variable contains environment variables specified for the workflow run. The values can be accessed by using the index syntax.</p>
+			<p>The <strong class="source-inline">secrets</strong> context variable contains the secrets available for the workflow run. These values can also be accessed by the index syntax. Note that these values will be redacted in the logs, so the secret values will not be exposed.</p>
+			<p>The <strong class="source-inline">matrix</strong> context variable contains information about the matrix parameters you configure for the current job. For example, if you want to run a build on multiple operating systems with multiple versions of Go, the matrix variable allows you to specify the list of each one, which can be used to execute a set of concurrent job executions using each combination of operating system and Go version. We will go into more detail about this when we tal<a id="_idTextAnchor509"/>k about jobs.</p>
+			<h4>Expressions</h4>
+			<p>The syntax<a id="_idIndexMarker1001"/> used for an expression is <strong class="source-inline">${{ expression }}</strong>. Expressions consist of variables, literals, operators, and functions. Let's examine the following example:</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  job_with_secrets:</p>
+			<p class="source-code">    if: contains(github.event.pull_request.labels.*.name, 'safe to test')</p>
+			<p>The preceding job will only execute<a id="_idIndexMarker1002"/> if the pull request is labeled with <strong class="source-inline">safe to test</strong>. The <strong class="source-inline">if</strong> conditional will evaluate the <strong class="source-inline">github.event.pull_request.labels.*.name</strong> context variable and verify that one of the labels on the pull request is named <strong class="source-inline">safe to test</strong>. This is useful if you want to ensure that a workflow only executes after a repository maintainer has had an opportunity to verify that the pull request is safe.</p>
+			<p>Expressions can also be used as input. Let's examine the following example:</p>
+			<p class="source-code">env:</p>
+			<p class="source-code">  GIT_SHA: ${{ github.sha }}</p>
+			<p>The snippet of YAML shows how to set an environment variable called <strong class="source-inline">GIT_SHA</strong> to the value of the <strong class="source-inline">github.sha</strong> context variable. The <strong class="source-inline">GIT_SHA</strong> environment variable will now be available to all actions running within the job. Using context variables for input is useful for customizing the execution of scripts or actions executed<a id="_idTextAnchor510"/> in a workflow.</p>
+			<h3>Jobs</h3>
+			<p>A job is a collection<a id="_idIndexMarker1003"/> of steps that run on an individual compute instance, or runner. You can think of a runner as a virtual machine for running your job. Jobs, by default, execute concurrently, so if a workflow defines multiple jobs, they will execute concurrently if enough runners are available. Jobs have the concept of dependency where a job can be dependent on another job, which will ensure the jobs execute sequentially rather than concurrently.</p>
+			<h4>Job syntax</h4>
+			<p>Jobs require a developer to specify an ID of the job, the type<a id="_idIndexMarker1004"/> of runner the job will execute on using the <strong class="source-inline">runs-on:</strong> key, and a sequence of steps the job will execute using the <strong class="source-inline">steps:</strong> key. The <strong class="source-inline">runs-on:</strong> key is particularly interesting to us, as it is useful for executing a job on different <strong class="bold">operating system</strong> (<strong class="bold">OS</strong>) platforms such as multiple versions of Ubuntu, macOS, and Windows.</p>
+			<p>With the <strong class="source-inline">runs-on:</strong> key, a job is able to run on a specified platform, but that does not allow us to make a matrix of jobs to run on multiple platforms concurrently. To enable a job to execute in a matrix of configurations, one must use the <strong class="source-inline">strategy:</strong> key and expressions. By configuring<a id="_idIndexMarker1005"/> the strategy, we can build a matrix of jobs executing the same job configuration. You will find an example of this configuration in the following example.</p>
+			<p>There are many other options to customize the execution of the job and the environment that the job executes within, but we will not dive<a id="_idTextAnchor511"/> deeply into them.</p>
+			<h4>Executing jobs on multiple platforms</h4>
+			<p>This example shows two jobs named <strong class="source-inline">job_one</strong> and <strong class="source-inline">job_two</strong>. Here, <strong class="source-inline">job_one</strong> is a matrix job that will run six concurrent<a id="_idIndexMarker1006"/> templated jobs on the latest versions of Ubuntu, macOS, and Windows, which will each echo <strong class="source-inline">1.17</strong> and <strong class="source-inline">1.16</strong>. Running on Ubuntu 18.04, <strong class="source-inline">job_two</strong> will run concurrently with <strong class="source-inline">job_one</strong> and echo <strong class="source-inline">"hello world!"</strong>:</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  job_one:</p>
+			<p class="source-code">    strategy:</p>
+			<p class="source-code">      matrix:</p>
+			<p class="source-code">        os: [ubuntu-latest, macos-latest, windows-latest]</p>
+			<p class="source-code">        go_version: [1.17, 1.16]</p>
+			<p class="source-code">    runs_on: ${{ matrix.os }}</p>
+			<p class="source-code">      steps:</p>
+			<p class="source-code">        - run: echo "${{ matrix.go_version }}"</p>
+			<p class="source-code">  job_two:</p>
+			<p class="source-code">    runs_on: ubuntu-18.04</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - run: <a id="_idTextAnchor512"/>echo "hello world!"</p>
+			<h3>Steps</h3>
+			<p>Steps are tasks that run in the context of a job and execute in the context of the job's associated runner. Steps<a id="_idIndexMarker1007"/> can consist of a shell command or an action. Since steps execute in the same runner, they can share data between each of the steps. For example, if you create a file on the filesystem of the runner in a previous step, subsequent steps will be able to access that file. You can think of a step running within its own process and that any changes to environment variables will not carry ov<a id="_idTextAnchor513"/>er to the next step.</p>
+			<h4>Steps syntax</h4>
+			<p>Steps require a developer to specify<a id="_idIndexMarker1008"/> an action with the <strong class="source-inline">uses:</strong> key or specify the shell commands to run with the <strong class="source-inline">run:</strong> key. Optional input allows you to customize the environment variables using the <strong class="source-inline">env:</strong> key and the working directory using the <strong class="source-inline">working-directory:</strong> key, and also to change the name that appears in the GitHub user interface for the step by using the <strong class="source-inline">name</strong> key. There are a wide variety of other options to customize the execution of steps, but we will not go into gre<a id="_idTextAnchor514"/>at depth about these.</p>
+			<h4>Step for installing Go using an action</h4>
+			<p>This example shows a step with no name that uses<a id="_idIndexMarker1009"/> the v2 version of <strong class="source-inline">actions/setup-go</strong> to install version 1.17.0 or higher of Go. This action can be found at <a href="https://github.com/actions/setup-go">https://github.com/actions/setup-go</a>. This is a great example of a publicly available action that you can use to add functionality to your automation. You can find actions for nearly any task at <a href="https://github.com/marketplace?type=actions">https://github.com/marketplace?type=actions</a>. In a later section, we'll discuss how to build your own action and publish it to the GitHub Marketplace:</p>
+			<p class="source-code">steps:</p>
+			<p class="source-code">  - uses: actions/setup-go@v2</p>
+			<p class="source-code">    with:</p>
+			<p class="source-code">      go-version: '^1.17.0'</p>
+			<h4>A step with a multiple line command</h4>
+			<p>In this example, we've extended the previous<a id="_idIndexMarker1010"/> one and added a <strong class="source-inline">Run go mod download and test</strong> step that runs the <strong class="source-inline">go</strong> tool, which was installed by <strong class="source-inline">actions/setup-go@v2</strong>. The run command uses <strong class="source-inline">|</strong> in the first line to indicate the start of a multiline string in YAML:</p>
+			<p class="source-code">steps:</p>
+			<p class="source-code">  - uses: actions/setup-go@v2</p>
+			<p class="source-code">    with:</p>
+			<p class="source-code">      go-version: '^1.17.0'</p>
+			<p class="source-code">  - name: Run go mod download and test</p>
+			<p class="source-code">    run: |</p>
+			<p class="source-code">      go mod<a id="_idTextAnchor515"/> download</p>
+			<p class="source-code">      go test</p>
+			<h3>Actions</h3>
+			<p>An action is a reusable combination<a id="_idIndexMarker1011"/> of a set of steps formed into a single command, which can also have input and output. For example, the <strong class="source-inline">actions/setup-go</strong> action is used to execute a series of steps to install a version of Go on a runner. The Go toolchain can then be used within subsequent steps within the same job.</p>
+			<p>GitHub Actions is aptly named, as actions are the superpower of GitHub Actions. Actions are often published publicly and enable developers to leverage existing recipes to build complex automation quickly. Actions are similar to open source Go libraries, which enable developers to build Go applications quicker. As we build our own actions, you will quickly see the power of this feature.</p>
+			<p>If you are interested in seeing the source code for <strong class="source-inline">actions/setup-go</strong>, visit <a href="https://github.com/actions/setup-go">https://github.com/actions/setup-go</a>. Later in this chapter, we will build our own Go action and publish it to<a id="_idTextAnchor516"/> the GitHub Marketplace.</p>
+			<h2 id="_idParaDest-245"><a id="_idTextAnchor517"/>How to build and trigger your first GitHub Action</h2>
+			<p>Now that we have a general understanding<a id="_idIndexMarker1012"/> of what the components of an action are, let's build<a id="_idIndexMarker1013"/> one and explore how the components ar<a id="_idTextAnchor518"/>e structured and interact.</p>
+			<h3>Creating and cloning a GitHub repository</h3>
+			<p>If this is your first time creating and cloning<a id="_idIndexMarker1014"/> a repository, you may find <a id="_idIndexMarker1015"/>the following links useful:</p>
+			<ul>
+				<li><a href="https://docs.github.com/en/get-started/quickstart/create-a-repo">https://docs.github.com/en/get-started/quickstart/create-a-repo</a></li>
+				<li><a href="https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository-from-github/cloning-a-repository">https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository-from-github/cloning-a-repository</a></li>
+			</ul>
+			<p>When creating the repository, I normally add <strong class="source-inline">README.md</strong>, <strong class="source-inline">.gitignore</strong>, and an <strong class="bold">Massachusetts Institute of Technology</strong> (<strong class="bold">MIT</strong>) license file. Once you have created and cloned <a id="_idIndexMarker1016"/>your repository, you should have a local directory for your project, as shown in the following:</p>
+			<p class="source-code">$ tree . -a -I '\.git' </p>
+			<p class="source-code">.</p>
+			<p class="source-code">├── .gitign<a id="_idTextAnchor519"/>ore</p>
+			<p class="source-code">├── LICENSE</p>
+			<p class="source-code">└── README.md</p>
+			<h3>Creating your first workflow</h3>
+			<p>Remember that workflows<a id="_idIndexMarker1017"/> live in the <strong class="source-inline">.github/workflows</strong> directory. The first step is to create that directory. The next step is to create the workflow file within the <strong class="source-inline">.github/workflows</strong> directory:</p>
+			<p class="source-code">mkdir -p .github/workflows</p>
+			<p class="source-code">touch .github/workflows/first.yaml</p>
+			<p>Open <strong class="source-inline">.github/workflows/first.yaml</strong> in your favorite editor and add the following workflow YAML:</p>
+			<p class="source-code">name: first-workflow</p>
+			<p class="source-code">on: push</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  echo:</p>
+			<p class="source-code">    runs-on: ubuntu-latest</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - name: echo step</p>
+			<p class="source-code">        run: echo 'hello world!'</p>
+			<p>The preceding workflow is named <strong class="source-inline">first-workflow</strong>. It will execute a single job called <strong class="source-inline">echo</strong> on the latest version of Ubuntu <a id="_idIndexMarker1018"/>and execute a single step that will echo <strong class="source-inline">hello world!</strong> using the system's default shell. You can also specify the shell you would like with the <strong class="source-inline">shell:</strong> key.</p>
+			<p>Save <strong class="source-inline">.github/workflows/first.yaml</strong>. Commit and push the workflow to GitHub:</p>
+			<p class="source-code">git add .</p>
+			<p class="source-code">git commit -am 'my first action'</p>
+			<p class="source-code">git push origin main</p>
+			<p>Normally, you'd create a branch first and then open a pull request before committing and pushing directly to the main branch, but for your first workflow, this will be the quickest way to see your results.</p>
+			<p>After you push your commit, you should be able to open your GitHub repository in your browser and click on the <strong class="bold">Actions</strong> tab. You should be greeted with a view of your first workflow having successfully executed. It should look like the following:</p>
+			<div>
+				<div id="_idContainer029" class="IMG---Figure">
+					<img src="Images/B17626_10_001.jpg" alt="Figure 10.1 – The All workflows view&#13;&#10;" width="937" height="343"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.1 – The All workflows view</p>
+			<p>Note the list of workflows<a id="_idIndexMarker1019"/> on the left and that there is one workflow named <strong class="bold">first-workflow</strong>. We can see that the first run of the workflow was for our commit with the <strong class="bold">my first action</strong> message.</p>
+			<p>If you click on the workflow run for <strong class="bold">my first action</strong>, you should see the following:</p>
+			<div>
+				<div id="_idContainer030" class="IMG---Figure">
+					<img src="Images/B17626_10_002.jpg" alt="Figure 10.2 – The workflow job view&#13;&#10;" width="838" height="488"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.2 – The workflow job view</p>
+			<p>Note the <strong class="bold">Jobs</strong> list on the left with the <strong class="bold">echo</strong> job marked with a green check, signifying the successful execution <a id="_idIndexMarker1020"/>of the job. On the right, you can see the details of the execution.</p>
+			<p>You can click on the <strong class="bold">echo</strong> job to see output from it and the steps that were executed:</p>
+			<div>
+				<div id="_idContainer031" class="IMG---Figure">
+					<img src="Images/B17626_10_003.jpg" alt="Figure 10.3 – The echo job output view&#13;&#10;" width="802" height="690"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.3 – The echo job output view</p>
+			<p>Note the job setup, which provides details about the runner and the environment the job executed within. Also, note the <strong class="bold">echo step</strong> single step executed a <strong class="source-inline">echo 'Hello World!'</strong> single shell command and echoed the <strong class="source-inline">"Hello World!"</strong> string to the console log. Finally, the job completed successfully due to <strong class="source-inline">echo step</strong> returning a<a id="_idTextAnchor520"/> <strong class="source-inline">0</strong> error code upon completion.</p>
+			<p>In this section, you have learned the basics of GitHub Actions and created your first simple automation. You now have the tools<a id="_idIndexMarker1021"/> needed to start building more complex automation that will eliminate the toilsome tasks we discussed earlier in the chapter. In the upcoming sections, you will learn how to use these skills to build continuous integration and release workflows and, later, your o<a id="_idTextAnchor521"/>wn custom action written in Go.</p>
+			<h1 id="_idParaDest-246"><a id="_idTextAnchor522"/>Building a continuous integration workflow</h1>
+			<p>In this section, we will use GitHub Actions<a id="_idIndexMarker1022"/> to execute continuous integration automation when a pull request is opened or when code is pushed to a repository. If you are unfamiliar with continuous integration, it is the practice of automating the integration of code changes from multiple contributors into a code repository. Continuous integration automation tasks include cloning the repository at a specific commit, linting, building, and testing code, and evaluating changes to test coverage. The goal of continuous integration automation is to provide a guard against code changes that will lower the quality of a project or violate the rules codified in automation.</p>
+			<p>In this section, you will learn how to create a continuous integration workflow. In your continuous integration workflow, you will learn to execute jobs across multiple operating systems concurrently. You will install build tools onto the job executors, which you will use to build the software project. You will clone the source code for the project using an action. Finally, you will enforce passing tests and code quality by running a code <a id="_idTextAnchor523"/>linter and executing unit tests.</p>
+			<h2 id="_idParaDest-247"><a id="_idTextAnchor524"/>Introducing the tweeter command-line tool</h2>
+			<p>You cannot have a continuous integration<a id="_idIndexMarker1023"/> workflow without a software project to run the workflow upon. We will be using a simple Go command-line tool called <strong class="bold">tweeter</strong>. The source code for the project can be found at <a href="https://github.com/PacktPublishing/B18275-08-Automating-Workflows-with-GitHub-Actions-Code-Files">https://github.com/PacktPublishing/B18275-08-Automating-Workflows-with-GitHub-Actions-Code-Files</a>.</p>
+			<p>Tweeter is a simple Go command-line tool that will send tweets to Twitter. The source code consists of two packages, <strong class="source-inline">main</strong> and <strong class="source-inline">tweeter</strong>. The <strong class="source-inline">tweeter</strong> package contains Go tests that will be executed by our<a id="_idTextAnchor525"/> continuous integration workflow.</p>
+			<h3>Cloning and testing tweeter</h3>
+			<p>Create a new repository from the template at <a href="https://github.com/PacktPublishing/B18275-08-Automating-Workflows-with-GitHub-Actions-Code-Files">https://github.com/PacktPublishing/B18275-08-Automating-Workflows-with-GitHub-Actions-Code-Files</a> by clicking the <strong class="bold">Use this template</strong> button in the repository. This will create a copy<a id="_idIndexMarker1024"/> of the repository in your account. Run the following commands<a id="_idIndexMarker1025"/> to clone and test tweeter (replace <strong class="source-inline">{your-account}</strong> with your account name):</p>
+			<p class="source-code">git clone https://github.com/{your-account}/B18275-08-Automating-Workflows-with-GitHub-Actions-Code-Files</p>
+			<p class="source-code">cd B18275-08-Automating-Workflows-with-GitH<a id="_idTextAnchor526"/>ub-Actions-Code-Files</p>
+			<p class="source-code">go test ./...</p>
+			<p>Executing <strong class="source-inline">tweeter</strong> with the <strong class="source-inline">-h</strong> argument will provide usage documentation:</p>
+			<p class="source-code">$ go run . -h</p>
+			<p class="source-code">Usage of /tmp/go-build3731631588/b001/exe/github-actions:</p>
+			<p class="source-code">      --accessToken string         twitter access token</p>
+			<p class="source-code">      --accessTokenSecret string   twitter access token secret</p>
+			<p class="source-code">      --apiKey string              twitter api key</p>
+			<p class="source-code">      --apiKeySecret string        twitter api key secret</p>
+			<p class="source-code">      --dryRun                     if true or if env var DRY_RUN=true, then a tweet will not be sent</p>
+			<p class="source-code">      --message string             message you'd like to send to twitter</p>
+			<p class="source-code">      --version                    output the version of tweeter</p>
+			<p class="source-code"><a id="_idTextAnchor527"/>pflag: help requested</p>
+			<p class="source-code">exit status 2</p>
+			<h3>Twitter usage is not required</h3>
+			<p>If you are not inclined to use social media, tweeter <a id="_idIndexMarker1026"/>also allows users to simulate sending a tweet. When <strong class="source-inline">--dryRun</strong> is specified, the message value will be output to <strong class="source-inline">STDOUT</strong>, rather than being sent to Twitter as a tweet.</p>
+			<p>Next, we will build a continuous i<a id="_idTextAnchor528"/>ntegration workflow to test tweeter.</p>
+			<h2 id="_idParaDest-248"><a id="_idTextAnchor529"/>Goals of the tweeter continuous integration workflow</h2>
+			<p>Before building a continuous integration<a id="_idIndexMarker1027"/> workflow, you should consider what you want to accomplish with the workflow. For the tweeter workflow, our goals are the following:</p>
+			<ul>
+				<li>Trigger on pushes to <strong class="source-inline">main</strong> and tags formatted as a semantic version – for example, <strong class="source-inline">v1.2.3</strong> must build and validate.</li>
+				<li>Pull requests against the <strong class="source-inline">main</strong> branch must build and validate.</li>
+				<li>Tweeter must build and validate on Ubuntu, macOS, and Windows concurrently.</li>
+				<li>Tweeter must build and validate using Go 1.16 and 1.17 concurrently.</li>
+				<li>Tweeter source code mu<a id="_idTextAnchor530"/>st pass a code-linting quality check.</li>
+			</ul>
+			<h2 id="_idParaDest-249"><a id="_idTextAnchor531"/>Continuous integration workflow for tweeter</h2>
+			<p>With our goals for the tweeter continuous integration<a id="_idIndexMarker1028"/> workflow specified, we can construct a workflow to achieve those goals. The following is a continuous integration workflow that achieves each goal:</p>
+			<p class="source-code">name: tweeter-automation</p>
+			<p class="source-code">on:</p>
+			<p class="source-code">  push:</p>
+			<p class="source-code">    tags:</p>
+			<p class="source-code">      - 'v[0-9]+.[0-9]+.*'</p>
+			<p class="source-code">    branches:</p>
+			<p class="source-code">      - main</p>
+			<p class="source-code">  pull_request:</p>
+			<p class="source-code">    branches:</p>
+			<p class="source-code">      - main</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  test:</p>
+			<p class="source-code">    strategy:</p>
+			<p class="source-code">      matrix:</p>
+			<p class="source-code">        go-version: [ 1.16.x, 1.17.x ]</p>
+			<p class="source-code">        os: [ ubuntu-latest, macos-latest, windows-latest ]</p>
+			<p class="source-code">    runs-on: ${{ matrix.os }}</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - name: install go</p>
+			<p class="source-code">        uses: actions/setup-go@v2</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          go-version: ${{ matrix.go-version }}</p>
+			<p class="source-code">      - uses: actions/checkout@v2</p>
+			<p class="source-code">      - name: lint with golangci-lint</p>
+			<p class="source-code">        uses: golangci/golangci-lint-action@v2</p>
+			<p class="source-code">      - name: run go test</p>
+			<p class="source-code">        run: go test ./...</p>
+			<p>The preceding workflow <a id="_idIndexMarker1029"/>is a lot to absorb initially. However, if we break down the wo<a id="_idTextAnchor532"/>rkflow, the behavior will become clear.</p>
+			<h3>Triggering the workflow</h3>
+			<p>The first two goals for the tweeter continuous integration workflow<a id="_idIndexMarker1030"/> are as follows:</p>
+			<ul>
+				<li>Pushes to <strong class="source-inline">main</strong> and tags matching <strong class="source-inline">v[0-9]+.[0-9]+.*</strong> must build and validate.</li>
+				<li>Pull requests against the <strong class="source-inline">main</strong> branch must build and validate.</li>
+			</ul>
+			<p>These goals are accomplished by specifying the following event triggers:</p>
+			<p class="source-code">on:</p>
+			<p class="source-code">  push:</p>
+			<p class="source-code">    tags:</p>
+			<p class="source-code">      - 'v[0-9]+.[0-9]+.*'</p>
+			<p class="source-code">    branches:</p>
+			<p class="source-code">      - main</p>
+			<p class="source-code">  pull_request:</p>
+			<p class="source-code">    branches:</p>
+			<p class="source-code">      - main</p>
+			<p>The <strong class="source-inline">push:</strong> trigger will execute the workflow if a tag is pushed matching <strong class="source-inline">v[0-9]+.[0-9]+.*</strong> – for example, <strong class="source-inline">v1.2.3</strong> would match the pattern. The <strong class="source-inline">push:</strong> trigger will also execute the workflow if a commit is pushed to <strong class="source-inline">main</strong>. The <strong class="source-inline">pull_request</strong> trigger will execute the workflow on any changes to a pull request targeting the <strong class="source-inline">main</strong> branch.</p>
+			<p>Note that using the <strong class="source-inline">pull_request</strong> trigger will allow us to update the workflow and see the changes to the workflow each time the changes are pushed in a pull request. This is the desired behavior when developing a workflow, but it does open automation to malicious actors. For example, a malicious actor can open a new pull request, mutating the workflow to exfiltrate secrets exposed in it. There are multiple mitigations to prevent this, which can be applied independently or together, depending on the security preferences<a id="_idIndexMarker1031"/> of a given project:</p>
+			<ul>
+				<li>Only allow maintainers to trigger workflows.</li>
+				<li>Use the <strong class="source-inline">pull_request_target</strong> event to trigger, which will use workflows defined in the base of the pull request without regard to workflow changes in the pull request.</li>
+				<li>Add a label guard for executing a workflow so that it will only execute if a maintainer adds the label to the pull request. For example, a pull request can be reviewed by a maintainer, and then if the user and code changes are safe, the maintainer will apply a <strong class="source-inline">safe-to-test</strong> label, allowing the job to proceed.</li>
+			</ul>
+			<p>Next, we'll extend automation to in<a id="_idTextAnchor533"/>clude multiple platforms and Go versions.</p>
+			<h3>Entering the matrix</h3>
+			<p>The next two goals for the tweeter continuous integration workflow<a id="_idIndexMarker1032"/> are as follows:</p>
+			<ul>
+				<li>Tweeter must build and validate on Ubuntu, macOS, and Windows concurrently.</li>
+				<li>Tweeter must build and validate using Go 1.16 and 1.17 concurrently.</li>
+			</ul>
+			<p>These goals are accomplished by specifying the following <strong class="source-inline">matrix</strong> configuration:</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  test:</p>
+			<p class="source-code">    strategy:</p>
+			<p class="source-code">      matrix:</p>
+			<p class="source-code">        go-version: [ 1.16.x, 1.17.x ]</p>
+			<p class="source-code">        os: [ ubuntu-latest, macos-latest, windows-latest ]</p>
+			<p class="source-code">    runs-on: ${{ matrix.os }}</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - name: install go</p>
+			<p class="source-code">        uses: actions/setup-go@v2</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          go-version: ${{ matrix.go-version }}</p>
+			<p>The <strong class="source-inline">test</strong> job specifies a matrix<a id="_idIndexMarker1033"/> strategy with two dimensions, <strong class="source-inline">go-version</strong> and <strong class="source-inline">os</strong>. There are two Go versions and three OSs specified. This variable combinations will create six concurrent jobs, <strong class="source-inline">[(ubuntu-latest, 1.16.x)</strong>, <strong class="source-inline">(ubuntu-latest, 1.17.x)</strong>, <strong class="source-inline">(macos-latest, 1.16.x)</strong>, <strong class="source-inline">(macos-latest, 1.17.x)</strong>, <strong class="source-inline">(windows-latest, 1.16.x)</strong>, and <strong class="source-inline">(windows-latest, 1.17.x)]</strong>. The values of the matrix will be substituted in <strong class="source-inline">runs-on:</strong> and <strong class="source-inline">go-version:</strong> to execute a concurrent job, satisfying the goals of running on each combination of platform and Go version:</p>
+			<div>
+				<div id="_idContainer032" class="IMG---Figure">
+					<img src="Images/B17626_10_004.jpg" alt="Figure 10.4 – A pull request showing matrix builds&#13;&#10;" width="833" height="506"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.4 – A pull request showing matrix builds</p>
+			<p>In the preceding figure, you can see each matrix job executing concurrently. Note that each job specifies the name of the job, <strong class="source-inline">t<a id="_idTextAnchor534"/>est</strong>, and the matrix variables for the job.</p>
+			<h3>Building, testing, and linting</h3>
+			<p>There is an overlap<a id="_idIndexMarker1034"/> of build, testing, and linting<a id="_idIndexMarker1035"/> in the last three<a id="_idIndexMarker1036"/> goals:</p>
+			<ul>
+				<li>Tweeter must build and validate on Ubuntu, macOS, and Windows concurrently.</li>
+				<li>Tweeter must build and validate using Go 1.16 and 1.17 concurrently.</li>
+				<li>The Tweeter source code must pass a code-linting quality check.</li>
+			</ul>
+			<p>The following steps will satisfy these requirements:</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - name: install go</p>
+			<p class="source-code">        uses: actions/setup-go@v2</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          go-version: ${{ matrix.go-version }}</p>
+			<p class="source-code">      - uses: actions/checkout@v2</p>
+			<p class="source-code">      - name: lint with golangci-lint</p>
+			<p class="source-code">        uses: golangci/golangci-lint-action@v2</p>
+			<p class="source-code">      - name: run go test</p>
+			<p class="source-code">        run: go test ./...</p>
+			<p>In the preceding steps, the following occurs:</p>
+			<ol>
+				<li>Go is installed with the <strong class="source-inline">actions/setup-go@v2</strong> action using the matrix-specified Go version. This action is available to all GitHub users and is published through the GitHub Marketplace. There are numerous actions available in the Marketplace that can simplify workflow authoring.</li>
+				<li>The source code for the current <strong class="source-inline">ref</strong> is cloned with the <strong class="source-inline">actions/checkout@v2</strong> action in the current working directory. Note that the action is not named. For commonly used actions, it is idiomatic to not provide a name.</li>
+				<li>Linting is run with the <strong class="source-inline">golangci/golangci-lint-action@v2</strong>, which installs and executes the <strong class="source-inline">golangci-lint</strong> tool on the source of the repository, satisfying the goal of ensuring that the code passes a lint quality check. This particular action includes several sub-linters that run a rigorous check of common Go performance and stylistic errors.</li>
+				<li>The code is functionally validated by running an ad hoc <strong class="source-inline">go test ./...</strong> script, which tests the packages recursively in the repository. Note that in a previous step, the Go tools have been installed a<a id="_idTextAnchor535"/>nd are available for use in subsequent steps.</li>
+			</ol>
+			<p>With the preceding steps, we have satisfied<a id="_idIndexMarker1037"/> the goals of our continuous integration<a id="_idIndexMarker1038"/> workflow. With the preceding  workflow, we executed a matrix<a id="_idIndexMarker1039"/> of concurrent jobs, installed build tools, cloned source code, linted, and tested the change set. In this example, we learned to build a continuous integration workflow for a Go project, but any language and set of tools can be used to create a continuous integration workflow.</p>
+			<p>In the next section, we will build a release workflow that will automate the process of building an<a id="_idTextAnchor536"/>d releasing new versions of the tweeter project.</p>
+			<h1 id="_idParaDest-250"><a id="_idTextAnchor537"/>Building a release workflow</h1>
+			<p>In this section, we will take the manual, toilsome process of publishing a new release and transform it into GitHub workflow<a id="_idIndexMarker1040"/> automation, triggered by pushing a tag to the repository. This automation will result in a GitHub release containing build notes and release artifacts for a tagged, semantic version of the tweeter command-line tool. Automating manual processes such as releases reduces the possibility of manual errors and increases the productivity of project maintainers.</p>
+			<p>In this section, you will learn how to create a release automation workflow. You will learn how to trigger automation to run after the successful completion of dependent automation. You will learn how to build binaries targeting multiple platforms. Finally, you will automate the creation of a GitHub release, <a id="_idTextAnchor538"/>including automatically generated release notes. </p>
+			<h2 id="_idParaDest-251"><a id="_idTextAnchor539"/>GitHub releases</h2>
+			<p>GitHub releases are deployable software<a id="_idIndexMarker1041"/> iterations for a repository that are based on Git tags. A release declares to the world that a new version of the software is available. A release is composed of a title, an optional description, and an optional set of artifacts. The title provides a name for the release. The description is used to provide insight into what is contained in the release – for example, what new features or pull requests were included in the release, and which GitHub contributors contributed to the release. The description is formatted in GitHub Markdown. Release artifacts are files associated with the release that users can download – for example, a command-line application might publ<a id="_idTextAnchor540"/>ish compiled binaries ready for download and use. </p>
+			<h3>Git tags</h3>
+			<p>A Git tag is a named pointer to a specific reference in the Git repository<a id="_idIndexMarker1042"/> and are often formatted as semantic versions, such as <strong class="source-inline">v1.2.3</strong>. Semantic versioning is a convention for naming tags that provides some insight into the significance of a new release. A semantic version tag is formatted as <strong class="source-inline">Major.Minor.Patch</strong>. The following behavior is expressed by incrementing the individual field:</p>
+			<ul>
+				<li><strong class="source-inline">Major</strong>: Increment when incompatible API changes occur, such as breaking changes.</li>
+				<li><strong class="source-inline">Minor</strong>: Increment when functionality is added in a backward-compatible manner, such as new features.</li>
+				<li><strong class="source-inline">Patch</strong>: I<a id="_idTextAnchor541"/>ncrement when making backward-compatible bug fixes.</li>
+			</ul>
+			<h2 id="_idParaDest-252"><a id="_idTextAnchor542"/>Release automation for tweeter</h2>
+			<p>In the <em class="italic">Continuous integration workflow for tweeter</em> section, we created a CI automation for the tweeter command-line tool. We will build upon the CI<a id="_idTextAnchor543"/> automation<a id="_idIndexMarker1043"/> and add release automation<a id="_idIndexMarker1044"/> for tweeter.</p>
+			<h3>Goals for automation</h3>
+			<p>In our release automation, we are going<a id="_idIndexMarker1045"/> to accomplish the following goals:</p>
+			<ul>
+				<li>Trigger automation when the repository is tagged with a semantic version</li>
+				<li>Run unit tests and validation prior to creating the release</li>
+				<li>Inject the semantic version of the release into the tweeter application</li>
+				<li>Build cross-platform versions of the tweeter application</li>
+				<li>Generate release notes from the pull requests in the release</li>
+				<li>Tag the contributors in the release</li>
+				<li>Create a GitHub release containing the following:<ul><li>A title containing the semantic version of the release</li><li>A description containing the generated release notes</li><li>Artifacts consisting of the cross-platform binaries</li></ul></li>
+			</ul>
+			<p>Next, we will cr<a id="_idTextAnchor544"/>eate release automation to satisfy these requirements.</p>
+			<h3>Creating the release automation</h3>
+			<p>With our goals for the tweeter release<a id="_idIndexMarker1046"/> automation specified, we are ready to extend the existing continuous integration workflow that we built in the previous section and add a release job to achieve those goals. The release job is longer than the continuous integrat<a id="_idTextAnchor545"/>ion workflow, so we'll approach it one piece at a time.</p>
+			<h4>Triggering the automation</h4>
+			<p>The first goal for the tweeter release workflow is triggering the automation<a id="_idIndexMarker1047"/> when the repository is tagged with a semantic version:</p>
+			<p class="source-code">name: tweeter-automation</p>
+			<p class="source-code">on:</p>
+			<p class="source-code">  push:</p>
+			<p class="source-code">    tags:</p>
+			<p class="source-code">      - 'v[0-9]+.[0-9]+.*'</p>
+			<p class="source-code">    branches:</p>
+			<p class="source-code">      - main</p>
+			<p class="source-code">  pull_request:</p>
+			<p class="source-code">    branches:</p>
+			<p class="source-code">      - main</p>
+			<p>The preceding snippet of YAML <a id="_idIndexMarker1048"/>is unchanged from the continuous integration workflow. It will trigger the workflow with any tag matching the semantic version in the form of <strong class="source-inline">v1.2.3</strong>. However, the workflow will also trigger on pull requests and pushes. We want the continuous integration workflow to execute on pull requests and pushes, but we do not want to execute a release each time. We will need to restrict execution<a id="_idTextAnchor546"/> of the release job to only when executing on a <strong class="source-inline">tag</strong> push.</p>
+			<h4>Restricting release execution</h4>
+			<p>The first and second goal<a id="_idIndexMarker1049"/> for the tweeter release workflow is as follows:</p>
+			<ul>
+				<li>Triggering the automation when the repository is tagged with a semantic version </li>
+				<li>Running unit tests and validation prior to creating the release</li>
+			</ul>
+			<p>Let's make sure the release job only executes when the repository is tagged:</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  test:</p>
+			<p class="source-code">    # continuous integration job omitted for brevity    </p>
+			<p class="source-code">  release:</p>
+			<p class="source-code">    needs: test</p>
+			<p class="source-code">    if: startsWith(github.ref, 'refs/tags/v')</p>
+			<p class="source-code">    runs-on: ubuntu-latest</p>
+			<p class="source-code">    steps:</p>
+			<p>The preceding job definition completes<a id="_idIndexMarker1050"/> the first goal of only running the release when a tag starting with <strong class="source-inline">v</strong> is pushed by specifying an <strong class="source-inline">if</strong> statement to verify that the <strong class="source-inline">github.ref</strong> context variable starts with <strong class="source-inline">refs/tags/v</strong>. The second goal of ensuring the <strong class="source-inline">test</strong> job executes successfully before attempting to execute the <strong class="source-inline">release</strong> job is achieved by specifying <strong class="source-inline">needs: test</strong>. If <strong class="source-inline">needs: test</strong> was not specified on the <strong class="source-inline">release</strong> job, both jobs will execute concurrently, which ca<a id="_idTextAnchor547"/>n cause a release to be created without passing validation.</p>
+			<h4>Workspace and environmental setup</h4>
+			<p>To achieve the rest<a id="_idIndexMarker1051"/> of the automation goals, we will need to set<a id="_idIndexMarker1052"/> up the workspace:</p>
+			<p class="source-code"># Previous config of the release job omitted for brevity </p>
+			<p class="source-code">steps:</p>
+			<p class="source-code">  - uses: actions/checkout@v2</p>
+			<p class="source-code">  - name: Set RELEASE_VERSION ENV var</p>
+			<p class="source-code">    run: echo "RELEASE_VERSION=${GITHUB_REF:10}" &gt;&gt; $GITHUB_ENV</p>
+			<p class="source-code">  - name: install go</p>
+			<p class="source-code">    uses: actions/setup-go@v2</p>
+			<p class="source-code">    with:</p>
+			<p class="source-code">      go-version: 1.17.x</p>
+			<p>The preceding code does the following:</p>
+			<ul>
+				<li>Checks out the source at the Git ref associated with the tag</li>
+				<li>Creates a <strong class="source-inline">RELEASE_VERSION</strong> environment<a id="_idTextAnchor548"/> variable with the tag, such as <strong class="source-inline">v1.2.3</strong></li>
+				<li>Installs Go 1.17 tools</li>
+			</ul>
+			<h4>Building cross-platform binaries and version injection</h4>
+			<p>The third and fourth goals<a id="_idIndexMarker1053"/> of the tweeter release flow<a id="_idIndexMarker1054"/> are as follows:</p>
+			<ul>
+				<li>Inject the semantic version of the release into the tweeter application.</li>
+				<li>Build cross-platform versions of the tweeter application.</li>
+			</ul>
+			<p>Let's get started by injecting the semantic version of the release into the compiled binary:</p>
+			<p class="source-code">steps:</p>
+			<p class="source-code">  # Previous steps of the release job omitted for brevity </p>
+			<p class="source-code">  - name: install gox</p>
+			<p class="source-code">    run: go install github.com/mitchellh/gox@v1.0.1</p>
+			<p class="source-code">  - name: build cross-platform binaries</p>
+			<p class="source-code">    env:</p>
+			<p class="source-code">      PLATFORMS: darwin/amd64 darwin/arm64 windows/amd64 linux/amd64 linux/arm64</p>
+			<p class="source-code">      VERSION_INJECT: github.com/devopsforgo/github-actions/pkg/tweeter.Version</p>
+			<p class="source-code">      OUTPUT_PATH_FORMAT: ./bin/${{ env.RELEASE_VERSION }}/{{.OS}}/{{.Arch}}/tweeter</p>
+			<p class="source-code">    run: |</p>
+			<p class="source-code">      gox -osarch="${PLATFORMS}" -ldflags "-X</p>
+			<p class="source-code">${VERSION_INJECT}=${RELEASE_VERSION}" -output</p>
+			<p class="source-code">"${OUTPUT_PATH_FORMAT}"</p>
+			<p>The preceding steps do the following:</p>
+			<ol>
+				<li value="1">Install the <strong class="source-inline">gox</strong> command-line tool for simplifying Go cross-compilation.</li>
+				<li>Build cross-platform binaries<a id="_idIndexMarker1055"/> for each specified platform/architecture while injecting the <strong class="source-inline">RELEASE_VERSION</strong> environment<a id="_idIndexMarker1056"/> variable into a Go <strong class="source-inline">ldflag</strong>. The <strong class="source-inline">ldflag -X</strong> replaces the default value of the <strong class="source-inline">Version</strong> variable in the <strong class="source-inline">github.com/devopsforgo/github-actions/pkg/tweeter</strong> package with the semantic version tag of the build. The output of <strong class="source-inline">gox</strong> is structured by <strong class="source-inline">OUTPUT_PATH_FORMAT</strong> – for example, the output directory looks like the following:<p class="source-code"><strong class="bold">$ tree ./bin/</strong></p><p class="source-code"><strong class="bold">./bin/</strong></p><p class="source-code"><strong class="bold">└── v1.0.0</strong></p><p class="source-code"><strong class="bold">    ├── darwin</strong></p><p class="source-code"><strong class="bold">    │   ├── amd64</strong></p><p class="source-code"><strong class="bold">    │   │   └── tweeter</strong></p><p class="source-code"><strong class="bold">    │   └── arm64</strong></p><p class="source-code"><strong class="bold">    │       └── tweeter</strong></p><p class="source-code"><strong class="bold">    └── linux</strong></p><p class="source-code"><strong class="bold">        └── amd64</strong></p><p class="source-code"><strong class="bold">            └── tweeter</strong></p></li>
+			</ol>
+			<p>One of the most compelling reasons to use Golang for building applications is the relative ease of building cross-platform, statically linked binaries. With a couple of steps, we can build versions of tweeter for Linux, Windows, macOS targeting AMD64 and ARM64, as well as many other platforms and architectures. These small, statically linked binaries are simple to distribute and execute across platforms and architectures.</p>
+			<p>With the preceding steps, the release job has compiled the semantic version of the release into the platform and architecture-specific, statically linked binaries. In the next <a id="_idTextAnchor549"/>step, we will use the semantic version<a id="_idIndexMarker1057"/> to generate release<a id="_idIndexMarker1058"/> notes.</p>
+			<h4>Generating release notes</h4>
+			<p>We have the following goals<a id="_idIndexMarker1059"/> associated with generating release notes:</p>
+			<ul>
+				<li>Generate release notes from the pull requests in the release.</li>
+				<li>Tag the contributors in the release.</li>
+				<li>Create a GitHub release containing the following:<ul><li>A description containing the generated release notes</li></ul></li>
+			</ul>
+			<p>Here's some great news! With a bit of configuration and tagging, release note generation is automatically handled by GitHub. We'll start by adding a new file to the repository, <strong class="source-inline">./.github/release.yml</strong>, with the following content:</p>
+			<p class="source-code">changelog:</p>
+			<p class="source-code">  exclude:</p>
+			<p class="source-code">    labels:</p>
+			<p class="source-code">      - ignore-for-release</p>
+			<p class="source-code">  categories:</p>
+			<p class="source-code">    - title: Breaking Changes </p>
+			<p class="source-code">      labels:</p>
+			<p class="source-code">        - breaking-change</p>
+			<p class="source-code">    - title: New Features </p>
+			<p class="source-code">      labels:</p>
+			<p class="source-code">        - enhancement</p>
+			<p class="source-code">    - title: Bug Fixes </p>
+			<p class="source-code">      labels:</p>
+			<p class="source-code">        - bug-fix</p>
+			<p class="source-code">    - title: Other Changes</p>
+			<p class="source-code">      labels:</p>
+			<p class="source-code">        - "*"</p>
+			<p>The preceding release configuration<a id="_idIndexMarker1060"/> will tell GitHub to filter and categorize pull requests based on the applied labels. For example, pull requests labeled with <strong class="source-inline">ignore-for-release</strong> will be excluded from the release notes, but a pull request labeled with <strong class="source-inline">enhancement</strong> will be grouped under the <strong class="source-inline">New Features</strong> header in the release notes:</p>
+			<p class="source-code">steps:</p>
+			<p class="source-code">  # Previous steps of the release job omitted for brevity </p>
+			<p class="source-code">  - name: generate release notes</p>
+			<p class="source-code">    env:</p>
+			<p class="source-code">      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}</p>
+			<p class="source-code">    run: |</p>
+			<p class="source-code">      gh api -X POST 'repos/{owner}/{repo}/releases/generate-notes' \</p>
+			<p class="source-code">        -F commitish=${{ env.RELEASE_VERSION }} \</p>
+			<p class="source-code">        -F tag_name=${{ env.RELEASE_VERSION }} \</p>
+			<p class="source-code">        &gt; tmp-release-notes.json</p>
+			<p>The preceding step generates release notes. The step executes an API call to the GitHub API to generate the release notes for the given tag. The command captures the JSON body of the response in a <strong class="source-inline">tmp-release-notes.json</strong> filename. Note that <strong class="source-inline">gh</strong> requires a GitHub token to interact with the GitHub APIs. The GitHub secret is passed into the <strong class="source-inline">GITHUB_TOKEN</strong> environment variable and is used by <strong class="source-inline">gh</strong> to authenticate.</p>
+			<p>The following is an example of JSON returned from the <strong class="source-inline">generate-notes</strong> API call:</p>
+			<p class="source-code">{</p>
+			<p class="source-code">  "name": "name of the release",</p>
+			<p class="source-code">  "body": "markdown body containing the release notes"</p>
+			<p class="source-code">}</p>
+			<p>We wi<a id="_idTextAnchor550"/>ll use <strong class="source-inline">tmp-release-notes.json</strong> to create the release<a id="_idIndexMarker1061"/> in the next step.</p>
+			<h4>Creating the GitHub release</h4>
+			<p>The final goal of creating<a id="_idIndexMarker1062"/> the release automation is as follows:</p>
+			<ul>
+				<li>A title containing the semantic version of the release </li>
+				<li>A description containing the generated release notes </li>
+				<li>Artifacts consisting of the cross-platform binaries</li>
+			</ul>
+			<p>Let's get started creating our release automation:</p>
+			<p class="source-code">steps:</p>
+			<p class="source-code">  # Previous steps of the release job omitted for brevity </p>
+			<p class="source-code">  - name: gzip the bins</p>
+			<p class="source-code">    env:</p>
+			<p class="source-code">      DARWIN_BASE: ./bin/${{ env.RELEASE_VERSION }}/darwin</p>
+			<p class="source-code">      WIN_BASE: ./bin/${{ env.RELEASE_VERSION }}/windows</p>
+			<p class="source-code">      LINUX_BASE: ./bin/${{ env.RELEASE_VERSION }}/linux</p>
+			<p class="source-code">    run: |</p>
+			<p class="source-code">      tar -czvf "${DARWIN_BASE}/amd64/tweeter_darwin_amd64.tar.gz" -C "${DARWIN_BASE}/amd64" tweeter</p>
+			<p class="source-code">      tar -czvf "${DARWIN_BASE}/arm64/tweeter_darwin_arm64.tar.gz" -C "${DARWIN_BASE}/arm64" tweeter</p>
+			<p class="source-code">      tar -czvf "${WIN_BASE}/amd64/tweeter_windows_amd64.tar.gz" -C "${WIN_BASE}/amd64" tweeter.exe</p>
+			<p class="source-code">      tar -czvf "${LINUX_BASE}/amd64/tweeter_linux_amd64.tar.gz" -C "${LINUX_BASE}/amd64" tweeter</p>
+			<p class="source-code">      tar -czvf "${LINUX_BASE}/arm64/tweeter_linux_arm64.tar.gz" -C "${LINUX_BASE}/arm64" tweeter</p>
+			<p class="source-code">  - name: create release</p>
+			<p class="source-code">    env:</p>
+			<p class="source-code">      OUT_BASE: ./bin/${{ env.RELEASE_VERSION }}</p>
+			<p class="source-code">      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}</p>
+			<p class="source-code">    run: |</p>
+			<p class="source-code">      jq -r .body tmp-release-notes.json &gt; tmp-release-notes.md</p>
+			<p class="source-code">      gh release create ${{ env.RELEASE_VERSION }} \</p>
+			<p class="source-code">        -t "$(jq -r .name tmp-release-notes.json)" \</p>
+			<p class="source-code">        -F tmp-release-notes.md \</p>
+			<p class="source-code">     </p>
+			<p class="source-code">"${OUT_BASE}/darwin/amd64/tweeter_darwin_amd64.tar.gz#tweeter_osx_amd64" \</p>
+			<p class="source-code">"${OUT_BASE}/darwin/arm64/tweeter_darwin_arm64.tar.gz#tweeter_osx_arm64" \</p>
+			<p class="source-code">"${OUT_BASE}/windows/amd64/tweeter_windows_amd64.tar.gz#tweeter_windows_amd64" \</p>
+			<p class="source-code">"${OUT_BASE}/linux/amd64/tweeter_linux_amd64.tar.gz#tweeter_linux_amd64" \</p>
+			<p class="source-code">"${OUT_BASE}/linux/arm64/tweeter_linux_arm64.tar.gz#tweeter_linux_arm64"</p>
+			<p>The preceding steps do the following:</p>
+			<ul>
+				<li>Execute <strong class="source-inline">tar</strong> and <strong class="source-inline">gzip</strong> on the binaries. With Go 1.17, tweeter bins<a id="_idIndexMarker1063"/> are roughly 6.5 MB. After <strong class="source-inline">gzip</strong>, each artifact is less than 4 MB.</li>
+				<li>Create a GitHub release using the <strong class="source-inline">gh</strong> command-line tool, which is available on all GitHub job executors. <strong class="source-inline">gh</strong> requires a GitHub token to interact with the GitHub APIs. The GitHub secret is passed into the <strong class="source-inline">GITHUB_TOKEN</strong> environment variable and is used by <strong class="source-inline">gh</strong> to authenticate. <strong class="source-inline">gh release create</strong> creates a release and uploads each of the files specified after the arguments. Each file uploaded becomes an artifact on the release. Note <strong class="source-inline">#</strong> after each artifact file path. The text after <strong class="source-inline">#</strong> is the name that the artifact will display, as in the GitHub UI. We also specify the title and the release notes using the captured <strong class="source-inline">tmp-release-notes.json</strong> and <strong class="source-inline">jq</strong> to parse and select the JSON content.</li>
+			</ul>
+			<p>At this point, we have a created release targeting multiple platforms and architectures, satisfying all<a id="_idTextAnchor551"/> our goals for automation. Let's kick off a release and see the results.</p>
+			<h3>Creating a release of tweeter</h3>
+			<p>Now that we have built a release job<a id="_idIndexMarker1064"/> that will automate the releases of tweeter, we can now tag the repository and release a version of the application. To start the release automation, we are going to create and push the <strong class="source-inline">v0.0.1</strong> tag to the repository by executing the following:</p>
+			<p class="source-code">git tag v0.0.1</p>
+			<p class="source-code">git push origin v0.0.1</p>
+			<p>After the tag is pushed, you should be able to go to the <strong class="bold">Actions</strong> tab on your GitHub repository and see the tag workflow executing. If you navigate to the workflow, you should see something like the following:</p>
+			<div>
+				<div id="_idContainer033" class="IMG---Figure">
+					<img src="Images/B17626_10_005.jpg" alt="Figure 10.5 – The workflow job view showing dependent test and release jobs&#13;&#10;" width="947" height="588"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.5 – The workflow job view showing dependent test and release jobs</p>
+			<p>As you can see in the preceding figure, the tests<a id="_idIndexMarker1065"/> have been executed and, subsequently, the release job has been too. If you navigate to the <strong class="bold">release</strong> job, you should see something like the following:</p>
+			<div>
+				<div id="_idContainer034" class="IMG---Figure">
+					<img src="Images/B17626_10_006.jpg" alt="Figure 10.6 – The release job output view&#13;&#10;" width="950" height="679"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.6 – The release job output view</p>
+			<p>As you can see in the preceding<a id="_idIndexMarker1066"/> figure, the release job has successfully executed each of the steps and the release was created. If you go to the landing page of the repository, you should see that a new release has been created. If you click on that release, you should see something like the following:</p>
+			<div>
+				<div id="_idContainer035" class="IMG---Figure">
+					<img src="Images/B17626_10_007.jpg" alt="Figure 10.7 – The release view, containing assets, the release note, and the semantic version title&#13;&#10;" width="959" height="1078"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.7 – The release view, containing assets, the release note, and the semantic version title</p>
+			<p>In the preceding figure, you can see that the release named <strong class="source-inline">v0.0.1</strong> has been autogenerated with categorized release notes that link to the pull requests, the contributor, and artifacts for each platform/architecture combination.</p>
+			<p>With the preceding steps, we have satisfied the goals<a id="_idIndexMarker1067"/> of our release automation job. We triggered the release job after the tests executed to ensure a release will always pass our validations before being published. We built statically linked binaries for each of the specified platform/architecture combinations using <strong class="source-inline">gox</strong>. We leveraged GitHub release notes autogeneration to create beautifully formatted release notes. And finally, we created a release with the generated notes and artifacts from the build.</p>
+			<p>In this example, we learned to build a release automation job for a Go project, but any language and set of tools can be used in a similar manner to create release automation for any language.</p>
+			<p>We have no more manual toil to release the tweeter project. All that needs to be done is to push a tag to the repository. Our use of open source actions has enhanced our ability to author these automations. In the next section, we will learn to create o<a id="_idTextAnchor552"/>ur own packaged action that will allow others to use an action we author.</p>
+			<h1 id="_idParaDest-253"><a id="_idTextAnchor553"/>Creating a custom GitHub Action using Go</h1>
+			<p>In this section, we will extend upon our work by turning the tweeter command line into a GitHub Action. This will allow anyone on GitHub<a id="_idIndexMarker1068"/> building automation to use tweeter<a id="_idIndexMarker1069"/> to tweet from their own pipeline. Furthermore, we'll use our tweeter action to tweet when we release new versions of tweeter by extending the release job to use our new action.</p>
+			<p>In this section, you will learn the basics of authoring GitHub Actions. You will create a custom GitHub Action using Go. You will then opti<a id="_idTextAnchor554"/>mize the start up time of your custom action by creating a container image.</p>
+			<h2 id="_idParaDest-254"><a id="_idTextAnchor555"/>Basics of custom actions</h2>
+			<p>Custom actions are individual tasks<a id="_idIndexMarker1070"/> that wrap a collection of related tasks. Custom actions can be executed as<a id="_idTextAnchor556"/> individual tasks in workflows and can be shared with the GitHub community. </p>
+			<h3>Types of actions</h3>
+			<p>There are three types<a id="_idIndexMarker1071"/> of actions: container, JavaScript, and composite actions. Container-based actions use a Dockerfile or a container image reference as the entry point, the starting point of execution for the action, and are useful if you want to author an action in anything but JavaScript or existing actions. Container-based actions offer flexibility in customizing the execution environment of an action, but it comes at the cost of start up time. If a container-based action depends on a large container image or a slow-building Dockerfile, then the action start up time will be adversely affected. JavaScript actions can run directly on the runner machine and are the native expression of an action. JavaScript actions start up quickly and can leverage the GitHub Actions Toolkit, a set of JavaScript packages to make creating actions easier. Composite actions are a collection of steps within a wrapper action. They enabl<a id="_idTextAnchor557"/>e an author to combine a set of disparate steps into a higher-order behavior.</p>
+			<h3>Action metadata</h3>
+			<p>To define an action, you<a id="_idIndexMarker1072"/> must create an <strong class="source-inline">action.yaml</strong> file in a GitHub repository. If the action is to be shared publicly, the <strong class="source-inline">action.yaml</strong> file should be created in the root of the repository. If the action is not to be shared publicly, it is recommended to create the <strong class="source-inline">action.yaml</strong> file in <strong class="source-inline">./.github/{name-of-action}/action.yaml</strong> where <strong class="source-inline">{name-of-action}</strong> should be substituted with the name of the action. For example, if the tweeter action was only to be used internally, the path of the action metadata would be <strong class="source-inline">./.github/tweeter/action.yaml</strong>:</p>
+			<p class="source-code">name: Name of the Action</p>
+			<p class="source-code">author: @author</p>
+			<p class="source-code">description: Description of your action</p>
+			<p class="source-code">branding:</p>
+			<p class="source-code">  icon: message-circle</p>
+			<p class="source-code">  color: blue</p>
+			<p class="source-code">inputs:</p>
+			<p class="source-code">  sample:</p>
+			<p class="source-code">    description: sample description</p>
+			<p class="source-code">    required: true</p>
+			<p class="source-code">outputs:</p>
+			<p class="source-code">  sampleOutput:</p>
+			<p class="source-code">    description: some sample output</p>
+			<p class="source-code">runs:</p>
+			<p class="source-code">  using: docker</p>
+			<p class="source-code">  image: Dockerfile</p>
+			<p class="source-code">  args:</p>
+			<p class="source-code">    - --sample</p>
+			<p class="source-code">    - "${{ inputs.sample }}"</p>
+			<p>The preceding <strong class="source-inline">action.yaml</strong> defines the following:</p>
+			<ul>
+				<li>The name<a id="_idIndexMarker1073"/> of the action that will be shown in the GitHub UI</li>
+				<li>The author of the action</li>
+				<li>The description of the action</li>
+				<li>Branding that will be used for the action in the GitHub UI</li>
+				<li>Input the action will accept</li>
+				<li>Output the action will return</li>
+				<li>The <strong class="source-inline">runs</strong> section, which describes how the action will be executed</li>
+			</ul>
+			<p>In this example, we are using a Dockerfile, which will build a container from the Dockerfile and execute the container<a id="_idIndexMarker1074"/> entry point with the specified arguments. Note how the <strong class="source-inline">inputs.sample</strong> context variable is used to map input to command-line arguments.</p>
+			<p>The preceding action can be executed with the following step:</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  sample-job:</p>
+			<p class="source-code">    runs-on: ubuntu-latest</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - name: Sample action step</p>
+			<p class="source-code">        id: sample</p>
+			<p class="source-code">        uses: devopsforgo/sample-action@v1</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          sample: 'Hello from the sample!'</p>
+			<p class="source-code">      # Use the output from the `sample` step</p>
+			<p class="source-code">      - name: Get the sample message</p>
+			<p class="source-code">        run: echo "The message is ${{</p>
+			<p class="source-code">            steps.sample.outputs.sampleOutput }}"</p>
+			<p>The preceding sample execution does the following:</p>
+			<ul>
+				<li>Executes a step using the sample action with the assumption that the action is tagged with <strong class="source-inline">v1</strong> in the <strong class="source-inline">devopsforgo/sample-action</strong> repository, with <strong class="source-inline">action.yaml</strong> at the root of that repository, and specifies the required input variable <strong class="source-inline">sample</strong>.</li>
+				<li>Ech<a id="_idTextAnchor558"/>oes the <strong class="source-inline">sampleOutput</strong> variable.</li>
+			</ul>
+			<p>Next, we will discuss how to tag action releases.</p>
+			<h3>Action release management</h3>
+			<p>In all of our examples of using actions in our workflows, the <strong class="source-inline">uses:</strong> value for the action has always included the version of the action. For example, in the preceding sample, we used <strong class="source-inline">devopsforgo/sample-action@v1</strong> to specify that we wanted to use the action at the Git tag of <strong class="source-inline">v1</strong>. By specifying that version, we are telling the workflow to use the action at the Git reference pointed<a id="_idIndexMarker1075"/> to by that tag. By convention, the <strong class="source-inline">v1</strong> tag of an action can point to any Git reference that is tagged in the semantic version range of <strong class="source-inline">v1.x.x</strong>. That means that the <strong class="source-inline">v1</strong> tag is a floating tag and not static, and will advance as new releases in the <strong class="source-inline">v1.x.x</strong> range are released. Recall from the description of semantic versions earlier in this chapter that increments of the major version indicate breaking changes. The author of the action is making a promise to users that anything tagged with <strong class="source-inline">v1</strong> will not include breaking changes.</p>
+			<p>The conventions used for versioning actions can cause friction when an action is included in the same repository as another versioned software project. It is advised to consider the implications of action versioning, and consider creating a repository dedicated to an action<a id="_idTextAnchor559"/> rather than creating it within a repository containing other versioned projects.</p>
+			<h2 id="_idParaDest-255"><a id="_idTextAnchor560"/>Goals for the tweeter custom GitHub Action</h2>
+			<p>In our custom GitHub Action for tweeter, we are going<a id="_idIndexMarker1076"/> to accomplish the following:</p>
+			<ul>
+				<li>Build a Dockerfile for building and running the tweeter command-line tool.</li>
+				<li>Create an action metadata file for the custom action.</li>
+				<li>Extend the continuous integration job to test the action.</li>
+				<li>Create an image release workflow for publishing the tweeter container image.</li>
+				<li>Optimize the tweeter custom action by using the publ<a id="_idTextAnchor561"/>ished container image.</li>
+			</ul>
+			<p>Next, we will create a custom Go action using a Dockerfile.</p>
+			<h2 id="_idParaDest-256"><a id="_idTextAnchor562"/>Creating the tweeter action</h2>
+			<p>With our goals<a id="_idIndexMarker1077"/> for the tweeter custom action specified, we are ready to create the Dockerfile required to run tweeter, define the metadata for the action to map input and output from the tweeter command-line tool, extend our continuous integration job to test the action, and finally, optimize the start time for the action by using a pre-built container image <a id="_idTextAnchor563"/>in the custom action. We will break down each step and create our custom Go action.</p>
+			<h3>Defining a Dockerfile</h3>
+			<p>The first goal for the tweeter custom GitHub Action<a id="_idIndexMarker1078"/> is building a Dockerfile for building and running the tweeter command-line tool.</p>
+			<p>Let's get started by building a Dockerfile in the root of the tweeter repository that we will use to build a container image:</p>
+			<p class="source-code">FROM golang:1.17 as builder</p>
+			<p class="source-code">WORKDIR /workspace</p>
+			<p class="source-code"># Copy the Go Modules manifests</p>
+			<p class="source-code">COPY go.mod go.mod</p>
+			<p class="source-code">COPY go.sum go.sum</p>
+			<p class="source-code"># Cache deps before building and copying source</p>
+			<p class="source-code"># so that we don't need to re-download as much</p>
+			<p class="source-code"># and so that source changes don't invalidate </p>
+			<p class="source-code"># our downloaded layer</p>
+			<p class="source-code">RUN go mod download</p>
+			<p class="source-code"># Copy the sources</p>
+			<p class="source-code">COPY ./ ./</p>
+			<p class="source-code">RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \</p>
+			<p class="source-code">    go build -a -ldflags '-extldflags "-static"' \</p>
+			<p class="source-code">    -o tweeter .</p>
+			<p class="source-code"># Copy the action into a thin image</p>
+			<p class="source-code">FROM gcr.io/distroless/static:latest</p>
+			<p class="source-code">WORKDIR /</p>
+			<p class="source-code">COPY --from=builder /workspace/tweeter .</p>
+			<p class="source-code">ENTRYPOINT ["/tweeter"]</p>
+			<p>The preceding Dockerfile does the following:</p>
+			<ol>
+				<li value="1">Uses the <strong class="source-inline">golang:1.17</strong> image as an intermediate builder container, which contains the Go build tools<a id="_idIndexMarker1079"/> needed to compile the tweeter command-line tool. Using the builder pattern creates an intermediate container, containing build tools and source code that will not be needed in the end product. It allows us a scratch area to build a statically linked Go application that can be added to a slimmed-down container at the end of the build process. This enables the final container to only contain the Go application and nothing more.</li>
+				<li>The build then copies in <strong class="source-inline">go.mod</strong> and <strong class="source-inline">go.sum</strong>, and then downloads the Go dependencies for the tweeter application.</li>
+				<li>The source for the tweeter application is copied into the builder container and then compiled as a statically linked binary.</li>
+				<li>The production image is created from the <strong class="source-inline">gcr.io/distroless/static:latest</strong> base image, and the tweeter application is copied from the intermediate builder container.</li>
+				<li>Finally, the default entry point is set to the tweeter binary, which will enable us to run the container and directly execute the tweeter application.</li>
+			</ol>
+			<p>To build and then execute the preceding Dockerfile, you can run the following:</p>
+			<p class="source-code">$ docker build . -t tweeter</p>
+			<p class="source-code"># output from the docker build</p>
+			<p class="source-code">$ docker run tweeter -h</p>
+			<p class="source-code">pflag: help requested</p>
+			<p class="source-code">Usage of /tweeter:</p>
+			<p class="source-code">      --accessToken string         twitter access token</p>
+			<p class="source-code">      # More help text removed for brevity.</p>
+			<p>The preceding script does the following:</p>
+			<ul>
+				<li>Builds the Dockerfile and tags<a id="_idIndexMarker1080"/> it with the name <strong class="source-inline">tweeter</strong></li>
+				<li>Runs the tagged tweeter container image, passing the tweeter application the <strong class="source-inline">-h</strong> argument, causing the tweeter application to print the help text</li>
+			</ul>
+			<p>Now that we have a working D<a id="_idTextAnchor564"/>ockerfile, we can use that to define a custom container action defined in <strong class="source-inline">action.yaml</strong>.</p>
+			<h3>Creating action metadata</h3>
+			<p>The second goal for the tweeter<a id="_idIndexMarker1081"/> custom GitHub Action is creating an action metadata file for the custom action.</p>
+			<p>Now that we have defined the Dockerfile, we can author a Docker action with the following action metadata in an <strong class="source-inline">action.yaml</strong> file in the root of the repository:</p>
+			<p class="source-code">name: Tweeter Action</p>
+			<p class="source-code">author: DevOps for Go</p>
+			<p class="source-code">description: Action to send a tweet via a GitHub Action.</p>
+			<p class="source-code">inputs:</p>
+			<p class="source-code">  message:</p>
+			<p class="source-code">    description: 'message you want to tweet'</p>
+			<p class="source-code">    required: true</p>
+			<p class="source-code">  apiKey:</p>
+			<p class="source-code">    description: 'api key for Twitter api'</p>
+			<p class="source-code">    required: true</p>
+			<p class="source-code">  apiKeySecret:</p>
+			<p class="source-code">    description: 'api key secret for Twitter api'</p>
+			<p class="source-code">    required: true</p>
+			<p class="source-code">  accessToken:</p>
+			<p class="source-code">    description: 'access token for Twitter api'</p>
+			<p class="source-code">    required: true</p>
+			<p class="source-code">  accessTokenSecret:</p>
+			<p class="source-code">    description: 'access token secret for Twitter api'</p>
+			<p class="source-code">    required: true</p>
+			<p class="source-code">outputs:</p>
+			<p class="source-code">  errorMessage:</p>
+			<p class="source-code">    description: 'if something went wrong, the error message'</p>
+			<p class="source-code">  sentMessage:</p>
+			<p class="source-code">    description: 'the message sent to Twitter'</p>
+			<p class="source-code">runs:</p>
+			<p class="source-code">  using: docker</p>
+			<p class="source-code">  image: Dockerfile</p>
+			<p class="source-code">  args:</p>
+			<p class="source-code">    - --message</p>
+			<p class="source-code">    - "${{ inputs.message }}"</p>
+			<p class="source-code">    - --apiKey</p>
+			<p class="source-code">    - ${{ inputs.apiKey }}</p>
+			<p class="source-code">    - --apiKeySecret</p>
+			<p class="source-code">    - ${{ inputs.apiKeySecret }}</p>
+			<p class="source-code">    - --accessToken</p>
+			<p class="source-code">    - ${{ inputs.accessToken }}</p>
+			<p class="source-code">    - --accessTokenSecret</p>
+			<p class="source-code">    - ${{ inputs.accessTokenSecret }}</p>
+			<p>The preceding action metadata<a id="_idIndexMarker1082"/> does the following:</p>
+			<ul>
+				<li>Defines the action name, author, and description metadata</li>
+				<li>Defines the expected input to the action</li>
+				<li>Defines the output variable for the action</li>
+				<li>Executes the Dockerfile, mapping the input of the action to the <strong class="source-inline">args</strong> of the tweeter application</li>
+			</ul>
+			<p>How the input variables map to the tweeter <strong class="source-inline">args</strong> command line is apparent due to the mapping of the input to the arguments, but it is not clear how the output variables are mapped. The output variables are mapped by specially encoding the variables in STDOUT in the Go application:</p>
+			<p class="source-code">func printOutput(key, message string) {</p>
+			<p class="source-code">    fmt.Printf("::set-output name=%s::%s\n", key, message)</p>
+			<p class="source-code">}</p>
+			<p>The preceding function prints to STDOUT the key <a id="_idIndexMarker1083"/>and the message for an output variable. To return the <strong class="source-inline">sentMessage</strong> output variable, the Go application calls <strong class="source-inline">printOutput("sendMessage", message)</strong>. The action runtime will read STDOUT, recognize the encoding, and then populate the context variable for <strong class="source-inline">steps.{action.id}.outputs.sentMessage</strong>.</p>
+			<p>With our action metadata defined, we are now ready to test our action by extending t<a id="_idTextAnchor565"/>he tweeter continuous integration workflow to execute the action in the local repository.</p>
+			<h3>Testing the action</h3>
+			<p>The third goal of the tweeter custom GitHub Action<a id="_idIndexMarker1084"/> is to extend the continuous integration job to test the action.</p>
+			<p>With the <strong class="source-inline">action.yaml</strong> file authored, we can add a workflow job to test the action:</p>
+			<p class="source-code">test-action:</p>
+			<p class="source-code">  runs-on: ubuntu-latest</p>
+			<p class="source-code">  steps:</p>
+			<p class="source-code">    - uses: actions/checkout@v2</p>
+			<p class="source-code">    - name: test the tweeter action in DRY_RUN</p>
+			<p class="source-code">      id: tweeterAction</p>
+			<p class="source-code">      env:</p>
+			<p class="source-code">        DRY_RUN: true</p>
+			<p class="source-code">      uses: ./</p>
+			<p class="source-code">      with:</p>
+			<p class="source-code">        message: hello world!</p>
+			<p class="source-code">        accessToken: fake</p>
+			<p class="source-code">        accessTokenSecret: fake</p>
+			<p class="source-code">        apiKey: fake</p>
+			<p class="source-code">        apiKeySecret: fake</p>
+			<p class="source-code">    - run: echo ${{ steps.tweeterAction.outputs.sentMessage</p>
+			<p class="source-code">}} from dry run test</p>
+			<p>The preceding <strong class="source-inline">test-action</strong> job does the following:</p>
+			<ul>
+				<li>Checks out the code<a id="_idIndexMarker1085"/> to the local workspace</li>
+				<li>Executes the local action, specifying all required input and setting the <strong class="source-inline">DRY_RUN</strong> environment variable to <strong class="source-inline">true</strong> so that the action will not try to send the message to Twitter</li>
+				<li>Runs an <strong class="source-inline">echo</strong> command, fetching the echoed output from the action</li>
+			</ul>
+			<p>Let's see what happens when we trigger this workflow:</p>
+			<div>
+				<div id="_idContainer036" class="IMG---Figure">
+					<img src="Images/B17626_10_008.jpg" alt="Figure 10.8 – The workflow run with the new test-action job&#13;&#10;" width="897" height="682"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.8 – The workflow run with the new test-action job</p>
+			<p>In the preceding screenshot, you can see that the <strong class="source-inline">test-action</strong> job is now part of the tweeter automation that will validate<a id="_idIndexMarker1086"/> the action. Note the runtime of 54 seconds for executing the job. It seems like a long time to call a command-line application:</p>
+			<div>
+				<div id="_idContainer037" class="IMG---Figure">
+					<img src="Images/B17626_10_009.jpg" alt="Figure 10.9 – The test-action job output&#13;&#10;" width="880" height="616"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.9 – The test-action job output</p>
+			<p>In the preceding screenshot, you can see that the test for the tweeter action took 49 seconds out of the total job runtime of 54 seconds. That is the vast majority of the time it took to execute the job. Most of that time was spent compiling tweeter and building the <strong class="source-inline">docker</strong> image prior to executing the action. In the next part, we'll optimize th<a id="_idTextAnchor566"/>e action execution time by referencing a pre-built version of the tweeter container image.</p>
+			<h3>Creating a container image release workflow</h3>
+			<p>The fourth goal of the tweeter<a id="_idIndexMarker1087"/> custom GitHub Action is creating an image release workflow for publishing the tweeter container image.</p>
+			<p>As we saw in the previous section, the amount of time to build the Dockerfile was significant. There is little reason<a id="_idIndexMarker1088"/> to do that for every execution of an action, which can be avoided by publishing the container image to a container registry and then using the registry image in place of the Dockerfile:</p>
+			<p class="source-code">name: release image</p>
+			<p class="source-code">on:</p>
+			<p class="source-code">  # push events for tags matching image-v for version</p>
+			<p class="source-code">(image-v1.0, etc)</p>
+			<p class="source-code">  push:</p>
+			<p class="source-code">    tags:</p>
+			<p class="source-code">      - 'image-v*' </p>
+			<p class="source-code">permissions:</p>
+			<p class="source-code">  contents: read</p>
+			<p class="source-code">  packages: write</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  image:</p>
+			<p class="source-code">    runs-on: ubuntu-latest</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - uses: actions/checkout@v2</p>
+			<p class="source-code">      - name: set env</p>
+			<p class="source-code">        # refs/tags/image-v1.0.0 substring starting at 1.0.0</p>
+			<p class="source-code">        run: echo "RELEASE_VERSION=${GITHUB_REF:17}" &gt;&gt; $GITHUB_ENV</p>
+			<p class="source-code">      - name: setup buildx</p>
+			<p class="source-code">        uses: docker/setup-buildx-action@v1</p>
+			<p class="source-code">      - name: login to GitHub container registry</p>
+			<p class="source-code">        uses: docker/login-action@v1</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          registry: ghcr.io</p>
+			<p class="source-code">          username: ${{ github.repository_owner }}</p>
+			<p class="source-code">          password: ${{ secrets.GITHUB_TOKEN }}</p>
+			<p class="source-code">      - name: build and push</p>
+			<p class="source-code">        uses: docker/build-push-action@v2</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          push: true</p>
+			<p class="source-code">          tags: |</p>
+			<p class="source-code">            ghcr.io/devopsforgo/tweeter:${{ env.RELEASE_VERSION }}</p>
+			<p class="source-code">            ghcr.io/devopsforgo/tweeter:latest</p>
+			<p>The preceding workflow<a id="_idIndexMarker1089"/> definition does the following:</p>
+			<ul>
+				<li>Triggers only when tags starting with <strong class="source-inline">image-v</strong> are pushed</li>
+				<li>Requests permissions to write to the <strong class="source-inline">ghcr.io</strong> image repository and read the Git repository</li>
+				<li>Contains a single container image build and steps to publish the image.</li>
+				<li>Checks out the repository</li>
+				<li>Builds the <strong class="source-inline">RELEASE_VERSION</strong> environment variable based on the tag format</li>
+				<li>Sets up <strong class="source-inline">buildx</strong> for building the container image</li>
+				<li>Logs in to <strong class="source-inline">ghcr.io</strong>, the GitHub container registry</li>
+				<li>Builds and pushes the container image tagged with both the release version and the latest version</li>
+			</ul>
+			<p>With the preceding workflow in place, we can tag<a id="_idIndexMarker1090"/> the repository with the following commands and have the container image published to the GitHub container registry for use in the tweeter action:</p>
+			<p class="source-code">git tag image-v1.0.0</p>
+			<p class="source-code">git push origin image-v1.0.0</p>
+			<p>Let's see the result of our image release workflow:</p>
+			<div>
+				<div id="_idContainer038" class="IMG---Figure">
+					<img src="Images/B17626_10_010.jpg" alt="Figure 10.10 – The workflow job view for the image-release job&#13;&#10;" width="1003" height="547"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.10 – The workflow job view for the image-release job</p>
+			<p>The preceding screenshot shows the <strong class="source-inline">release image</strong> workflow that was triggered by pushing the <strong class="source-inline">image-v1.0.0</strong> tag. The following screenshot details the results of each step of the <strong class="source-inline">release image</strong> workflow:</p>
+			<div>
+				<div id="_idContainer039" class="IMG---Figure">
+					<img src="Images/B17626_10_011.jpg" alt="Figure 10.11 – The image release job output&#13;&#10;" width="973" height="683"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.11 – The image release job output</p>
+			<p>The result of the preceding workflow is that we now have a container<a id="_idIndexMarker1091"/> image pushed to <strong class="source-inline">ghcr.io/devopsforgo/tweeter</strong>, tagged with <a id="_idTextAnchor567"/><strong class="source-inline">v1.0.0</strong> and <strong class="source-inline">latest</strong>. We can now update the action metadata to use the tagged image version.</p>
+			<h3>Optimizing the custom Go action</h3>
+			<p>The final goal of this section is optimizing<a id="_idIndexMarker1092"/> the tweeter custom action by using the published container image.</p>
+			<p>Now that we have the image published to <strong class="source-inline">ghcr.io</strong>, we can replace the Dockerfile with the reference to the published image:</p>
+			<p class="source-code"># omitted the previous portion of the action.yaml </p>
+			<p class="source-code">runs:</p>
+			<p class="source-code">  using: docker</p>
+			<p class="source-code">  image: docker://ghcr.io/devopsforgo/tweeter:1.0.0</p>
+			<p class="source-code"># omitted the subsequent portion of the action.yaml </p>
+			<p>The preceding portion of the <strong class="source-inline">action.yaml</strong> file illustrates replacing the Dockerfile with the published tweeter<a id="_idIndexMarker1093"/> container image. Now that the Dockerfile has been replaced, let's run the workflow and see the performance optimization in action:</p>
+			<div>
+				<div id="_idContainer040" class="IMG---Figure">
+					<img src="Images/B17626_10_012.jpg" alt="Figure 10.12 – The workflow view showing the speed increase of the test-action job&#13;&#10;" width="950" height="693"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.12 – The workflow view showing the speed increase of the test-action job</p>
+			<p>The preceding screenshot illustrates the gains from using a pre-built container image. Recall, when using a Dockerfile, that the workflow execution was 54 seconds. Now, using the tweeter container image from the registry, the workflow executes in 11 seconds. This is a significant optimization and should be used when possible.</p>
+			<p>In this section, we learned to build custom actions using Go, which enables a DevOps engineer to build complex actions and package them in easily accessible units of automation. We also learned how to test and optimize these actions locally, ensuring that when custom actions are published, they function as intended.</p>
+			<p>In the next section, we will build upon the ability to author custom actions and publish an action to the entire GitHub community. By publishing an action to the GitHub<a id="_idTextAnchor568"/> marketplace, an action can become a key<a id="_idIndexMarker1094"/> tool for other DevOps engineers authoring automation.</p>
+			<h1 id="_idParaDest-257"><a id="_idTextAnchor569"/>Publishing a custom Go GitHub Action</h1>
+			<p>The superpower of GitHub Actions<a id="_idIndexMarker1095"/> is the community and the actions that the community publishes to the GitHub Marketplace. Think about how much more work we would have had to do in the previous sections if we didn't have community actions available for use. Our workflows would have had to start from first principles, involving authoring long, tedious scripts to complete tasks that we were able to express in a handful of YAML instead.</p>
+			<p>Open source software is not only about having access to free software but also about giving back to the community. We are going to learn how to give back to the GitHub Actions community through publishing an action to GitHub Marketplace. This will enable the entire user community of GitHub to benefit from it.</p>
+			<p>In this section, you will learn how to publish a custom action to the GitHub Marketplace. You will learn the basics of publishing actions. After covering the basics, you will learn how to automate versioning for a published action. You will learn how to use the tweeter action to tweet an announcement of new releases to tweeter. Finally, you will learn how to publish your action to the<a id="_idTextAnchor570"/> GitHub Marketplace so that it can be used by the rest of the GitHub community across the world.</p>
+			<h2 id="_idParaDest-258"><a id="_idTextAnchor571"/>The basics of publishing actions</h2>
+			<p>Publishing an action to the GitHub Marketplace<a id="_idIndexMarker1096"/> adds some requirements and best<a id="_idIndexMarker1097"/> practices that, for a local action, as we built in the previous section, do not apply. For example, the readme for the repository will be the landing page for the action in the marketplace, so you'd want to provide a description and usage guidance for the repository readme.</p>
+			<p>The following are the requirements for publishing an action to the GitHub Marketplace:</p>
+			<ul>
+				<li>The action must be in a public GitHub repository.</li>
+				<li>In the root of the repository must be a single action named <strong class="source-inline">action.yaml</strong> or <strong class="source-inline">action.yml</strong>.</li>
+				<li>The name of the action in <strong class="source-inline">action.yaml</strong> must be unique to the marketplace. The name may not overlap with any GitHub features or products, or any other names that GitHub reserves.</li>
+				<li>A public action should follow <strong class="source-inline">v1</strong> and <strong class="source-inline">v1.2.3</strong> semantic version guidance so that users of the action<a id="_idIndexMarker1098"/> can specify<a id="_idTextAnchor572"/> a full semantic version, or simply <strong class="source-inline">v1</strong> to denote<a id="_idIndexMarker1099"/> the latest in the <strong class="source-inline">v1</strong> major semantic version series.</li>
+			</ul>
+			<h2 id="_idParaDest-259"><a id="_idTextAnchor573"/>Goals for publishing the tweeter custom action</h2>
+			<p>The following are goals for publishing<a id="_idIndexMarker1100"/> the tweeter custom action:</p>
+			<ul>
+				<li>Set up a release-triggered<a id="_idIndexMarker1101"/> workfl<a id="_idTextAnchor574"/>ow that will handle semantic version management.</li>
+				<li>Publish the tweeter action to the GitHub Marketplace.</li>
+			</ul>
+			<h2 id="_idParaDest-260"><a id="_idTextAnchor575"/>Managing action semantic versioning</h2>
+			<p>The first and second goals of publishing<a id="_idIndexMarker1102"/> the tweeter custom action to the marketplace<a id="_idIndexMarker1103"/> are as follows:</p>
+			<ul>
+				<li>Set up a release-triggered workflow that will handle semantic version management.</li>
+				<li>Use the action to tweet an announcement of the new release of the action.</li>
+			</ul>
+			<p>We are going to build a workflow to update the major version tag – for example, <strong class="source-inline">v1</strong> – to point to the latest release in the <strong class="source-inline">v1.x.x</strong> series of semantic versions. The workflow will also be responsible for creating new major version tags as new major semantic versions are released:</p>
+			<p class="source-code">name: Release new tweeter version</p>
+			<p class="source-code">on:</p>
+			<p class="source-code">  release:</p>
+			<p class="source-code">    types: [released]</p>
+			<p class="source-code">  workflow_dispatch:</p>
+			<p class="source-code">    inputs:</p>
+			<p class="source-code">      TAG_NAME:</p>
+			<p class="source-code">        description: 'Tag name that the major tag will point to'</p>
+			<p class="source-code">        required: true</p>
+			<p class="source-code">permissions:</p>
+			<p class="source-code">  contents: write</p>
+			<p class="source-code">env:</p>
+			<p class="source-code">  TAG_NAME: ${{ github.event.inputs.TAG_NAME || github.event.release.tag_name }}</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  update_tag:</p>
+			<p class="source-code">    name: Update the major tag to include the ${{ env.TAG_NAME }} changes</p>
+			<p class="source-code">    runs-on: ubuntu-latest</p>
+			<p class="source-code">    steps:</p>
+			<p class="source-code">      - name: Update the ${{ env.TAG_NAME }} tag</p>
+			<p class="source-code">        uses: actions/publish-action@v0.1.0</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          source-tag: ${{ env.TAG_NAME }}</p>
+			<p class="source-code">      - uses: actions/checkout@v2</p>
+			<p class="source-code">      - name: Tweet about the release</p>
+			<p class="source-code">        uses: ./</p>
+			<p class="source-code">        with:</p>
+			<p class="source-code">          message: Hey folks, we just released the ${{ env.TAG_NAME }} for the tweeter GitHub Action!!</p>
+			<p class="source-code">          accessToken: ${{ secrets.ACCESS_TOKEN }}</p>
+			<p class="source-code">          accessTokenSecret: ${{ secrets.ACCESS_TOKEN_SECRET }}</p>
+			<p class="source-code">          apiKey: ${{ secrets.API_KEY }}</p>
+			<p class="source-code">          apiKeySecret: ${{ secrets.API_KEY_SECRET }}</p>
+			<p>The preceding workflow<a id="_idIndexMarker1104"/> does the following:</p>
+			<ul>
+				<li>Triggers on a release being published or on a manual UI<a id="_idIndexMarker1105"/> submission. This means that a project maintainer can trigger the workflow via the GitHub UI if ad hoc execution was required.</li>
+				<li>Declares that the workflow requires rights to write to the repository. This is used to write tags.</li>
+				<li>Declares the <strong class="source-inline">TAG_NAME</strong> environment variable, which is either the ad hoc job input or the tag of the release.</li>
+				<li>The <strong class="source-inline">update_tag</strong> takes the tag in <strong class="source-inline">v1.2.3</strong> format and updates the tag's major semantic version tag to the latest version within that major semantic version. For example, if the new release tag is <strong class="source-inline">v1.2.3</strong>, then the <strong class="source-inline">v1</strong> tag will point to the same Git ref as <strong class="source-inline">v1.2.3</strong>.</li>
+				<li>Clones the source code using <strong class="source-inline">actions/checkout@v2</strong>.</li>
+				<li>Tweets about the new release using Twitter developer credentials embedded in GitHub repository secrets. To set up Twitter developer<a id="_idIndexMarker1106"/> credentials, see <a href="https://developer.twitter.com/en/portal/dashboard">https://developer.twitter.com/en/portal/dashboard</a> and set up an account and application. After you gather the secrets, you can add them to the repository secrets under the <strong class="bold">Settings</strong> tab, as shown in the following screenshot: </li>
+			</ul>
+			<div>
+				<div id="_idContainer041" class="IMG---Figure">
+					<img src="Images/B17626_10_013.jpg" alt="Figure 10.13 – Repository secrets&#13;&#10;" width="954" height="837"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 10.13 – Repository secrets</p>
+			<p>With the preceding<a id="_idIndexMarker1107"/> workflow, when we apply a tag – for example, <strong class="source-inline">v1.2.3</strong> – the repository<a id="_idIndexMarker1108"/> will also be tagged at the same Git <strong class="source-inline">ref</strong> with <strong class="source-inline">v1</strong>. After the tags are set, the tweeter action will execute, announcing the release to the world.</p>
+			<p>Recall from the previous section that when we tag the tweeter repository with a semantic version, the release workflow will trigger, causing a new release to be created. This workflow will then trigger the action version update release workflow, which will tag the action with the major version and announce through Twitter that the action release is available.</p>
+			<p>All that is left to do is to rel<a id="_idTextAnchor576"/>ease <a id="_idIndexMarker1109"/>the action to the GitHub Marketplace. This only needs to be done the first time the action is released.</p>
+			<h2 id="_idParaDest-261"><a id="_idTextAnchor577"/>Publishing the tweeter action to the GitHub Marketplace</h2>
+			<p>The final goal of publishing the tweeter custom action<a id="_idIndexMarker1110"/> is to publish the tweeter action<a id="_idIndexMarker1111"/> to the GitHub Marketplace. The first publication of your GitHub Action<a id="_idIndexMarker1112"/> is a manual process and can be accomplished by following the guide here: <a href="https://docs.github.com/en/actions/creating-actions/publishing-actions-in-github-marketplace">https://docs.github.com/en/actions/creating-actions/publishing-actions-in-github-marketplace</a>. After taking this first set of manual steps, they will not need to be repeated for future releases.</p>
+			<h1 id="_idParaDest-262"><a id="_idTextAnchor578"/>Summary</h1>
+			<p>GitHub Actions is a powerful system for project maintainers to automate toilsome processes, enabling greater developer satisfaction and increased project velocity. We targeted Go in this chapter as the language of choice for GitHub Actions due to its type safety, low memory overhead, and speed. We believe that it is the best choice for writing GitHub Actions. However, many of the skills taught here are transferable to other languages. Each of the patterns, continuous integration, release pipelines, semantic versioning, and action creation can be applied to any project that you come into contact with.</p>
+			<p>The key to the chapter is to understand the impact of community contributions in the GitHub Marketplace. By using, building, and contributing to the marketplace, an engineer can make their automation more com<a id="_idTextAnchor579"/>posable and empower community members to solve more complex problems through the contributions of the community.</p>
+			<p>We learned the basics of GitHub Actions with a focus on its features, which enable us to be functional quickly. With these basic skills, we were able to build a continuous integration automation workflow to clone, build, lint, and test the tweeter project. We extended the continuous integration automation to create a release pipeline trigger from Git tags. The release pipeline transformed manual tasks such as authoring release notes and made them an automated part of the release workflow. Finally, we created and published a custom Go GitHub Action that can be used by the entire community.</p>
+			<p>I hope that at the end of this chapter you feel confident in your ability to create automation to eliminate toilsome tasks that burdened your team's day. Remember that if you can automate a task that happens once a week and takes an hour, you are saving a full week of work from one of your team members! That is time that is likely better spent adding value to your business. </p>
+			<p>In the next chapter, we are going to learn about ChatOps. You will learn how to use chat applications such as Slack to trigger automation and alerts when events occur, providing you and your team an interactive robotic DevOps partner.</p>
+		</div>
+	</div></body></html>

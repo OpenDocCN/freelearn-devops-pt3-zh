@@ -1,0 +1,814 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer019">
+			<h1 id="_idParaDest-206"><a id="_idTextAnchor430"/>Chapter <a id="_idTextAnchor431"/>8: Automating Command-Line Tasks</h1>
+			<p>Most jobs start out as some type of manual operation that an engineer performs. Over time, these should become documented procedures that have the best practice for doing some operation, and finally, that job should become the work of software that takes those best practices and runs them with the efficiency that only a machine can provide.</p>
+			<p>One of the core missions of a <strong class="bold">development-operations</strong> (<strong class="bold">DevOps</strong>) engineer is automating these tasks. This can be from the mundane, such as running a few commands, to changing the configuration on thousands of machines.</p>
+			<p>Automating systems often requires manipulating a system via its command line and calling other tools native to the <strong class="bold">operating system</strong> (<strong class="bold">OS</strong>). This can include using <strong class="bold">RPM Package Manager</strong> (<strong class="bold">RPM</strong>)/<strong class="bold">Debian Package</strong> (<strong class="bold">dpkg</strong>) for installing packages, grabbing stats for a system using common utilities, or configuring network routers.</p>
+			<p>A DevOps engineer may want to do this locally to automate a series of steps normally done manually (such as automating Kubernetes's <strong class="source-inline">kubectl</strong> tool) or remotely execute commands on hundreds of machines at the same time. This chapter will cover how these can be accomplished using Go.</p>
+			<p>In this chapter, you will learn how to execute command-line tools on the local machine to accomplish automation goals. To access a remote machine, we will learn about how to use <strong class="bold">Secure Shell</strong> (<strong class="bold">SSH</strong>) and Expect packages. But knowing how to call executables on machines is just one part of the skillset. We will also talk about the anatomy of a change and how to do concurrent changes safely.</p>
+			<p>We will cover the following topics in this chapter:</p>
+			<ul>
+				<li>Using <strong class="source-inline">os/exec</strong> to automate local changes</li>
+				<li>Using SSH in Go to automate remote changes</li>
+				<li>Designing safe, concurrent change automations</li>
+				<li>Writing a system agent</li>
+			</ul>
+			<h1 id="_idParaDest-207"><a id="_idTextAnchor432"/>Technical requirements</h1>
+			<p>This chapter requires that you have the latest Go tooling installed and access to a Linux system for running any service binaries we create. All tooling in this chapter will be geared toward controlling a Linux system, as this is the most popular cloud computing platform.</p>
+			<p>For the remote machine access requirements, the remote Linux system will need to be running SSH to allow for remote connectivity.</p>
+			<p>To use the system agent in the final part of this chapter, you will also need to use a Linux distribution that has <strong class="source-inline">systemd</strong> installed. Most modern distributions use <strong class="source-inline">systemd</strong>.</p>
+			<p>Code written in this chapter can be found here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8</a></p>
+			<h1 id="_idParaDest-208"><a id="_idTextAnchor433"/>Using os/exec to automate local changes</h1>
+			<p>Automating the execution of<a id="_idIndexMarker726"/> tools that are local to the machine can provide a series of benefits to end users. The first of these is that it can reduce the toil that your team experiences. One of the primary goals for DevOps<a id="_idIndexMarker727"/> and <strong class="bold">Site Reliability Engineers</strong> (<strong class="bold">SRE</strong>) is to remove repetitive, manual processes. That time can be <a id="_idIndexMarker728"/>put to better use by reading a good book (such as this one), organizing a sock drawer, or working on the next problem. The second benefit is to remove manual mistakes from a process. It is easy to type the wrong thing or copy and paste something incorrectly. And finally, it is the core underpinning of operating at scale. Automating locally can be combined with other techniques detailed in the book to make changes at a large scale.</p>
+			<p>The automation life cycle generally comes in three stages, moving from manually doing work to automation, as follows:</p>
+			<ol>
+				<li>The first stage revolves around the manual execution of commands by an experienced engineer. While this is not automation itself, this starts a cycle that ends with some type of automation.</li>
+				<li>The second stage usually revolves around writing those stages down in order to document the procedure, to allow more than one person to share the workload. This might be a <strong class="bold">method of procedure</strong> (<strong class="bold">MOP</strong>) document, though more commonly, it is a bunch of notes that <a id="_idIndexMarker729"/>you spend an hour looking for. We highly recommend a central place to store these such as a wiki or markdown in a <strong class="source-inline">git</strong> repository.</li>
+				<li>The third stage is usually a script to make the task repeatable.</li>
+			</ol>
+			<p>Once a company gets larger, these <a id="_idIndexMarker730"/>stages are usually condensed into developing a service to handle the task in a fully automated way when a need <a id="_idIndexMarker731"/>for it is identified.</p>
+			<p>A good example of this might be deploying pods on a Kubernetes cluster or adding a new pod configuration to your Kubernetes config. These are driven by calling command-line applications such as <strong class="source-inline">kubectl</strong> and <strong class="source-inline">git</strong>. These types of jobs start manually; eventually, they are documented and finally automated in some way. At some point, this might<a id="_idIndexMarker732"/> move into a <strong class="bold">continuous integration/continuous deployment</strong> (<strong class="bold">CI/CD</strong>) system that handles this for you.</p>
+			<p>The key to automating tooling locally is the <strong class="source-inline">os/exec</strong> package. This package allows for the execution of other tools and control of their <strong class="source-inline">STDIN</strong>/<strong class="source-inline">STDOUT</strong>/<strong class="source-inline">STDERR</strong> streams.</p>
+			<p>Let's take a closer<a id="_idTextAnchor434"/> look.</p>
+			<h2 id="_idParaDest-209"><a id="_idTextAnchor435"/>Determining the availability of essential tools</h2>
+			<p>When writing an application that <a id="_idIndexMarker733"/>calls other applications on a system, it is critical to determine if the tools needed are available on the system before you start executing commands. Nothing is worse than being partway through a procedure to find that a critical tool is missing.</p>
+			<p>The <strong class="source-inline">exec</strong> package provides the <strong class="source-inline">LookPath()</strong> function to help determine if a binary exists. If only the name of the binary is provided, the <strong class="source-inline">PATH</strong> environmental variable is consulted and those paths will be searched for the binary. If a <strong class="source-inline">/</strong> is in the name, only that path will be consulted.</p>
+			<p>Let's say we are writing a tool that needs both <strong class="source-inline">kubectl</strong> and <strong class="source-inline">git</strong> to be installed in order to work. We can test if those tools are available in our <strong class="source-inline">PATH</strong> variable by executing the following code:</p>
+			<p class="source-code">const (</p>
+			<p class="source-code">    kubectl = "kubectl"</p>
+			<p class="source-code">    git = "git"</p>
+			<p class="source-code">)</p>
+			<p class="source-code">_, err := exec.LookPath(kubectl)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">    return fmt.Errorf("cannot find kubectl in our PATH")</p>
+			<p class="source-code">}</p>
+			<p class="source-code">_, err := exec.LookPath(git)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">    return fmt.Errorf("cannot find git in our PATH")</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Defines constants for our binary names</li>
+				<li>Uses <strong class="source-inline">LookPath()</strong> to determine if these binaries exist in our PATH variable</li>
+			</ul>
+			<p>In this code, we simply return an<a id="_idIndexMarker734"/> error if we do not find the tool. There are other options, such as attempting to install these tools with the local package manager. Depending on the makeup of our fleet, we might want to test which version is deployed and only proceed if we are at a compatible version.</p>
+			<p>Let's look at using the <strong class="source-inline">exec.CommandContext</strong> type to call b<a id="_idTextAnchor436"/>inaries.</p>
+			<h3>Executing binaries with the exec package</h3>
+			<p>The <strong class="source-inline">exec</strong> package<a id="_idIndexMarker735"/> allows us to execute a binary using the <strong class="source-inline">exec.Cmd</strong> type. To create one of these, we can use the <strong class="source-inline">exec.CommandContext()</strong> constructor. This takes in the name of the binary to execute and the arguments to the binary, as illustrated in the following code snippet:</p>
+			<p class="source-code">cmd := exec.CommandContext(ctx, kubectl, "apply", "-f", config)</p>
+			<p>This creates a command that will run the <strong class="source-inline">kubectl</strong> tool's <strong class="source-inline">apply</strong> function and tell it to apply the configuration at the path stored in the <strong class="source-inline">config</strong> variable.</p>
+			<p>Does this command seem to have a familiar syntax? It should! <strong class="source-inline">kubectl</strong> is written using Cobra from our last chapter!</p>
+			<p>We could execute this command <a id="_idIndexMarker736"/>using several different methods on <strong class="source-inline">cmd</strong>, as follows:</p>
+			<ul>
+				<li><strong class="source-inline">.CombinedOutput()</strong>: Runs the command and returns the combined output of <strong class="source-inline">STDOUT</strong>/<strong class="source-inline">STDERR</strong>.</li>
+				<li><strong class="source-inline">.Output()</strong>: Runs the command and returns the output of <strong class="source-inline">STDOUT</strong>.</li>
+				<li><strong class="source-inline">.Run()</strong>: Runs the program and waits for it to exit. It returns an error on any issues.</li>
+				<li><strong class="source-inline">.Start()</strong>: Runs the command but doesn't block. Used when you want to interact with the command as it runs.</li>
+			</ul>
+			<p><strong class="source-inline">.CombinedOuput()</strong> and <strong class="source-inline">.Output()</strong> are the most common ways to start a program. The output that a user sees in the terminal can often be both from <strong class="source-inline">STDOUT</strong> and <strong class="source-inline">STDERR</strong>. Choosing which one of these to use depends on how you want to respond to the program's output.</p>
+			<p><strong class="source-inline">.Run()</strong> is used when you only need to know the exit status and do not require any of the output.</p>
+			<p>There are two main reasons to use <strong class="source-inline">.Start()</strong>, as outlined here:</p>
+			<ul>
+				<li>There is a need to respond on <strong class="source-inline">STDIN</strong> to output on <strong class="source-inline">STDOUT</strong>.</li>
+				<li>The program execution takes a while, and you want to output its content to your screen, instead of waiting for the program to complete.</li>
+			</ul>
+			<p>If you need to respond on <strong class="source-inline">STDIN</strong> to a program's output, using Google's <strong class="source-inline">goexpect </strong>package (<a href="https://github.com/google/goexpect">https://github.com/google/goexpect</a>) or Netflix's <strong class="source-inline">go-expect</strong> package (<a href="https://github.com/Netflix/go-expect">https://github.com/Netflix/go-expect</a>) is probably a better choice. These packages continue the proud tradition of porting the abilities of the <strong class="bold">Tool Command Language</strong> (<strong class="bold">TCL</strong>) Expect <a id="_idIndexMarker737"/>extension (<a href="https://en.wikipedia.org/wiki/Expect">https://en.wikipedia.org/wiki/Expect</a>) to other languages.</p>
+			<p>Let's write a simple program that tests our ability to log in to hosts on a subnet. We will use the <strong class="source-inline">ping</strong> utility and the <strong class="source-inline">ssh</strong> client programs to test connectivity. We will be relying on your host to<a id="_idIndexMarker738"/> recognize your SSH key (we are not using password authentication here, as that is more complicated). Finally, we will use <strong class="source-inline">uname</strong> on the remote machine to determine the OS. The code is illustrated in the following snippet:</p>
+			<p class="source-code">func hostAlive(ctx context.Context, host net.IP) bool {</p>
+			<p class="source-code">        cmd := exec.CommandContext(ctx, ping, "-c", "1", "-t", "2", host.String())</p>
+			<p class="source-code">        if err := cmd.Run(); err != nil {</p>
+			<p class="source-code">            return false</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        return true</p>
+			<p class="source-code">}</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout"><strong class="source-inline">uname</strong> is a program found on Unix-like systems that will display information about the current OS and the hardware it runs on. Only Linux and Darwin machines are likely to have <strong class="source-inline">uname</strong>. As SSH is just a connection protocol, we may just get an error. Also, a given Linux distribution might not have <strong class="source-inline">uname</strong> installed. There can be subtle differences between versions of common utilities on similar platforms. Linux <strong class="source-inline">ping</strong> and OS X <strong class="source-inline">ping</strong> utilities share some flags, but also have different flags. Windows often has completely different utilities for accomplishing the same tasks. If you are trying to support all platforms with a tool that uses <strong class="source-inline">exec</strong>, you will <a id="_idIndexMarker739"/>need either build constraints (<a href="https://pkg.go.dev/cmd/go#hdr-Build_constraints">https://pkg.go.dev/cmd/go#hdr-Build_constraints</a>) or to use the <strong class="source-inline">runtime</strong> package to run different utilities on different platforms.</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Creates a <strong class="source-inline">*Cmd</strong> that pings a host<ul><li><strong class="source-inline">-c 1</strong> sends a single <strong class="bold">Internet Control Message Protocol</strong> (<strong class="bold">ICMP</strong>) packet.</li><li><strong class="source-inline">-t 2</strong> causes a timeout after 2 seconds.</li></ul></li>
+				<li>Runs the command<ul><li>If there is an error, the ping was unsuccessful.</li><li>Otherwise, the host responded to the ping.</li></ul></li>
+			</ul>
+			<p>Let's now use the <strong class="source-inline">ssh</strong> utility to <a id="_idIndexMarker740"/>send a command to be run on the remote machine, as follows:</p>
+			<p class="source-code">func runUname(ctx context.Context, host net.IP, user string) </p>
+			<p class="source-code">(string, error) {</p>
+			<p class="source-code">        if _, ok := ctx.Deadline(); !ok {</p>
+			<p class="source-code">                var cancel context.CancelFunc</p>
+			<p class="source-code">                ctx, cancel = context.WithTimeout(ctx, 5*time.Second)</p>
+			<p class="source-code">                defer cancel()</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        login := fmt.Sprintf("%s@%s", user, host)</p>
+			<p class="source-code">        cmd := exec.CommandContext(</p>
+			<p class="source-code">                ctx,</p>
+			<p class="source-code">                ssh,</p>
+			<p class="source-code">                "-o StrictHostKeyChecking=no",</p>
+			<p class="source-code">                "-o BatchMode=yes",</p>
+			<p class="source-code">                login,</p>
+			<p class="source-code">                "uname -a",</p>
+			<p class="source-code">        )</p>
+			<p class="source-code">        out, err := cmd.CombinedOutput()</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">                return "", err</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        return string(out), nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the<a id="_idIndexMarker741"/> following:</p>
+			<ul>
+				<li>Sets a timeout of 5 seconds, if <strong class="source-inline">ctx</strong> has none</li>
+				<li>Creates a <strong class="source-inline">user@host</strong> login line</li>
+				<li>Creates a *<strong class="source-inline">CMD</strong> that issues the command: <strong class="source-inline">ssh user@host</strong> "<strong class="source-inline">uname -a</strong>"<ul><li>The <strong class="source-inline">StrictHostKeyChecking</strong> option automatically adds host keys.</li><li>The <strong class="source-inline">BatchMode</strong> option prevents asking for passwords.</li></ul></li>
+				<li>Runs the command and captures the output from <strong class="source-inline">STDOUT</strong><ul><li>If successful, it runs <strong class="source-inline">uname -a</strong> and returns the output.</li><li>The host must have the user's SSH key for this to work.<ul><li>Password authentication requires either the <strong class="source-inline">sshpass</strong> utility or an Expect package.</li></ul></li></ul></li>
+			</ul>
+			<p>We need a type to store the data we gather. Let's create that, as follows:</p>
+			<p class="source-code">type record struct{</p>
+			<p class="source-code">    Host net.IP</p>
+			<p class="source-code">    Reachable bool</p>
+			<p class="source-code">    LoginSSH bool</p>
+			<p class="source-code">    Uname string</p>
+			<p class="source-code">}</p>
+			<p>Now, we need some code to take a<a id="_idIndexMarker742"/> channel containing <strong class="bold">Internet Protocol</strong> (<strong class="bold">IP</strong>) addresses that need to be scanned. We want to do this in parallel, so we will be using goroutines, as illustrated in the <a id="_idIndexMarker743"/>following code snippet:</p>
+			<p class="source-code">func scanPrefixes(ipCh chan net.IP) chan record {</p>
+			<p class="source-code">        ch := make(chan record, 1)</p>
+			<p class="source-code">        go func() {</p>
+			<p class="source-code">                defer close(ch)</p>
+			<p class="source-code">                limit := make(chan struct{}, 100)</p>
+			<p class="source-code">                wg := sync.WaitGroup{}</p>
+			<p class="source-code">                for ip := range ipCh {</p>
+			<p class="source-code">                        limit &lt;- struct{}{}</p>
+			<p class="source-code">                        wg.Add(1)</p>
+			<p class="source-code">                        go func(ip net.IP) {</p>
+			<p class="source-code">                                defer func() { &lt;-limit }()</p>
+			<p class="source-code">                                defer wg.Done()</p>
+			<p class="source-code">                                ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second))</p>
+			<p class="source-code">                                defer cancel()</p>
+			<p class="source-code">                                rec := record{Host: ip}</p>
+			<p class="source-code">                                if hostAlive(ctx, ip) {</p>
+			<p class="source-code">                                        rec.Reachable = true</p>
+			<p class="source-code">                                }</p>
+			<p class="source-code">                                ch &lt;- rec</p>
+			<p class="source-code">                        }(ip)</p>
+			<p class="source-code">                }</p>
+			<p class="source-code">                wg.Wait()</p>
+			<p class="source-code">        }()</p>
+			<p class="source-code">        return ch</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Takes in a channel of <strong class="source-inline">net.IP</strong></li>
+				<li>Creates a channel to put records on</li>
+				<li>Spins off a goroutine to do all the scanning<ul><li>Defers closure of our output channel</li><li>Loops through all IPs on the incoming channel</li><li>Uses the <strong class="source-inline">limit</strong> channel to limit 100 pings concurrently</li><li>Spins a goroutine for each ping<ul><li>Decrements the limiter when we finish</li><li>Makes a timeout of 2 seconds for our ping</li><li>Calls our <strong class="source-inline">hostAlive()</strong> function</li><li>Outputs the result on our <strong class="source-inline">ch</strong> output channel</li></ul></li><li>Waits for all pings to finish with <strong class="source-inline">WaitGroup</strong></li></ul></li>
+				<li>Returns the channel</li>
+			</ul>
+			<p>We now have a function that <a id="_idIndexMarker744"/>will asynchronously ping hosts in parallel and put the result on a channel.</p>
+			<p>Our <strong class="source-inline">ssh</strong> function has a similar function signature to <strong class="source-inline">scanPrefixes</strong>, as we can see here:</p>
+			<p class="source-code">func unamePrefixes(user string, recs chan record) chan record</p>
+			<p>For brevity, we are not going to include the code here, but you can see it in the repository linked at the end of the exercise.</p>
+			<p>These are the big differences between <strong class="source-inline">scanPrefixes()</strong> and <strong class="source-inline">unamePrefixes()</strong>:</p>
+			<ul>
+				<li>We receive a channel of <strong class="source-inline">record</strong>, the output of <strong class="source-inline">scanPrefixes()</strong>.</li>
+				<li>If <strong class="source-inline">rec.Reachable</strong> is <strong class="source-inline">false</strong>, we simply put <strong class="source-inline">rec</strong> on the output channel without adding OS information to the fields.</li>
+				<li>Otherwise, we call <strong class="source-inline">runUname()</strong> instead of <strong class="source-inline">hostAlive()</strong>.</li>
+			</ul>
+			<p>Now, let's set up<a id="_idIndexMarker745"/> our <strong class="source-inline">main()</strong> function, as follows:</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">    _, err := exec.LookPath(ping)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        log.Fatal("cannot find ping in our PATH")</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    _, err := exec.LookPath(ssh)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        log.Fatal("cannot find ssh in our PATH")</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if len(os.Args) != 2 {</p>
+			<p class="source-code">        log.Fatal("error: only one argument allowed, the network CIDR to scan")</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    ipCh, err := hosts(os.Args[1])</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">            log.Fatalf("error: CIDR address did not parse: %s", err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    u, err := user.Current()</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        log.Fatal(err)</p>
+			<p class="source-code">    }</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Checks that our binaries exist in the path</li>
+				<li>Checks we have the correct number of arguments, which is <strong class="source-inline">1</strong><ul><li>We check that <strong class="source-inline">len(os.Args) == 2</strong> because the first argument is the binary name.</li></ul></li>
+				<li>Retrieves a channel of IPs in the network passed in the argument<ul><li>The implementation of the <strong class="source-inline">hosts()</strong> function is not detailed here, but you will find it in the repository.</li></ul></li>
+				<li>Gets the current user's login name</li>
+			</ul>
+			<p>Now, we need to<a id="_idIndexMarker746"/> scan our prefixes and concurrently process the results by doing a login and retrieving the <strong class="source-inline">uname</strong> output, as follows:</p>
+			<p class="source-code">    scanResults := scanPrefixes(ipCh)</p>
+			<p class="source-code">    unameResults := unamePrefixes(u.Username, scanResults)</p>
+			<p class="source-code">    for rec := range unameResults {</p>
+			<p class="source-code">        b, _ := json.Marshal(rec)</p>
+			<p class="source-code">        fmt.Printf("%s\n", b)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Sends <strong class="source-inline">scanPrefixes()</strong> a channel of IPs</li>
+				<li>Receives the results on <strong class="source-inline">scanResults</strong></li>
+				<li>Sends the channel of results to <strong class="source-inline">unamePrefixes()</strong></li>
+				<li>Prints<a id="_idIndexMarker747"/> the <strong class="bold">JavaScript Object Notation</strong> (<strong class="bold">JSON</strong>) results to <strong class="source-inline">STDOUT</strong></li>
+			</ul>
+			<p>The key to this code is the channel read in the <strong class="source-inline">for range</strong> loops in <strong class="source-inline">scanPrefixes()</strong> and <strong class="source-inline">unamePrefixes()</strong>. When all IPs have been sent, <strong class="source-inline">ipCh</strong> will be closed. That will stop our <strong class="source-inline">for range</strong> loop in <strong class="source-inline">scanPrefixes()</strong>, which will cause its output channel to close. That causes <strong class="source-inline">unamePrefixes</strong> to see the closure and close its output channel. This will in turn close our <strong class="source-inline">for rec := range unameResults</strong> loop and stop printing.</p>
+			<p>Using this chaining concurrency model, we will be scanning up to 100 IPs while SSHing into a maximum of 100 hosts and printing the results to the screen, all at the same time.</p>
+			<p>We have stored the output of <strong class="source-inline">uname -a</strong> in our <strong class="source-inline">record</strong> variable but in an unparsed format. We could<a id="_idIndexMarker748"/> use a lexer/parser or <strong class="bold">regular expression</strong> (<strong class="bold">regex</strong>) to parse that into a <strong class="source-inline">struct</strong>. If you need to use the output of an executed binary, we recommend finding tools that can output in a structured format such as JSON instead of parsing it yourself.</p>
+			<p>You can see this code at the following link: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/scanner</a></p>
+			<h3>Notes on using the exec package</h3>
+			<p>There are some things you<a id="_idIndexMarker749"/> should look out for when using <strong class="source-inline">exec</strong>. One of the big ones is if the binary being invoked takes control of the terminal. <strong class="source-inline">ssh</strong> does this, for example, to get a password from the user. We suppressed this in our example, but when this happens, it bypasses the normal STDOUT you are reading.</p>
+			<p>This happens when someone uses terminal mode. In those cases, you will want to use <strong class="source-inline">goexpect</strong> or <strong class="source-inline">go-expect</strong> if you must deal with it. Generally, this is something where you want to find alternatives. However, some software and various routing equipment will implement menu-driven systems and use terminal modes that cannot be avoided.</p>
+			<p>In this section, we have talked about automating the command line with the <strong class="source-inline">exec</strong> package. You now have the skills to check for binaries on the system and execute those binaries. You can check the error <a id="_idIndexMarker750"/>condition and retrieve the output.</p>
+			<p>In the next section, we will talk about the basics of SSH in Go. While in this section, we showed how you could use the <strong class="source-inline">ssh</strong> binary, in the next, we will talk about using the <strong class="source-inline">ssh</strong> package to use SSH without the SSH library. This is faster and also provides benefits over calling the binary.</p>
+			<p class="callout-heading">Note </p>
+			<p class="callout">In general, always use a package instead of a binary when available. This keeps system dependencies low and m<a id="_idTextAnchor437"/>akes code more portable.</p>
+			<h1 id="_idParaDest-210"><a id="_idTextAnchor438"/>Using SSH in Go to automate remote changes</h1>
+			<p>SSH is simply a network <a id="_idIndexMarker751"/>protocol that can be used to secure communication between two hosts.</p>
+			<p>While most people think that the <strong class="source-inline">ssh</strong> binary allows you to connect from a terminal on one host to a terminal on another host, that is only one use. SSH can be used to secure connections for <a id="_idIndexMarker752"/>services such as <strong class="bold">Google Remote Procedure Call</strong> (<strong class="bold">gRPC</strong>) or to tunnel graphical interfaces <a id="_idIndexMarker753"/>such as the <strong class="bold">X Window System</strong> (<strong class="bold">X11</strong>).</p>
+			<p>In this section, we will talk about how you can use the <a id="_idIndexMarker754"/>SSH package (<a href="https://pkg.go.dev/golang.org/x/crypto/ssh">https://pkg.go.dev/golang.org/x/crypto/ssh</a>) for c<a id="_idTextAnchor439"/>reating clients and servers.</p>
+			<h2 id="_idParaDest-211"><a id="_idTextAnchor440"/>Connecting to another system</h2>
+			<p>The most basic use of SSH is to<a id="_idIndexMarker755"/> connect to another system and either send a single command or invoke a shell and issue commands. SSH is simply a transport mechanism, so there are many other uses of SSH such as connection tunneling or <a id="_idIndexMarker756"/>wrapping <strong class="bold">remote procedure calls</strong> (<strong class="bold">RPCs</strong>). We will not cover those here, as they are outside the use cases for general DevOps work.</p>
+			<p>As with most connection technologies, the hardest part of connecting to systems with an SSH client is resolving authentication. The most common forms of SSH authentication are outlined here:</p>
+			<ul>
+				<li><strong class="bold">Username/password</strong>: Username/password is the most popular implementation. It's the default <a id="_idIndexMarker757"/>and therefore the one that people tend to use. With network equipment, sometimes this is the only way. With this method, the password database may be on the local system, or the system may pass the password hash to another system to validate.</li>
+				<li><strong class="bold">Public key authentication</strong>: Public key authentication<a id="_idIndexMarker758"/> is where a user creates a public/private key on their machine with an optional passphrase. The server has the public key installed for a user and your SSH client is set up to use the private key.</li>
+				<li><strong class="bold">Challenge-response authentication</strong>: There are <a id="_idIndexMarker759"/>varying types of challenge-response <a id="_idIndexMarker760"/>authentication for SSH. This is commonly used to allow <strong class="bold">two-factor authentication</strong> (<strong class="bold">2FA</strong>) through devices such as Yubikeys.</li>
+			</ul>
+			<p>We will concentrate on using the first<a id="_idIndexMarker761"/> two methods and will assume that the remote end will be using OpenSSH. While installations should move to using 2FA, that setup is beyond what we can cover here.</p>
+			<p>We will be using Go's excellent <a id="_idIndexMarker762"/>SSH package: <a href="http://golang.org/x/crypto/ssh">http://golang.org/x/crypto/ssh</a>.</p>
+			<p>The first thing that will be required is to set up our authentication method. The initial method I will show here is username/password, as follows:</p>
+			<p class="source-code">auth := ssh.Password("password")</p>
+			<p>That was simple enough.</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">If you are writing a command-line application, it is not safe to retrieve a password using flags or arguments. You also do not want to echo a password to the screen. The password needs to come from a file only the current user has access to or by controlling the terminal. The SSH package has a terminal package (<a href="http://golang.org/x/crypto/ssh/terminal">http://golang.org/x/crypto/ssh/terminal</a>) that can help:</p>
+			<p class="callout"><strong class="source-inline">fmt.Printf("SSH Passsword: ")</strong></p>
+			<p class="callout"><strong class="source-inline">password, err := terminal.ReadPassword(int(os.Stdin.Fd()))</strong></p>
+			<p>For the public key, it is only<a id="_idIndexMarker763"/> slightly more complicated, as illustrated here:</p>
+			<p class="source-code">func publicKey(privateKeyFile string) (ssh.AuthMethod, error) {</p>
+			<p class="source-code">    k, err := os.ReadFile(privateKeyFile)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">            return nil, err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    signer, err := ssh.ParsePrivateKey(k)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">            return nil, err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return ssh.PublicKeys(signer), nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Reads our private key file</li>
+				<li>Parses our private key</li>
+				<li>Returns a public key authorization implementation of <strong class="source-inline">ssh.AuthMethod</strong></li>
+			</ul>
+			<p>We can now authorize by <a id="_idIndexMarker764"/>simply providing our private key to our program. Many times your key is not stored locally but in a cloud service, such as Microsoft Azure's Key Vault. In that case, you simply need to change <strong class="source-inline">os.ReadFile()</strong> to use the cloud service.</p>
+			<p>Now that we have our authorization sorted out, let's create an SSH config, as follows:</p>
+			<p class="source-code">config := &amp;ssh.ClientConfig {</p>
+			<p class="source-code">    User: user,</p>
+			<p class="source-code">    Auth: []ssh.AuthMethod{auth},</p>
+			<p class="source-code">    HostKeyCallback: ssh.InsecureIgnoreHostKey(),</p>
+			<p class="source-code">    Timeout: 5 * time.Second,</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Creates a new <strong class="source-inline">*ssh.ClientConfig</strong> config<ul><li>Uses the username is stored in the <strong class="source-inline">user</strong> variable</li><li>Supplies one <strong class="source-inline">AuthMethod</strong>, but you can use multiple <strong class="source-inline">AuthMethod</strong>(s)</li><li>Ignores the host key<ul><li>Sets a dial timeout of 5 seconds</li></ul><p class="callout-heading">Important Note </p><p class="callout">Ignoring a host key with <strong class="source-inline">ssh.InsecureIgnoreHostKey()</strong> is not secure. This can lead to a typo where you are sending information to a system outside your control. That system could be masquerading as one of your systems in the hope of getting you to type something in the terminal, such as a password. When working in a production environment, it is critical not to ignore the host key and store a valid list of host keys that can be checked.</p></li></ul></li>
+			</ul>
+			<p>Let's make a <a id="_idIndexMarker765"/>connection to a host, as follows:</p>
+			<p class="source-code">conn, err := ssh.Dial("tcp", host, config)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">    fmt.Println("Error: could not dial host: ", err)</p>
+			<p class="source-code">    os.Exit(1)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">defer conn.Close()</p>
+			<p>Now that we have established an SSH connection, let's build a function to run a simple command, as follows:</p>
+			<p class="source-code">func combinedOutput(conn *ssh.Client, cmd string) (string, error) {</p>
+			<p class="source-code">    sess, err := conn.NewSession()</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">            return "", err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    defer sess.Close()</p>
+			<p class="source-code">    b, err := sess.Output(cmd)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">            return "", err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return string(b), nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Creates an SSH session<ul><li>One session per command is required</li></ul></li>
+				<li>Runs the command in the session and returns the output<ul><li>This gets the STDOUT and STDERR in a single output</li></ul></li>
+			</ul>
+			<p>This code will let you issue <a id="_idIndexMarker766"/>commands against systems that are using OpenSSH or similar SSH implementations. It is best practice to hold the <strong class="source-inline">conn</strong> object open until you have issued all of the commands for a device.</p>
+			<p>You can see this code here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/remotecmd/remotecmd.go</a></p>
+			<p>This is great for cases when you can simply issue a command to the far end and let it run. But what if the program requires some level of interaction? When interfacing with routing platforms over SSH, you often require more interaction.</p>
+			<p>When that need <a id="_idIndexMarker767"/>arises, Expect libraries are there to help. So, let's have a look <a id="_idTextAnchor441"/>at one of the more popular ones, up next.</p>
+			<h3>Using Expect for complicated interactions</h3>
+			<p><strong class="source-inline">expect</strong> packages<a id="_idIndexMarker768"/> provide the ability to deal with output from a command, such as the following: <strong class="source-inline">would you like to continue[y/n]</strong>.</p>
+			<p>The most popular package for using <strong class="source-inline">expect</strong> comes from Google. You can find it here: <a href="https://github.com/google/goexpect">https://github.com/google/goexpect</a>.</p>
+			<p>Here's an example of an <strong class="source-inline">expect</strong> script to install the original TCL <strong class="source-inline">expect</strong> tools on an Ubuntu host <a id="_idIndexMarker769"/>using the <strong class="bold">Advanced Packaging Tool</strong> (<strong class="bold">APT</strong>) package manager. Note that this is not the best way to do this, but simply gives an uncomplicated example.</p>
+			<p>Let's start by configuring our <strong class="source-inline">expect</strong> client to use the SSH client, as follows:</p>
+			<p class="source-code">config := &amp;ssh.ClientConfig {</p>
+			<p class="source-code">    User:            user,</p>
+			<p class="source-code">    Auth:            []ssh.AuthMethod{auth},</p>
+			<p class="source-code">    HostKeyCallback: ssh.InsecureIgnoreHostKey(),</p>
+			<p class="source-code">}</p>
+			<p class="source-code">conn, err := ssh.Dial("tcp", host, config)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">    return err</p>
+			<p class="source-code">}</p>
+			<p class="source-code">e, _, err := expect.SpawnSSH(conn, 5 * time.Second)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">    return err</p>
+			<p class="source-code">}</p>
+			<p class="source-code">defer e.Close()</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Sets up an <strong class="source-inline">*ssh.ClientConfig</strong> config</li>
+				<li>Uses it to make a connection</li>
+				<li>Passes that connection to an <strong class="source-inline">expect</strong> client</li>
+			</ul>
+			<p>Now we have an <strong class="source-inline">expect</strong> client <a id="_idIndexMarker770"/>logged in via SSH, let's make sure we have a prompt, as follows:</p>
+			<p class="source-code">var (</p>
+			<p class="source-code">    promptRE = regexp.MustCompile(`\$ `)</p>
+			<p class="source-code">    aptCont = regexp.MustCompile(`Do you want to continue\? \[Y/n\] `)</p>
+			<p class="source-code">    aptAtNewest = regexp.MustCompile(`is already the newest`)</p>
+			<p class="source-code">)</p>
+			<p class="source-code">_, _, err = e.Expect(promptRE, 10*time.Second)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">        return fmt.Errorf("did not get shell prompt")</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Compiles a <strong class="source-inline">$</strong> regex to expect our prompt </li>
+				<li>Calls <strong class="source-inline">Expect()</strong> to wait for the prompt for up to 10 seconds</li>
+			</ul>
+			<p>Now, let's send our command to install <strong class="source-inline">expect</strong> via the <strong class="source-inline">apt-get</strong> tool. We will be using <strong class="source-inline">sudo</strong> to issue this command with root <a id="_idIndexMarker771"/>privileges. The code is illustrated in the following snippet:</p>
+			<p class="source-code">if err := e.Send("sudo apt-get install expect\n"); err != nil {</p>
+			<p class="source-code">        return fmt.Errorf("error on send command: %s", err)</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">apt-get</strong> will either prompt us if it is OK to install or tell us it is already installed. Let's handle those two cases, as follows:</p>
+			<p class="source-code">f _, _, ecase, err := e.ExpectSwitchCase(</p>
+			<p class="source-code">    []expect.Caser{</p>
+			<p class="source-code">            &amp;expect.Case{</p>
+			<p class="source-code">                    R: aptCont,</p>
+			<p class="source-code">                    T: expect.OK(),</p>
+			<p class="source-code">            },</p>
+			<p class="source-code">            &amp;expect.Case{</p>
+			<p class="source-code">                    R: aptAtNewest,</p>
+			<p class="source-code">                    T: expect.OK(),</p>
+			<p class="source-code">            },</p>
+			<p class="source-code">    },</p>
+			<p class="source-code">    10*time.Second,</p>
+			<p class="source-code">)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">        return fmt.Errorf("apt-get install did not send what we expected")</p>
+			<p class="source-code">}</p>
+			<p>This code<a id="_idIndexMarker772"/> does the following:</p>
+			<ul>
+				<li>Waits for either of these to be displayed:<ul><li><strong class="source-inline">Do you want to continue\? [Y/n]</strong></li><li><strong class="source-inline">is already the newest</strong></li></ul></li>
+				<li>If neither happens, it gives an error</li>
+				<li><strong class="source-inline">ecase</strong> will contain the <strong class="source-inline">case</strong> type detailing which condition occurred</li>
+			</ul>
+			<p>If we get the continue prompt, we <a id="_idIndexMarker773"/>need to send <strong class="source-inline">Y</strong> to the terminal by executing the following code:</p>
+			<p class="source-code">switch ecase{</p>
+			<p class="source-code">case 0:</p>
+			<p class="source-code">        if err := e.Send("Y\n"); err != nil {</p>
+			<p class="source-code">                return err</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">}</p>
+			<p>Finally, we need to just make sure we received the prompt again by executing the following code:</p>
+			<p class="source-code">_, _, err = e.Expect(promptRE, 10*time.Second)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">        return fmt.Errorf("did not get shell prompt")</p>
+			<p class="source-code">}</p>
+			<p class="source-code">return nil</p>
+			<p>You can see this code with a debug mode here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/ssh/client/expect/expect.go</a></p>
+			<p>This section has shown how you can spawn an<a id="_idIndexMarker774"/> SSH session in pure Go, use it to send commands, and then retrieve the output. Finally, we looked at how you can interact with an application using <strong class="source-inline">goexpect</strong>.</p>
+			<p>Now, we will show how you can use this knowledge to write<a id="_idTextAnchor442"/> tooling that runs commands on multiple systems.</p>
+			<h1 id="_idParaDest-212"><a id="_idTextAnchor443"/>Designing safe, concurrent change automations</h1>
+			<p>So far, we have shown how to execute commands locally or remotely.</p>
+			<p>In the modern day, we often need to run sets of commands across multiple systems to achieve some end state. Depending on<a id="_idIndexMarker775"/> your scale, you may want to run a system such as Ansible or Jenkins to attempt to automate these processes.</p>
+			<p>For some work, it is simpler to use Go directly to execute changes across a set of systems. This allows the DevOps group to simply understand the Go language and a small bit of code versus understanding the complexities of a workflow system such as Ansible, which requires its own skillset, system updates, and so on.</p>
+			<p>In this section, we are going to talk about the components of changing a set of systems, a framework for achieving this, and <a id="_idTextAnchor444"/>an example application to apply a set of changes.</p>
+			<h2 id="_idParaDest-213"><a id="_idTextAnchor445"/>Components of a change</h2>
+			<p>When writing a system that makes a change, there are several types of actions that must be dealt with. In broad terms, I define these as the following:</p>
+			<ul>
+				<li><strong class="bold">Global preconditions</strong>: Global preconditions <a id="_idIndexMarker776"/>are a set of conditions that need to be true to move forward. When doing network automation, this would be things such as the packet loss on the network being under a certain threshold. For devices, this might be that your services are in a green state before proceeding. No one wants to push changes during a problem.</li>
+				<li><strong class="bold">Local preconditions</strong>: Local preconditions are<a id="_idIndexMarker777"/> the state of the individual work unit (say, a server) that needs to be in a certain state to proceed.</li>
+				<li><strong class="bold">Actions</strong>: Actions are operations that <a id="_idIndexMarker778"/>will mutate the state of a work unit.</li>
+				<li><strong class="bold">Action validations</strong>: Checks that are <a id="_idIndexMarker779"/>done to validate an action was successful.</li>
+				<li><strong class="bold">Local postconditions</strong>: Local postconditions are checks that the work unit is both in the configuration state you want <a id="_idIndexMarker780"/>and meets some state. This might be that it is still reachable, possibly serving traffic or not serving traffic, whatever the end state should be.</li>
+				<li><strong class="bold">Global postconditions</strong>: Global <a id="_idIndexMarker781"/>postconditions are the state of conditions after execution, usually similar to global preconditions.</li>
+			</ul>
+			<p>Not every set of changes on multiple systems requires all these, but they will at least need a subset of them.</p>
+			<p>Let's take a look at doing a rollout of jobs on a <a id="_idIndexMarker782"/>set of <strong class="bold">virtual machines</strong> (<strong class="bold">VMs</strong>) in a single data center. For small shops that have a limited number of machines, a setup such as this can be sufficient when you aren't large enough to use something such as Kubernetes but can't fit in the limitations of services such as Azure Functions or <a id="_idIndexMarker783"/>Amazon's <strong class="bold">Elastic Container Service</strong> (<strong class="bold">ECS</strong>). Or, it could be that you are <a id="_idTextAnchor446"/>running on your own machines and not in a cloud provider.</p>
+			<h2 id="_idParaDest-214"><a id="_idTextAnchor447"/>Writing a concurrent job</h2>
+			<p>Let's tackle the actions we<a id="_idIndexMarker784"/> want to perform. We want to do the following:</p>
+			<ul>
+				<li>Remove our job from a load balancer</li>
+				<li>Kill the job on the VM or server</li>
+				<li>Copy our new software to the server</li>
+				<li>Start our service</li>
+				<li>Check the service is reachable</li>
+				<li>Add the job back to the load balancer</li>
+			</ul>
+			<p>In essence, this is what Kubernetes does for large-scale installations of microservices. We will be talking about this in an upcoming chapter. But at a small scale, it is seldom the best choice to take on the complexity of running a Kubernetes cluster, even when the infrastructure is managed by a cloud provider.</p>
+			<p>Let's define the overall structure of the<a id="_idIndexMarker785"/> code that executes our actions, as follows:</p>
+			<p class="source-code">type stateFn func(ctx context.Context) (stateFn, error)</p>
+			<p class="source-code">type actions struct {</p>
+			<p class="source-code">    ... // Some set of attributes</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *actions) run(ctx context.Context) (err error) {</p>
+			<p class="source-code">    fn := s.rmBackend</p>
+			<p class="source-code">    if s.failedState != nil {</p>
+			<p class="source-code">        fn = s.failedState</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    s.started = true</p>
+			<p class="source-code">    for {</p>
+			<p class="source-code">        if ctx.Err() != nil {</p>
+			<p class="source-code">            s.err = ctx.Err()</p>
+			<p class="source-code">            return ctx.Err()</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        fn, err = fn(ctx)</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">            s.failedState = fn</p>
+			<p class="source-code">            s.err = err</p>
+			<p class="source-code">            return err</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        if fn == nil {</p>
+			<p class="source-code">            return nil</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (a *actions) rmBackend(ctx context.Context) (stateFn, error) {...}</p>
+			<p class="source-code">func (a *actions) jobKill(ctx context.Context) (stateFn, error) {...}</p>
+			<p class="source-code">func (a *actions) cp(ctx context.Context) (stateFn, error) {...}</p>
+			<p class="source-code">func (a *actions) jobStart(ctx context.Context) (stateFn, error) {...}</p>
+			<p class="source-code">func (a *actions) reachable(ctx context.Context) (stateFn, error) {...}</p>
+			<p class="source-code">func (a *actions) addBackend(ctx context.Context) (stateFn, error) {...}</p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">Much of this is just a skeleton—we will implement these methods in a moment.</p>
+			<p>This code does the<a id="_idIndexMarker786"/> following:</p>
+			<ul>
+				<li>Defines a <strong class="source-inline">stateFn</strong> type<ul><li>If it returns an error, stop processing.</li><li>If it doesn't and returns a non-nil <strong class="source-inline">stateFn</strong> type, execute it.</li><li>If it returns a nil <strong class="source-inline">stateFn</strong> type and no error, we are done.</li></ul></li>
+				<li>Defines an <strong class="source-inline">actions</strong> type<ul><li>This is a state machine for actions on a server</li><li>Calling <strong class="source-inline">run()</strong> does the following:<ul><li>Executes one <strong class="source-inline">stateFn</strong> type at a time until an error or <strong class="source-inline">stateFn == nil</strong></li></ul></li><li><strong class="source-inline">rmBackend()</strong>, <strong class="source-inline">jobKill()</strong>, <strong class="source-inline">cp()</strong>, and the rest are <strong class="source-inline">stateFn</strong> types we will define.</li><li><strong class="source-inline">.failedState</strong> is there to allow retrying a failed state when using <strong class="source-inline">.run()</strong> more than once.</li></ul></li>
+			</ul>
+			<p>What we have is a simple state<a id="_idIndexMarker787"/> machine that will execute actions. This moves us through all the states that are required to do this type of action on a system.</p>
+			<p>Let's look at what a few of these <strong class="source-inline">stateFn</strong> types would look like when implemented, as follows:</p>
+			<p class="source-code">func (a *actions) rmBackend(ctx context.Context) (stateFn, error) {</p>
+			<p class="source-code">    err := a.lb.RemoveBackend(ctx, a.config.Pattern, a.backend)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        return nil, fmt.Errorf("problem removing backend from pool: %w", err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return a.jobKill, nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Calls a client to our network load balancer to remove our server endpoint</li>
+				<li>If successful, sends back <strong class="source-inline">jobKill</strong> as the next state to execute</li>
+				<li>If not successful, returns our error</li>
+			</ul>
+			<p><strong class="source-inline">s.lb.RemoveBackend()</strong> in the cloud might talk to a <strong class="bold">REST</strong> service that informs it to<a id="_idIndexMarker788"/> remove our service endpoint. Or, in your own data center, it might be a <a id="_idIndexMarker789"/>network load balancer that you log in to via an SSH client and issue commands.</p>
+			<p>Once this completes, it tells <strong class="source-inline">run()</strong> to execute <strong class="source-inline">jobKill()</strong>. Let's explore what that would look like, as follows:</p>
+			<p class="source-code">func (a *actions) jobKill(ctx context.Context) (stateFn, error) {</p>
+			<p class="source-code">    pids, err := a.findPIDs(ctx)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        return nil, fmt.Errorf("problem finding existing PIDs: %w", err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if len(pids) == 0 {</p>
+			<p class="source-code">        return a.cp, nil</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if err := a.killPIDs(ctx, pids, 15); err != nil {</p>
+			<p class="source-code">        return nil, fmt.Errorf("failed to kill existing PIDs: %w", err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if err := a.waitForDeath(ctx, pids, 30*time.Second); err != nil {</p>
+			<p class="source-code">        if err := a.killPIDs(ctx, pids, 9); err != nil {</p>
+			<p class="source-code">            return nil, fmt.Errorf("failed to kill existing PIDs: %w", err)</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        if err := a.waitForDeath(ctx, pids, 10*time.Second); err != nil {</p>
+			<p class="source-code">            return nil, fmt.Errorf("failed to kill existing PIDs after -9: %w", err)</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        return a.cp, nil</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return a.cp, nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Executes <strong class="source-inline">findPIDs()</strong><ul><li>This logs on to a<a id="_idIndexMarker790"/> machine via SSH and runs the <strong class="source-inline">pidof</strong> binary</li></ul></li>
+				<li>Executes <strong class="source-inline">killPIDs()</strong><ul><li>This uses SSH to execute <strong class="source-inline">kill</strong> against our process</li><li>Uses signal 15 or <strong class="source-inline">TERM</strong> as a soft kill</li></ul></li>
+				<li>Executes <strong class="source-inline">waitForDeath()</strong><ul><li>This uses SSH to <a id="_idIndexMarker791"/>wait for the <strong class="bold">process identifiers</strong> (<strong class="bold">PIDs</strong>) to exit</li><li>Waits up to 30 seconds</li><li>If successful, we return our next state, <strong class="source-inline">cp</strong></li><li>If not, execute <strong class="source-inline">killPIDs()</strong>with signal 9 or <strong class="source-inline">KILL</strong> and execute <strong class="source-inline">waitForDeath()</strong> again</li><li>If it fails, it returns an error</li><li>If successful, we return our next state, <strong class="source-inline">cp</strong></li></ul></li>
+			</ul>
+			<p>This code is simply killing our jobs on the server before we copy our new binary and start it.</p>
+			<p>The rest of the code will be in our repository (link provided further on in this section). For now, assume we have written out the rest of these actions for our state machine.</p>
+			<p>We now need something to run<a id="_idIndexMarker792"/> all our actions. We will create a  <strong class="source-inline">workflow</strong> struct with this basic structure:</p>
+			<p class="source-code">type workflow struct {</p>
+			<p class="source-code">    config *config</p>
+			<p class="source-code">    lb     *client.Client</p>
+			<p class="source-code">    failures int32</p>
+			<p class="source-code">    endState endState</p>
+			<p class="source-code">    actions []*actions</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Has <strong class="source-inline">*config</strong> that will detail the settings for our rollout</li>
+				<li>Creates a connection to our load balancer</li>
+				<li>Tracks the number of failures we have had</li>
+				<li>Outputs the final end state, which is <a id="_idIndexMarker793"/>an enumerator in the file</li>
+				<li>Creates a list of all our actions</li>
+			</ul>
+			<p>There are two phases to a typical rollout, as follows:</p>
+			<ul>
+				<li><strong class="bold">Canary</strong>: The canary stage is<a id="_idIndexMarker794"/> where you test a few samples to make sure the rollout is working. You want to do this one sample at a time and wait some amount of time before continuing to the next canary. This allows administrators to have some time to stop potential problems that the rollout hasn't detected.</li>
+				<li><strong class="bold">General</strong>: The general rollout <a id="_idIndexMarker795"/>occurs after the canary stage. This usually sets some amount of concurrency and a maximum number of failures. Depending on the size of your environment, failures may be common due to an ever-changing environment. This may mean you tolerate a certain number of failures and continue to retry those failures until you have success, but if the failures reach some maximum level, you stop.<p class="callout-heading">Note </p><p class="callout">Depending on the environment, you can have more sophisticated staging, but for smaller environments, this usually suffices. When doing concurrent rollouts, failures can exceed your maximum failure setting by large amounts, depending on the setting. If we have a maximum of  failures and our concurrency is set to 5, it is possible to have between 5 and 9 failures happen. Keep this in mind when you deal with concurrent rollouts.</p></li>
+			</ul>
+			<p>The main method on the workflow that <a id="_idIndexMarker796"/>handles the rollouts is called <strong class="source-inline">run()</strong>. Its job is to run our pre-checks, then run our canaries, and finally run the main jobs at some concurrency level. We<a id="_idIndexMarker797"/> should exit if we have too many problems. Let's have a look, as follows:</p>
+			<p class="source-code">func (w *workflow) run(ctx context.Context) error {</p>
+			<p class="source-code">    preCtx, cancel := context.WithTimeout(ctx, 30*time.Second)</p>
+			<p class="source-code">    if err := w.checkLBState(preCtx); err != nil {</p>
+			<p class="source-code">        w.endState = esPreconditionFailure</p>
+			<p class="source-code">        return fmt.Errorf("checkLBState precondition fail: %s", err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    cancel()</p>
+			<p>This part of the code does the following:</p>
+			<ul>
+				<li>Runs our <strong class="source-inline">checkLBState()</strong> precondition code</li>
+				<li>If it fails, records an <strong class="source-inline">esPreconditionFailure</strong> end state<p class="callout-heading">Note</p><p class="callout">You may notice a <strong class="source-inline">cancel()</strong> function that is created when we create a <strong class="source-inline">Context</strong> object with a timeout. This can be used to cancel our <strong class="source-inline">Context</strong> object at any time. It is best practice to cancel a <strong class="source-inline">Context</strong> object that has a timeout immediately after use to exit a Go routine that is running in the background, counting down to the timeout.</p></li>
+			</ul>
+			<p>This is run before we make any changes to the system. We don't want to make changes when things are<a id="_idIndexMarker798"/> already unhealthy.</p>
+			<p>Next, we need to run our canaries, as follows:</p>
+			<p class="source-code">for i := 0; i &lt; len(w.actions) &amp;&amp; </p>
+			<p class="source-code">int32(i) &lt; w.config.CanaryNum; i++ {</p>
+			<p class="source-code">    color.Green("Running canary on: %s", w.actions[i].endpoint)</p>
+			<p class="source-code">    ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)</p>
+			<p class="source-code">    err := w.actions[i].run(ctx)</p>
+			<p class="source-code">    cancel()</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        w.endState = esCanaryFailure</p>
+			<p class="source-code">        return fmt.Errorf("canary failure on endpoint(%s): %w\n", w.actions[i].endpoint, err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    color.Yellow("Sleeping after canary for 1 minutes")</p>
+			<p class="source-code">    time.Sleep(1 * time.Minute)</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Runs some defined number of canaries</li>
+				<li>Runs them one at a time</li>
+				<li>Sleeps for 1 minute in between</li>
+			</ul>
+			<p>These settings would be configurable in the config file that will be defined. The sleep time could be made configurable to what makes sense for the service, to allow you to respond in case of problems that aren't detected in the workflow. You could even define a sleep time between all canaries and general rollout.</p>
+			<p>Now, we need to roll out at some <a id="_idIndexMarker799"/>concurrency level while checking for some maximum number of failures. Let's check that out, as follows:</p>
+			<p class="source-code">limit := make(chan struct{}, w.config.Concurrency)</p>
+			<p class="source-code">wg := sync.WaitGroup{}</p>
+			<p class="source-code">for i := w.config.CanaryNum; int(i) &lt; len(w.actions); i++ {</p>
+			<p class="source-code">    i := i</p>
+			<p class="source-code">    limit &lt;- struct{}{}</p>
+			<p class="source-code">    if atomic.LoadInt32(&amp;w.failures) &gt; w.config.MaxFailures {</p>
+			<p class="source-code">        break</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    wg.Add(1)</p>
+			<p class="source-code">    go func() {</p>
+			<p class="source-code">        defer func(){&lt;-limit}()</p>
+			<p class="source-code">        defer wg.Done()</p>
+			<p class="source-code">        ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)</p>
+			<p class="source-code">        color.Green("Upgrading endpoint: %s", </p>
+			<p class="source-code">w.actions[i]. endpoint)</p>
+			<p class="source-code">        err := w.actions[i].run(ctx)</p>
+			<p class="source-code">        cancel()</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">            color.Red("Endpoint(%s) had upgrade error: %s", w.actions[i].endpoint, err)</p>
+			<p class="source-code">            atomic.AddInt32(&amp;w.failures, 1)</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">    }()</p>
+			<p class="source-code">}</p>
+			<p class="source-code">wg.Wait()</p>
+			<p>This code does<a id="_idIndexMarker800"/> the following:</p>
+			<ul>
+				<li>Spins off goroutines running our actions.</li>
+				<li>Concurrency is limited by our <strong class="source-inline">limit</strong> channel.</li>
+				<li>Failures are limited by our <strong class="source-inline">.failures</strong> attribute check.</li>
+			</ul>
+			<p>This is the first time we have shown the <strong class="source-inline">atomic</strong> package. <strong class="source-inline">atomic</strong> is a sub-package of <strong class="source-inline">sync</strong> that allows us to do thread-safe operations on numbers without using <strong class="source-inline">sync.Mutex</strong>. This is great for<a id="_idIndexMarker801"/> counters as it is <strong class="bold">orders of magnitude</strong> (<strong class="bold">OOM</strong>) faster than <strong class="source-inline">sync.Mutex</strong> for this particular<a id="_idIndexMarker802"/> type of operation.</p>
+			<p>We have now shown the basics of <strong class="source-inline">.run()</strong> for our <strong class="source-inline">workflow</strong> struct. You can find the complete code for this rollout application at <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/rollout</a>.</p>
+			<p>The code for the application simply needs your SSH key, a file describing the rollout, and the binary to roll out to the server. That file would look like this:</p>
+			<p class="source-code">{</p>
+			<p class="source-code">    "Concurrency": 2,</p>
+			<p class="source-code">    "CanaryNum": 1,</p>
+			<p class="source-code">    "MaxFailures": 2,</p>
+			<p class="source-code">    "Src": "/home/[user]/rollout/webserver",</p>
+			<p class="source-code">    "Dst": "/home/[user]/webserver",</p>
+			<p class="source-code">    "LB": "10.0.0.4:8081",</p>
+			<p class="source-code">    "Pattern": "/",</p>
+			<p class="source-code">    "Backends": [</p>
+			<p class="source-code">            "10.0.0.5",</p>
+			<p class="source-code">            "10.0.0.6",</p>
+			<p class="source-code">            "10.0.0.7",</p>
+			<p class="source-code">            "10.0.0.8",</p>
+			<p class="source-code">            "10.0.0.9"</p>
+			<p class="source-code">    ],</p>
+			<p class="source-code">    "BackendUser": "azureuser",</p>
+			<p class="source-code">    "BinaryPort": 8082</p>
+			<p class="source-code">}</p>
+			<p>This describes everything the application needs to do a simple rollout.</p>
+			<p>Of course, we can make this application more general, have it record its running state and final states to storage, add flags to ignore beginning states so that we can do a rollback, put this behind a gRPC service, and so on…</p>
+			<p>In fewer than 1,000 lines of <a id="_idIndexMarker803"/>code, we have a simple alternative to systems such as Kubernetes when they aren't available or your scale doesn't justify them.</p>
+			<p class="callout-heading">Note </p>
+			<p class="callout">This doesn't address the need for binary restarts if your program crashes, such as restarts achieved through software such as <strong class="source-inline">systemd</strong>. In those cases, it may be better to create an agent that run<a id="_idTextAnchor448"/>s on the device and provides RPCs to control local services, such as <strong class="source-inline">systemd</strong>.</p>
+			<h2 id="_idParaDest-215"><a id="_idTextAnchor449"/>Case study – Network rollouts</h2>
+			<p>The principles laid out<a id="_idIndexMarker804"/> here have been the essence of rollouts of network device configuration on Google's B2 backbone for a decade.</p>
+			<p>Prior to this, we simply had scripts that took hand-crafted configuration or generated configurations and applied them to the network while an operator watched the progress and dealt with issues that might arise.</p>
+			<p>At scale, this became an issue. SRE service teams had been moving away from similar models as their complexity tended to grow faster than the networks. </p>
+			<p>Network engineering moved toward a more formalized system to centralize the execution of work on the backbone, giving us a single place to monitor and a central place to stop rollouts in case of emergencies.</p>
+			<p>In addition, there was a need to formalize any set of rollouts so that they were always executed the same way with the same automated checks, instead of relying on humans to do the right things.</p>
+			<p>The orchestration system I led the design and implementation on is simply a more complex and pluggable version of what is presented here. Teams built their actions into the system, and that system executed those actions based on arguments sent to perform some set of jobs.</p>
+			<p>At the time of my departure from Google, using this methodology had led to zero outages from automation (which<a id="_idIndexMarker805"/> is not the same as having zero rollout failures). My understanding is that as I am writing this, your cat videos are still in safe hands on this system.</p>
+			<p>In this section, we have learned about the components of change and what that might look like using Go, and we have written an example rollout application that uses these principles.</p>
+			<p>Next, we will talk about writing a system agent that can be deployed on sys<a id="_idTextAnchor450"/>tems to allow everything from system monitoring to controlling a local rollout.</p>
+			<h1 id="_idParaDest-216"><a id="_idTextAnchor451"/>Writing a system agent</h1>
+			<p>So far, when we have <a id="_idIndexMarker806"/>automated operations on a device, we have either done it from an application that executes locally or through a command we run remotely with SSH.</p>
+			<p>But if we look toward managing a small fleet of machines, it can be more practical to write a service that runs on the device that we connect to via RPCs. Using knowledge of the gRPC services we discussed in previous chapters, we can combine these concepts to allow control of our machines in a more uniform way.</p>
+			<p>Here are a few things we can use <a id="_idIndexMarker807"/>system agents for:</p>
+			<ul>
+				<li>Installing and running services</li>
+				<li>Gathering machine running stats</li>
+				<li>Gathering machine inventory information</li>
+			</ul>
+			<p>Some of these are the kinds of things Kubernetes does with its system agents. Others, such as inventory information, can be vital in running a healthy fleet of machines, often overlooked in smaller settings. Even in a Kubernetes environment, there may be advantages to running your own agent for certain tasks.</p>
+			<p>A system agent can provide several advantages. If we <a id="_idIndexMarker808"/>define one <strong class="bold">application programming interface</strong> (<strong class="bold">API</strong>) using gRPC, we can have multiple OSs with different agents implementing the same RPCs, allowing us to control our fleet in the same uniform way, regardless of the OS. And because Go will pr<a id="_idTextAnchor452"/>etty much run on anything, you can write different agents using the same language.</p>
+			<h2 id="_idParaDest-217"><a id="_idTextAnchor453"/>Designing a system agent</h2>
+			<p>For our example system agent, we<a id="_idIndexMarker809"/> are going to target Linux specifically, but we will make our API generic to allow implementation for other OSs to use the same API. Let's talk about a few things we might be interested in. We could consider the following:</p>
+			<ul>
+				<li>Installing/removing binaries using <strong class="source-inline">systemd</strong></li>
+				<li>Exporting both system and installed binary performance data</li>
+				<li>Allowing the pulling of application logs</li>
+				<li>Containerizing our application</li>
+			</ul>
+			<p>For those of you not familiar with <strong class="source-inline">systemd</strong>, it is a Linux daemon that runs software services in the background. Taking advantage of <strong class="source-inline">systemd</strong> allows us to have automatic restarts of failed applications and automatic log rotation with <strong class="source-inline">journald</strong>. </p>
+			<p>Containerization, for those not<a id="_idIndexMarker810"/> familiar with the concept, executes an application within its own self-contained space with access to only the parts of the OS you want. This is a similar <a id="_idIndexMarker811"/>concept to what is called sandboxing. Containerization has been made popular by software such as Docker and has led to container formats that look like VMs with entire OS images within a container. However, these container formats and tooling are not required to containerize an application on Linux.</p>
+			<p>As we are going to use <strong class="source-inline">systemd</strong> to control our process execution, we will use the <strong class="source-inline">Service</strong> directives of <strong class="source-inline">systemd</strong> to provide containerization. These details can be seen in our repository in the file <a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/8/agent/internal/service/unit_file.go</a></p>
+			<p>For exporting stats, we will use the <strong class="source-inline">expvar</strong> Go standard library package. This package allows us to publish stats on a <strong class="bold">HTTP</strong> page. <strong class="source-inline">expvar</strong> stats are a JSON object with<a id="_idIndexMarker812"/> string keys that map to values representing our stats or information. There are built-in stats automatically provided, along with ones we will define.</p>
+			<p>This allows you to quickly gather stat data using a collector or by simply querying it with a web browser or command-line tool such as <strong class="source-inline">wget</strong>.</p>
+			<p>An example <strong class="source-inline">expvar</strong> page that is output might return the following:</p>
+			<p class="source-code">{</p>
+			<p class="source-code">    "cmdline": ["/tmp/go-build7781/c0021/exe/main"],</p>
+			<p class="source-code">    "cpu": "8",</p>
+			<p class="source-code">    "goroutines": "16",</p>
+			<p class="source-code">}</p>
+			<p>For the book portion of our example, we are going to concentrate on <em class="italic">installing and removing binaries</em> and <em class="italic">exporting system performance data</em> to show how we can use our RPC service for interactive calls and HTTP for read-only information. The version in our repository will implement more features than we can cover in the book.</p>
+			<p>Now that we've talked about what <a id="_idIndexMarker813"/>we want the system agent to do, let's design our proto for our service, as follows:</p>
+			<p class="source-code">syntax = "proto3";</p>
+			<p class="source-code">package system.agent;</p>
+			<p class="source-code">option go_package = "github.com/[repo]/proto/agent";</p>
+			<p class="source-code">message InstallReq {</p>
+			<p class="source-code">    string name = 1;</p>
+			<p class="source-code">    bytes package = 2;</p>
+			<p class="source-code">    string binary = 3;</p>
+			<p class="source-code">    repeated string args = 4;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message InstallResp {}</p>
+			<p class="source-code">message CPUPerfs {</p>
+			<p class="source-code">    int32 resolutionSecs = 1;</p>
+			<p class="source-code">    int64 unix_time_nano = 2;</p>
+			<p class="source-code">    repeated CPUPerf cpu = 3;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message CPUPerf {</p>
+			<p class="source-code">    string id = 1;</p>
+			<p class="source-code">    int32 user = 2;</p>
+			<p class="source-code">    int32 system = 3;</p>
+			<p class="source-code">    int32 idle = 4;</p>
+			<p class="source-code">    int32 io_wait = 5;</p>
+			<p class="source-code">    int32 irq = 6;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message MemPerf {</p>
+			<p class="source-code">    int32 resolutionSecs = 1;</p>
+			<p class="source-code">    int64 unix_time_nano = 2;</p>
+			<p class="source-code">    int32 total = 3;</p>
+			<p class="source-code">    int32 free = 4;</p>
+			<p class="source-code">    int32 avail = 5;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">service Agent {</p>
+			<p class="source-code">   rpc Install(InstallReq) returns (InstallResp) {};</p>
+			<p class="source-code">}</p>
+			<p>We now have a gene<a id="_idTextAnchor454"/>ral framework<a id="_idIndexMarker814"/> for our RPCs, so let's look at implementing a method for our <strong class="source-inline">Install</strong> RPC.</p>
+			<h2 id="_idParaDest-218"><a id="_idTextAnchor455"/>Implementing Install</h2>
+			<p>Implementing<a id="_idIndexMarker815"/> installations on Linux will require a multi-step process. First, we are going to install the package under <strong class="source-inline">sa/packages/[InstallReq.Name]</strong> in the agent's user home directory. <strong class="source-inline">InstallReq.Name</strong> will need to be a single name, containing only letters and numbers. If that name already exists, we will turn down the existing job and install this in its place. <strong class="source-inline">InstallReq.Package</strong> on Linux will be a ZIP file that will be unpacked in that directory.</p>
+			<p><strong class="source-inline">InstallReq.Binary</strong> is the name of the binary in the root directory to execute. <strong class="source-inline">InstallReq.Args</strong> is a list of arguments to pass to the binary.</p>
+			<p>We will be using a third-party package to access <strong class="source-inline">systemd</strong>. You can find the package here: <a href="https://github.com/coreos/go-systemd/tree/main/dbus">https://github.com/coreos/go-systemd/tree/main/dbus</a>.</p>
+			<p>Let's look at the implementation here:</p>
+			<p class="source-code">func (a *Agent) Install(ctx context.Context, req </p>
+			<p class="source-code">*pb.InstallReq) (*pb.InstallResp, error) {</p>
+			<p class="source-code">    if err := req.Validate(); err != nil {</p>
+			<p class="source-code">        return nil, status.Error(codes.InvalidArgument, </p>
+			<p class="source-code">err.Error())</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    a.lock(req.Name)</p>
+			<p class="source-code">    defer a.unlock(req.Name, false)</p>
+			<p class="source-code">    loc, err := a.unpack(req.Name, req.Package)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        return nil, err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if err := a.migrate(req, loc); err != nil {</p>
+			<p class="source-code">        return nil, err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if err := a.startProgram(ctx, req.Name); err != nil {</p>
+			<p class="source-code">        return nil, err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return &amp;pb.InstallResp{}, nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the<a id="_idIndexMarker816"/> following:</p>
+			<ul>
+				<li>Validates our incoming request to ensure it is valid<ul><li>Implementation is in the repository code</li></ul></li>
+				<li>Takes a lock for this specific install name<ul><li>This prevents multiple installs with the same name at the same time</li><li>Implementation is in the repository code</li></ul></li>
+				<li>Unpacks our ZIP file into a temporary directory<ul><li>Returns the location of the temporary directory</li><li>Validates that our <strong class="source-inline">req.Binary</strong> binary exists</li><li>Implementation is in the repository code</li></ul></li>
+				<li>Migrates our temporary directory to our <strong class="source-inline">req.Name</strong> location<ul><li>If a <strong class="source-inline">systemd</strong> unit already exists, it is turned down</li><li>Creates a <strong class="source-inline">systemd</strong> unit file under <strong class="source-inline">/home/[user]/.config/systemd/user/</strong></li><li>If the final path already exists, deletes it</li><li>Moves the temporary directory to the final location</li><li>Implementation is in the repository code</li></ul></li>
+				<li>Starts our binary<ul><li>Makes sure it is up and running for 30 seconds</li></ul></li>
+			</ul>
+			<p>This is a simple example <a id="_idIndexMarker817"/>of the setup for our gRPC service to set up and run a service with <strong class="source-inline">systemd</strong>. We are skipping various implementation details, but you can find them inside the repository listed toward th<a id="_idTextAnchor456"/>e end of the chapter.</p>
+			<p>Now that we have <strong class="source-inline">Install</strong> done, let's work on implementing <strong class="source-inline">SystemPerf</strong>.</p>
+			<h2 id="_idParaDest-219"><a id="_idTextAnchor457"/>Implementing SystemPerf</h2>
+			<p>To gather our<a id="_idIndexMarker818"/> system information, we will be using the <strong class="source-inline">goprocinfo</strong> package, which you can find here: <a href="https://github.com/c9s/goprocinfo/tree/master/linux">https://github.com/c9s/goprocinfo/tree/master/linux</a>.</p>
+			<p>We want this to update us about every 10 seconds, so we will implement our gathering in a loop where all callers read from the same data.</p>
+			<p>Let's start by<a id="_idIndexMarker819"/> collecting our <strong class="bold">central processing unit</strong> (<strong class="bold">CPU</strong>) data for our system, as follows:</p>
+			<p class="source-code">func (a *Agent) collectCPU(resolution int) error {</p>
+			<p class="source-code">    stat, err := linuxproc.ReadStat("/proc/stat")</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">        return err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    v := &amp;pb.CPUPerfs{</p>
+			<p class="source-code">        ResolutionSecs: resolution,</p>
+			<p class="source-code">        UnixTimeNano:   time.Now().UnixNano(),</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    for _, p := range stat.CPUStats {</p>
+			<p class="source-code">        c := &amp;pb.CPUPerf{</p>
+			<p class="source-code">            Id:     p.Id,</p>
+			<p class="source-code">            User:   int32(p.User),</p>
+			<p class="source-code">            System: int32(p.System),</p>
+			<p class="source-code">            Idle:   int32(p.Idle),</p>
+			<p class="source-code">            IoWait: int32(p.IOWait),</p>
+			<p class="source-code">            Irq:    int32(p.IRQ),</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        v.Cpu = append(v.Cpu, c)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    a.cpuData.Store(v)</p>
+			<p class="source-code">    return nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the<a id="_idIndexMarker820"/> following:</p>
+			<ul>
+				<li>Reads our CPU state data</li>
+				<li>Writes it to a protocol buffer</li>
+				<li>Stores the data in <strong class="source-inline">.cpuData</strong></li>
+			</ul>
+			<p><strong class="source-inline">.cpuData</strong> will be of the <strong class="source-inline">atomic.Value</strong> type. This type is useful when you wish to synchronize an entire value, not<a id="_idIndexMarker821"/> mutate the value. Every time we update <strong class="source-inline">a.cpuData</strong>, we put a new value into it. If you store a <strong class="source-inline">struct</strong>, <strong class="source-inline">map</strong>, or <strong class="source-inline">slice</strong> in an <strong class="source-inline">atomic.Value</strong>, you cannot change a key/field—you <em class="italic">MUST</em> make a new copy with all keys/indexes/fields and store it, instead of changing a single key/field.</p>
+			<p>This is much faster for reading than using a mutex when values are small, which is perfect when storing a small set of counters.</p>
+			<p>The <strong class="source-inline">collectMem</strong> memory collector is similar to <strong class="source-inline">collectCPU</strong> and is detailed in the repository code.</p>
+			<p>Let's have a look at the loop that will be<a id="_idIndexMarker822"/> started in our <strong class="source-inline">New()</strong> constructor for gathering perf data, as follows:</p>
+			<p class="source-code">func (a *Agent) perfLoop() error {</p>
+			<p class="source-code">    const resolutionSecs = 10</p>
+			<p class="source-code">    if err := a.collectCPU(resolutionSecs); err != nil {</p>
+			<p class="source-code">        return err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    expvar.Publish(</p>
+			<p class="source-code">        "system-cpu",</p>
+			<p class="source-code">        expvar.Func(</p>
+			<p class="source-code">            func() interface{} {</p>
+			<p class="source-code">                return a.cpuData.Load().(*pb.CPUPerfs)</p>
+			<p class="source-code">            },</p>
+			<p class="source-code">        ),</p>
+			<p class="source-code">    )</p>
+			<p class="source-code">    go func() {</p>
+			<p class="source-code">        for {</p>
+			<p class="source-code">            time.Sleep(resolutionSecs * time.Second)</p>
+			<p class="source-code">            if err := a.collectCPU(resolutionSecs); err != nil {</p>
+			<p class="source-code">                log.Println(err)</p>
+			<p class="source-code">            }</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">    }()</p>
+			<p class="source-code">        return nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the<a id="_idIndexMarker823"/> following:</p>
+			<ul>
+				<li>Collects our initial CPU stats</li>
+				<li>Publishes an <strong class="source-inline">expvar.Var</strong> type for <strong class="source-inline">system-cpu</strong><ul><li>Our variable type is <strong class="source-inline">func() interface{}</strong>, which implements <strong class="source-inline">expvar.Func</strong></li><li>This simply reads our <strong class="source-inline">atomic.Value</strong> set by our <strong class="source-inline">collectCPU()</strong> function<ul><li>A read occurs when someone queries our web page at <strong class="source-inline">/debug/vars</strong></li></ul></li></ul></li>
+				<li>Refreshes our collections every 10 seconds</li>
+			</ul>
+			<p><strong class="source-inline">expvar</strong> defines other simpler<a id="_idIndexMarker824"/> types such as <strong class="source-inline">String</strong>, <strong class="source-inline">Float</strong>, <strong class="source-inline">Map</strong>, and so on. However, I prefer using protocol buffers over <strong class="source-inline">Map</strong> for grouping content in a single, sharable message type that can be used in any language. Because a proto is JSON-serializable, it can be used as the return value for an <strong class="source-inline">expvar.Func</strong> with a little help from the <strong class="source-inline">protojson</strong> package. In the repository, that helper code is in <strong class="source-inline">agent/proto/extra.go</strong>.</p>
+			<p>This code only shares the latest data collection. It is important to not directly read from stat files on each call, as your system can be easily overloaded.</p>
+			<p>When you go to the <strong class="source-inline">/debug/vars</strong> web endpoint, you can now see the following:</p>
+			<p class="source-code">"system-cpu": {"resolutionSecs":10,"unixTimeNano":"1635015190106788056","cpu":[{"id":"cpu0","user":13637,"system":10706,"idle":17557545,"ioWait":6663},{"id":"cpu1","user":12881,"system":22465,"idle":17539705,"ioWait":2997}]},</p>
+			<p class="source-code">"system-mem": {"resolutionSecs":10,"unixTimeNano":"163501519010 6904757","total":8152984,"free":6594776,"avail":7576540}</p>
+			<p>There will be other stats there that are for the system agent itself, which can be useful in debugging the agent. These are automatically exported by <strong class="source-inline">expvar</strong>. By using a collector that connects and reads these stats, it is possible to see trends for these stats over time.</p>
+			<p>We now have an agent that is <a id="_idIndexMarker825"/>getting perf data every 10 seconds, giving us a functioning system agent. It is worth noting that we have shied away from<a id="_idIndexMarker826"/> talking about <strong class="bold">authentication, authorization, and accounting</strong> (<strong class="bold">AAA</strong>) when talking about RPC systems. gRPC has<a id="_idIndexMarker827"/> support for <strong class="bold">Transport Layer Security</strong> (<strong class="bold">TLS</strong>) to both secure the transport and allow for mutual TLS. You can also implement a <a id="_idIndexMarker828"/>user/password, <strong class="bold">Open Authorization</strong> (<strong class="bold">OAuth</strong>), or any other AAA system you are interested in.</p>
+			<p>Web services can implement their own security for things such as <strong class="source-inline">expvar</strong>. <strong class="source-inline">expvar</strong> publishes its stats on <strong class="source-inline">/debug/vars</strong>, and it is a good idea not to expose these to the outside world. Either prevent the export on all load balancers or implement some type of security on the endpoint.</p>
+			<p>You can find the complete code for our system agent here: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/8/agent</a>.</p>
+			<p>In our completed code, we have decided to implement our system agent over SSH. This allows us to use an authorization system we already have with strong transport security. In addition, the gRPC service is exporting services over a private Unix domain socket, so local services that are not <strong class="source-inline">root</strong> cannot access the service.</p>
+			<p>You will also find code that containerizes the applications we install via <strong class="source-inline">systemd</strong> directives. This provides native isolation to help protect the system.</p>
+			<p>In this section, we have learned the possible uses of a system agent, a basic design guide to building one, and finally walked through the implementation of a basic agent on Linux. We also discussed how our gRPC interface is designed to be generic, to allow for the implementation of the agent for other OSs.</p>
+			<p>As part of building the agent, we<a id="_idIndexMarker829"/> have given a brief introduction to exporting variables<a id="_idTextAnchor458"/> with <strong class="source-inline">expvar</strong>. In the next chapter, we will talk about the big brother of <strong class="source-inline">expvar</strong>—the Prometheus package.</p>
+			<h1 id="_idParaDest-220"><a id="_idTextAnchor459"/>Summary</h1>
+			<p>This chapter has been an introduction to automating the command line. We have seen how to use the <strong class="source-inline">exec</strong> package to execute commands locally on a device. This can be useful when needing to string together a set of already made tools. We have shown how you can use the <strong class="source-inline">ssh</strong> package to run commands on remote systems or interact with complicated programs using <strong class="source-inline">ssh</strong> and <strong class="source-inline">goexpect</strong> packages. We tied this together with our Go knowledge from previous chapters to implement a basic workflow application that upgraded binaries on multiple systems concurrently and safely. Finally, in this chapter, we have learned how we can create a system agent that runs on a device to allow us to gather vital data and export it. We also have refined our ability to install programs by using the agent to control <strong class="source-inline">systemd</strong> on Linux devices.</p>
+			<p>This chapter has now given you new skills that will allow you to control local command-line applications, execute remote applications on any number of machines, and deal with interactive applications. You have also gained a basic understanding of building a workflow application, developing RPC services that can control a local machine, and how to export stats using Go's <strong class="source-inline">expvar</strong> package. </p>
+			<p>In our next chapter, we will be talking about how we can observe running software to detect issues before they become a problem and diagnose issues when an incident occurs.</p>
+		</div>
+	</div></body></html>

@@ -1,0 +1,792 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer016">
+			<h1 id="_idParaDest-154"><a id="_idTextAnchor332"/>Chapter 5: Using Common Data Formats</h1>
+			<p>One of the key skills that a DevOps engineer requires is the ability to manipulate data across a variety of storage mediums.</p>
+			<p>In the last chapter, we interacted with the local filesystem to read and stream files. That is foundational for the skills we will be learning in this chapter.</p>
+			<p>This chapter will focus on how to manipulate common data formats that engineers commonly use. These formats are used to configure services, structure log data, and to export metrics, among the many other uses.</p>
+			<p>In this chapter, you will learn how to use <strong class="bold">comma-separated values</strong> (<strong class="bold">CSV</strong>) files to read and store data and encode/decode the popular JSON and YAML formats. You will discover how Go uses <strong class="source-inline">struct</strong> field tags to store metadata about fields. Also, you will learn how to stream these formats efficiently when working with large amounts of data.</p>
+			<p>Unlocking these skills will allow you to engage with services by manipulating configuration files, searching through records that might include logs or metrics, and outputting data into Excel for reporting purposes.</p>
+			<p>In this chapter, we will cover the following topics:</p>
+			<ul>
+				<li>CSV files</li>
+				<li>Popular encoding formats</li>
+			</ul>
+			<p>In the next section, we will dive into the process of utilizing data in one of the oldest formats, CSV. </p>
+			<p>Let's get started!</p>
+			<h1 id="_idParaDest-155"><a id="_idTextAnchor333"/>Technical requirements</h1>
+			<p>The code files for this chapter can be downloaded from <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/5">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/5</a></p>
+			<h1 id="_idParaDest-156"><a id="_idTextAnchor334"/>CSV files</h1>
+			<p>CSV is one of the most<a id="_idIndexMarker436"/> common data sources that a DevOps engineer can encounter.</p>
+			<p>This simple format has long been a mainstay in the corporate world as one of the easiest ways to export data out of a system for manipulation and back into a data store.</p>
+			<p>Many critical systems at large cloud providers, such as Google's GCP and Microsoft's Azure, have critical data sources and systems based on the CSV format. We have seen systems such as network modeling and critical data reporting stored in CSV.</p>
+			<p>Data scientists love CSV for its easy searching and streaming capabilities. The added quality of being able to quickly visualize the data in software has only added to its appeal.</p>
+			<p>And, like many other formats, it is human-readable, which allows the data to be manipulated by hand.</p>
+			<p>In this section, we are going to focus on importing and exporting CSV data using the following:</p>
+			<ul>
+				<li>The <strong class="source-inline">strings</strong> package and the <strong class="source-inline">bytes</strong> package</li>
+				<li>The <strong class="source-inline">encoding/csv</strong> package</li>
+			</ul>
+			<p>Additionally, we are going to look at importing and exporting data to the popular Excel spreadsheet format using <strong class="source-inline">excelize</strong>, which is a popular package for Microsoft Excel.</p>
+			<p>Now, let's discuss how we can use simple string/byte manipulation packages to read/write CSV files.<a id="_idTextAnchor335"/></p>
+			<h2 id="_idParaDest-157"><a id="_idTextAnchor336"/>Basic value separation using the strings package</h2>
+			<p>Go provides several packages<a id="_idIndexMarker437"/> that you will find<a id="_idIndexMarker438"/> useful in the manipulation<a id="_idIndexMarker439"/> of the <strong class="source-inline">string</strong> and <strong class="source-inline">[]byte</strong> types:</p>
+			<ul>
+				<li><strong class="source-inline">strings</strong></li>
+				<li><strong class="source-inline">bytes</strong></li>
+			</ul>
+			<p>These packages offer similar functionality such as the following:</p>
+			<ul>
+				<li>Functions to split data such as <strong class="source-inline">strings.Split()</strong></li>
+				<li>Functions to merge data with separators such as <strong class="source-inline">strings.Join()</strong></li>
+				<li>Buffer types that implement the <strong class="source-inline">io</strong> package's interfaces, such as <strong class="source-inline">bytes.Buffer</strong> and <strong class="source-inline">strings.Builder</strong></li>
+			</ul>
+			<p>When dealing with CSV files, a developer either<a id="_idIndexMarker440"/> streams the data<a id="_idIndexMarker441"/> or reads the whole<a id="_idIndexMarker442"/> file.</p>
+			<p>Many developers prefer to read an entire file into memory and convert it from a <strong class="source-inline">[]byte</strong> type into a <strong class="source-inline">string</strong> type. Strings are easier for developers to understand the join and split rules. </p>
+			<p>However, this causes a copy to be created during conversion, which can be inefficient because you have to double the amount of memory used and dedicate some CPU to doing the copy. When that is a problem, developers reach for the <strong class="source-inline">bytes</strong> and <strong class="source-inline">bufio</strong> packages. These are slightly more difficult to use, but they prevent any unnecessary conversion cost.</p>
+			<p>Let's look at how we can read an entire file and covert the entries into a structured r<a id="_idTextAnchor337"/>ecord.</p>
+			<h3>Conversion after reading the whole file</h3>
+			<p>When doing basic CSV <a id="_idIndexMarker443"/>manipulation, sometimes, it is easier to simply split data using a carriage return and then split the line based on a comma or other separator. Let's say we have a CSV file representing first and last names and break that CSV file into records:</p>
+			<p class="source-code">type record []string</p>
+			<p class="source-code">func (r record) validate() error {</p>
+			<p class="source-code">     if len(r) != 2 {</p>
+			<p class="source-code">          return errors.New("data format is incorrect")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (r record) first() string {</p>
+			<p class="source-code">     return r[0]</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (r record) last() string {</p>
+			<p class="source-code">     return r[1]</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func readRecs() ([]record, error) {</p>
+			<p class="source-code">     b, err := os.ReadFile("data.csv")</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return nil, err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     content := string(b)</p>
+			<p class="source-code">     lines := strings.Split(content, "\n") // Split by line</p>
+			<p class="source-code">     var records []record</p>
+			<p class="source-code">     for i, line := range lines {</p>
+			<p class="source-code">          // Skip empty lines</p>
+			<p class="source-code">          if strings.Trimspace(line) == "" {</p>
+			<p class="source-code">               continue</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          var rec record = strings.Split(line, ",")  </p>
+			<p class="source-code">          if err := rec.validate(); err != nil {</p>
+			<p class="source-code">               return nil, fmt.Errorf("entry at line %d was invalid: %w", i, err)</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          records = append(records, rec)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return records, nil</p>
+			<p class="source-code">}</p>
+			<p>The preceding<a id="_idIndexMarker444"/> code does the following:</p>
+			<ol>
+				<li>It defines a <strong class="source-inline">record</strong> type based on a slice of strings, <strong class="source-inline">[]string</strong>.</li>
+				<li>We can check whether a <strong class="source-inline">record</strong> type was valid by calling its <strong class="source-inline">validate()</strong> method.</li>
+				<li>The record's first name can be retrieved using <strong class="source-inline">first()</strong>.</li>
+				<li>The record's last name can be retrieved using <strong class="source-inline">last()</strong>.</li>
+				<li>It defines a <strong class="source-inline">readRecs()</strong> function to read a file, called <strong class="source-inline">data.csv</strong>.</li>
+				<li>It reads the entire file into memory and converts it into a string called <strong class="source-inline">content</strong>.</li>
+				<li><strong class="source-inline">content</strong> is split by the new line character, <strong class="source-inline">\n</strong>, with each entry representing a line.</li>
+				<li>It loops through the lines, splitting each line with a comma, <strong class="source-inline">,</strong>.</li>
+				<li>It assigns each return from <strong class="source-inline">Split</strong>, which is a <strong class="source-inline">[]string</strong> type to a <strong class="source-inline">record</strong> type.</li>
+				<li>It compiles all records to a slice of records, <strong class="source-inline">[]record</strong>.</li>
+			</ol>
+			<p>You can view this code in action at <a href="https://play.golang.org/p/CVgQZzScO8Z">https://play.golang.org/p/CVgQ<span id="_idTextAnchor338"/>ZzScO8Z</a>.</p>
+			<h3>Converting line by line</h3>
+			<p>If the file is large <a id="_idIndexMarker445"/>and we want to be efficient, we can use the <strong class="source-inline">bufio</strong> and <strong class="source-inline">bytes</strong> packages:</p>
+			<p class="source-code">func readRecs() ([]record, error) { </p>
+			<p class="source-code">    file, err := os.Open("data.csv") </p>
+			<p class="source-code">    if err != nil { </p>
+			<p class="source-code">        return nil, err </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    defer file.Close() </p>
+			<p class="source-code">    scanner := bufio.NewScanner(fakeFile) </p>
+			<p class="source-code">    var records []record </p>
+			<p class="source-code">    lineNum := 0 </p>
+			<p class="source-code">    for scanner.Scan() { </p>
+			<p class="source-code">        line := scanner.Text() </p>
+			<p class="source-code">        if strings.TrimSpace(line) == "" { </p>
+			<p class="source-code">            continue </p>
+			<p class="source-code">        } </p>
+			<p class="source-code">        var rec record = strings.Split(line, ",") </p>
+			<p class="source-code">        if err := rec.validate(); err != nil { </p>
+			<p class="source-code">            return nil, fmt.Errorf("entry at line %d was invalid: %w", lineNum, err) </p>
+			<p class="source-code">        } </p>
+			<p class="source-code">        records = append(records, rec) </p>
+			<p class="source-code">        lineNum++ </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">return records, scanner.Err()</p>
+			<p class="source-code">}</p>
+			<p>This differs from the previous code in that the following occurs:</p>
+			<ul>
+				<li>We read each line, one by one, using <strong class="source-inline">bufio.Scanner</strong> instead of the entire file.</li>
+				<li><strong class="source-inline">scanner.Scan()</strong> reads the next set of content until it sees <strong class="source-inline">\n</strong>.</li>
+				<li>That content can be retrieved using <strong class="source-inline">scanner.Text()</strong>.</li>
+			</ul>
+			<p>You can view this code in action at <a href="https://play.golang.org/p/2JPaNTchaKV">https://play.golang.org/p/2JPaNTchaKV</a>. </p>
+			<p>With this version, we are still doing a <strong class="source-inline">[]byte</strong> conversion<a id="_idIndexMarker446"/> on each line into a <strong class="source-inline">string</strong> type. If you are interested in a version that does not do this, please refer to <a href="https://play.golang.org/p/RwsTHzM2dPC">https://play.golang.org/p/RwsTHzM2dPC</a>.</p>
+			<h3>Writing records </h3>
+			<p>Writing records<a id="_idIndexMarker447"/> to CSV is fairly simple using the methods that we played with earlier. If after reading our records, we wanted to sort them and write them back to a file, we could accomplish this with the following code:</p>
+			<p class="source-code">func writeRecs(recs []record) error {</p>
+			<p class="source-code">     file, err := os.OpenFile("data-sorted.csv", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     defer file.Close()</p>
+			<p class="source-code">     // Sort by last name</p>
+			<p class="source-code">     sort.Slice(</p>
+			<p class="source-code">           recs, </p>
+			<p class="source-code">           func(i, j int) bool { </p>
+			<p class="source-code">               return recs[i].last() &lt; recs[j].last()</p>
+			<p class="source-code">           },</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     for _, rec := range recs {</p>
+			<p class="source-code">          _, err := file.Write(rec.csv())</p>
+			<p class="source-code">          if err != nil {</p>
+			<p class="source-code">               return err</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>We can also modify the <strong class="source-inline">record</strong> type to have<a id="_idIndexMarker448"/> this new method:</p>
+			<p class="source-code">// csv outputs the data in CSV format.</p>
+			<p class="source-code">func (r record) csv() []byte {</p>
+			<p class="source-code">     b := bytes.Buffer{}</p>
+			<p class="source-code">     for _, field := range r {</p>
+			<p class="source-code">          b.WriteString(field + ",")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     b.WriteString("\n")</p>
+			<p class="source-code">     return b.Bytes()</p>
+			<p class="source-code">}</p>
+			<p>You can see this running at <a href="https://play.golang.org/p/qBCDAsOSgS6">https://play.golang.org/p/qBCDAsOSgS6</a>.</p>
+			<p>The <strong class="source-inline">writeRecs()</strong> function does the following: </p>
+			<ul>
+				<li>It opens <strong class="source-inline">data-sorted.csv</strong> for writing.</li>
+				<li>It sorts the records using <strong class="source-inline">sort.Slice()</strong> from the <strong class="source-inline">sort</strong> package.</li>
+				<li>It loops over the records and writes out the CSV file, as generated by the new <strong class="source-inline">csv()</strong> method.</li>
+			</ul>
+			<p>The <strong class="source-inline">csv()</strong> method does the following:</p>
+			<ul>
+				<li>It creates a <strong class="source-inline">bytes.Buffer</strong> interface, which acts similar to an in-memory file.</li>
+				<li>It loops through each field in the record and writes the field value followed by a comma.</li>
+				<li>It writes a carriage return after the content on the CSV line.</li>
+				<li>It returns<a id="_idIndexMarker449"/> the buffer as a <strong class="source-inline">[]bytes</strong> type that now represents a<a id="_idTextAnchor339"/> single line.</li>
+			</ul>
+			<h2 id="_idParaDest-158"><a id="_idTextAnchor340"/>Using the encoding/csv package</h2>
+			<p>To handle CSV encodings<a id="_idIndexMarker450"/> that conform to<a id="_idIndexMarker451"/> the RFC 4180 standard, <a href="https://www.rfc-editor.org/rfc/rfc4180.html">https://www.rfc-editor.org/rfc/rfc4180.html</a>, the standard library<a id="_idIndexMarker452"/> provides the <strong class="source-inline">encoding/csv</strong> package.</p>
+			<p>Developers should opt to use this package for CSV handling when the CSV conforms to this specification.</p>
+			<p>This package provides two types for handling CSVs:</p>
+			<ul>
+				<li><strong class="source-inline">Reader</strong> for reading in CSVs</li>
+				<li><strong class="source-inline">Writer</strong> for writing CSVs</li>
+			</ul>
+			<p>In this section, we will tackle the same problem as before, but we will utilize the <strong class="source-inline">Reader</strong> a<a id="_idTextAnchor341"/>nd <strong class="source-inline">Writer</strong> types.</p>
+			<h3>Reading line by line</h3>
+			<p>In the same way as before, we want<a id="_idIndexMarker453"/> to read each CSV entry from the file one at a time and process it to a <strong class="source-inline">record</strong> type:</p>
+			<p class="source-code">func readRecs() ([]record, error) { </p>
+			<p class="source-code">    file, err := os.Open("data.csv") </p>
+			<p class="source-code">    if err != nil { </p>
+			<p class="source-code">        return nil, err </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    defer file.Close() </p>
+			<p class="source-code">    reader := csv.NewReader(file) </p>
+			<p class="source-code">    reader.FieldsPerRecord = 2 </p>
+			<p class="source-code">    reader.TrimLeadingSpace = true </p>
+			<p class="source-code">    var recs []record </p>
+			<p class="source-code">    for { </p>
+			<p class="source-code">        data, err := reader.Read() </p>
+			<p class="source-code">        if err != nil { </p>
+			<p class="source-code">            if err == io.EOF{ </p>
+			<p class="source-code">                break </p>
+			<p class="source-code">            } </p>
+			<p class="source-code">            return nil, err </p>
+			<p class="source-code">        } </p>
+			<p class="source-code">        rec := record(data) </p>
+			<p class="source-code">        recs = append(recs, rec) </p>
+			<p class="source-code">    } </p>
+			<p class="source-code">    return recs, nil </p>
+			<p class="source-code">}</p>
+			<p>You can view this code in action at <a href="https://go.dev/play/p/Sf6A1AbbQAq">https://go.dev/play/p/Sf6A1AbbQAq</a>.</p>
+			<p>This function utilizes our reader to perform the following:</p>
+			<ul>
+				<li>Pass the file to our <strong class="source-inline">NewReader()</strong>constructor.</li>
+				<li>Set the reader to require two fields per record.</li>
+				<li>Remove any leading space in a line.</li>
+				<li>Read each record and store it in a <strong class="source-inline">[]record</strong> slice.</li>
+			</ul>
+			<p>The <strong class="source-inline">Reader</strong> type has<a id="_idIndexMarker454"/> other fields that can change how data is read in. For more information, please refer to <a href="https://pkg.go.dev/encoding/csv">https://pkg.go.dev/encoding/csv</a>.</p>
+			<p>In addition, <strong class="source-inline">Reader</strong> provides a <strong class="source-inline">ReadAll()</strong>method that reads all of the records<a id="_idTextAnchor342"/> in a single call.</p>
+			<h3>Writing line by line</h3>
+			<p>The companion of the CSV <strong class="source-inline">Reader</strong> type , <strong class="source-inline">Writer</strong>, makes it simple to write to a file. Let's replace<a id="_idIndexMarker455"/> the writing part of our previous <strong class="source-inline">writeRecs()</strong>function:</p>
+			<p class="source-code">w := csv.NewWriter(file) </p>
+			<p class="source-code">defer w.Flush() </p>
+			<p class="source-code">for _, rec := range recs {</p>
+			<p class="source-code">     if err := w.Write(rec); err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p class="source-code">return nil</p>
+			<p>Here is the runnable code: <a href="https://play.golang.org/p/7-dLDzI4b3M">https://play.golang.org/p/7-dLDzI4b3M</a></p>
+			<p>The preceding code does the following:</p>
+			<ul>
+				<li>It spawns a new <strong class="source-inline">Writer</strong> type that writes to our file.</li>
+				<li>It flushes our content to the file on function exit.</li>
+				<li>It writes<a id="_idIndexMarker456"/> each record out as a CSV<a id="_idTextAnchor343"/> file, one per line.</li>
+			</ul>
+			<h2 id="_idParaDest-159"><a id="_idTextAnchor344"/>Using excelize when dealing with Excel</h2>
+			<p>Microsoft's Excel has been a popular tool for visualizing data since the 1980s. While the power of the program<a id="_idIndexMarker457"/> has grown, its simplicity has helped<a id="_idIndexMarker458"/> to make spreadsheets a common tool in most businesses.</p>
+			<p>While Excel is not CSV, it can import and export data in CSV. For basic usage, you can use the <strong class="source-inline">encoding/csv</strong> package detailed earlier in this chapter.</p>
+			<p>However, if your organization uses Excel, it can be more helpful to use its native format to write the data and supply visual representations of the data. <strong class="source-inline">excelize</strong> is a third-party Go package that can help you do that.</p>
+			<p>The package can be found at <a href="https://github.com/qax-os/excelize/tree/v2">https://github.com/qax-os/excelize/tree/v2</a>. Additionally, the official documentation<a id="_idIndexMarker459"/> can be found at <a href="https://xuri.me/excelize/">https://xuri.me/excelize/</a>.</p>
+			<p>There is also an online version of Excel that is part of Microsoft's Office 365. You can manipulate spreadsheets directly there; however, I find it easier to manipulate the spreadsheet offline and then import it. </p>
+			<p>If you are interested<a id="_idIndexMarker460"/> in the REST API, you can read about it at <a href="https://docs.microsoft.com/en-us/sharepoint/dev/general-development/excel-services-rest-api">https://docs.microsoft.com/en-us/sharepoint/dev/general-development/excel-services-rest-api</a>.</p>
+			<h3>Creating a .xlsx file and adding some data</h3>
+			<p>Excel has a few<a id="_idIndexMarker461"/> characteristics<a id="_idIndexMarker462"/> that are helpful <a id="_idIndexMarker463"/>to understand:</p>
+			<ul>
+				<li>An Excel file has the <strong class="source-inline">.xlsx</strong> extension.</li>
+				<li>Each <strong class="source-inline">.xlsx</strong> file contains <strong class="bold">sheets</strong>. </li>
+				<li>Each sheet includes a set of rows and columns.</li>
+				<li>A <strong class="source-inline">.xlsx</strong> file has a default sheet, called <strong class="bold">Sheet1</strong>. </li>
+				<li>The intersection<a id="_idIndexMarker464"/> of a row and column is called a <strong class="bold">cell</strong>. </li>
+				<li>Columns start with the letter A. </li>
+				<li>Rows start with the number 1. </li>
+			</ul>
+			<p>We are going to add<a id="_idIndexMarker465"/> some data that represents server data for a fictional fleet <a id="_idIndexMarker466"/>of devices. This includes<a id="_idIndexMarker467"/> the name of the server, the hardware generation, when it was acquired, and the CPU vendor:</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">    const sheet = "Sheet1"</p>
+			<p class="source-code">    xlsx := excelize.NewFile()    </p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "A1", "Server Name")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "B1", "Generation")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "C1", "Acquisition Date")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "D1", "CPU Vendor")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "A2", "svlaa01")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "B2", 12)</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "C2", mustParse("10/27/2021"))</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "D2", "Intel")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "A3", "svlac14")</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "B3", 13)</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "C3", mustParse("12/13/2021"))</p>
+			<p class="source-code">    xlsx.SetCellValue(sheet, "D3", "AMD")</p>
+			<p class="source-code">    if err := xlsx.SaveAs("./Book1.xlsx"); err != nil {</p>
+			<p class="source-code">        panic(err)</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">}</p>
+			<p>The preceding<a id="_idIndexMarker468"/> code does the<a id="_idIndexMarker469"/> following:</p>
+			<ul>
+				<li>It creates<a id="_idIndexMarker470"/> an Excel spreadsheet.</li>
+				<li>It adds column labels.</li>
+				<li>It adds two servers, <strong class="source-inline">slvaa01</strong> and <strong class="source-inline">slvac14</strong>. </li>
+				<li>It saves the Excel file.</li>
+			</ul>
+			<p>There is a <strong class="source-inline">mustParse()</strong>function (used, but not defined above) that converts a string representing a date into <strong class="source-inline">time.Time</strong>. In Go, when you see <strong class="source-inline">must</strong> proceeding a function name, by convention if the function encounters an error, it will panic.</p>
+			<p>You can find the runnable code in the repository at <a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/5/excel/simple/excel.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/5/excel/simple/excel.go</a>.</p>
+			<p>This example is the simplest way to add data to a sheet. However, it is not very scalable. Let's create one that is:</p>
+			<p class="source-code">type serverSheet struct {</p>
+			<p class="source-code">    mu sync.Mutex</p>
+			<p class="source-code">    sheetName string</p>
+			<p class="source-code">    xlsx *excelize.File</p>
+			<p class="source-code">    nextRow int</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func newServerSheet() (*serverSheet, error) {</p>
+			<p class="source-code">    s := &amp;serverSheet{</p>
+			<p class="source-code">        sheetName: "Sheet1",</p>
+			<p class="source-code">        xlsx: excelize.NewFile(),</p>
+			<p class="source-code">        nextRow: 2,</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "A1", "Server Name")</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "B1", "Generation")</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "C1", "Acquisition")</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "D1", "CPU Vendor")</p>
+			<p class="source-code">    return s, nil</p>
+			<p class="source-code">}</p>
+			<p>The preceding<a id="_idIndexMarker471"/> code does the<a id="_idIndexMarker472"/> following:</p>
+			<ul>
+				<li>It creates a <strong class="source-inline">serverSheet</strong> type for managing<a id="_idIndexMarker473"/> our Excel sheet.</li>
+				<li>It has a constructor that adds our column labels.</li>
+			</ul>
+			<p>Now we need something to add the data:</p>
+			<p class="source-code">func (s *serverSheet) add(name string, gen int, acquisition time.Time, vendor CPUVendor) error {</p>
+			<p class="source-code">    s.mu.Lock()</p>
+			<p class="source-code">    defer s.mu.Unlock()</p>
+			<p class="source-code">    if name == "" {</p>
+			<p class="source-code">            return errors.New("name cannot be blank")</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if gen &lt; 1 || gen &gt; 13 {</p>
+			<p class="source-code">            return errors.New("gen was not in range")</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if acquisition.IsZero() {</p>
+			<p class="source-code">            return errors.New("acquisition must be set")</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if !validCPUVendors[vendor] {</p>
+			<p class="source-code">            return errors.New("vendor is not valid )</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "A" +</p>
+			<p class="source-code">strconv.Itoa(s.nextRow), name)</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "B" + strconv.Itoa(s.nextRow), gen)</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "C" + strconv.Itoa(s.nextRow), acquisition)</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "D" + strconv.Itoa(s.nextRow), vendor)</p>
+			<p class="source-code">    s.nextRow++</p>
+			<p class="source-code">    return nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>It uses a lock to prevent multiple calls.</li>
+				<li>It performs very basic data validation checks.</li>
+				<li>It adds a row and then increments our internal <strong class="source-inline">nextRow</strong> counter.</li>
+			</ul>
+			<p>Now we have<a id="_idIndexMarker474"/> a more scalable way<a id="_idIndexMarker475"/> to add data to our sheet. Nex<a id="_idTextAnchor345"/>t, let's discuss<a id="_idIndexMarker476"/> how to summarize data.</p>
+			<h3>Data summarization</h3>
+			<p>There are two ways to summarize<a id="_idIndexMarker477"/> data that is added:</p>
+			<ul>
+				<li>Tracking summaries in our object</li>
+				<li>Excel pivot tables</li>
+			</ul>
+			<p>For our example, I am going<a id="_idIndexMarker478"/> to use the first method. This method comes with several advantages:</p>
+			<ul>
+				<li>It is easier to implement.</li>
+				<li>It performs faster calculations.</li>
+				<li>It removes complex calculations from the spreadsheet.</li>
+			</ul>
+			<p>However, it comes with a distinctive disadvantage:</p>
+			<ul>
+				<li>Data changes do not affect the summary.</li>
+			</ul>
+			<p>To track our data summary, let's add a <strong class="source-inline">struct</strong> type:</p>
+			<p class="source-code">type summaries struct {</p>
+			<p class="source-code">     cpuVendor cpuVendorSum</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type cpuVendorSum struct {</p>
+			<p class="source-code">     unknown, intel, amd int</p>
+			<p class="source-code">}</p>
+			<p>Let's modify the <strong class="source-inline">add()</strong> method that we wrote earlier to summarize our table:</p>
+			<p class="source-code">     ...</p>
+			<p class="source-code">     s.xlsx.SetCellValue(s.sheetName, "D" + strconv.Itoa(s.nextRow), vendor)</p>
+			<p class="source-code">     switch vendor {</p>
+			<p class="source-code">     case Intel:</p>
+			<p class="source-code">          s.sum.cpuVendor.intel++</p>
+			<p class="source-code">     case AMD:</p>
+			<p class="source-code">          s.sum.cpuVendor.amd++</p>
+			<p class="source-code">     default:</p>
+			<p class="source-code">          s.sum.cpuVndor.unknown++</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     s.nextRow++</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *serverSheet) writeSummaries() {</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "F1", "Vendor Summary")</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "F2", "Vendor")</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "G2", "Total")</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "F3", Intel)</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "G3", s.summaries.cpuVendor.intel)</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "F4", AMD)</p>
+			<p class="source-code">    s.xlsx.SetCellValue(s.sheetName, "G4", s.summaries.cpuVendor.amd)</p>
+			<p class="source-code">}</p>
+			<p>The preceding code<a id="_idIndexMarker479"/> does the following:</p>
+			<ul>
+				<li>It looks at our vendor and adds to our summary counters.</li>
+				<li>It adds a method to write our summaries to the sheet.</li>
+			</ul>
+			<p>Next, let's discuss how<a id="_idTextAnchor346"/> we can add visualizations using this data.</p>
+			<h3>Adding visualizations</h3>
+			<p>One of the reasons for using Excel over CSV for output is to add visualization elements. This allows you to quickly<a id="_idIndexMarker480"/> generate reports that users can look at that are more appealing than CSV and less intensive to write than web pages.</p>
+			<p>Adding a chart is done via the <strong class="source-inline">AddChart()</strong>method. <strong class="source-inline">AddChart()</strong>takes in a string representing JSON that indicates how to build the chart. In our example, you will see a package, called <strong class="source-inline">chart</strong>, that extracts private types from <strong class="source-inline">excelize</strong> used to represent the charts and makes them public types. In this way, we can use a typed data structure instead of JSON that has been converted into that structure. This also allows for the easier discovery of values that you might wish to set:</p>
+			<p class="source-code">func (s *serverSheet) createCPUChart() error {</p>
+			<p class="source-code">    c := chart.New()</p>
+			<p class="source-code">    </p>
+			<p class="source-code">    c.Type = "pie3D"</p>
+			<p class="source-code">    c.Dimension = chart.FormatChartDimension{640, 480}</p>
+			<p class="source-code">    c.Title = chart.FormatChartTitle{Name: "Server CPU Vendor Breakdown"}</p>
+			<p class="source-code">    c.Format = chart.FormatPicture{</p>
+			<p class="source-code">            FPrintsWithSheet: true,</p>
+			<p class="source-code">            NoChangeAspect: false,</p>
+			<p class="source-code">            FLocksWithSheet: false,</p>
+			<p class="source-code">            OffsetX: 15,</p>
+			<p class="source-code">            OffsetY: 10,</p>
+			<p class="source-code">            XScale: 1.0,</p>
+			<p class="source-code">            YScale: 1.0,</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    c.Legend = chart.FormatChartLegend{</p>
+			<p class="source-code">            Position: "bottom",</p>
+			<p class="source-code">            ShowLegendKey: true,</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    c.Plotarea.ShowBubbleSize = true</p>
+			<p class="source-code">    c.Plotarea.ShowCatName = true</p>
+			<p class="source-code">    c.Plotarea.ShowLeaderLines = false</p>
+			<p class="source-code">    c.Plotarea.ShowPercent = true</p>
+			<p class="source-code">    c.Plotarea.ShowSerName = true</p>
+			<p class="source-code">    c.ShowBlanksAs = "zero"</p>
+			<p class="source-code">    c.Series = append(</p>
+			<p class="source-code">            c.Series,</p>
+			<p class="source-code">            chart.FormatChartSeries{</p>
+			<p class="source-code">                    Name: `%s!$F$1`,</p>
+			<p class="source-code">                    Categories: fmt.Sprintf(`%s!$F$3:$F$4`, s.sheetName),</p>
+			<p class="source-code">                    Values: fmt.Sprintf(`%s!$G$3:$G$4`, s.sheetName),</p>
+			<p class="source-code">            },</p>
+			<p class="source-code">    )</p>
+			<p class="source-code">    b, err := json.Marshal(c)</p>
+			<p class="source-code">    if err != nil {</p>
+			<p class="source-code">            return err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    if err := s.xlsx.AddChart(s.sheetName,  "I1", string(b)); err != nil {</p>
+			<p class="source-code">            return err</p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return nil</p>
+			<p class="source-code">}</p>
+			<p>This code does<a id="_idIndexMarker481"/> the following:</p>
+			<ul>
+				<li>It creates a new 3D pie chart type.</li>
+				<li>It sets the dimensions, title, and legend.</li>
+				<li>It applies the chart values and categories.</li>
+				<li>It marshals the chart's instructions to JSON.</li>
+				<li>It calls <strong class="source-inline">AddChart</strong> to insert the chart into the sheet.</li>
+			</ul>
+			<p>You can find the runnable code in the following repository: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/5/excel/visualization">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/5/excel/visualization</a></p>
+			<p>So, we have covered the base minimum of using Excel for outputting reports. There are many other options, including inserting pictures, pivot tables, and advanced formatting directives. And while we wouldn't recommend Excel for data input into a system or a data storage format, it can be a useful data <a id="_idTextAnchor347"/>output system for summaries and viewing data.</p>
+			<h1 id="_idParaDest-160"><a id="_idTextAnchor348"/>Popular encoding formats</h1>
+			<p>CSV is one of the more basic human-readable <a id="_idIndexMarker482"/>encodings that DevOps engineers will encounter, but it is by no means the only one. Within the last two decades, several new formats have emerged that are used to transfer information or provide configuration<a id="_idIndexMarker483"/> to applications. </p>
+			<p><strong class="bold">JavaScript Object Notation</strong> (<strong class="bold">JSON</strong>) is a data serialization format that was designed to convert JavaScript objects<a id="_idIndexMarker484"/> into a textual representation so that they could be saved or transferred. This notation, due to its simplicity and clarity, has been adopted by almost every language to transfer data.</p>
+			<p><strong class="bold">Yet Another Markup Language</strong> (<strong class="bold">YAML</strong>) is another data serialization format that is often used to store configuration<a id="_idIndexMarker485"/> information for a service. YAML is the primary configuration language in Kubernetes clusters.</p>
+			<p>In this section, we will look at the ways to marshal and unmarshal data from Go ty<a id="_idTextAnchor349"/>pes into these formats and back into the Go type.</p>
+			<h2 id="_idParaDest-161"><a id="_idTextAnchor350"/>The Go field tags</h2>
+			<p>Go has a feature<a id="_idIndexMarker486"/> called field tags that allow a developer to add string tags to <strong class="source-inline">struct</strong> fields. This allows<a id="_idIndexMarker487"/> a Go program to inspect the extra metadata<a id="_idIndexMarker488"/> regarding a field before performing an operation. Tags are key/value pairs:</p>
+			<p class="source-code">type Record struct {</p>
+			<p class="source-code">     Last string `json:"last_name"`</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code snippet, you can see a <strong class="source-inline">struct</strong> type with a field called <strong class="source-inline">Last</strong> that has a field tag. The field tag is an inline raw string. Raw strings are denoted by backticks. This will produce a tag with a key of <strong class="source-inline">"json"</strong> and a value of <strong class="source-inline">"last_name"</strong>.</p>
+			<p>Go packages can use the <strong class="source-inline">reflect</strong> package to read these tags. These tags allow a package to change the behavior of an operation based on the tag data. In this example, it tells our JSON encoder package to use <strong class="source-inline">last_name</strong> instead of <strong class="source-inline">Last</strong> when writing data to JSON and the reverse when reading data.</p>
+			<p>This feat<a id="_idTextAnchor351"/>ure is key for packages that handle data marshaling.</p>
+			<h2 id="_idParaDest-162"><a id="_idTextAnchor352"/>JSON</h2>
+			<p>Over the past decade, the JSON<a id="_idIndexMarker489"/> format has become the de facto format for data encoding to disk and for communicating via RPC<a id="_idIndexMarker490"/> to services. No language in the cloud space can be successful without supporting JSON.</p>
+			<p>A developer might encounter JSON as an application configuration language, but it is poorly suited for this task due to the following reasons:</p>
+			<ul>
+				<li>The lack of multiline strings</li>
+				<li>The inability to have comments</li>
+				<li>The pickiness regarding its punctuation (that is, good for machines, and bad for humans)</li>
+			</ul>
+			<p>For the interchange of data, JSON can be quite useful with only a few downsides, such as the following:</p>
+			<ul>
+				<li>Schemaless</li>
+				<li>Non-binary format</li>
+				<li>Lack of byte array support</li>
+			</ul>
+			<p>A schema is a definition of a message's content that lives outside code.</p>
+			<p>Schemaless means there is no strict definition of what a message contains. This means that, for every language that is supported, we must create definitions for our messages in that language. Formats such as protocol buffers have entered into this space to provide a schema that can be used to generate code for any language.</p>
+			<p>JSON is also a human-readable format. These types of formats are not as efficient as binary formats in terms of size and speed. This generally matters when trying to scale large services. However, many prefer human-readable formats due to their ability to be easily debugged.</p>
+			<p>JSON's lack of support for byte arrays is also a failing. JSON can still transfer raw bytes, but it requires encoding and decoding the bytes using <strong class="source-inline">base64</strong> encoding and storing them in JSON's <strong class="source-inline">string</strong> type. This requires an extra level of encoding that should be unnecessary. There are several supersets of JSON that are not widely supported (such as Binary JSON, or BSON for short) that contain a byte array type.</p>
+			<p>JSON is delivered<a id="_idIndexMarker491"/> to a user in one of several ways:</p>
+			<ul>
+				<li>As a single message that can contain sub-messages</li>
+				<li>As an array of JSON messages</li>
+				<li>As a stream of JSON messages</li>
+			</ul>
+			<p>JSON's origins<a id="_idIndexMarker492"/> started as a format for simply encoding a JavaScript object for transfer. However, as its uses have grown, the need for sending large messages or streams of messages became a use case.</p>
+			<p>Single, large messages can be hard to decode. Generally, JSON decoders are written to read the entire message into memory and validate the message's content. </p>
+			<p>To simplify large sets of messages or streaming content, you might encounter a message with brackets,<strong class="source-inline">[]</strong>, surrounding a set of messages or individual messages separated with carriage returns. These are not valid JSON as intended, but have become de facto standards for handling large sets of data as small, individual messages that make up part of a whole stream.</p>
+			<p>Because JSON is a standard part of the cloud ecosystem, Go has built-in language support in the standard library's <strong class="source-inline">encoding/json</strong> package. In the upcoming sections, we w<a id="_idTextAnchor353"/>ill detail the most common ways to use the JSON package.</p>
+			<h3>Marshaling and unmarshaling to maps</h3>
+			<p>Because JSON is schemaless, it is possible to have messages of different types in a stream or in files. This is usually<a id="_idIndexMarker493"/> undesirable, and it is better<a id="_idIndexMarker494"/> to have a top-level message that holds these types of messages.</p>
+			<p>When you need to handle multiple message types or do discovery on a message, Go allows you to decode messages into <strong class="source-inline">map[string]interface{}</strong>, where the <strong class="source-inline">string</strong> key represents the field name and <strong class="source-inline">interface{}</strong> represents the value.</p>
+			<p>Let's examine an example of unmarshaling a file into a <strong class="source-inline">map</strong>:</p>
+			<p class="source-code">b, err := os.ReadFile("data.json") </p>
+			<p class="source-code">if err != nil { </p>
+			<p class="source-code">    return "", </p>
+			<p class="source-code">    err</p>
+			<p class="source-code">} </p>
+			<p class="source-code">data := map[string]interface{}{} </p>
+			<p class="source-code">if err := json.Unmarshal(b, &amp;data); err != nil { </p>
+			<p class="source-code">    return "", err </p>
+			<p class="source-code">}</p>
+			<p class="source-code">v, ok := data["user"]</p>
+			<p class="source-code">if !ok {</p>
+			<p class="source-code">     return "", errors.New("json does not contain key 'user'")</p>
+			<p class="source-code">}</p>
+			<p class="source-code">switch user := v.(type) {</p>
+			<p class="source-code">case string:</p>
+			<p class="source-code">     return user, nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">return "", fmt.Errorf("key 'user' is not a string, was %T", v)</p>
+			<p>The preceding<a id="_idIndexMarker495"/> example does the<a id="_idIndexMarker496"/> following:</p>
+			<ul>
+				<li>It reads the content of the <strong class="source-inline">data.json</strong> file into variable <strong class="source-inline">b</strong>.</li>
+				<li>It creates a <strong class="source-inline">map</strong>, called <strong class="source-inline">data</strong>, to store our JSON content.</li>
+				<li>It unmarshals the raw bytes representing the JSON into <strong class="source-inline">data</strong>.</li>
+				<li>It looks up the <strong class="source-inline">user</strong> key in <strong class="source-inline">data</strong>.</li>
+				<li>If <strong class="source-inline">user</strong> does not exist, we return an error.</li>
+				<li>If it does exist, we <strong class="source-inline">type assert</strong> to determine what the value type is.</li>
+				<li>If the value is a string, we return the content.</li>
+				<li>If the value is not a string, we return an error.</li>
+			</ul>
+			<p>Using the <strong class="source-inline">map</strong>, we can explore<a id="_idIndexMarker497"/> the values in the data to discover<a id="_idIndexMarker498"/> a message type, <strong class="source-inline">type</strong> <strong class="source-inline">assert</strong> the <strong class="source-inline">interface{}</strong> value to a concrete type, and then use the concrete value. Remember that type assertion converts an <strong class="source-inline">interface</strong> variable into another <strong class="source-inline">interface</strong> variable or a concrete type such as <strong class="source-inline">string</strong> or <strong class="source-inline">int64</strong>.</p>
+			<p>Using a <strong class="source-inline">map</strong> is the hardest method of data decoding for JSON. It is only recommended in cases where the JSON is unpredictable, and there is no control of the data provider. It is usually better to have whatever is providing the data change its behavior than decoding in this way.</p>
+			<p>Marshalling a <strong class="source-inline">map</strong> into JSON is simple:</p>
+			<p class="source-code">if err := json.Marshal(data); err != nil {</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">json.Marshal</strong> will read our <strong class="source-inline">map</strong> and output valid JSON for the contents.<strong class="source-inline">[]byte</strong> fi<a id="_idTextAnchor354"/>elds are automatically <strong class="source-inline">base64</strong> encoded into JSON's <strong class="source-inline">string</strong> type.</p>
+			<h3>Marshaling and unmarshaling to structs</h3>
+			<p>The preferred method<a id="_idIndexMarker499"/> of JSON decoding<a id="_idIndexMarker500"/> is doing so in a Go <strong class="source-inline">struct</strong> type that represents the data. Here is an example of how to create a user record struct, which we will use to decode a JSON stream:</p>
+			<p class="source-code">type Record struct {</p>
+			<p class="source-code">     Name string `json:"user_name"`</p>
+			<p class="source-code">     User string `json:"user"`</p>
+			<p class="source-code">     ID int</p>
+			<p class="source-code">     Age int `json:"-"`</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     rec := Record{</p>
+			<p class="source-code">          Name: "John Doak",</p>
+			<p class="source-code">          User: "jdoak",</p>
+			<p class="source-code">          ID: 23,</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     b, err := json.Marshal(rec)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          panic(err)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     fmt.Printf("%s\n", b)</p>
+			<p class="source-code">}</p>
+			<p>The preceding code outputs <strong class="source-inline">{"user_name":"John Doak","user":"jdoak","ID":23}</strong>. You can find the runnable code at <a href="https://play.golang.org/p/LzoUpOeEN9y">https://play.golang.org/p/LzoUpOeEN9y</a>.</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>It defines<a id="_idIndexMarker501"/> a <strong class="source-inline">Record</strong> type.</li>
+				<li>It uses field<a id="_idIndexMarker502"/> tags to tell JSON what the output field mapping should be.</li>
+				<li>It uses a field tag of <strong class="source-inline">-</strong> on <strong class="source-inline">Age</strong> so that it will not be marshaled.</li>
+				<li>It creates a <strong class="source-inline">Record</strong> type called <strong class="source-inline">rec</strong>.</li>
+				<li>It marshals <strong class="source-inline">rec</strong> to JSON.</li>
+				<li>It prints the JSON.</li>
+			</ul>
+			<p>Notice that the <strong class="source-inline">Name</strong> field was translated to <strong class="source-inline">user_name</strong> and <strong class="source-inline">User</strong> to <strong class="source-inline">user</strong>. The <strong class="source-inline">ID</strong> field was unchanged in the output because we did not use a field tag. <strong class="source-inline">Age</strong> was not output because we used a field tag of <strong class="source-inline">-</strong>. </p>
+			<p>Fields that are private<a id="_idIndexMarker503"/> because they start with a lowercase<a id="_idIndexMarker504"/> letter cannot be exported. This is because the JSON marshaler is in a different package and cannot see the private type in this package.</p>
+			<p>You can read about<a id="_idIndexMarker505"/> the field tags that JSON supports in the <strong class="source-inline">encoding/json</strong> GoDoc, located under <strong class="source-inline">Marshal()</strong> (<a href="https://pkg.go.dev/encoding/json#Marshal">https://pkg.go.dev/encoding/json#Marshal</a>).</p>
+			<p>The JSON package also includes <strong class="source-inline">MarshalIndent()</strong>, which can be used to output more readable JSON with line separators between the fields and indentions.</p>
+			<p>Decoding data into a <strong class="source-inline">struct</strong> type, such as <strong class="source-inline">Record</strong> earlier, can be done as follows:</p>
+			<p class="source-code">rec := Record{}</p>
+			<p class="source-code">if err := json.Unmarshal(b, &amp;rec); err != nil {</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p>This transforms text that represents the JSON into a <strong class="source-inline">Record</strong> type stored in the <strong class="source-inline">rec</strong> variable. Yo<a id="_idTextAnchor355"/>u can find the runnable code at <a href="https://play.golang.org/p/DD8TrKgTUwE">https://play.golang.org/p/DD8TrKgTUwE</a>.</p>
+			<h3>Marshaling and unmarshaling large messages</h3>
+			<p>Sometimes, we might<a id="_idIndexMarker506"/> receive a stream of JSON<a id="_idIndexMarker507"/> messages or a file that contains a list of JSON messages.</p>
+			<p>Go provides <strong class="source-inline">json.Decoder</strong> to handle a series of messages. Here is an example borrowed from the GoDoc, where each message is separated by a carriage return:</p>
+			<p class="source-code">const jsonStream = `</p>
+			<p class="source-code">     {"Name": "Ed", "Text": "Knock knock."}</p>
+			<p class="source-code">     {"Name": "Sam", "Text": "Who's there?"}</p>
+			<p class="source-code">`</p>
+			<p class="source-code">type Message struct {</p>
+			<p class="source-code">     Name, Text string</p>
+			<p class="source-code">}</p>
+			<p class="source-code">reader := strings.NewReader(jsonStream)</p>
+			<p class="source-code">dec := json.NewDecoder(reader)</p>
+			<p class="source-code">msgs := make(chan Message, 1)</p>
+			<p class="source-code">errs := make(chan error, 1)</p>
+			<p class="source-code">// Parse the messages concurrently with printing the message.</p>
+			<p class="source-code">go func() {</p>
+			<p class="source-code">     defer close(msgs)</p>
+			<p class="source-code">     defer close(errs)</p>
+			<p class="source-code">     for {</p>
+			<p class="source-code">          var m Message</p>
+			<p class="source-code">          if err := dec.Decode(&amp;m); err == io.EOF {</p>
+			<p class="source-code">               break</p>
+			<p class="source-code">          } else if err != nil {</p>
+			<p class="source-code">               errs &lt;- err</p>
+			<p class="source-code">               return</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          msgs &lt;- m</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}()</p>
+			<p class="source-code">// This will print the messages as we decode them.</p>
+			<p class="source-code">for m := range msgs {</p>
+			<p class="source-code">     fmt.Printf("%+v\n", m)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">if err := &lt;-errs; err != nil {</p>
+			<p class="source-code">     fmt.Println("stream error: ", err)</p>
+			<p class="source-code">}</p>
+			<p>You can view this running code at <a href="https://play.golang.org/p/kqmSvfdK4EG">https://play.golang.org/p/kqmSvfdK4EG</a>.</p>
+			<p>This example<a id="_idIndexMarker508"/> does the<a id="_idIndexMarker509"/> following:</p>
+			<ul>
+				<li>It defines a <strong class="source-inline">Message</strong> struct.</li>
+				<li>It wraps the <strong class="source-inline">jsonStream</strong> raw output in an <strong class="source-inline">io.Reader</strong> via <strong class="source-inline">strings.NewReader()</strong>.</li>
+				<li>It starts a goroutine that decodes the messages as they are read and puts them on a channel.</li>
+				<li>It reads all messages that are sent until the output channel is closed.</li>
+				<li>It prints out any errors that are encountered.</li>
+			</ul>
+			<p>Sometimes, this format<a id="_idIndexMarker510"/> of streaming will have brackets,<strong class="source-inline">[]</strong>, around the messages and use commas<a id="_idIndexMarker511"/> as separators between the entries. </p>
+			<p>In this case, we can utilize another feature of the decoder, <strong class="source-inline">dec.Token()</strong>, to remove them safely:</p>
+			<p class="source-code">const jsonStream = `[</p>
+			<p class="source-code">     {"Name": "Ed", "Text": "Knock knock."},</p>
+			<p class="source-code">     {"Name": "Sam", "Text": "Who's there?"}</p>
+			<p class="source-code">]`</p>
+			<p class="source-code">dec := json.NewDecoder(reader)</p>
+			<p class="source-code">_, err := dec.Token() // Reads [</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">     return fmt.Errorf(`outer [ is missing`))</p>
+			<p class="source-code">}</p>
+			<p class="source-code">for dec.More() {</p>
+			<p class="source-code">     var m Message</p>
+			<p class="source-code">     // decode an array value (Message)</p>
+			<p class="source-code">     err := dec.Decode(&amp;m)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     fmt.Printf("%+v\n", m)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">_, err = dec.Token() // Reads ]</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">     return fmt.Errorf(`final ] is missing`)</p>
+			<p class="source-code">}</p>
+			<p>You can view this running code at <a href="https://play.golang.org/p/_PrUVUy4zRv">https://play.golang.org/p/_PrUVUy4zRv</a>.</p>
+			<p>This code works<a id="_idIndexMarker512"/> in the same way, except<a id="_idIndexMarker513"/> it removes the outer brackets and requires a comma-delimited list instead.</p>
+			<p>Encoding data in a stream is very similar to decoding. We can write JSON messages into <strong class="source-inline">io.Writer</strong> to output to a stream. Here's an example:</p>
+			<p class="source-code">func encodeMsgs(in chan Message, output io.Writer) chan error {</p>
+			<p class="source-code">     errs := make(chan error, 1)</p>
+			<p class="source-code">     go func() {</p>
+			<p class="source-code">          defer close(errs)</p>
+			<p class="source-code">          enc := json.NewEncoder(output)</p>
+			<p class="source-code">          for msg := range in {</p>
+			<p class="source-code">               if err := enc.Encode(msg); err != nil {</p>
+			<p class="source-code">                    errs &lt;- err</p>
+			<p class="source-code">                    return</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     return errs</p>
+			<p class="source-code">}</p>
+			<p>You can see this code running at <a href="https://play.golang.org/p/ELICEC4lcax">https://play.golang.org/p/ELICEC4lcax</a>.</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>It reads from a <strong class="source-inline">channel</strong> of <strong class="source-inline">Message</strong>.</li>
+				<li>It writes to an <strong class="source-inline">io.Writer</strong>.</li>
+				<li>It returns a channel that signals when the encoder is done processing.</li>
+				<li>If an error is returned, it means that the encod<a id="_idTextAnchor356"/>er had a problem.</li>
+			</ul>
+			<p>This outputs<a id="_idIndexMarker514"/> the JSON as separated<a id="_idIndexMarker515"/> values without brackets.</p>
+			<h3>JSON final thoughts</h3>
+			<p>The <strong class="source-inline">encoding/json</strong> package has support for other methods of decoding that are not covered here. You can mix <strong class="source-inline">map[string]interace{}</strong> into your <strong class="source-inline">struct</strong> types and vice versa, or you can decode each field and value individually. </p>
+			<p>However, the best use cases<a id="_idIndexMarker516"/> are those that are straightforward <strong class="source-inline">struct</strong> types as a single value or stream of values.</p>
+			<p>This is why <strong class="source-inline">encoding/json</strong> is my first choice when encoding or decoding JSON values. It is not the fastest method, but it is the most flexible.</p>
+			<p>There are other third-party libraries that can increase your throughput while sacrificing some flexibility. Here is just a small list of packages that you might want to consider:</p>
+			<ul>
+				<li><a href="https://github.com/francoispqt/gojay">https://github.com/francoispqt/gojay</a></li>
+				<li><a href="https://github.com/goccy/go-json">https://github.com/goccy/go-json</a></li>
+				<li><a href="https://pkg.go.dev/github.com/json-iterator/go">https://pkg.g<span id="_idTextAnchor357"/>o.dev/github.com/json-iterator/go</a></li>
+				<li><a href="https://pkg.go.dev/github.com/valyala/fastjson">https://pkg.go.dev/github.com/valyala/fastjson</a></li>
+			</ul>
+			<h2 id="_idParaDest-163"><a id="_idTextAnchor358"/>YAML encoding</h2>
+			<p>YAML (yet another markup language/YAML Ain't Markup Language) is a language that is commonly used<a id="_idIndexMarker517"/> to write configurations.</p>
+			<p>YAML is the default<a id="_idIndexMarker518"/> language of services such as Kubernetes to hold configurations, and as a DevOps engineer, you are likely to come across it in a variety of applications.</p>
+			<p>YAML has a few advantages over JSON for use in configurations:</p>
+			<ul>
+				<li>Support for comments</li>
+				<li>More flexible for humans, such as unquoted strings and quoted strings</li>
+				<li>Multiline strings</li>
+				<li>Anchors and references to avoid repetition of the same text data</li>
+			</ul>
+			<p>YAML is often <a id="_idIndexMarker519"/>cited as having the following flaws:</p>
+			<ul>
+				<li>It is schemaless.</li>
+				<li>The standard is large and some features are confusing.</li>
+				<li>Large files can have indention errors that go unnoticed.</li>
+				<li>Implementations in some languages can accidentally execute code embedded in YAML. This can lead to a few security patches in software projects.</li>
+			</ul>
+			<p>Go does not have support in the standard library, but it has a third-party library that has become the de facto package for YAML serialization, called <strong class="source-inline">go-yaml</strong> (https://github.com/go-yaml/yaml<a id="_idTextAnchor359"/>).</p>
+			<p>Next, let's discuss how we can read these YAML files to read our configurations.</p>
+			<h3>Marshaling and unmarshaling to maps</h3>
+			<p>YAML, like JSON, is schemaless and suffers from the same drawbacks. However, unlike JSON, YAML is intended<a id="_idIndexMarker520"/> to represent a configuration, so<a id="_idIndexMarker521"/> we don't have the same need to stream content.</p>
+			<p>For YAML, the general use case would entail encoding/decoding to a <strong class="source-inline">struct</strong> type instead of a <strong class="source-inline">map</strong>. However, if you have a need for message discovery, YAML can handle a <strong class="source-inline">map</strong> decode in the same way that we can handle it for JSON.</p>
+			<p>Let's look at an example of unmarshaling a file into a <strong class="source-inline">map</strong>:</p>
+			<p class="source-code">data := map[string]interface{}{}</p>
+			<p class="source-code">if err := yaml.Unmarshal(yamlContent, &amp;data); err != nil {</p>
+			<p class="source-code">     return "", err</p>
+			<p class="source-code">}</p>
+			<p class="source-code">v, ok := data["user"]</p>
+			<p class="source-code">if !ok {</p>
+			<p class="source-code">     return "", errors.New("'user' key not found")</p>
+			<p class="source-code">}</p>
+			<p>The preceding example does the following:</p>
+			<ul>
+				<li>It creates a <strong class="source-inline">map</strong> called <strong class="source-inline">data</strong> to store our YAML content.</li>
+				<li>It unmarshals the raw bytes representing the YAML into <strong class="source-inline">data</strong>.</li>
+				<li>It looks up the <strong class="source-inline">user</strong> key in <strong class="source-inline">data</strong>.</li>
+				<li>If <strong class="source-inline">user</strong> does not exist, we return an error.</li>
+			</ul>
+			<p>For a more complete example, please refer to <a href="https://play.golang.org/p/wkHkmu47e6V">https://play.golang.org/p/wkHkmu47e6V</a>.</p>
+			<p>Marshalling a <strong class="source-inline">map</strong> into YAML is simple:</p>
+			<p class="source-code">if err := yaml.Marshal(data); err != nil {</p>
+			<p class="source-code">     retu<a id="_idTextAnchor360"/>rn err</p>
+			<p class="source-code">}</p>
+			<p>Here, <strong class="source-inline">yaml.Marshal()</strong>will<a id="_idIndexMarker522"/> read our <strong class="source-inline">map</strong> and output<a id="_idIndexMarker523"/> valid YAML for the contents.</p>
+			<h3>Marshaling and unmarshaling to structs</h3>
+			<p>The <strong class="source-inline">struct</strong> serialization<a id="_idIndexMarker524"/> is the preferred way to<a id="_idIndexMarker525"/> handle YAML. As YAML is a configuration language, programs must know what fields are available ahead of time to set program parameters.</p>
+			<p>YAML serialization works in a similar way to JSON serialization, and you will find that similarity across most data serialization packages:</p>
+			<p class="source-code">type Config struct {</p>
+			<p class="source-code">     Jobs []Job</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type Job struct {</p>
+			<p class="source-code">     Name     string</p>
+			<p class="source-code">     Interval time.Duration</p>
+			<p class="source-code">     Cmd      string</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     c := Config{</p>
+			<p class="source-code">          Jobs: []Job{</p>
+			<p class="source-code">               {</p>
+			<p class="source-code">                    Name:     "Clear tmp",</p>
+			<p class="source-code">                    Interval: 24 * time.Hour,</p>
+			<p class="source-code">                    Cmd:      "rm -rf " + os.TempDir(),</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     b, err := yaml.Marshal(c)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          panic(err)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     fmt.Printf("%s\n", b)</p>
+			<p class="source-code">}</p>
+			<p>You can<a id="_idIndexMarker526"/> see this running code at <a href="https://play.golang.org/p/SvJHLKBsdUP">https://play.golang.org/p/SvJHLKBsdUP</a>.</p>
+			<p>This outputs<a id="_idIndexMarker527"/> the following:</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">- name: Clear tmp dir</p>
+			<p class="source-code">  interval: 24h0m0s</p>
+			<p class="source-code">  cmd: rm -rf /tmp</p>
+			<p>The preceding code does the following:</p>
+			<ul>
+				<li>It creates a top-level configuration called <strong class="source-inline">Config</strong>.</li>
+				<li>It creates a list of sub-messages called <strong class="source-inline">Job</strong>.</li>
+				<li>It marshals<a id="_idIndexMarker528"/> an example into the text<a id="_idIndexMarker529"/> representation.</li>
+			</ul>
+			<p>Unmarshaling is just as easy:</p>
+			<p class="source-code">     data := []byte(`</p>
+			<p class="source-code">jobs:</p>
+			<p class="source-code">  - name: Clear tmp</p>
+			<p class="source-code">    interval: 24h0m0s</p>
+			<p class="source-code">    whatever: is not in the Job type</p>
+			<p class="source-code">    cmd: rm -rf /tmp</p>
+			<p class="source-code">`)</p>
+			<p class="source-code">     c := Config{}</p>
+			<p class="source-code">     if err := yaml.Unmarshal(data, &amp;c); err != nil {</p>
+			<p class="source-code">          panic(err)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     for _, job := range c.Jobs {</p>
+			<p class="source-code">          fmt.Println("Name: ", job.Name)</p>
+			<p class="source-code">          fmt.Println("Interval: ", job.Interval)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     </p>
+			<p>The preceding code does the following:</p>
+			<ul>
+				<li>It takes a YAML config that is represented by data.</li>
+				<li>It converts it into the <strong class="source-inline">Config</strong> type.</li>
+				<li>It prints out contained <strong class="source-inline">Job</strong> information.</li>
+				<li>It ignores the <strong class="source-inline">whatever</strong> field.</li>
+			</ul>
+			<p>This code will ignore<a id="_idIndexMarker530"/> the unknown <strong class="source-inline">whatever</strong> field. However, in many<a id="_idIndexMarker531"/> cases, you do not want to ignore a field that could potentially be misspelled. In those cases, we can use <strong class="source-inline">UnmarshalStrict()</strong>.</p>
+			<p>That would cause this code to fail with the following message:</p>
+			<p class="source-code">line 5: field whaterver not found in type main.Job</p>
+			<p>When using <strong class="source-inline">UnmarshalStrict()</strong>, you must add new field support to your progra<a id="_idTextAnchor361"/>ms and deploy them before adding them to your configs, or you will cause old binaries to fail. </p>
+			<h3>YAML final thoughts</h3>
+			<p>The <strong class="source-inline">github.com/go-yaml/yaml</strong> package has support for other methods of serialization that we are not going to cover here. One that is used most often is decoding into a <strong class="source-inline">yaml.Node</strong> object in order<a id="_idIndexMarker532"/> to preserve comments, then ch<a id="_idTextAnchor362"/>a<a id="_idTextAnchor363"/>nging the content and writing the configuration back out. However, this is relatively uncommon.</p>
+			<p>In this section, you have learned how to use JSON and YAML to read and write data in their respective data formats. In the next sect<a id="_idTextAnchor364"/>i<a id="_idTextAnchor365"/>on, we will look at how to interact with SQL data sources that are used to commonly store data.</p>
+			<h1 id="_idParaDest-164"><a id="_idTextAnchor366"/>Summary</h1>
+			<p>This also ends our chapter on using common data formats. We have covered how to read and write with CSV files and Excel reports. Additionally, we have learned how to encode and decode data in JSON and YAML formats. This chapter has shown how we can decode data in streams while reinforcing ways to concurrently read and use data with goroutines.</p>
+			<p>Your newly acquired skills for JSON will be immediately useful in our next chapter. In that chapter, we will look at how to connect to SQL databases and interact with RPC services. As REST RPC services and databases such as Postgres can use JSON, this skill will come in handy.</p>
+			<p>So, let's jump in!</p>
+		</div>
+	</div></body></html>

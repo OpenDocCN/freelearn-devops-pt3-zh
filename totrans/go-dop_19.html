@@ -1,0 +1,793 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer068">
+			<h1 id="_idParaDest-337"><a id="_idTextAnchor742"/>Chapter <a id="_idTextAnchor743"/>16: Designing for Chaos</h1>
+			<p>Writing software that works in perfect conditions is easy. It would be nice if you never had to worry about network latency, service timeouts, storage outages, misbehaving applications, users sending bad arguments, security issues, or any of the real-life scenarios we find ourselves in.</p>
+			<p>In my experience, things tend to fail in the following three ways:</p>
+			<ul>
+				<li>Immediately</li>
+				<li>Gradually</li>
+				<li>Spectacularly</li>
+			</ul>
+			<p><strong class="bold">Immediately</strong> is usually the result of a change to application code that causes a service to die on startup or when receiving traffic to an endpoint. Most development test environments or canary rollouts catch these before any real problems occur in production. This type is generally trivial to fix and prevent.</p>
+			<p><strong class="bold">Gradually</strong> is usually the result of some type of memory leak, thread/goroutine leak, or ignoring design limitations. These problems build up over time and begin causing problems that result in services crashing or growth in latency at unacceptable levels. Many times, these are easy fixes caught during canary rollouts once the problem is recognized. In the case of design issues, fixes can require months of intense work to resolve. Some rare versions of this have what I call a cliff failure: gradual growth hits a limitation that cannot be overcome by throwing more resources at the problem. That type of problem belongs to our next category.</p>
+			<p>That category is <strong class="bold">spectacularly</strong>. This is when you find a problem in production that is causing mass failures when a few moments ago everything was working fine. Cellphones everywhere start pinging alerts, dashboards go red, dogs and cats start living together— mass hysteria! This could be the rollout of a bugged service that overwhelms your network, the death of a caching service you depend on, or a type of query that crashes your service. These outages cause mass panic, test your ability to communicate across teams efficiently, and are the ones that show up in news articles.</p>
+			<p>This chapter will focus on designing infrastructure tooling to survive chaos. The most spectacular failures of major cloud companies have often been the results of infrastructure tooling, from <strong class="bold">Google Site Reliability Engineering</strong> (<strong class="bold">Google SRE</strong>) erasing all the disks at their cluster satellites to <strong class="bold">Amazon Web Services</strong> (<strong class="bold">AWS</strong>) overwhelming their network with infrastructure tool <strong class="bold">remote procedure calls</strong> (<strong class="bold">RPCs</strong>). </p>
+			<p>In this chapter, we will look at safe ways for <strong class="bold">first responders</strong> (<strong class="bold">FRs</strong>) to stop automation, how to write idempotent workflow tools, packages for incremental backoffs of failed RPCs, providing pacing limiters for rollouts, and much more.</p>
+			<p>To do this, we will be introducing concepts and packages that will be built into a generic workflow system that you can use to further your education. The system will be able to take requests to do some type of work, will validate the parameters are correct, validate the request against a set of policies, and then execute that work.</p>
+			<p>In this model, clients (which can be <strong class="bold">command-line interface</strong> (<strong class="bold">CLI</strong>) applications or services) detail work to be done via a protocol buffer and send it to the server. The workflow system does all the actual work.</p>
+			<p>We are going to cover the following main topics in this chapter:</p>
+			<ul>
+				<li>Using overload prevention mechanisms</li>
+				<li>Using rate limiters to prevent runaway workflows</li>
+				<li>Building workflows that are repeatable and never lost</li>
+				<li>Using policies to restrict tools</li>
+				<li>Building systems with an emergency stop</li>
+			</ul>
+			<h1 id="_idParaDest-338"><a id="_idTextAnchor744"/>Technical requirements</h1>
+			<p>This chapter has the same requirements as previous chapters, only adding the need to access the following GitHub repository: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow</a>. </p>
+			<p>With that said, let's jump into our first chapter on using overload prevention mechanisms to keep our network and services healthy when problems occur.</p>
+			<h1 id="_idParaDest-339"><a id="_idTextAnchor745"/>Using overload prevention mechanisms</h1>
+			<p>When you have a small<a id="_idIndexMarker1543"/> set of services, misbehaving applications generally cause small problems. This is because there is usually an overabundance of network capacity to absorb badly behaving applications within a data center, and with a small set of services, it is usually intuitive to figure out what would cause the issue.</p>
+			<p>When you have a large number of applications running, your network and your machines are usually oversubscribed. <strong class="bold">Oversubscribed</strong> means that your network and systems<a id="_idIndexMarker1544"/> cannot handle all your applications running at 100%. Oversubscription is common in networks or clusters to control costs. This works because, at any given time, most applications ebb and flow with network traffic, <strong class="bold">central processing unit</strong> (<strong class="bold">CPU</strong>), and memory. </p>
+			<p>An application that suddenly experiences some type<a id="_idIndexMarker1545"/> of bug can go into <strong class="bold">retry loops</strong> that quickly overwhelm a service. In addition, if some catastrophic event occurs that takes a service offline, trying to bring the application back online can cause the service to go down as it is overwhelmed by requests that are queuing on all clients.</p>
+			<p>Worse is what can happen to the network. If the network becomes overwhelmed or when cloud devices have their <strong class="bold">queries per second</strong> (<strong class="bold">QPS</strong>) exceeded, other applications can<a id="_idIndexMarker1546"/> have their traffic adversely affected. This can mask the true cause of your problems.</p>
+			<p>There are several ways of preventing these types of problems, with the two most common being the following:</p>
+			<ul>
+				<li>Circuit breakers</li>
+				<li>Backoff implementations</li>
+			</ul>
+			<p>Each of these prevention mechanisms has the same idea: when failures occur, prevent retries from overwhelming the service.</p>
+			<p>Infrastructure services are often an overlooked use case for these prevention mechanisms. Many times, we concentrate on our public services, but infrastructure services are just as important. If that service is critical and becomes overwhelmed, it can be difficult to restore it without manually touching other services to reduce load.</p>
+			<p>Let's have a look at one of the more popular methods: the <strong class="bold">circuit breaker</strong>.</p>
+			<h2 id="_idParaDest-340"><a id="_idTextAnchor746"/>Case study – AWS client requests overwhelm the network</h2>
+			<p>AWS had an outage that affected AWS customers<a id="_idIndexMarker1547"/> across the world when a misbehaving application began sending too much traffic across<a id="_idIndexMarker1548"/> a network boundary between their customer network and their core network where AWS critical services live. This was restricted to their <strong class="source-inline">us-east-1</strong> region, but the effects were felt by their customers in multiple locations. </p>
+			<p>The problem was twofold, comprising the following factors:</p>
+			<ul>
+				<li>A misbehaving application sending too many requests.</li>
+				<li>Their clients didn't back off on failure.</li>
+			</ul>
+			<p>It is the second issue that caused the long failure. AWS had been doing the right thing in having a standard client for RPCs that invoked incrementing backoffs when requests failed. However, for some reason, the client library did not perform as expected in this case.  </p>
+			<p>This means that instead of the load reducing itself as the endpoints became overwhelmed, they went into some type of infinite loop that kept increasing the load on the affected systems and overwhelmed their network cross-connects. This overwhelming of cross-connects disabled their monitoring and prevented them from seeing the problem. The result was they had to try reducing their network load by scaling back application traffic while trying to not affect the customer services that were still working—a feat I would not envy.</p>
+			<p>This case points to how important it is to prevent<a id="_idIndexMarker1549"/> application retries when failures occur. To read more on this from Amazon, see the following web page: <a href="https://aws.amazon.com/message/12721/">https://aws.amazon.com/message/12721/</a>.</p>
+			<h2 id="_idParaDest-341"><a id="_idTextAnchor747"/>Using circuit breakers</h2>
+			<p>Circuit breakers<a id="_idIndexMarker1550"/> work by wrapping RPC calls within a client<a id="_idIndexMarker1551"/> that will automatically fail any attempt once a threshold is reached. All calls then simply return a failure without actually making any attempt for some amount of time.</p>
+			<p>Circuit breakers have three modes, as follows:</p>
+			<ul>
+				<li>Closed</li>
+				<li>Open</li>
+				<li>Half-open</li>
+			</ul>
+			<p>A circuit breaker is in a <strong class="bold">closed</strong> state when everything<a id="_idIndexMarker1552"/> is working. This is the normal state.</p>
+			<p>A circuit breaker is in an <strong class="bold">open</strong> state after some amount of failures<a id="_idIndexMarker1553"/> trip the breaker. When in this state, all requests<a id="_idIndexMarker1554"/> are automatically failed without trying to send the message. This period lasts for some amount of time. It is suggested that this time be some set period and some randomness to prevent spontaneous synchronization.</p>
+			<p>A circuit breaker moves into a <strong class="bold">half-open</strong> state after some time in the open<a id="_idIndexMarker1555"/> state. Once in the half-open state, some number of requests that are requested are actually tried. If some threshold of success is passed, the circuit breaker moves back into the <strong class="bold">closed</strong> state. If not, the circuit breaker moves into the <strong class="bold">open</strong> state again.</p>
+			<p>You can find several different circuit-breaker implementations for Go, but one of the most popular was<a id="_idIndexMarker1556"/> developed at Sony, called <strong class="bold">gobreaker</strong> (<a href="https://github.com/sony/gobreaker">https://github.com/sony/gobreaker</a>).</p>
+			<p>Let's look at how we might use<a id="_idIndexMarker1557"/> it to limit retries for <strong class="bold">HTTP</strong> queries, as follows:</p>
+			<p class="source-code">type HTTP struct {</p>
+			<p class="source-code">     client *http.Client</p>
+			<p class="source-code">     cb     *gobreaker.CircuitBreaker</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New(client *http.Client) *HTTP {</p>
+			<p class="source-code">     return &amp;HTTP{</p>
+			<p class="source-code">          client: client,</p>
+			<p class="source-code">          cb: gobreaker.NewCircuitBreaker(</p>
+			<p class="source-code">               gobreaker.Settings{</p>
+			<p class="source-code">                    MaxRequests: 1,</p>
+			<p class="source-code">                    Interval:    30 * time.Second,</p>
+			<p class="source-code">                    Timeout:     10 * time.Second,</p>
+			<p class="source-code">                    ReadyToTrip: func(c gobreaker.Counts) bool {</p>
+			<p class="source-code">                         return c.ConsecutiveFailures &gt; 5</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          ),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (h *HTTP) Get(req *http.Request) (*http.Response, error) {</p>
+			<p class="source-code">     if _, ok := req.Context().Deadline(); !ok {</p>
+			<p class="source-code">          return nil, fmt.Errorf("all requests must have a Context deadline set")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     r, err := h.cb.Execute(</p>
+			<p class="source-code">          func() (interface{}, error) {</p>
+			<p class="source-code">               resp, err := h.client.Do(req)</p>
+			<p class="source-code">               if resp.StatusCode != 200 {</p>
+			<p class="source-code">                    return nil, fmt.Errorf("non-200 response code")</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">               return resp, err</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return nil, err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return r.(*http.Response), nil</p>
+			<p class="source-code">}</p>
+			<p>The preceding code<a id="_idIndexMarker1558"/> defines the following:</p>
+			<ul>
+				<li>An HTTP type that<a id="_idIndexMarker1559"/> holds both of these:<ul><li>An <strong class="source-inline">http.Client</strong> for making HTTP requests</li><li>A circuit breaker for HTTP requests</li></ul></li>
+				<li>A <strong class="source-inline">New()</strong> constructor for our <strong class="source-inline">HTTP</strong> type. It creates a circuit breaker with settings that enforces the following:<ul><li>Allows one request at a time when in the half-open state</li><li>Has a 30-second period where we are half-open after being in a closed state</li><li>Has a closed state that lasts 10 seconds</li><li>Enters the closed state if we have five consecutive failures</li><li>A <strong class="source-inline">Get()</strong> method on <strong class="source-inline">HTTP</strong> that does the following:</li><li>Checks that <strong class="source-inline">*http.Request</strong> has a timeout define</li><li>Calls the circuit breaker on our <strong class="source-inline">client.Do()</strong> method</li><li>Converts the returned <strong class="source-inline">interface{}</strong> to the underlying <strong class="source-inline">*http.Response</strong></li></ul></li>
+			</ul>
+			<p>This code gives us a robust HTTP client wrapped with a circuit breaker. A better version of this might pass in the settings<a id="_idIndexMarker1560"/> to the constructor, but I wanted<a id="_idIndexMarker1561"/> it to be packed neatly for the example.</p>
+			<p>If you'd like to see a demo of the circuit breaker<a id="_idIndexMarker1562"/> in action, you can see it here: </p>
+			<p><a href="https://go.dev/play/p/qpG_l3OE-bu">https://go.dev/play/p/qpG_l3OE-bu</a> </p>
+			<h2 id="_idParaDest-342"><a id="_idTextAnchor748"/>Using backoff implementations</h2>
+			<p>A <strong class="bold">backoff implementation</strong> wraps RPCs with a client that will retry<a id="_idIndexMarker1563"/> with a pause between attempts. These pauses get longer <a id="_idIndexMarker1564"/>and longer until they reach some maximum value.</p>
+			<p>Backoff implementations can have a wide range of methods for calculating the time period. We will concentrate on exponential backoff in this chapter. </p>
+			<p>Exponential backoff simply adds delays to each attempt that increases exponentially as failures mount. As with circuit breakers, there are many packages offering backoff implementations. For this example, we will use <a href="https://pkg.go.dev/github.com/cenk/backoff">https://pkg.go.dev/github.com/cenk/backoff</a>, which is an implementation of Google's HTTP backoff library for Java.</p>
+			<p>This backoff implementation offers many important features that Google has found useful over years of studying service failures. One of the most important features in the library is adding random values to sleep times between retries. This prevents multiple clients from syncing their retry attempts.</p>
+			<p>Other important features include the ability to honor context cancellations and supply maximum retry attempts.</p>
+			<p>Let's look at how we might use it to limit retries for HTTP queries, as follows:</p>
+			<p class="source-code">type HTTP struct {</p>
+			<p class="source-code">     client *http.Client</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New(client *http.Client) *HTTP {</p>
+			<p class="source-code">     return &amp;HTTP{</p>
+			<p class="source-code">          client: client,</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (h *HTTP) Get(req *http.Request) (*http.Response, error) {</p>
+			<p class="source-code">     if _, ok := req.Context().Deadline(); !ok {</p>
+			<p class="source-code">          return nil, fmt.Errorf("all requests must have a Context deadline set")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     var resp *http.Response</p>
+			<p class="source-code">     op := func() error {</p>
+			<p class="source-code">          var err error</p>
+			<p class="source-code">          resp, err = h.client.Do(req)</p>
+			<p class="source-code">          if err != nil {</p>
+			<p class="source-code">               return err</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          if resp.StatusCode != 200 {</p>
+			<p class="source-code">               return fmt.Errorf("non-200 response code")</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          return nil</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     err := backoff.Retry(</p>
+			<p class="source-code">          op, </p>
+			<p class="source-code">          backoff.WithContext(</p>
+			<p class="source-code">               backoff.NewExponentialBackOff(),</p>
+			<p class="source-code">               req.Context(),</p>
+			<p class="source-code">          ),</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return nil, err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return resp, nil</p>
+			<p class="source-code">}</p>
+			<p>The preceding <a id="_idIndexMarker1565"/>code defines the following:</p>
+			<ul>
+				<li>An HTTP type that holds both of these:<ul><li>An <strong class="source-inline">http.Client</strong> for making HTTP requests</li><li>An exponential backoff for HTTP requests</li></ul></li>
+				<li>A <strong class="source-inline">New()</strong> constructor for our <strong class="source-inline">HTTP</strong> type</li>
+				<li>A <strong class="source-inline">Get()</strong> method on <strong class="source-inline">HTTP</strong></li>
+				<li>It also does<a id="_idIndexMarker1566"/> the following:<ul><li>Creates a <strong class="source-inline">func()</strong> error that attempts our request called <strong class="source-inline">op</strong></li><li>Runs <strong class="source-inline">op</strong> with retries and exponential delays</li><li>Creates an exponential backoff with default values</li><li>Wraps that backoff in <strong class="source-inline">BackOffContext</strong> to honor our context deadline</li></ul></li>
+			</ul>
+			<p>For a list of the default values for <strong class="source-inline">ExponentialBackoff</strong>, see the following web page: </p>
+			<p><a href="https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff">https://pkg.go.dev/github.com/cenkalti/backoff?utm_source=godoc#ExponentialBackOff</a></p>
+			<p>If you'd like<a id="_idIndexMarker1567"/> to see a demo of this backoff<a id="_idIndexMarker1568"/> in action, you<a id="_idIndexMarker1569"/> can see it here:</p>
+			<p><a href="https://go.dev/play/p/30tetefu9t0">https:/<span id="_idTextAnchor749"/>/go.dev/play/p/30tetefu9t0</a></p>
+			<h2 id="_idParaDest-343"><a id="_idTextAnchor750"/>Combining circuit breakers with backoff</h2>
+			<p>When choosing a prevention<a id="_idIndexMarker1570"/> implementation, another option<a id="_idIndexMarker1571"/> is to combine a circuit breaker with backoff for a more robust implementation.</p>
+			<p>A backoff implementation can be set to have a maximum time in which retries are occurring. Wrapping that inside a circuit breaker to make any set of failed attempts to trigger our circuit breaker not only potentially reduces our load by slowing our requests, but we can also stop these attempts with our circuit breaker. </p>
+			<p>If you would like to see an implementation combining both, you can go to the following web page:</p>
+			<p><a href="https://go.dev/play/p/gERsR7fvDck">https://go.dev/play/p/gERsR7fvDck</a></p>
+			<p>In this section, we have discussed the need to have mechanisms to prevent overwhelming your network and services. We have discussed an AWS outage that was partially due to the failure of such mechanisms. You were introduced to the circuit-breaker and backoff mechanisms to prevent these types of failures. Finally, we have shown two popular packages for implementing these mechanisms with examples.</p>
+			<p>In our workflow engine, we will be implementing<a id="_idIndexMarker1572"/> these prevention mechanisms for our <strong class="bold">Google RPC</strong> (<strong class="bold">gRPC</strong>) client to prevent issues talking to our server. You can see that here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/client/client.go</a></p>
+			<p>In our next section, we will be looking at preventing workflows from executing too fast using rate limiters. It is important to enforce both pacing for workflows' actions and to prevent too many workflows of a type fro<a id="_idTextAnchor751"/>m executing at the same time.</p>
+			<h1 id="_idParaDest-344"><a id="_idTextAnchor752"/>Using rate limiters to prevent runaway workflows</h1>
+			<p><strong class="bold">DevOps engineers </strong>can be responsible for a service that is made up of dozens of microservices. These microservices can then number in the dozens to the tens of thousands of instances running in data centers around the globe. Once a service consists<a id="_idIndexMarker1573"/> of more than a couple of instances, some form of rate control needs to exist to prevent bad rollouts or configuration changes from causing mass destruction.</p>
+			<p>Some type of a <strong class="bold">rate limiter</strong> for work with forced pause intervals is critical to prevent runaway infrastructure changes.</p>
+			<p>Rate limiting is easy to implement, but the scope of the rate limiter is going to depend on what your workflows are doing. For services, you may only want one type of change to happen at a time or only affect some number of instances at a time. </p>
+			<p>The first type of rate limiting would prevent multiple instances of a workflow type from running at a time; for example, you might only want one satellite disk erasure to occur at a time. </p>
+			<p>The second is to limit the number of devices, services, and so on that can be affected concurrently; for example, you might only want to allow two routers in a region to be taken out for a firmware upgrade.</p>
+			<p>For rate limiters to be effective, having a single system that executes actions for a set of services can greatly streamline these efforts. This allows centralized enforcement of policies such as rate limiting. </p>
+			<p>Let's look at the simplest implementation of a rate limiter in Go using channels.</p>
+			<h2 id="_idParaDest-345"><a id="_idTextAnchor753"/>Case study – Google satellite disk erase</h2>
+			<p>In the early days, Google<a id="_idIndexMarker1574"/> did not own all the data center space it does today—we were in a lot of rented space with a large number of machines. In some places, however, this was prohibitively expensive. To speed up connectivity in these places, we would rent small spaces that could have cache machines, terminate HTTP connections and backhaul<a id="_idIndexMarker1575"/> the traffic to a data center. We called these <strong class="bold">satellites</strong>.</p>
+			<p>Google has an automated<a id="_idIndexMarker1576"/> process for the decommissioning of machines. One part of this is called disk erase, whereby the machines have their disks wiped.</p>
+			<p>The software was written to grab a list of machines for a satellite and filter out other machines. Unfortunately, if you run it twice on a satellite, the filter is not applied, and your list of machines is all machines in every satellite.</p>
+			<p>Disk erase was very efficient, putting all machines in all satellites in disk erase at once before anything could be done. </p>
+			<p>For a more detailed<a id="_idIndexMarker1577"/> breakdown, you can read <a href="https://sre.google/workbook/postmortem-culture/">https://sre.google/workbook/postmortem-culture/</a>, where several <strong class="bold">Site Reliability Engineers</strong> (<strong class="bold">SREs</strong>) have provided more detail in the <a id="_idIndexMarker1578"/>context of postmortems.</p>
+			<p>We can look at the filtering part of the code and discuss bad design, but there will always be badly written tools with bad inputs. Even if you currently have a good culture for code reviews, things slip by. During times of hypergrowth with new engineers, these types of problems can rear their ugly heads. </p>
+			<p>Some tools that are known to be dangerous in the hands of a small group of experienced engineers can be used quite safely, but new engineers without experience or ones lacking proper fear can quickly devastate your infrastructure.</p>
+			<p>In this case and many other cases, centralized execution with rate limiting and other mandatory safety mechanisms allow new people to write tools that may be dangerous but limited in their blast radius.</p>
+			<h2 id="_idParaDest-346"><a id="_idTextAnchor754"/>Channel-based rate limiter</h2>
+			<p>A <strong class="bold">channel-based rate limiter</strong> is useful when a single program is handling the automation. In that case, you can make a limiter<a id="_idIndexMarker1579"/> that is based on the size of a channel. Let's make a limiter that allows only a fixed number of items to be worked on at a time, as follows:</p>
+			<p class="source-code">limit := make(chan struct{}, 3)</p>
+			<p>We now have something that<a id="_idIndexMarker1580"/> can limit the number of items that can be worked on. </p>
+			<p>Let's define a simple type that represents some action to be executed, as follows:</p>
+			<p class="source-code">type Job interface {</p>
+			<p class="source-code">     Validate(job *pb.Job) error</p>
+			<p class="source-code">     Run(ctx context.Context, job *pb.Job) error</p>
+			<p class="source-code">}</p>
+			<p>This defines a <strong class="source-inline">Job</strong> that can do the following:</p>
+			<ul>
+				<li>Validate a <strong class="source-inline">pb.Job</strong> definition passed to us</li>
+				<li>Run the job with that definition</li>
+			</ul>
+			<p>Here is a very simplistic example of executing a set of jobs contained in something called a block, which is just a holder of a slice of jobs: </p>
+			<p class="source-code">go</p>
+			<p class="source-code">wg := sync.WaitGroup{}</p>
+			<p class="source-code">for _, block := range work.Blocks {</p>
+			<p class="source-code">     limit := make(chan struct{}, req.Limit)</p>
+			<p class="source-code">     for _, job := range block.Jobs {</p>
+			<p class="source-code">          job := job</p>
+			<p class="source-code">          limit &lt;- struct{}{}</p>
+			<p class="source-code">          wg.Add()</p>
+			<p class="source-code">          go func() {</p>
+			<p class="source-code">               defer wg.Done()</p>
+			<p class="source-code">               defer func() {</p>
+			<p class="source-code">                    &lt;-limit</p>
+			<p class="source-code">               }()</p>
+			<p class="source-code">               job()</p>
+			<p class="source-code">          }()</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p class="source-code">wg.Wait()</p>
+			<p>In the preceding code<a id="_idIndexMarker1581"/> snippet, the following happens:</p>
+			<ul>
+				<li>We loop through a slice of <strong class="source-inline">Block</strong> inside the <strong class="source-inline">work.Blocks</strong> variable. </li>
+				<li>We loop through a slice of <strong class="source-inline">Jobs</strong> in the <strong class="source-inline">block.Jobs</strong> variable. </li>
+				<li>If we already have <strong class="source-inline">req.limit</strong> items running, <strong class="source-inline">limit &lt;- struct{}{}</strong> will block.</li>
+				<li>It executes our job concurrently.</li>
+				<li>When our goroutine ends, we remove an item from our <strong class="source-inline">workLimit</strong> queue.</li>
+				<li>We wait for all goroutines to end.</li>
+			</ul>
+			<p>This code prevents more than <strong class="source-inline">req.limit</strong> items from happening at a time. If this were a server, you could make <strong class="source-inline">limit</strong> a variable shared by all users and prevent more than three items of work from occurring for all work that was happening in your system. Alternatively, you could have different limiters for different classes of work.</p>
+			<p>A note about that <strong class="source-inline">job := job</strong> part. This is creating a shadowed variable of <strong class="source-inline">job</strong>. This prevents the <strong class="source-inline">job</strong> variable from being changed inside our goroutine when the loop and the goroutine are running in parallel by making a copy of the variable in the same scope as the goroutine. This is a common concurrency<a id="_idIndexMarker1582"/> bug for new Go developers, sometimes called the <strong class="bold">for loop gotcha</strong>. Here is a playground you can use to work through why this is necessary: <a href="https://go.dev/play/p/O9DcUIKuGBv">https://go.dev/play/p/O9DcUIKuGBv</a>.</p>
+			<p>We have completed the following example in the playground that you can play around with to explore these concepts: </p>
+			<p><a href="https://go.dev/play/p/aYoCTEFvRBI">https://go.dev/play/p/aYoCTEFvRBI</a></p>
+			<p>You can see a channel-based rate limiter<a id="_idIndexMarker1583"/> in action in the workflow service inside <strong class="source-inline">runJobs()</strong> here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workf<span id="_idTextAnchor755"/>low/internal/service/executor/executor.go</a></p>
+			<h2 id="_idParaDest-347"><a id="_idTextAnchor756"/>Token-bucket rate limiter</h2>
+			<p><strong class="bold">Token buckets</strong> are normally used to provide burstable traffic<a id="_idIndexMarker1584"/> management for services. There are several types of token buckets, the most popular being the standard token bucket and the leaky token bucket. </p>
+			<p>These are not normally deployed for an infrastructure tool, as clients tend to be internal and more predictable than external-facing services, but a useful type of a token bucket can be used to provide pacing. A standard token bucket simply holds some fixed set of tokens, and those tokens are refilled at some interval.</p>
+			<p>Here's a sample one:</p>
+			<p class="source-code">type bucket struct {</p>
+			<p class="source-code">     tokens chan struct{}</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func newbucket(size, incr int, interval time.Duration) (*bucket, error) {</p>
+			<p class="source-code">     b := bucket{tokens: make(chan struct{}, size)}</p>
+			<p class="source-code">     go func() {</p>
+			<p class="source-code">          for _ = range time.Tick(interval) {</p>
+			<p class="source-code">               for i := 0; i &lt; incr; i++ {</p>
+			<p class="source-code">                    select{</p>
+			<p class="source-code">                    case &lt;-b.tokens:</p>
+			<p class="source-code">                         continue</p>
+			<p class="source-code">                    default:</p>
+			<p class="source-code">                    }</p>
+			<p class="source-code">                    break</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     return &amp;b, nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (b *bucket) token(ctx context.Context) error {</p>
+			<p class="source-code">     select {</p>
+			<p class="source-code">     case &lt;-ctx.Done():</p>
+			<p class="source-code">          return ctx.Err()</p>
+			<p class="source-code">     case b.tokens &lt;-struct{}{}:</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>This preceding code snippet<a id="_idIndexMarker1585"/> does the following:</p>
+			<ul>
+				<li>Defines a <strong class="source-inline">bucket</strong> type that holds our tokens</li>
+				<li>Has <strong class="source-inline">newBucket()</strong>, which creates a new <strong class="source-inline">bucket</strong> instance with the following attributes:</li>
+				<li><strong class="source-inline">size</strong>, which is the total amount of tokens that can be stored<ul><li><strong class="source-inline">incr</strong>, which is how many tokens are added at a time</li><li><strong class="source-inline">interval</strong>, which is how often to add to the bucket</li></ul></li>
+			</ul>
+			<p>It also does the following:</p>
+			<ul>
+				<li>Starts a goroutine that will fill the bucket at intervals</li>
+				<li>Will only fill to the max <strong class="source-inline">size</strong> value</li>
+			</ul>
+			<ul>
+				<li>Defines <strong class="source-inline">token()</strong>, which retrieves a token:<ul><li>If no tokens are available, we wait for one.</li><li>If a <strong class="source-inline">Context</strong> is canceled, we return an error.</li></ul></li>
+			</ul>
+			<p>This is a fairly robust implementation <a id="_idIndexMarker1586"/>of a standard token bucket. You may be able to achieve a faster implementation using the <strong class="source-inline">atomic</strong> package, but it will be more complex to do so.</p>
+			<p>An implementation with input checking and the ability to stop a goroutine created with <strong class="source-inline">newBucket()</strong> can be found here: </p>
+			<p><a href="https://go.dev/play/p/6Dihz2lUH-P">https://go.dev/play/p/6Dihz2lUH-P</a></p>
+			<p>If we want, we could use a token bucket to only allow execution at some rate we define. This can be used inside a job to limit how fast an individual action can happen or to only allow so many instances of a workflow to happen within some time period. We will use it in our next section to limit when a particular workflow is allowed to happen.</p>
+			<p>Our generic workflow system has a token bucket package here:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/token/token.go</a></p>
+			<p>In this section, we looked at how rate limiters can be used to prevent runaway workflows. We talked about Google's satellite disk erase as a case study on this type of event. We showed how channel-based rate limiters can be implemented to control concurrent operations. We talked about how a token bucket could be used to rate-limit a number of executions within a certain time period.</p>
+			<p>This section is also laying the foundation of how executing actions, defined as a job, will work in the workflow system example we are building.</p>
+			<p>Now that we have some ideas on how we can rate-limit actions, let's look at how we can develop repeatabl<a id="_idTextAnchor757"/>e workflows that cannot be lost by a client.</p>
+			<h1 id="_idParaDest-348"><a id="_idTextAnchor758"/>Building workflows that are repeatable and never lost</h1>
+			<p>As DevOps engineers, we write tooling<a id="_idIndexMarker1587"/> all the time. In small shops, many times, these are sets of scripts. In large shops, these are complicated systems. </p>
+			<p>As you may have gleaned from the introduction, I believe that tool execution should always occur in a centralized service, regardless of scale. A basic service is easy to write, and you can expand and replace it as new needs arise. </p>
+			<p>But to make a workflow service work, two key concepts must be true of the workflows you create, as follows:</p>
+			<ul>
+				<li>They must be repeatable.</li>
+				<li>They cannot be lost.</li>
+			</ul>
+			<p>The first concept is that running a workflow more than once on the same infrastructure should produce<a id="_idIndexMarker1588"/> the same result. We called this <strong class="bold">idempotency</strong>, borrowing the computer science term.</p>
+			<p>The second is that a workflow cannot be lost. If a tool creates a workflow to be executed by a system and the tool dies, the tool must be able to know that the workflow is running and resume watching it.</p>
+			<h2 id="_idParaDest-349"><a id="_idTextAnchor759"/>Building idempotent workflows</h2>
+			<p><strong class="bold">Idempotency</strong> is a concept that if you make a call with the same<a id="_idIndexMarker1589"/> parameters multiple times, you receive the same result. This is an important concept for writing certain types of software.</p>
+			<p>In infrastructure, we modify this definition slightly: an idempotent action is one that, if repeated with the same parameters and without changes to the infrastructure outside of this call, will return the same result.</p>
+			<p>Idempotency is key to making workflows that can be recovered when your workflow system goes down. Simple workflow systems can just repeat the entire workflow. More complicated systems can restart from where they left off.</p>
+			<p>Many times, developers don't think deeply about idempotency. For example, let's look at a simple operation<a id="_idIndexMarker1590"/> to copy some content to a file. Here is a naive implementation:</p>
+			<p class="source-code">func CopyToFile(content []byte, p string) error {</p>
+			<p class="source-code">     return io.WriteFile(p, content)</p>
+			<p class="source-code">}</p>
+			<p>The preceding code contains the following:</p>
+			<ul>
+				<li>A <strong class="source-inline">content</strong> argument that represents content for a file</li>
+				<li>A <strong class="source-inline">p</strong> argument, which is the path to the file</li>
+			</ul>
+			<p>It also does the following:</p>
+			<ul>
+				<li>Writes <strong class="source-inline">content</strong> to file at <strong class="source-inline">p</strong></li>
+			</ul>
+			<p>This initially appears to be idempotent. If our workflow was killed after <strong class="source-inline">CopyToFile()</strong> was called but before <strong class="source-inline">io.WriteFile()</strong> was called, we could repeat this operation, and it initially looks as though if we called this twice, we would still get the same result. </p>
+			<p>But what if the file didn't exist and we created it but did not have permissions to edit an existing file? If our program died before recording the result of <strong class="source-inline">io.WriteFile()</strong> but after the change has occurred, a repeat of this action would report an error, and because the infrastructure did not change, the action is not idempotent.</p>
+			<p>Let's modify this to make it idempotent, as follows:</p>
+			<p class="source-code">func CopyToFile(content []byte, p string) error {</p>
+			<p class="source-code">     if _, ok := os.Stat(p); ok {</p>
+			<p class="source-code">          f, err := os.Open(p)</p>
+			<p class="source-code">          if err != nil {</p>
+			<p class="source-code">               return err</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          h0 := sha256.New()</p>
+			<p class="source-code">          io.Copy(h0, f)</p>
+			<p class="source-code">          h1 := sha256.New()</p>
+			<p class="source-code">          h1.Write(content)</p>
+			<p class="source-code">          if h0.Sum(nil) == h1.Sum(nil) {</p>
+			<p class="source-code">               return nil</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return io.WriteFile(p, content)</p>
+			<p class="source-code">}</p>
+			<p>This code checks if the file<a id="_idIndexMarker1591"/> exists and then does the following:</p>
+			<ul>
+				<li>If it exists and it already has the content, it doesn't do anything.</li>
+				<li>If it doesn't, it writes the content.</li>
+			</ul>
+			<p>This uses the standard library's <strong class="source-inline">sha256</strong> package to calculate checksum hashes to validate if the content is the same.</p>
+			<p>The key to providing idempotency is often simply checking if the work is already done. </p>
+			<p>This leads us to a concept called three-way handshakes. This concept can be used in actions to provide idempotency when you need to talk to other systems via RPC. We will discuss how to use this concept in terms of executing workflows, but this can also be used i<a id="_idTextAnchor760"/>n idempotent actions that talk to other services.</p>
+			<h2 id="_idParaDest-350"><a id="_idTextAnchor761"/>Using three-way handshakes to prevent workflow loss</h2>
+			<p>When we write an application<a id="_idIndexMarker1592"/> that talks to a workflow service, it is important<a id="_idIndexMarker1593"/> that the application never loses track of workflows that are running on our service. </p>
+			<p>The three-way handshake is a name I borrowed from <strong class="bold">Transmission Control Protocol</strong> (<strong class="bold">TCP</strong>). TCP has a handshake that establishes<a id="_idIndexMarker1594"/> a socket between two machines. It consists of the following:</p>
+			<ul>
+				<li><strong class="bold">SYNchonize</strong> (<strong class="bold">SYN</strong>), a request to open<a id="_idIndexMarker1595"/> a connection</li>
+				<li><strong class="bold">ACKnowledge</strong> (<strong class="bold">ACK</strong>), an acknowledgment of the <a id="_idIndexMarker1596"/>request</li>
+				<li>SYN-ACK, an acknowledgment of the ACK</li>
+			</ul>
+			<p>When a client sends<a id="_idIndexMarker1597"/> a request to execute a workflow, we never<a id="_idIndexMarker1598"/> want the workflow service to execute a workflow that the client doesn't know exists due to a crash of the client.</p>
+			<p>This can happen because the client program crashes or the machine the client is running on fails. If we sent a workflow and the service began executing after a single RPC, the client could crash after sending<a id="_idIndexMarker1599"/> the RPC but before receiving an <strong class="bold">identifier</strong> (<strong class="bold">ID</strong>) for the workflow. </p>
+			<p>This would lead to a scenario where when the client was restarted, it did not know the workflow service was already running the workflow, and it might send another workflow that did the same thing. </p>
+			<p>To avoid that, instead of a single RPC to execute a workflow, a workflow should have a three-way handshake to do the following:</p>
+			<ul>
+				<li>Send the workflow to the service</li>
+				<li>Receive the workflow ID</li>
+				<li>Send a request to execute the workflow with its ID to the service</li>
+			</ul>
+			<p>This allows the client to record the ID of the workflow before it executes. If the client crashes before recording the ID, the service simply has a non-running workflow record. If the client dies after the service begins execution, when the client restarts, it can check the status of the workflow. If it is running, it can simply monitor it. If it isn't running, it can request it to execute again.</p>
+			<p>For our workflow service, let's create a service definition that supports our three-way handshake using gRPC, as follows:</p>
+			<p class="source-code">service Workflow {</p>
+			<p class="source-code">     rpc Submit(WorkReq) returns (WorkResp) {};</p>
+			<p class="source-code">     rpc Exec(ExecReq) returns (ExecResp) {};</p>
+			<p class="source-code">     rpc Status(StatusReq) returns (StatusResp) {};</p>
+			<p class="source-code">}</p>
+			<p>This defines a service with the following calls:</p>
+			<ul>
+				<li><strong class="source-inline">Submit</strong> submits a <strong class="source-inline">WorkReq</strong> message that describes the work to be done.</li>
+				<li><strong class="source-inline">Exec</strong> executes a <strong class="source-inline">WorkReq</strong> previously sent to the server with <strong class="source-inline">Submit</strong>.</li>
+				<li><strong class="source-inline">Status</strong> retrieves the status of a <strong class="source-inline">WorkReq</strong>.</li>
+			</ul>
+			<p>The content of the messages<a id="_idIndexMarker1600"/> for these service calls will be discussed<a id="_idIndexMarker1601"/> in detail in the next section, but the key to this is that on <strong class="source-inline">Submit()</strong>, <strong class="source-inline">WorkResp</strong> will return an ID, but the workflow will not execute. When <strong class="source-inline">Exec()</strong> is called, we will send the ID we received from our <strong class="source-inline">Submit()</strong> call, and our <strong class="source-inline">Status()</strong> call allows us to check the status of any workflow.</p>
+			<p>We now have the basic definition of a workflow service that includes a three-way handshake to prevent any loss of workflows by our clients.</p>
+			<p>In this section, we have covered the basics of repeatable workflows that cannot be lost by our clients. We covered idempotency and how this leads to repeatable workflows. We have also shown how a three-way handshake allows us to prevent a running workflow from becoming <em class="italic">lost</em>.</p>
+			<p>We have also defined service calls that we will use in the workflow system we are building.</p>
+			<p>Now, we want to look<a id="_idIndexMarker1602"/> at how tools can understand the <strong class="bold">scope of work</strong> (<strong class="bold">SOW</strong>) being executed to provide protection against runaway <a id="_idTextAnchor762"/>tooling. To do this, let's explore building a policy engine.</p>
+			<h1 id="_idParaDest-351"><a id="_idTextAnchor763"/>Using policies to restrict tools</h1>
+			<p>Rate limiting is great for preventing<a id="_idIndexMarker1603"/> a bad tool run from wiping out a service when all items of work<a id="_idIndexMarker1604"/> are equal. But not all items of work are equal, as some machine services are more important and fragile than others (such as your service's database systems). Also, machines or services may need to be put into logical groupings that can only happen in some limited amount. These could be broken up by sites, geographical areas, and so on.</p>
+			<p>This logic is generally specific to some set of work items. This bundling, which we will call a SOW, can be quite complex. </p>
+			<p>To safely do work, you must understand your scope. This might be how you can safely update database schemas for a particular service or how many route reflectors in a network region can be modified at a time.</p>
+			<p>To implement safety around a SOW, we will introduce the idea of policies. Policies will be used to check a set of work that is entering into the system for compliance. If it is not compliant, it will be rejected.</p>
+			<p>As an example, we will look at handling disk erasures similar to Google's disk erase case study. Here are some protections we will add:</p>
+			<ul>
+				<li>Only allow a single satellite disk erasure to happen every hour</li>
+				<li>Rate-limit so that we can only erase five machines at a time </li>
+				<li>Must pause for 1 minute after each five-machine erasure</li>
+			</ul>
+			<p>To be able to make a policy engine, we must have a common way to define what kind of work will be executed, in what order, and with what concurrency. </p>
+			<p>We also want the tool engineers to only define the work to be done and submit it to a separate service that executes it. This allows for the centralization of control.</p>
+			<p>Let's define the service that could do that in gRPC.</p>
+			<h2 id="_idParaDest-352"><a id="_idTextAnchor764"/>Defining a gRPC workflow service</h2>
+			<p>In the previous section, we talked about<a id="_idIndexMarker1605"/> a service definition that defines our three-way handshake. Let's look at the arguments to those calls to see what our clients will send the workflow service, as follows:</p>
+			<p class="source-code">message WorkReq {</p>
+			<p class="source-code">     string name = 1;</p>
+			<p class="source-code">     string desc = 2;</p>
+			<p class="source-code">     repeated Block blocks = 3;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message WorkResp {</p>
+			<p class="source-code">     string id = 1;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message Block {</p>
+			<p class="source-code">     string desc = 1;</p>
+			<p class="source-code">     int32 rate_limit = 2;</p>
+			<p class="source-code">     repeated Job jobs = 3;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message Job {</p>
+			<p class="source-code">     string name = 1;</p>
+			<p class="source-code">     map&lt;string, string&gt; args = 2;</p>
+			<p class="source-code">}</p>
+			<p>These messages<a id="_idIndexMarker1606"/> are used to define the work that a client wants the server to execute and contain the following attributes: </p>
+			<ul>
+				<li><strong class="source-inline">WorkReq</strong> message contains<a id="_idIndexMarker1607"/> the name of the work and all <strong class="source-inline">Block</strong> messages that make up a workflow.</li>
+				<li>The <strong class="source-inline">Block</strong> message describes a body of work<a id="_idIndexMarker1608"/> in the workflow; each <strong class="source-inline">Block</strong> executes one at a time and has the following attributes:<ul><li>Has a set of <strong class="source-inline">Job</strong> messages that describe the  work to be done</li><li>At what concurrency to execute the work described by the <strong class="source-inline">Job</strong> messages </li><li>The Job message describes<a id="_idIndexMarker1609"/> the server's Job type<a id="_idIndexMarker1610"/> on the server to call and with which arguments.</li></ul></li>
+				<li>The <strong class="source-inline">WorkResp</strong> message returns the ID that<a id="_idIndexMarker1611"/> refers to this <strong class="source-inline">WorkReq</strong>:<ul><li>Uses <strong class="source-inline">UUIDv1</strong> IDs that encapsulate time into the ID so we know when it was submitted to the system</li><li>Uses that time mechanic to prevent execution if the <strong class="source-inline">Exec()</strong> <strong class="source-inline">RPC</strong> is not called in by some expiration time</li></ul></li>
+			</ul>
+			<p><strong class="source-inline">Exec</strong> messages provide the ID you want to execute, as illustrated here:</p>
+			<p class="source-code">message ExecReq {</p>
+			<p class="source-code">     string id = 1;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message ExecResp {}</p>
+			<p>There are more messages and <strong class="source-inline">enums</strong> to allow for a <strong class="source-inline">Status</strong> call. You can find the complete protocol buffer definition here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/proto/diskerase.proto</a></p>
+			<p>Now that we have messages to describe the work to be done, let's look at creating a policy engine.</p>
+			<h2 id="_idParaDest-353"><a id="_idTextAnchor765"/>Creating a policy engine</h2>
+			<p>A policy checks our work to make sure some parameter<a id="_idIndexMarker1612"/> is allowed. In our case, these parameters are inside a <strong class="source-inline">pb.WorkReq</strong> instance. We want policies to be generic so that they can be reused against multiple types of work described by a <strong class="source-inline">pb.WorkReq</strong>. Once defined, we will have a <strong class="source-inline">policy.json</strong> file that defines which policies are applied against a specifically named <strong class="source-inline">pb.WorkReq</strong>.</p>
+			<p>To make this work, each policy<a id="_idIndexMarker1613"/> will need to receive the settings for the policy that should be applied to a specific workflow. Let's define two interfaces that describe a policy and its settings, as follows:</p>
+			<p class="source-code">type Settings interface{</p>
+			<p class="source-code">     Validate() error</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type Policy interface {</p>
+			<p class="source-code">     Run(ctx context.Context, name string, req *pb.WorkReq, settings Settings) error</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">Settings</strong> will always be implemented as some struct. Its <strong class="source-inline">Validate()</strong> method will be used to validate that the fields for that struct are set to valid values.</p>
+			<p><strong class="source-inline">Policy</strong> runs our implementation against a <strong class="source-inline">pb.WorkReq</strong> with the settings provided.</p>
+			<p>Each <strong class="source-inline">WorkReq</strong> that is submitted will have a list of policies to apply. This is defined as follows:</p>
+			<p class="source-code">type PolicyArgs struct {</p>
+			<p class="source-code">     Name string</p>
+			<p class="source-code">     Settings Settings</p>
+			<p class="source-code">}</p>
+			<p><strong class="source-inline">Name</strong> is the name of the policy to invoke. <strong class="source-inline">Settings</strong> are the settings for that invocation.</p>
+			<p>The configuration file will detail a set of <strong class="source-inline">PolicyArgs</strong> arguments to run. Each policy will need to be registered in the system. We are going to skip the registration method for policies, but this is where the policies are registered:</p>
+			<p class="source-code">var policies = map[string]registration{}</p>
+			<p class="source-code">type registration struct {</p>
+			<p class="source-code">     Policy Policy</p>
+			<p class="source-code">     Settings Settings</p>
+			<p class="source-code">}</p>
+			<p>When a <strong class="source-inline">pb.WorkReq</strong> enters the system, we want<a id="_idIndexMarker1614"/> to invoke those policies concurrently against that <strong class="source-inline">pb.WorkReq</strong>. Let's have a look at how that would work here:</p>
+			<p class="source-code">func Run(ctx context.Context, req *pb.WorkReq, args ...PolicyArgs) error {</p>
+			<p class="source-code">     if len(args) == 0 {</p>
+			<p class="source-code">          return nil</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     var cancel context.CancelFunc</p>
+			<p class="source-code">     ctx, cancel = context.WithCancel(ctx)</p>
+			<p class="source-code">     defer cancel()</p>
+			<p class="source-code">     // Make a deep clone so that no policy is able to make changes.</p>
+			<p class="source-code">     creq := proto.Clone(req).(*pb.WorkReq)</p>
+			<p class="source-code">     runners := make([]func() error, 0, len(args))</p>
+			<p class="source-code">     for _, arg := range args {</p>
+			<p class="source-code">          r, ok := policies[arg.Name]</p>
+			<p class="source-code">          if !ok {</p>
+			<p class="source-code">               return fmt.Errorf("policy(%s) does not exist", arg.Name)</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          runners = append(</p>
+			<p class="source-code">               runners,</p>
+			<p class="source-code">               func() error {</p>
+			<p class="source-code">                    return r.Policy.Run(ctx, arg.Name, creq, arg.Settings)</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          )</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     wg := sync.WaitGroup{}</p>
+			<p class="source-code">     ch := make(chan error, 1)</p>
+			<p class="source-code">     wg.Add(len(runners))</p>
+			<p class="source-code">     for _, r := range runners {</p>
+			<p class="source-code">          r := r</p>
+			<p class="source-code">          go func() {</p>
+			<p class="source-code">               defer wg.Done()</p>
+			<p class="source-code">               if err := r(); err != nil {</p>
+			<p class="source-code">                    select {</p>
+			<p class="source-code">                    case ch &lt;- err:</p>
+			<p class="source-code">                         cancel()</p>
+			<p class="source-code">                    default:</p>
+			<p class="source-code">                    }</p>
+			<p class="source-code">                    return</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }()</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     wg.Wait()</p>
+			<p class="source-code">     select {</p>
+			<p class="source-code">     case err := &lt;-ch:</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     default:</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     if !proto.Equal(req, creq) {</p>
+			<p class="source-code">          return fmt.Errorf("a policy tried to modify a request: this is not allowed as it is a security violation")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>This preceding code<a id="_idIndexMarker1615"/> defines the following:</p>
+			<ul>
+				<li>If the configuration for a <strong class="source-inline">pb.WorkReq</strong> has no policies, return.</li>
+				<li>Create a <strong class="source-inline">Context</strong> object so that we can cancel policies being run on an error.</li>
+				<li>Clone our <strong class="source-inline">pb.WorkReq</strong> so that it cannot be changed by a <strong class="source-inline">Policy</strong>.</li>
+				<li>Make sure each <strong class="source-inline">Policy</strong> that is named actually exists.</li>
+				<li>Run all our policies with the settings that we were given.</li>
+				<li>If there is an error<a id="_idIndexMarker1616"/> in any of them, record it and cancel all running policies.</li>
+				<li>Make sure the copy of <strong class="source-inline">pb.WorkReq</strong> is the same as what was submitted.</li>
+			</ul>
+			<p>We now have the main parts of a policy engine. The full engine can be found here:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/policy.go</a></p>
+			<p>The <strong class="source-inline">Reader</strong> type that is used to read our <strong class="source-inline">policy.json</strong> file where we define policies  is detailed here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go</a></p>
+			<p>Let's look at writing a policy to be used by our engine.</p>
+			<h2 id="_idParaDest-354"><a id="_idTextAnchor766"/>Writing a policy</h2>
+			<p>One of the most basic policies<a id="_idIndexMarker1617"/> that you can define against a workflow is to limit which job types are allowed in that workflow. </p>
+			<p>This prevents some new type of work from being introduced into a workflow where no one has thought about policies that need to be applied to that <strong class="source-inline">Job</strong>. </p>
+			<p>For our first <strong class="source-inline">Policy</strong> implementation, let's write one that checks our <strong class="source-inline">pb.WorkReq</strong> to allow only <strong class="source-inline">Job</strong> types we have defined in our policy configuration. If we receive an unexpected <strong class="source-inline">Job</strong>, we reject the <strong class="source-inline">pb.WorkReq</strong>.</p>
+			<p>Let's define the settings for our <strong class="source-inline">Policy</strong>, as follows:</p>
+			<p class="source-code">type Settings struct { </p>
+			<p class="source-code">    AllowedJobs []string </p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s Settings) Validate() error { </p>
+			<p class="source-code">    for _, n := range s.AllowedJobs { </p>
+			<p class="source-code">        _, err := jobs.GetJob(n) </p>
+			<p class="source-code">        if err != nil { </p>
+			<p class="source-code">            return fmt.Errorf("allowed job(%s) is not defined in the proto") </p>
+			<p class="source-code">        } </p>
+			<p class="source-code">    }</p>
+			<p class="source-code">    return nil </p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s Settings) allowed(name string) bool {</p>
+			<p class="source-code">     for _, jn := range s.AllowedJobs {</p>
+			<p class="source-code">          if jn == name {</p>
+			<p class="source-code">               return true</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return false</p>
+			<p class="source-code">}</p>
+			<p>This preceding code<a id="_idIndexMarker1618"/> contains the following:</p>
+			<ul>
+				<li>Our specific <strong class="source-inline">Settings</strong> that implement <strong class="source-inline">policy.Settings</strong></li>
+				<li><strong class="source-inline">AllowedJobs</strong>, which are the names of the jobs we allow</li>
+				<li>A <strong class="source-inline">Validate()</strong> method that validates the listed <strong class="source-inline">Jobs</strong> exist</li>
+				<li>An <strong class="source-inline">allowed()</strong> method that checks a given name against what we allow</li>
+				<li>It also uses our <strong class="source-inline">jobs</strong> package to do these checks</li>
+			</ul>
+			<p>With these settings, a user can define a policy for any workflow in our configuration file that defines which <strong class="source-inline">Job</strong> types are allowed.</p>
+			<p>Let's define a type that implements<a id="_idIndexMarker1619"/> the <strong class="source-inline">Policy</strong> interface as follows:</p>
+			<p class="source-code">type Policy struct{}</p>
+			<p class="source-code">func New() (Policy, error) {</p>
+			<p class="source-code">     return Policy{}, nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (p Policy) Run(ctx context.Context, name string, req *pb.WorkReq, settings policy.Settings) error {</p>
+			<p class="source-code">     const errMsg = "policy(%s): block(%d)/job(%d) is a type(%s) that is not allowed"</p>
+			<p class="source-code">     s, ok := settings.(Settings)</p>
+			<p class="source-code">     if !ok {</p>
+			<p class="source-code">          return fmt.Errorf("settings were not valid")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     for blockNum, block := range req.Blocks {</p>
+			<p class="source-code">          for jobNum, job := range block.Jobs {</p>
+			<p class="source-code">               if ctx.Err() != nil {</p>
+			<p class="source-code">                    return ctx.Err()</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">               if !s.allowed(job.Name) {</p>
+			<p class="source-code">                    return fmt.Errorf(errMsg, blockNum, jobNum, job.name)</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>This preceding code<a id="_idIndexMarker1620"/> does the following:</p>
+			<ul>
+				<li>Defines our policy, which implements the <strong class="source-inline">policy.Policy</strong> interface</li>
+				<li>Defines a <strong class="source-inline">New()</strong> constructor</li>
+				<li>Implements the <strong class="source-inline">policy.Policy.Run()</strong> method</li>
+				<li>Validates the <strong class="source-inline">policy.Settings</strong> value passed are the <strong class="source-inline">Settings</strong> for this <strong class="source-inline">Policy</strong></li>
+				<li>Loops through all our <strong class="source-inline">req.Blocks</strong> and gets our <strong class="source-inline">Job</strong> instances</li>
+				<li>Checks each <strong class="source-inline">Job</strong> has an allowed name</li>
+			</ul>
+			<p>We now have a policy we can apply to restrict <strong class="source-inline">Job</strong> types in a <strong class="source-inline">pb.WorkReq</strong>. This is how we could apply that in our configuration file to a workflow that does satellite disk erasures:</p>
+			<p class="source-code">{</p>
+			<p class="source-code">     "Name": "SatelliteDiskErase",</p>
+			<p class="source-code">     "Policies": [</p>
+			<p class="source-code">          {</p>
+			<p class="source-code">               "Name": "restrictJobTypes",</p>
+			<p class="source-code">               "Settings": {</p>
+			<p class="source-code">                    "AllowedJobs": [</p>
+			<p class="source-code">                            "validateDecom",</p>
+			<p class="source-code">                            "diskErase",</p>
+			<p class="source-code">                            "sleep",</p>
+			<p class="source-code">                            "getTokenFromBucket"</p>
+			<p class="source-code">                    ]</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     ]</p>
+			<p class="source-code">}</p>
+			<p>This policy has the following<a id="_idIndexMarker1621"/> attributes:</p>
+			<ul>
+				<li>Is applied only to workflows called <strong class="source-inline">"SatelliteDiskErase"</strong></li>
+				<li>Has a single policy applied, <strong class="source-inline">"restrictJobTypes"</strong>, which we defined</li>
+				<li>Allows only <strong class="source-inline">Job</strong> types called one of the following:<ul><li><strong class="source-inline">"validateDecom"</strong></li><li><strong class="source-inline">"diskErase"</strong></li><li><strong class="source-inline">"sleep"</strong></li><li><strong class="source-inline">"getTokenFromBucket"</strong></li></ul></li>
+			</ul>
+			<p>You can see the full <strong class="source-inline">Policy</strong> implementation here:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/register/restrictjobtypes/restrictjobtypes.go</a></p>
+			<p>You can find other policies we have defined in directories here:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/16/workflow/internal/policy/register</a></p>
+			<p>You can see the policy configuration currently defined here:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go">https://github.com/PacktPublishi<span id="_idTextAnchor767"/>ng/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/policy/config/config.go</a></p>
+			<h2 id="_idParaDest-355"><a id="_idTextAnchor768"/>Cautions on policy engines</h2>
+			<p>Before we move on, I would like<a id="_idIndexMarker1622"/> to provide a word of caution. </p>
+			<p>Simplicity is the key to sustainable software. I define sustainable software as having the following attributes:</p>
+			<ul>
+				<li>Easy to debug</li>
+				<li>Users can understand how to use it in a few hours at most</li>
+			</ul>
+			<p>Policy engines can be amazingly effective in preventing major problems, acting as a secondary check on sanity to some set of actions. As with security, it should provide substantial benefits while only introducing a small burden. </p>
+			<p>Policy engines are easy to overdevelop, with the lofty goal of 100% protection while introducing a large amount of complexity and burden. Often, I will see policy engines that are not tightly coupled to a single workflow system. Instead, engineers will design a generic system that tries to deal with multiple tooling systems.</p>
+			<p>If your policy statements start to look like a programming language (<strong class="source-inline">if</strong> statements, loops, functions), you are moving toward complexity. As policy engines become generic, they become complex to deal with. If you need policy enforcement in multiple places, this is another warning sign. </p>
+			<p>Not all workflows can achieve safety with generic policies. When you have a complex workflow, feel free to design a policy that does deep checks for a single workflow. Keep your <strong class="source-inline">if</strong> statements, loops, and functions in your code, not your configuration.</p>
+			<p>I've seen engineers write lots of overcomplicated safety systems. Focus on providing guard rails that are easy to write and update while covering 80% of cases, not 100% of cases. With the division between software that creates a set of actions to run and a service that validates those actions against policies, you are unlikely to have a <em class="italic">disk-erase</em> type of event in the future, and importantly, you will be able to maintain velocity. </p>
+			<p>In this section, we have discussed what an SOW would be. To allow our workflow service to understand an SOW, to enforce it, we have designed a policy engine and created our first policy that can be applied to workflows submitted to our system.</p>
+			<p>Even with policies, something is going to go wrong. This could simply be a confluence of events that makes a normally safe operation unsafe. To be able to respond<a id="_idIndexMarker1623"/> quickly<a id="_idTextAnchor769"/> to these types of events, let's look at introducing emergency-stop capabilities.</p>
+			<h1 id="_idParaDest-356"><a id="_idTextAnchor770"/>Building systems with an emergency stop</h1>
+			<p>Systems are going to run amok. This is a simple truth<a id="_idIndexMarker1624"/> that you need to come to terms<a id="_idIndexMarker1625"/> with early in infrastructure tooling development.</p>
+			<p>When you are a small company, there is usually a very small group of people who understand the systems well and watch over any changes to handle problems. If those people are good, they can quickly respond to a problem. Usually, these people are the developers of the software.</p>
+			<p>As companies start to grow, jobs begin to become more specialized. The larger the company, the more specialized the jobs. As that happens, the first responders to major issues don't have the access or knowledge to deal with these problems.</p>
+			<p>This can create a critical gap between recognition of a major problem and stopping the problem from getting worse.</p>
+			<p>This is where the ability to allow first responders to stop changes comes into play. We call this an emergency-stop ability.</p>
+			<h2 id="_idParaDest-357"><a id="_idTextAnchor771"/>Understanding emergency stops</h2>
+			<p>There are multiple<a id="_idIndexMarker1626"/> ways to build an emergency-stop system, but the basics are the same. The software will check some data store that contains the name of the workflow you are executing and what the emergency-stop state is.</p>
+			<p>The most simplistic version of an emergency-stop system has two modes, as follows:</p>
+			<ul>
+				<li><strong class="source-inline">Go</strong></li>
+				<li><strong class="source-inline">Stop</strong></li>
+			</ul>
+			<p>The software that does any type of work would need to reference the system at intervals. If it cannot<a id="_idIndexMarker1627"/> find itself listed or the system indicates it is in a <strong class="source-inline">Stop</strong> state, the software terminates, or if it is an execution system, it terminates that workflow. </p>
+			<p>More complicated versions of this might contain site information so that all tooling running at a site is stopped, or it might include other states such as <strong class="source-inline">Pause</strong>. These are more complicated to implement, so we will stick to this mor<a id="_idTextAnchor772"/>e simplistic form here.</p>
+			<p>Let's look at what an implementation of this might look like.</p>
+			<h2 id="_idParaDest-358"><a id="_idTextAnchor773"/>Building an emergency-stop package</h2>
+			<p>The first thing we need<a id="_idIndexMarker1628"/> to do is define what the data format will look like. For this exercise, we will make it <strong class="bold">JavaScript Object Notation</strong> (<strong class="bold">JSON</strong>) that will be stored on disk. The disk might<a id="_idIndexMarker1629"/> be a distributed filesystem or a lock file in <strong class="source-inline">etcd</strong>. And while I'm using JSON here, this could be a single table in a database or a protocol buffer. </p>
+			<p>Let's define the status our workflows can have, as follows:</p>
+			<p class="source-code">// Status indicates the emergency stop status.</p>
+			<p class="source-code">type Status string</p>
+			<p class="source-code">const (</p>
+			<p class="source-code">     Unknown Status = ""</p>
+			<p class="source-code">     Go Status = "go"</p>
+			<p class="source-code">     Stop Status = "stop"</p>
+			<p class="source-code">)</p>
+			<p>This defines a few statuses, as follows:</p>
+			<ul>
+				<li><strong class="source-inline">Unknown</strong>, which means that the status was not set</li>
+				<li><strong class="source-inline">Go</strong>, which indicates the workflow can be executed</li>
+				<li><strong class="source-inline">Stop</strong>, which indicates the workflow should stop</li>
+			</ul>
+			<p>It is key to know that any status that is not <strong class="source-inline">Go</strong> is considered <strong class="source-inline">Stop</strong>.</p>
+			<p>Now, let's define an emergency<a id="_idIndexMarker1630"/> stop entry that can be converted to and from JSON, as follows:</p>
+			<p class="source-code">type Info struct {</p>
+			<p class="source-code">     // Name is the workflow name.</p>
+			<p class="source-code">     Name string</p>
+			<p class="source-code">     // Status is the emergency stop status.</p>
+			<p class="source-code">     Status Status</p>
+			<p class="source-code">}</p>
+			<p>This has the following fields:</p>
+			<ul>
+				<li><strong class="source-inline">Name</strong>, which is a unique name for a workflow</li>
+				<li><strong class="source-inline">Status</strong>, which details the emergency-stop status for this workflow</li>
+			</ul>
+			<p>Another key to an emergency-stop package is that every workflow must have an entry. If a check is made for an entry that is not named, it is treated as being set to <strong class="source-inline">Stop</strong>.</p>
+			<p>Now, we need to validate an entry. Here's how to go about this:</p>
+			<p class="source-code">func (i Info) validate() error {</p>
+			<p class="source-code">     i.Name = strings.TrimSpace(i.Name)</p>
+			<p class="source-code">     if i.Name == "" {</p>
+			<p class="source-code">          return fmt.Errorf(“es.json: rule with empty name”)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     switch i.Status {</p>
+			<p class="source-code">     case Go, Stop:</p>
+			<p class="source-code">     default:</p>
+			<p class="source-code">          return fmt.Errorf("es.json: rule(%s) has invalid Status(%s), ignored", i.Name, i.Status)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>The preceding code does the following:</p>
+			<ul>
+				<li>Removes any spaces around a workflow name.</li>
+				<li>If the <strong class="source-inline">Name</strong> value is empty, it is an error.</li>
+				<li>If the <strong class="source-inline">Status</strong> value is not <strong class="source-inline">Go</strong> or <strong class="source-inline">Stop</strong>, it is an error.</li>
+			</ul>
+			<p>We treat these errors<a id="_idIndexMarker1631"/> as simply being that the rule doesn't exist. If a rule doesn't exist, then a workflow is considered in a <strong class="source-inline">Stop</strong> state.</p>
+			<p>We now need something that reads this emergency-stop file at intervals or receives notifications on changes. If a service cannot reach the datastore holding our emergency-stop information after some small amount of time, it should report a <strong class="source-inline">Stop</strong> state.</p>
+			<p>Let's make a <strong class="source-inline">Reader</strong> type that accesses our emergency-stop data, as follows:</p>
+			<p class="source-code">var Data *Reader</p>
+			<p class="source-code">func init() {</p>
+			<p class="source-code">     r, err := newReader()</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          panic(fmt.Sprintf("es error: %s", err))</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     Data = r</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type Reader struct {</p>
+			<p class="source-code">     entries atomic.Value // map[string]Info</p>
+			<p class="source-code">     mu          sync.Mutex</p>
+			<p class="source-code">     subscribers map[string][]chan Status</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func newReader() (*Reader, error) {...}</p>
+			<p class="source-code">func (r *Reader) Subscribe(name string) (chan Status, Cancel){...}</p>
+			<p class="source-code">func (r *Reader) Status(name string) Status {...}</p>
+			<p>The preceding<a id="_idIndexMarker1632"/> code does the following:</p>
+			<ul>
+				<li>Provides a <strong class="source-inline">Data</strong> variable that is the single access point for our <strong class="source-inline">Reader</strong> type</li>
+				<li>Provides an <strong class="source-inline">init()</strong> function that accesses our emergency-stop data on program start</li>
+				<li>Provides a<strong class="source-inline"> Reader</strong> type that allows us to read our emergency-stop states</li>
+				<li>Provides a<strong class="source-inline"> Subscribe()</strong> function that returns status changes for a workflow and a <strong class="source-inline">Cancel()</strong> function that is called when you no longer want to subscribe</li>
+				<li>Provides a <strong class="source-inline">Status()</strong> function that returns the status once</li>
+				<li>Provides <strong class="source-inline">newReader</strong>, which is our <strong class="source-inline">Reader</strong> constructor</li>
+			</ul>
+			<p>The full code is not provided here but can be located at the following link:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/es/es.go</a></p>
+			<p>We only allow emergency-stop information to be accessed through <strong class="source-inline">Data</strong>, which is acting as a singleton. This prevents multiple instances from polling for the same data. I prefer having the singleton accessed through a variable to make it clear that a single instance exists.</p>
+			<p>We now have a package that can<a id="_idTextAnchor774"/> tell us our emergency-stop states. Let's look at how we can use this to cancel something.</p>
+			<h2 id="_idParaDest-359"><a id="_idTextAnchor775"/>Using the emergency-stop package</h2>
+			<p>Now that we have a package<a id="_idIndexMarker1633"/> that can read our emergency-stop data, let's show how we can use it, as follows:</p>
+			<p class="source-code">type Job interface{</p>
+			<p class="source-code">     Run(ctx context.Context)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type Work struct {</p>
+			<p class="source-code">     name string</p>
+			<p class="source-code">     jobs []Job</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (w *work) Exec(ctx context.Context) error{</p>
+			<p class="source-code">     esCh, cancelES := es.Data.Subscribe(w.name)</p>
+			<p class="source-code">     defer cancelES() // Stop subscribing</p>
+			<p class="source-code">     if &lt;-esCh != es.Go { // The initial state</p>
+			<p class="source-code">          return fmt.Errorf("es in Stop state")</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     var cancel context.CancelFunc</p>
+			<p class="source-code">     ctx, cancel = context.WithCancel(ctx)</p>
+			<p class="source-code">     defer cancel()</p>
+			<p class="source-code">     // If we get an emergency stop, cancel our context.</p>
+			<p class="source-code">     // If the context gets cancelled, then just exit.</p>
+			<p class="source-code">     go func() {</p>
+			<p class="source-code">          select {</p>
+			<p class="source-code">          case &lt;-ctx.Done():</p>
+			<p class="source-code">               return</p>
+			<p class="source-code">          case &lt;-esCh:</p>
+			<p class="source-code">               cancel()</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     for _, job := range w.jobs {</p>
+			<p class="source-code">          if err := job(ctx); err != nil {</p>
+			<p class="source-code">               return err</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return nil</p>
+			<p class="source-code">}</p>
+			<p>This preceding<a id="_idIndexMarker1634"/> code does the following:</p>
+			<ul>
+				<li>Creates a <strong class="source-inline">Job</strong> that executes some action we want to perform.</li>
+				<li>Creates a <strong class="source-inline">Work</strong> type that executes some set of <strong class="source-inline">Jobs</strong>.</li>
+				<li>Defines <strong class="source-inline">Exec()</strong>, which executes all <strong class="source-inline">Jobs</strong>.</li>
+				<li>Subscribes to emergency stop with a given workflow name.</li>
+				<li>If we don't start in the <strong class="source-inline">Go</strong> state, it returns an error.</li>
+				<li>Executes a goroutine that calls <strong class="source-inline">cancel()</strong> if we receive a <strong class="source-inline">Stop Status</strong> type.</li>
+				<li>Executes the Job instances held in work <strong class="source-inline">.jobs</strong>.</li>
+			</ul>
+			<p>This is a simple example<a id="_idIndexMarker1635"/> that uses a <strong class="source-inline">context.Context</strong> object to stop any <strong class="source-inline">Job</strong> that is executing when <strong class="source-inline">cancel()</strong> is called on our <strong class="source-inline">context.Context</strong> object. If we receive a state change with an emergency stop (which is always <strong class="source-inline">Stop</strong>), we call <strong class="source-inline">cancel()</strong>.</p>
+			<p>A more complete example of using the <strong class="source-inline">es</strong> package can be found in these two files: </p>
+			<ul>
+				<li><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/service.go</a></li>
+				<li><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go</a></li>
+			</ul>
+			<p>An example <strong class="source-inline">es.json</strong> file that stores emergency-stop data can be found here: </p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/configs/es.json</a></p>
+			<p>You can see this integrated into our workflow system as part of our <strong class="source-inline">Work.Run()</strong> method at the following link:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/internal/service/executor/executor.go</a></p>
+			<h2 id="_idParaDest-360"><a id="_idTextAnchor776"/>Case study – Google's network backbone emergency stop</h2>
+			<p>During an early postmortem<a id="_idIndexMarker1636"/> for a network tooling problem, it was identified that on-call<a id="_idIndexMarker1637"/> engineers responding to some major event needed a way to stop automations. At the time, we had a lot of small tools that could be executing against the network at any given time. An on-call engineer, recognizing a problem, had no good way of stopping other engineers from executing work or stopping a runaway program.</p>
+			<p>The first emergency-stop package was created from this postmortem and integrated into existing tooling. This worked by taking the tool's subscriber<a id="_idIndexMarker1638"/> name and matching it against the <strong class="bold">regular expressions</strong> (<strong class="bold">regexes</strong>) contained in an emergency-stop file. This check would occur anytime the file changed or at the start of the execution of the tool.</p>
+			<p>This was used to stop several automations that were causing problems from growing out of control. However, the implementation was flawed for an organization growing at our rate.</p>
+			<p>First, it required<a id="_idIndexMarker1639"/> that every tool developer integrate the emergency-stop package. As more teams<a id="_idIndexMarker1640"/> outside the initial core team developed tools, they wouldn't know this was a requirement. This led to rogue tooling. And as Google developed its own network gear, tooling development spanned departments that didn't coordinate in many respects. This meant that many tools never had an emergency stop integrated or it was done in a separate system.</p>
+			<p>Even when an emergency stop was integrated into a tool, it was sometimes a flawed implementation that didn't work. Every integration relied on an engineer doing the right thing.</p>
+			<p>Finally, an emergency stop had an assumption of a <strong class="source-inline">Go</strong> state. So, if there was no rule listed that matched your subscriber ID, it was assumed it was in a <strong class="source-inline">Go</strong> state. This meant that many times, you had to just stop everything or had to dig through code to figure out a subscriber ID so that you could re-enable everything but the problem tool.</p>
+			<p>To solve these problems in our backbone, we centralized executions of our backbone work into a central system.  This provided us with a single, well-tested emergency-stop implementation, and after a long audit, we switched the emergency-stop package to stop anything that didn't match a rule. </p>
+			<p>This provided our first responders the ability to stop backbone automation and tools during any major problem. If we found a problem tool, we could allow everything else to run except that tool until proper fixes were made.</p>
+			<p>In this section, you have learned what an emergency-stop system is, why it is important, how to implement a basic one, and finally, how to integrate an emergency-stop package into tooling.</p>
+			<h1 id="_idParaDest-361"><a id="_idTextAnchor777"/>Summary</h1>
+			<p>This chapter has provided a basic understanding of how to write tooling that provides safety in the face of chaos. We have shown you how circuit breakers or exponential backoff can save your network and services from overload when unexpected problems occur. We have shown how rate-limiting automation can prevent runaway workflows before responders can react. You have learned about how tool scoping via a centralized policy engine can provide a second layer of safety without overburdening your developers. We have learned the importance of idempotent workflows to allow workflow recovery. And finally, we have conveyed how an emergency-stop system can be utilized by first responders by quickly limit damage to automation systems while investigating a problem.</p>
+			<p>At this time, if you haven't played with the workflow system that we have been developing, you should explore the code and play with the examples. The <strong class="source-inline">README.md</strong> file will help you get started. You can find this at the following link:</p>
+			<p><a href="https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md">https://github.com/PacktPublishing/Go-for-DevOps/blob/rev0/chapter/16/workflow/README.md</a></p>
+			<p> </p>
+		</div>
+	</div></body></html>

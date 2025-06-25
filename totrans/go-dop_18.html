@@ -1,0 +1,557 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer067">
+			<p><a id="_idTextAnchor716"/></p>
+			<h1 id="_idParaDest-323"><a id="_idTextAnchor717"/>Chapter 15: Programming the Cloud</h1>
+			<p>You've probably heard the saying <em class="italic">the cloud is just someone else's computer</em>. While it is somewhat true, it is also wildly off target. Cloud service providers offer virtual machines running in their data centers that you can use in exchange for money, so in that way, you are using someone else's computer. However, it misses the bigger picture of what a cloud service provider is. A cloud service provider is a collection of hundreds of application-hosting, data, compliance, and computing infrastructure services that run in hundreds of data centers across the globe and are exposed through a fully programmable API. </p>
+			<p>In this chapter, we will learn how to interact with a cloud API using Microsoft Azure. We'll start by learning a bit about the nature of the APIs, including how they are described and where to find additional documentation about them. We'll learn the fundamentals of identity, authentication, and authorization. We'll then apply what we have learned in a set of examples using the Azure SDK for Go to build cloud infrastructure and utilize other cloud services. </p>
+			<p>By the end of the chapter, you will be equipped with the knowledge to work effectively with Microsoft Azure and will have gained the transferable skills to work with other cloud service providers.</p>
+			<p>We will cover the following topics in this chapter:</p>
+			<ul>
+				<li>What is the cloud?</li>
+				<li>Learning the basics of the Azure APIs </li>
+				<li>Building infrastructure using Azure Resource Manager</li>
+				<li>Using provisioned Azure infrastructure </li>
+			</ul>
+			<h1 id="_idParaDest-324"><a id="_idTextAnchor718"/>Technical requirements</h1>
+			<p>This chapter will require the following tools:</p>
+			<ul>
+				<li>Go</li>
+				<li>The Azure CLI: <a href="https://docs.microsoft.com/en-us/cli/azure/install-azure-cli">https://docs.microsoft.com/en-us/cli/azure/install-azure-cli</a></li>
+				<li>Code files downloaded from GitHub: <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15</a></li>
+			</ul>
+			<h1 id="_idParaDest-325"><a id="_idTextAnchor719"/>What is the cloud?</h1>
+			<p>The scale of capital investment<a id="_idIndexMarker1434"/> in the Amazon, Microsoft, and Google cloud physical computing infrastructure is monumental. Imagine the investment needed to build 200+ physical data centers with multiple redundant power and cooling systems, featuring state-of-the-art physical security. These centers are resilient in the face of a natural disaster. Even then, you are just scratching the surface. </p>
+			<p>These data centers require one of the largest interconnected networks on the planet to link them together. All of that infrastructure won't function without vast amounts of power and cooling, preferably from sustainable sources. For example, Azure has been carbon-neutral since 2012 and is committed to being carbon-negative by 2030. When people talk about hyper-scale cloud, they are talking about the planet-scale operations of these cloud service providers.</p>
+			<p>Ever wonder what it would be like to visit one of these data centers? For example, to access an Azure data center, there are multiple levels of security you must go through. You must first request access to the data center and provide a valid business justification. If access is granted, when you arrive at the data center's permitter access point, you'd notice the panoply of cameras, tall steel fences, and concrete surrounding the perimeter. You'd verify your identity and pass to the building entrance. At the building entrance, you'd be greeted by security officers who will once again verify who you are using two-factor authentication with biometrics. Upon passing biometric scanning, they'd guide you to the specific section of the data center where you have been approved to operate. As you proceed to the data center floor, you'd pass in and out through a full-body metal detection screening to ensure that you don't leave with anything you shouldn't. Security at these data centers is taken very seriously.</p>
+			<p>Still think this sounds like <em class="italic">someone else's computer</em>?</p>
+			<p>The physical infrastructure of cloud service providers is awe-inspiring. However, we should change our focus from the scale of cloud service provider operations to how cloud services are exposed to developers. As we mentioned initially, cloud service providers expose the functions of the cloud through APIs, which developers can use to manage infrastructure and applications running on the cloud. We can use these APIs to build applications that can<a id="_idIndexMarker1435"/> leverage hyper-scale cloud infrastructure to become planet-scale<a id="_idTextAnchor720"/>.</p>
+			<h1 id="_idParaDest-326"><a id="_idTextAnchor721"/>Learning the basics of the Azure APIs</h1>
+			<p>Now that we know the path to programming<a id="_idIndexMarker1436"/> the cloud is through APIs, let's learn a bit more about them. It's important to establish some background on how a large system of APIs comes together to form a consistent programmatic interface. We will also learn where you can find code and documentation when you run into challenges.</p>
+			<p>In this section, we are going to discuss how the major clouds<a id="_idIndexMarker1437"/> define APIs and produce <strong class="bold">Software Development Kits</strong> (<strong class="bold">SDKs</strong>) for programming against the cloud APIs. We will learn where to find these SDKs, and where to find documentation about the APIs and SDKs. </p>
+			<p>We will also learn about identity, <strong class="bold">Role-Based Access Control</strong> (<strong class="bold">RBAC</strong>), and <strong class="bold">resource hierarchy</strong> in Microsoft Azure. Finally, we'll create and log in to a free Azure account, which we will use in the subsequent sections to program the clo<a id="_idTextAnchor722"/>ud.</p>
+			<h2 id="_idParaDest-327"><a id="_idTextAnchor723"/>A background on cloud APIs and SDKs</h2>
+			<p>As we discussed in the previous<a id="_idIndexMarker1438"/> section, cloud service providers expose APIs for management<a id="_idIndexMarker1439"/> of and access to hundreds of services, spread across a vast number of regions. These APIs<a id="_idIndexMarker1440"/> are commonly implemented using <strong class="bold">Representational State Transfer</strong> (<strong class="bold">REST</strong>) or <strong class="bold">Google Remote Procedure Call</strong> (<strong class="bold">gRPC</strong>). Within each cloud service<a id="_idIndexMarker1441"/> provider, there is likely an equal number of engineering teams building these APIs. It is imperative to provide a consistent representation of resources in these APIs so that, when viewed as a whole, each service provides similar behavior. Each cloud service provider takes its own approach to this problem. For example, at Microsoft Azure, the rule<a id="_idIndexMarker1442"/> for defining REST APIs is codified by the <strong class="bold">Microsoft Azure REST API Guidelines</strong> (<a href="https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md">https://github.com/microsoft/api-guidelines/blob/vNext/azure/Guidelines.md</a>). These rules provide guidance to service teams.</p>
+			<p>Developers don't usually use cloud APIs directly via HTTP but rather through the use of SDKs. These are collections of libraries that provide access to the APIs for a given language. </p>
+			<p>For example, Azure (<a href="https://github.com/Azure/azure-sdk-for-go">https://github.com/Azure/azure-sdk-for-go</a>), AWS (https://github.com/aws/aws-sdk-go), and Google (<a href="https://github.com/googleapis/google-api-go-client">https://github.com/googleapis/google-api-go-client</a>) all have Go SDKs for their clouds and many<a id="_idIndexMarker1443"/> other languages. These SDKs do their best to eliminate the boilerplate<a id="_idIndexMarker1444"/> code needed for programmatically accessing clouds' APIs, simplifying what the developer needs to write to program against them. Besides the documentation published by cloud providers, always remember that GoDocs are your friend. For example, the GoDocs for the Azure Blob storage service (<a href="https://github.com/Azure/azure-kusto-go">https://github.com/Azure/azure-kusto-go</a>) provide useful information for using the SDK.</p>
+			<p>These SDKs, for the most part, are generated based on machine-readable API specifications. When you have hundreds of services and multiple languages, it will not scale well to have an enormous number of humans writing SDKs by hand. Each cloud solves this problem in its own way. </p>
+			<p>For example, Microsoft Azure generates<a id="_idIndexMarker1445"/> almost all of the Azure API reference documentation (<a href="https://docs.microsoft.com/en-us/rest/api/azure/">https://docs.microsoft.com/en-us/rest/api/azure/</a>) and SDKs using OpenAPI specifications in the Azure REST API Specs repository (<a href="https://github.com/Azure/azure-rest-api-specs">https://github.com/Azure/azure-rest-api-specs</a>). The entire process for producing documentation and generating SDKs is hosted on GitHub and powered by open source tools such as the AutoRest code generator (<a href="https://github.com/Azure/autorest">https://github.com/Azure/autorest</a>).</p>
+			<p class="callout-heading">Fun Note</p>
+			<p class="callout">One of this book's authors, David Justice, established this process at Azure and had the first commit to the Azure REST API Specs repository (<a href="https://github.com/Azure/azure-rest-api-specs/commit/8c42e6392618a878d5286b8735b99bbde693c0a2">https://github.com/Azure/azure-rest-api-specs/commit/8c42e6392618a878d5286b8735b99bbde693c0a2</a>).</p>
+			<h2 id="_idParaDest-328"><a id="_idTextAnchor724"/>Microsoft Azure identity, RBAC, and resource hierarchy</h2>
+			<p>To prepare us for interacting<a id="_idIndexMarker1446"/> with the Azure API, we need<a id="_idIndexMarker1447"/> to understand some<a id="_idIndexMarker1448"/> basics – identity, RBAC, and resource hierarchy. <strong class="bold">Identity</strong> establishes the user, or principal, interacting with the API. RBAC defines what the identity can do within the API. The resource hierarchy describes the relationship between the resources in the Azure cloud. RBAC roles and rights describe what a principal can do with a given resource<a id="_idIndexMarker1449"/> or resource hierarchy. For example, a user can be assigned<a id="_idIndexMarker1450"/> the contributor rights<a id="_idIndexMarker1451"/> to an Azure subscription and be able to mutate resources within that subscription.</p>
+			<p>Identities in Azure live in <strong class="bold">Azure Active Directory</strong> (<strong class="bold">AAD</strong>). This is an enterprise identity and access management<a id="_idIndexMarker1452"/> service. It provides single sign-on, multifactor authentication, and conditional access, among other features. Identities in AAD reside within one or more tenants. Tenants contain multiple identities. Identities can be user identities, which represent humans and have interactive authentication flows, or they can be service principals, which represent non-human identities such as applications that do not have interactive authentication flows. </p>
+			<p>The root of resources in Azure is an Azure subscription. A subscription is a logical container that contains Azure resource groups. Each resource such as a virtual machine, storage account or virtual network, resides within a resource group. A resource group is a logical entity that associates multiple Azure resources so that you can manage them as a single entity.</p>
+			<p>Identities are granted RBAC roles and rights to interact with Azure subscriptions and resources alike. You can think of AAD and Azure as separate systems that are bound together by RBAC rights and roles. We will not dive deeply into each RBAC role or right, but you can find more information <a id="_idIndexMarker1453"/>about them in the Azure built-in roles documentation (<a href="https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles">https://docs.microsoft.com/en-us/azure/role-based-access-control/built-in-roles</a>).</p>
+			<p>Now that we have some basic understanding of the cloud we will be working in<a id="_idTextAnchor725"/>, let's get started.</p>
+			<h2 id="_idParaDest-329"><a id="_idTextAnchor726"/>Creating an Azure account and accessing the API</h2>
+			<p>To run the rest of the examples<a id="_idIndexMarker1454"/> in this chapter, you will <a id="_idIndexMarker1455"/>need an Azure account. If you do not have an Azure account, you can sign up for a free<a id="_idIndexMarker1456"/> account with $200 of Azure credits (<a href="https://azure.microsoft.com/en-us/free/">https://azure.microsoft.com/en-us/free/</a>).</p>
+			<p>Once you have an account, log in with the Azure CLI:</p>
+			<p class="source-code">$ az login</p>
+			<p>This command will log you into your Azure account and set the default context for your primary Azure subscription. By default, when you create<a id="_idIndexMarker1457"/> an Azure account, your identity will be granted<a id="_idIndexMarker1458"/> the <strong class="source-inline">owner</strong> role in the subscription. The <strong class="source-inline">owner</strong> role grants full access to manage all resources, including the ability to assign roles in Azure RBAC. To see what subscription is active, run the following command:</p>
+			<p class="source-code">$ az account show</p>
+			<p class="source-code">{</p>
+			<p class="source-code">  "environmentName": "AzureCloud",</p>
+			<p class="source-code">  "isDefault": true,</p>
+			<p class="source-code">  "managedByTenants": [],</p>
+			<p class="source-code">  "name": "mysubscription",</p>
+			<p class="source-code">  "state": "Enabled",</p>
+			<p class="source-code">  "tenantId": "888bf....db93",</p>
+			<p class="source-code">  "user": {</p>
+			<p class="source-code">      ...</p>
+			<p class="source-code">  }</p>
+			<p class="source-code">}</p>
+			<p>The preceding command output shows the name of the subscription and other details about the current context of the Azure CLI. In the following command, we will use the <strong class="source-inline">az</strong> CLI to directly interact with the Azure API:</p>
+			<p class="source-code">az rest --method get --uri "/subscriptions?api-version=2019-03-01"</p>
+			<p>The preceding command will list the subscriptions your identity has access to via RBAC rights. Note that as part of the Azure REST API guidelines, all Azure APIs must be used with an <strong class="source-inline">api-version</strong> query parameter. This is enforced to ensure that API consumers can always rely on the stability of the request and response format for a specified <strong class="source-inline">api-version</strong>. The APIs are updated often, and without specifying the <strong class="source-inline">api-version</strong> query parameter of a given API, a consumer would possibly be subject to breaking changes in the API.</p>
+			<p>Next, let's run the same request using the <strong class="source-inline">debug</strong> flag:</p>
+			<p class="source-code">az rest --method get --uri "/subscriptions?api-version=2019-03-01" --debug</p>
+			<p>Executing any command<a id="_idIndexMarker1459"/> with the Azure CLI using <strong class="source-inline">--debug</strong> will output the HTTP request<a id="_idIndexMarker1460"/> details, showing output containing something similar to the following:</p>
+			<p class="source-code"> Request URL: 'https://management.azure.com/subscriptions?apiversion=2019-03-01'</p>
+			<p class="source-code"> Request method: 'GET'</p>
+			<p class="source-code"> Request headers:</p>
+			<p class="source-code">     'User-Agent': 'python/3.10.2 (macOS-12.3.1-arm64-arm-64bit) AZURECLI/2.34.1 (HOMEBREW)'</p>
+			<p class="source-code">    urllib3.connectionpool: Starting new HTTPS connection (1): management.azure.com:443</p>
+			<p class="source-code">urllib3.connectionpool: https://management.azure.com:443 "GET /subscriptions?api-version=2019-03-01 HTTP/1.1" 200 6079</p>
+			<p class="source-code"> Response status: 200</p>
+			<p class="source-code"> Response headers:</p>
+			<p class="source-code">     'Content-Type': 'application/json; charset=utf-8'</p>
+			<p class="source-code">     'x-ms-ratelimit-remaining-tenant-reads': '11999'</p>
+			<p class="source-code">     'x-ms-request-id': 'aebed1f6-75f9-48c2-ae0b-1dd18ae5ec46'</p>
+			<p class="source-code">     'x-ms-correlation-request-id': 'aebed1f6-75f9-48c2-ae0b-</p>
+			<p class="source-code">     'Date': 'Sat, 09 Apr 2022 22:52:32 GMT'</p>
+			<p class="source-code">     'Content-Length': '6079'</p>
+			<p>This output is incredibly useful for seeing what was sent to the Azure API in HTTP. Also, note that the URI, <strong class="source-inline">https://management.azure.com/...</strong>, corresponds to <strong class="bold">Azure Resource Manager</strong> (<strong class="bold">ARM</strong>). ARM is a composite service<a id="_idIndexMarker1461"/> composed of resource provider services for each<a id="_idIndexMarker1462"/> resource in Azure and is responsible for mutating<a id="_idIndexMarker1463"/> resources in it.</p>
+			<p>In this section, we learned about how the major clouds define APIs and produce SDKs for the APIs. We also learned specifically about Azure identities, RBAC, and resource hierarchies. This information may be specific to Azure, but all major clouds follow the same pattern. Once you learn how<a id="_idIndexMarker1464"/> one of the clouds approaches <strong class="bold">Identity and Access Management</strong> (<strong class="bold">IAM</strong>), it's roughly transferable to other clouds. Lastly, we signed into an Azure account for use in subsequent sections and learned how to directly access the Azure REST API through the Azure CLI.</p>
+			<p>In the next section, we will use the Azure SDK for Go to mutate cloud infrastructure. Let's get started on progr<a id="_idTextAnchor727"/>amming the Azure cloud with Go.</p>
+			<h1 id="_idParaDest-330"><a id="_idTextAnchor728"/>Building infrastructure using Azure Resource Manager</h1>
+			<p>Cloud APIs are bifurcated<a id="_idIndexMarker1465"/> into two<a id="_idIndexMarker1466"/> categories, the management plane and the data plane. The management plane is an API that controls the creation, deletion, and mutation of infrastructure. The data plane is an API exposed by provisioned infrastructure. </p>
+			<p>For example, the management plane would be used to create a SQL database. The data plane for the SQL database resource would be the SQL protocol for manipulating data and structure within the database. </p>
+			<p>The management plane is serviced by the cloud resource API, and the data plane is serviced by the API exposed by the provisioned service.</p>
+			<p>In this section, we will learn how to use the Azure SDK for Go to provision infrastructure in Azure. We will learn how to create and destroy resource groups, virtual networks, subnets, public IPs, virtual machines, and databases. The goal of this section is to build awareness<a id="_idIndexMarker1467"/> of the Azure Go SDK<a id="_idTextAnchor729"/><a id="_idIndexMarker1468"/> and how to interact with ARM.</p>
+			<h2 id="_idParaDest-331"><a id="_idTextAnchor730"/>Azure SDK for Go</h2>
+			<p>As we discussed in the previous section, cloud SDKs<a id="_idIndexMarker1469"/> simplify the interaction between a given language and a cloud<a id="_idIndexMarker1470"/> provider's API. In the case of Azure, we will be using the Azure SDK for Go (<a href="https://github.com/Azure/azure-sdk-for-go/">https://github.com/Azure/azure-sdk-for-go/</a>) to interact with the Azure APIs. Specifically, we'll use the latest edition of the SDK (<a href="https://github.com/Azure/azure-sdk-for-go#management-new-releases">https://github.com/Azure/azure-sdk-for-go#management-new-releases</a>), which has been redesigned to follow the Azure design guidelines for Go (<a href="https://azure.github.io/azure-sdk/golang_introduction.html">https://azure.github.io/azure-sdk/golang_introduction.html</a>). For the latest information about packages and docs, be sure to check out the Azure SDK Releases page (<a href="https://azure.github.io/azure-sdk/releases/latest/mgmt/go.html">https://azure.github.io/azure-sdk/releases/latest/mgmt/go.html</a>).</p>
+			<p>The code for this section is located in the GitHub code folder for this chapter <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/15</a>.</p>
+			<h2 id="_idParaDest-332"><a id="_idTextAnchor731"/>Setting up your local environment</h2>
+			<p>To run the code<a id="_idIndexMarker1471"/> for this section, you will need<a id="_idIndexMarker1472"/> to set up a <strong class="bold">Secure Shell</strong> (<strong class="bold">SSH</strong>) key and an<strong class="source-inline">.env</strong> file. Run the following<a id="_idIndexMarker1473"/> commands from the <strong class="source-inline">./chapter/15</strong> directory of the repository:</p>
+			<p class="source-code">$ mkdir .ssh</p>
+			<p class="source-code">$ ssh-keygen -t rsa -b 4096 -f ./.ssh/id_rsa -q -N ""</p>
+			<p class="source-code">$ chmod 600 ./.ssh/id_rsa*</p>
+			<p>This command will create a <strong class="source-inline">.ssh</strong> directory in <strong class="source-inline">./chapter/15</strong>, generate an SSH key pair within that directory, and ensure that proper permissions are set on the key pair. </p>
+			<p class="callout-heading">Note</p>
+			<p class="callout">The preceding command creates an SSH key that does not have a passphrase. We are only using this key pair as an example. You should provide a strong passphrase for real-world usage.</p>
+			<p>Next, let's set<a id="_idIndexMarker1474"/> up a local <strong class="source-inline">.env</strong> file<a id="_idIndexMarker1475"/> that we will <a id="_idIndexMarker1476"/>use to store environmental variables used in the examples:</p>
+			<p class="source-code">echo -e "AZURE_SUBSCRIPTION_ID=$(az account show --query 'id' -o tsv)\nSSH_PUBLIC_KEY_PATH=./.ssh/id_rsa.pub" &gt;&gt; .env</p>
+			<p>Now, this command will create an<strong class="source-inline">.env</strong> file that contains two environment variables, <strong class="source-inline">AZURE_SUBSCRIPTION_ID</strong> and <strong class="source-inline">SSH_PUBLIC_KEY_PATH</strong>. We derive the value for the Azure subscription ID from the Azure CLI's current active subscription. </p>
+			<p>Now that we have set up our local environment, let's build an <strong class="bold">Azure virtual machine</strong> that will run a <strong class="source-inline">cloud-init</strong> provisioning script an<a id="_idTextAnchor732"/>d provide access using SSH via a public IP.</p>
+			<h2 id="_idParaDest-333"><a id="_idTextAnchor733"/>Building an Azure virtual machine</h2>
+			<p>Let's get started by running<a id="_idIndexMarker1477"/> the example, and then we'll delve<a id="_idIndexMarker1478"/> into the code for building the infrastructure. To run the example, run the following command:</p>
+			<p class="source-code">$ go run ./cmd/compute/main.go</p>
+			<p class="source-code">Staring to build Azure resources...</p>
+			<p class="source-code">Building an Azure Resource Group named "fragrant-violet"...</p>
+			<p class="source-code">Building an Azure Network Security Group named "fragrant-violet-nsg"...</p>
+			<p class="source-code">Building an Azure Virtual Network named "fragrant-violet-vnet"...</p>
+			<p class="source-code">Building an Azure Virtual Machine named "fragrant-violet-vm"...</p>
+			<p class="source-code">Fetching the first Network Interface named "fragrant-violet-nic-6d8bb6ea" connected to the VM...</p>
+			<p class="source-code">Fetching the Public IP Address named "fragrant-violet-pip-6d8bb6ea" connected to the VM...</p>
+			<p class="source-code">Connect with: `ssh -i ./.ssh/id_rsa devops@20.225.222.128`</p>
+			<p class="source-code">Press enter to delete the infrastructure.</p>
+			<p>After running <strong class="source-inline">go run ./cmd/compute/main.go</strong>, you should see something similar to what is shown in the previous command<a id="_idIndexMarker1479"/> block. As you can see from the output, the program built<a id="_idIndexMarker1480"/> several bits of infrastructure, including an Azure resource group, network security group, virtual network, and virtual machine. We'll discuss every piece of infrastructure in more detail soon.</p>
+			<p>As the output states, you can also use SSH to access the virtual machine as described in the output. We'll use this to explore the provisioned state of the virtual machine to confirm that the <strong class="source-inline">cloud-init</strong> provisioning script ran as expected.</p>
+			<p>If you visit the Azure portal, you should see the following:</p>
+			<div>
+				<div id="_idContainer066" class="IMG---Figure">
+					<img src="Images/B17626_15_001.jpg" alt="Figure 15.1 – The Azure portal virtual machine infrastructure&#13;&#10;" width="1122" height="799"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.1 – The Azure portal virtual machine infrastructure</p>
+			<p>In the preceding screenshot, you<a id="_idIndexMarker1481"/> can see the resource group as well as all of the infrastructure<a id="_idIndexMarker1482"/> created. Next, let's look a<a id="_idTextAnchor734"/>t the code that provisioned this infrastructure.</p>
+			<h3>Provisioning Azure infrastructure using Go</h3>
+			<p>In these examples, you will see how<a id="_idIndexMarker1483"/> to build Azure API clients, probe for credentials for accessing<a id="_idIndexMarker1484"/> APIs, and mutate infrastructure. Many of these examples use abbreviated error-handling behavior to keep the code as concise as possible for illustrative purposes. <strong class="source-inline">panic</strong> is not your friend. Please wrap and bubble your errors as appropriate.</p>
+			<p>Let's start with the entry point of <strong class="source-inline">go run ./cmd/compute/main.go</strong> and learn how to use Go to provision cloud infrastructure:</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">	_ = godotenv.Load()</p>
+			<p class="source-code">	ctx := context.Background()</p>
+			<p class="source-code">	subscriptionID := helpers.MustGetenv(</p>
+			<p class="source-code">		"AZURE_SUBSCRIPTION_ID",</p>
+			<p class="source-code">	)</p>
+			<p class="source-code">	sshPubKeyPath := helpers.MustGetenv("SSH_PUBLIC_KEY_PATH")</p>
+			<p class="source-code">	factory := mgmt.NewVirtualMachineFactory(</p>
+			<p class="source-code">		subscriptionID,</p>
+			<p class="source-code">		sshPubKeyPath,</p>
+			<p class="source-code">	)</p>
+			<p class="source-code">	fmt.Println("Staring to build Azure resources...")</p>
+			<p class="source-code">	stack := factory.CreateVirtualMachineStack(</p>
+			<p class="source-code">		ctx,</p>
+			<p class="source-code">		"southcentralus",</p>
+			<p class="source-code">	)</p>
+			<p class="source-code">	admin := stack.VirtualMachine.Properties.OSProfile.AdminUsername</p>
+			<p class="source-code">	ipAddress := stack.PublicIP.Properties.IPAddress</p>
+			<p class="source-code">	sshIdentityPath := strings.TrimRight(sshPubKeyPath, ".pub")</p>
+			<p class="source-code">	fmt.Printf(</p>
+			<p class="source-code">		"Connect with: `ssh -i %s %s@%s`\n\n",</p>
+			<p class="source-code">		sshIdentityPath, *admin, *ipAddress,</p>
+			<p class="source-code">	)</p>
+			<p class="source-code">	fmt.Println("Press enter to delete the infrastructure.")</p>
+			<p class="source-code">	reader := bufio.NewReader(os.Stdin)</p>
+			<p class="source-code">	_, _ = reader.ReadString('\n')</p>
+			<p class="source-code">	factory.DestroyVirtualMachineStack(context.Background(), stack)</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, we load environment<a id="_idIndexMarker1485"/> variables in the local <strong class="source-inline">.env</strong> file using <strong class="source-inline">godotenv.Load()</strong>. In <strong class="source-inline">main</strong>, we create a new <strong class="source-inline">VirtualMachineFactory</strong> to manage<a id="_idIndexMarker1486"/> the creation and deletion of Azure infrastructure. Once the infrastructure is created in <strong class="source-inline">factory.CreateVirtualMachineStack</strong>, we print the SSH connection details and prompt for user confirmation to delete the infrastructure stack. </p>
+			<p>Next, let's dive into the VM factory and see what is included in the VM stack:</p>
+			<p class="source-code">type VirtualMachineFactory struct {</p>
+			<p class="source-code">     subscriptionID string</p>
+			<p class="source-code">     sshPubKeyPath  string</p>
+			<p class="source-code">     cred           azcore.TokenCredential</p>
+			<p class="source-code">     groupsClient   *armresources.ResourceGroupsClient</p>
+			<p class="source-code">     vmClient       *armcompute.VirtualMachinesClient</p>
+			<p class="source-code">     vnetClient     *armnetwork.VirtualNetworksClient</p>
+			<p class="source-code">     subnetClient   *armnetwork.SubnetsClient</p>
+			<p class="source-code">     nicClient      *armnetwork.InterfacesClient</p>
+			<p class="source-code">     nsgClient      *armnetwork.SecurityGroupsClient</p>
+			<p class="source-code">     pipClient      *armnetwork.PublicIPAddressesClient</p>
+			<p class="source-code">}</p>
+			<p>This code defines the structure of <strong class="source-inline">VirtualMachineFactory</strong>, which is responsible for the creation of and access to the Azure SDK API clients. We instantiate those clients using the <strong class="source-inline">NewVirtualMachineFactory</strong> func, as shown here:</p>
+			<p class="source-code">func NewVirtualMachineFactory(subscriptionID, sshPubKeyPath string) *VirtualMachineFactory {</p>
+			<p class="source-code">     cred := HandleErrWithResult(azidentity.NewDefaultAzureCredential(nil))</p>
+			<p class="source-code">     return &amp;VirtualMachineFactory{</p>
+			<p class="source-code">          cred:           cred,</p>
+			<p class="source-code">          subscriptionID: subscriptionID,</p>
+			<p class="source-code">          sshPubKeyPath:  sshPubKeyPath,</p>
+			<p class="source-code">          groupsClient:   BuildClient(subscriptionID, cred, armresources.NewResourceGroupsClient),</p>
+			<p class="source-code">          vmClient:       BuildClient(subscriptionID, cred, armcompute.NewVirtualMachinesClient),</p>
+			<p class="source-code">          vnetClient:     BuildClient(subscriptionID, cred, armnetwork.NewVirtualNetworksClient),</p>
+			<p class="source-code">          subnetClient:   BuildClient(subscriptionID, cred, armnetwork.NewSubnetsClient),</p>
+			<p class="source-code">          nsgClient:      BuildClient(subscriptionID, cred, armnetwork.NewSecurityGroupsClient),</p>
+			<p class="source-code">          nicClient:      BuildClient(subscriptionID, cred, armnetwork.NewInterfacesClient),</p>
+			<p class="source-code">          pipClient:      BuildClient(subscriptionID, cred, armnetwork.NewPublicIPAddressesClient),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>This code builds a new default Azure<a id="_idIndexMarker1487"/> identity credential. This credential<a id="_idIndexMarker1488"/> is used to authenticate the client to the Azure APIs. By default, this credential will probe multiple sources for an identity to use. The default credential will probe for environment variables first, then it will attempt<a id="_idIndexMarker1489"/> to use an Azure managed identity (<a href="https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview">https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview</a>), and finally, it will fall back to using the Azure CLI's user identity. For this example, we are relying<a id="_idIndexMarker1490"/> on the Azure CLI identity to interact<a id="_idIndexMarker1491"/> with the Azure APIs. This is convenient for development but should not be used for a deployed application or script. Non-interactive authentication<a id="_idIndexMarker1492"/> requires either an Azure service principal (<a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals">https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals</a>) or an Azure managed identity.</p>
+			<p>The VM factory builds each of the Azure API clients using <strong class="source-inline">subscriptionID</strong>, the credential, and the <strong class="source-inline">New*</strong> function for each of the clients. <strong class="source-inline">BuildClient()</strong> builds each client.</p>
+			<p>Now that we know how credentials and the API clients are instantiated, let's dive into the creation of infrastructure in <strong class="source-inline">CreateVirtualMachineStack</strong>:</p>
+			<p class="source-code">func (vmf *VirtualMachineFactory) CreateVirtualMachineStack(ctx context.Context, location string) *VirtualMachineStack {</p>
+			<p class="source-code">     stack := &amp;VirtualMachineStack{</p>
+			<p class="source-code">          Location:   location,</p>
+			<p class="source-code">          name:       haiku.Haikunate(),</p>
+			<p class="source-code">          sshKeyPath: HandleErrWithResult(homedir.Expand(vmf.sshPubKeyPath)),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     stack.ResourceGroup = vmf.createResourceGroup(ctx, stack.name, stack.Location)</p>
+			<p class="source-code">     stack.SecurityGroup = vmf.createSecurityGroup(ctx, stack.name, stack.Location)</p>
+			<p class="source-code">     stack.VirtualNetwork = vmf.createVirtualNetwork(ctx, stack)</p>
+			<p class="source-code">     stack.VirtualMachine = vmf.createVirtualMachine(ctx, stack)</p>
+			<p class="source-code">     stack.NetworkInterface = vmf.getFirstNetworkInterface(ctx, stack)</p>
+			<p class="source-code">     stack.PublicIP = vmf.getPublicIPAddress(ctx, stack)</p>
+			<p class="source-code">     return stack</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, we created<a id="_idIndexMarker1493"/> the idea of a stack – a collection of related <a id="_idIndexMarker1494"/>infrastructure. We created a new stack with a given location, a human-readable name, and the contents of the SSH public key path. Subsequently, we created each of the Azure resources needed to create a VM with public SSH access.</p>
+			<p>Let's explore each of the <strong class="source-inline">create</strong> and <strong class="source-inline">get</strong> funcs in <strong class="source-inline">CreateVirtualMachineStack</strong>:</p>
+			<p class="source-code">func (vmf *VirtualMachineFactory) createResourceGroup(ctx context.Context, name, location string) armresources.ResourceGroup {</p>
+			<p class="source-code">     param := armresources.ResourceGroup{</p>
+			<p class="source-code">          Location: to.Ptr(location),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     fmt.Printf("Building an Azure Resource Group named %q...\n", name)</p>
+			<p class="source-code">     res, err := vmf.groupsClient.CreateOrUpdate(ctx, name, param, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     return res.ResourceGroup</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, <strong class="source-inline">createResourceGroup</strong> calls <strong class="source-inline">CreateOrUpdate</strong> on <strong class="source-inline">groupsClient</strong> to create an Azure resource group<a id="_idIndexMarker1495"/> in the specified location. An Azure resource group is a logical container for Azure resources. We will use the resource group as a container for the rest of our resources.</p>
+			<p>Next, let's dive into the network security group creation function, <strong class="source-inline">createSecurityGroup</strong>:</p>
+			<p class="source-code">func (vmf *VirtualMachineFactory) createSecurityGroup(ctx context.Context, name, location string) armnetwork.SecurityGroup {</p>
+			<p class="source-code">     param := armnetwork.SecurityGroup{</p>
+			<p class="source-code">          Location: to.Ptr(location),</p>
+			<p class="source-code">          Name:     to.Ptr(name + "-nsg"),</p>
+			<p class="source-code">          Properties: &amp;armnetwork.SecurityGroupPropertiesFormat{</p>
+			<p class="source-code">               SecurityRules: []*armnetwork.SecurityRule{</p>
+			<p class="source-code">                    {</p>
+			<p class="source-code">                         Name: to.Ptr("ssh"),</p>
+			<p class="source-code">                         Properties: &amp;armnetwork.SecurityRulePropertiesFormat{</p>
+			<p class="source-code">                              Access:                   to.Ptr(armnetwork.SecurityRuleAccessAllow),</p>
+			<p class="source-code">                              Direction:                to.Ptr(armnetwork.SecurityRuleDirectionInbound),</p>
+			<p class="source-code">                              Protocol:                 to.Ptr(armnetwork.SecurityRuleProtocolAsterisk),</p>
+			<p class="source-code">                              Description:              to.Ptr("allow ssh on 22"),</p>
+			<p class="source-code">                              DestinationAddressPrefix: to.Ptr("*"),</p>
+			<p class="source-code">                              DestinationPortRange:     to.Ptr("22"),</p>
+			<p class="source-code">                              Priority:                 to.Ptr(int32(101)),</p>
+			<p class="source-code">                              SourcePortRange:          to.Ptr("*"),</p>
+			<p class="source-code">                              SourceAddressPrefix:      to.Ptr("*"),</p>
+			<p class="source-code">                         },</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     fmt.Printf("Building an Azure Network Security Group named %q...\n", *param.Name)</p>
+			<p class="source-code">     poller, err := vmf.nsgClient.BeginCreateOrUpdate(ctx, name, *param.Name, param, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     res := HandleErrPoller(ctx, poller)</p>
+			<p class="source-code">     return res.SecurityGroup</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, we built<a id="_idIndexMarker1496"/> an Azure network security group, which contains<a id="_idIndexMarker1497"/> a single security rule to allow network traffic on port <strong class="source-inline">22</strong>, enabling SSH access for the VM. Note that rather than calling <strong class="source-inline">CreateOrUpdate</strong>, we call <strong class="source-inline">BeginCreateOrUpdate</strong>, which issues <strong class="source-inline">PUT</strong> or <strong class="source-inline">PATCH</strong> to the Azure API and starts a long-running operation. </p>
+			<p>A long-running operation in Azure<a id="_idIndexMarker1498"/> is one that – once the initial mutation is accepted –executes until it reaches<a id="_idIndexMarker1499"/> a terminal state. For example, when creating a network security group, the API receives the initial mutation and then starts to build the infrastructure. After the infrastructure is ready, the API will indicate it is completed through the operation state or the provisioning state. <strong class="source-inline">poller</strong> takes care of following the long-running operation to completion. In <strong class="source-inline">HandleErrPoller</strong>, we follow the polling to completion and return the final state of the resource.</p>
+			<p>Next, let's explore the creation of the virtual network via <strong class="source-inline">createVirtualNetwork</strong>:</p>
+			<p class="source-code">func (vmf *VirtualMachineFactory) createVirtualNetwork(ctx context.Context, vmStack *VirtualMachineStack) armnetwork.VirtualNetwork {</p>
+			<p class="source-code">     param := armnetwork.VirtualNetwork{</p>
+			<p class="source-code">          Location: to.Ptr(vmStack.Location),</p>
+			<p class="source-code">          Name:     to.Ptr(vmStack.name + "-vnet"),</p>
+			<p class="source-code">          Properties: &amp;armnetwork.VirtualNetworkPropertiesFormat{</p>
+			<p class="source-code">               AddressSpace: &amp;armnetwork.AddressSpace{</p>
+			<p class="source-code">                    AddressPrefixes: []*string{to.Ptr("10.0.0.0/16")},</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">               Subnets: []*armnetwork.Subnet{</p>
+			<p class="source-code">                    {</p>
+			<p class="source-code">                         Name: to.Ptr("subnet1"),</p>
+			<p class="source-code">                         Properties: &amp;armnetwork.SubnetPropertiesFormat{</p>
+			<p class="source-code">                              AddressPrefix:        to.Ptr("10.0.0.0/24"),</p>
+			<p class="source-code">                              NetworkSecurityGroup: &amp;vmStack.SecurityGroup,</p>
+			<p class="source-code">                         },</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     fmt.Printf("Building an Azure Virtual Network named %q...\n", *param.Name)</p>
+			<p class="source-code">     poller, err := vmf.vnetClient.BeginCreateOrUpdate(ctx, vmStack.name, *param.Name, param, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     res := HandleErrPoller(ctx, poller)</p>
+			<p class="source-code">     return res.VirtualNetwork</p>
+			<p class="source-code">}</p>
+			<p>In the previous<a id="_idIndexMarker1500"/> code block, we built an Azure virtual network<a id="_idIndexMarker1501"/> for our VM. The virtual network<a id="_idIndexMarker1502"/> is set up with a <strong class="source-inline">10.0.0.0/16</strong> <strong class="bold">Classless Inter-Domain Routing</strong> (<strong class="bold">CIDR</strong>) and a single subnet with a <strong class="source-inline">10.0.0.0/24</strong> CIDR. The subnet references the network security group we built in the previous code block, which causes the rules in the network security group to be enforced on the subnet.</p>
+			<p>Now that we have built the networking for our VM, let's build it via <strong class="source-inline">createVirtualMachine</strong>:</p>
+			<p class="source-code">func (vmf *VirtualMachineFactory) createVirtualMachine(ctx context.Context, vmStack *VirtualMachineStack) armcompute.VirtualMachine {</p>
+			<p class="source-code">     param := linuxVM(vmStack)</p>
+			<p class="source-code">     fmt.Printf("Building an Azure Virtual Machine named %q...\n", *param.Name)</p>
+			<p class="source-code">     poller, err := vmf.vmClient.BeginCreateOrUpdate(ctx, vmStack.name, *param.Name, param, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     res := HandleErrPoller(ctx, poller)</p>
+			<p class="source-code">     return res.VirtualMachine</p>
+			<p class="source-code">}</p>
+			<p>There is not much to show for <strong class="source-inline">createVirtualMachine()</strong>. As you can see, the same pattern<a id="_idIndexMarker1503"/> of resource creation through a long-running API invocation<a id="_idIndexMarker1504"/> is applied in this code. The interesting bits are in <strong class="source-inline">linuxVM()</strong>:</p>
+			<p class="source-code">func linuxVM(vmStack *VirtualMachineStack) armcompute.VirtualMachine {</p>
+			<p class="source-code">     return armcompute.VirtualMachine{</p>
+			<p class="source-code">          Location: to.Ptr(vmStack.Location),</p>
+			<p class="source-code">          Name:     to.Ptr(vmStack.name + "-vm"),</p>
+			<p class="source-code">          Properties: &amp;armcompute.VirtualMachineProperties{</p>
+			<p class="source-code">               HardwareProfile: &amp;armcompute.HardwareProfile{</p>
+			<p class="source-code">                    VMSize: to.Ptr(armcompute.VirtualMachineSizeTypesStandardD2SV3),</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">            StorageProfile: &amp;armcompute.StorageProfile{</p>
+			<p class="source-code">                    ImageReference: &amp;armcompute.ImageReference{</p>
+			<p class="source-code">                         Publisher: to.Ptr("Canonical"),</p>
+			<p class="source-code">                         Offer:     to.Ptr("UbuntuServer"),</p>
+			<p class="source-code">                         SKU:       to.Ptr("18.04-LTS"),</p>
+			<p class="source-code">                         Version:   to.Ptr("latest"),</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">               NetworkProfile: networkProfile(vmStack),</p>
+			<p class="source-code">               OSProfile:      linuxOSProfile(vmStack),</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>In <strong class="source-inline">linuxVM</strong>, we specify the location, name, and properties<a id="_idIndexMarker1505"/> of the VM. In the properties, we specify<a id="_idIndexMarker1506"/> the type of hardware<a id="_idIndexMarker1507"/> we'd like to provision. In this case, we are provisioning<a id="_idIndexMarker1508"/> a Standard D3v2 (you can read more about it at <a href="https://docs.microsoft.com/en-us/azure/virtual-machines/dv3-dsv3-series">https://docs.microsoft.com/en-us/azure/virtual-machines/dv3-dsv3-series</a>) hardware <strong class="bold">Stock-Keeping Unit</strong> (<strong class="bold">SKU</strong>). </p>
+			<p>We also specify our <strong class="source-inline">StorageProfile</strong>, which is used to specify the OS as well as the data disks we'd like attached to the VM. In this case, we specify that we'd like to run the latest version of Ubuntu 18.04. Both <strong class="source-inline">NetworkProfile</strong> and <strong class="source-inline">OSProfile</strong> are a little too complex to include in this function, so let's explore them individually in the following code block:</p>
+			<p class="source-code">func networkProfile(vmStack *VirtualMachineStack) *armcompute.NetworkProfile {</p>
+			<p class="source-code">     firstSubnet := vmStack.VirtualNetwork.Properties.Subnets[0]</p>
+			<p class="source-code">     return &amp;armcompute.NetworkProfile{</p>
+			<p class="source-code">          NetworkAPIVersion: to.Ptr(armcompute.NetworkAPIVersionTwoThousandTwenty1101),</p>
+			<p class="source-code">          NetworkInterfaceConfigurations: []*armcompute.VirtualMachineNetworkInterfaceConfiguration{</p>
+			<p class="source-code">               {</p>
+			<p class="source-code">                    Name: to.Ptr(vmStack.name + "-nic"),</p>
+			<p class="source-code">                    Properties: &amp;armcompute.VirtualMachineNetworkInterfaceConfigurationProperties{</p>
+			<p class="source-code">                         IPConfigurations: []*armcompute.VirtualMachineNetworkInterfaceIPConfiguration{</p>
+			<p class="source-code">                              {</p>
+			<p class="source-code">                                   Name: to.Ptr(vmStack.name + "-nic-conf"),</p>
+			<p class="source-code">                                   Properties: &amp;armcompute.VirtualMachineNetworkInterfaceIPConfigurationProperties{</p>
+			<p class="source-code">                                        Primary: to.Ptr(true),</p>
+			<p class="source-code">                                        Subnet: &amp;armcompute.SubResource{</p>
+			<p class="source-code">                                             ID: firstSubnet.ID,</p>
+			<p class="source-code">                                        },</p>
+			<p class="source-code">                                        PublicIPAddress Configuration: &amp;armcompute.VirtualMachinePublicIPAddress Configuration{</p>
+			<p class="source-code">                                             Name: to.Ptr(vmStack.name + "-pip"),</p>
+			<p class="source-code">                                             Properties: &amp;armcompute.VirtualMachinePublicIPAddressConfiguration Properties{</p>
+			<p class="source-code">                                                  PublicIPAllocationMethod: to.Ptr(armcompute.PublicIPAllocation MethodStatic),</p>
+			<p class="source-code">                                                  PublicIPAddressVersion:   to.Ptr(armcompute.IPVersionsIPv4),</p>
+			<p class="source-code">                                             },</p>
+			<p class="source-code">                                        },</p>
+			<p class="source-code">                                   },</p>
+			<p class="source-code">                              },</p>
+			<p class="source-code">                         },</p>
+			<p class="source-code">                         Primary: to.Ptr(true),</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>In <strong class="source-inline">networkProfile()</strong>, we<a id="_idIndexMarker1509"/> create <strong class="source-inline">NetworkProfile</strong>, which specifies that the VM<a id="_idIndexMarker1510"/> should have a single network interface using IPv4 and be exposed via a public IP. The network interface should be allocated on the subnet that we created in <strong class="source-inline">createVirtualNetwork()</strong>.</p>
+			<p>Next, let's explore the <strong class="source-inline">OSProfile</strong> configuration via <strong class="source-inline">linuxOSProfile()</strong> in the following code block:</p>
+			<p class="source-code">func linuxOSProfile(vmStack *VirtualMachineStack) *armcompute.OSProfile {</p>
+			<p class="source-code">     sshKeyData := HandleErrWithResult(ioutil.ReadFile(vmStack.sshKeyPath))</p>
+			<p class="source-code">     cloudInitContent := HandleErrWithResult(ioutil.ReadFile("./cloud-init/init.yml"))</p>
+			<p class="source-code">     b64EncodedInitScript := base64.StdEncoding.EncodeToString(cloudInitContent)</p>
+			<p class="source-code">     return &amp;armcompute.OSProfile{</p>
+			<p class="source-code">          AdminUsername: to.Ptr("devops"),</p>
+			<p class="source-code">          ComputerName:  to.Ptr(vmStack.name),</p>
+			<p class="source-code">          CustomData:    to.Ptr(b64EncodedInitScript),</p>
+			<p class="source-code">          LinuxConfiguration: &amp;armcompute.LinuxConfiguration{</p>
+			<p class="source-code">               DisablePasswordAuthentication: to.Ptr(true),</p>
+			<p class="source-code">               SSH: &amp;armcompute.SSHConfiguration{</p>
+			<p class="source-code">                    PublicKeys: []*armcompute.SSHPublicKey{</p>
+			<p class="source-code">                         {</p>
+			<p class="source-code">                              Path:    to.Ptr("/home/devops/.ssh/authorized_keys"),</p>
+			<p class="source-code">                              KeyData: to.Ptr(string(sshKeyData)),</p>
+			<p class="source-code">                         },</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               },</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>In <strong class="source-inline">linuxOSProfile</strong>, we create an <strong class="source-inline">OSProfile</strong>, which includes details such as the admin username, computer<a id="_idIndexMarker1511"/> name, and SSH configuration. Take note<a id="_idIndexMarker1512"/> of the <strong class="source-inline">CustomData</strong> field used for specifying the Base64-encoded <strong class="source-inline">cloud-init</strong> YAML, which is used to run the initial configuration of the VM.</p>
+			<p>Let's explore what we are doing in the <strong class="source-inline">cloud-init</strong> YAML:</p>
+			<p class="source-code">#cloud-config</p>
+			<p class="source-code">package_upgrade: true</p>
+			<p class="source-code">packages:</p>
+			<p class="source-code">  - nginx</p>
+			<p class="source-code">  - golang</p>
+			<p class="source-code">runcmd:</p>
+			<p class="source-code">  - echo "hello world"</p>
+			<p>Once the VM is created, the following <strong class="source-inline">cloud-init</strong> instructions are executed:</p>
+			<ol>
+				<li>First, the packages on the Ubuntu machine are upgraded. </li>
+				<li>Next, the <strong class="source-inline">nginx</strong> and <strong class="source-inline">golang</strong> packages<a id="_idIndexMarker1513"/> are installed via the <strong class="bold">Advanced Package Tool</strong> (<strong class="bold">APT</strong>). </li>
+				<li>Finally, <strong class="source-inline">runcmd echos "hello world"</strong>.</li>
+			</ol>
+			<p><strong class="source-inline">cloud-init</strong> is super-useful for bootstrapping VMs. If you have not used it previously, I highly recommend<a id="_idIndexMarker1514"/> exploring it further (<a href="https://cloudinit.readthedocs.io/en/latest/">https://cloudinit.readthedocs.io/en/latest/</a>).</p>
+			<p>We can verify <strong class="source-inline">cloud-init</strong> executed by accessing the VM using SSH and executing commands similar to the following. Remember, your IP address will be different than what is shown here:</p>
+			<p class="source-code">$ ssh -i ./.ssh/id_rsa devops@20.225.222.128</p>
+			<p class="source-code">devops@fragrant-violet:~$ which go</p>
+			<p class="source-code">/usr/bin/go</p>
+			<p class="source-code">devops@fragrant-violet:~$ which nginx</p>
+			<p class="source-code">/usr/sbin/nginx</p>
+			<p class="source-code">cat /var/log/cloud-init-output.log</p>
+			<p>As you can see, <strong class="source-inline">nginx</strong> and <strong class="source-inline">go</strong> have been installed. You should also see the APT mutations and <em class="italic">hello world</em> in <strong class="source-inline">/var/log/cloud-init-output.log</strong> on the provisioned VM.</p>
+			<p>You have provisioned<a id="_idIndexMarker1515"/> and created an Azure VM and related<a id="_idIndexMarker1516"/> infrastructure! Now, let's destroy the entire stack of infrastructure. You should be able to press <em class="italic">Enter</em> in the shell where you are running <strong class="source-inline">go run ./cmd/compute/main.go</strong>.</p>
+			<p>Let's see what happened when we called <strong class="source-inline">factory.DestroyVirtualMachineStack</strong>:</p>
+			<p class="source-code">func (vmf *VirtualMachineFactory) DestroyVirtualMachineStack(ctx context.Context, vmStack *VirtualMachineStack) {</p>
+			<p class="source-code">     _, err := vmf.groupsClient.BeginDelete(ctx, vmStack.name, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">}</p>
+			<p>In <strong class="source-inline">DestroyVirtualMachineStack</strong>, we simply call <strong class="source-inline">BeginDelete()</strong> on the group's client, specifying the resource<a id="_idIndexMarker1517"/> group name. However, unlike other <a id="_idIndexMarker1518"/>examples, we do not wait for the poller to complete. We send the <strong class="source-inline">DELETE HTTP</strong> request to Azure. We do not wait for the infrastructure to be completely deleted; instead, we trust that the acceptance of <strong class="source-inline">delete</strong> means that it will eventually reach the deleted terminal state.</p>
+			<p>We have now built and cleaned up a stack of infrastructure using the Azure SDK for Go. We have learned how to create resource groups, virtual networks, subnets, public IPs, and VMs, and how a pattern can be extended to any resource in Azure. Additionally, these skills are applicable to each of the major clouds, not just Azure. AWS and GCP both have similar concepts and API access patterns.</p>
+			<p>In the next section, we'll build an Azure Storage account and learn a bit about using the data plane of a cloud serv<a id="_idTextAnchor735"/>ice by uploading files and then providing constrained access to download those files.</p>
+			<h1 id="_idParaDest-334"><a id="_idTextAnchor736"/>Using provisioned Azure infrastructure</h1>
+			<p>In the previous section, we built<a id="_idIndexMarker1519"/> a stack of computing and networking infrastructure to illustrate how to manipulate cloud infrastructure. In this section, we will pair a provisioning infrastructure with the Azure control plane and use the infrastructure through the provisioned service's data plane.</p>
+			<p>In this section, we are going to build a cloud storage infrastructure. We will use Azure Storage to store files and provide<a id="_idIndexMarker1520"/> constrained access to those files via shared access signatures (<a href="https://docs.microsoft.com/en-us/azure/storage/common/storage-sas-overview">https://docs.microsoft.com/en-us/azure/storage/common/storage-sas-overview</a>). We will learn how to use ARM to fe<a id="_idTextAnchor737"/>tch account keys and use those keys to provide constrained access to storage resources.</p>
+			<h2 id="_idParaDest-335"><a id="_idTextAnchor738"/>Building an Azure Storage account</h2>
+			<p>Let's get started by running<a id="_idIndexMarker1521"/> the example, and then we'll delve into the code for building the infrastructure and using the provisioned storage account. To execute the example, run the following:</p>
+			<p class="source-code">$ go run ./cmd/storage/main.go</p>
+			<p class="source-code">Staring to build Azure resources...</p>
+			<p class="source-code">Building an Azure Resource Group named "falling-rain"...</p>
+			<p class="source-code">Building an Azure Storage Account named "fallingrain"...</p>
+			<p class="source-code">Fetching the Azure Storage Account shared key...</p>
+			<p class="source-code">Creating a new container "jd-imgs" in the Storage Account...</p>
+			<p class="source-code">Reading all files ./blobs...</p>
+			<p class="source-code">Uploading file "img1.jpeg" to container jd-imgs...</p>
+			<p class="source-code">Uploading file "img2.jpeg" to container jd-imgs...</p>
+			<p class="source-code">Uploading file "img3.jpeg" to container jd-imgs...</p>
+			<p class="source-code">Uploading file "img4.jpeg" to container jd-imgs...</p>
+			<p class="source-code">Generating readonly links to blobs that expire in 2 hours...</p>
+			<p class="source-code">https://fallingrain.blob.core.windows.net/jd-imgs/img1.jpeg?se=2022-04-20T21%3A50%3A25Z&amp;sig=MrwCXziwLLQeepLZjrW93IeEkTLxJ%2BEX16rmGa2w548%3D&amp;sp=r&amp;sr=b&amp;st=2022-04-20T19%3A50%3A25Z&amp;sv=2019-12-12</p>
+			<p class="source-code">...</p>
+			<p class="source-code">Press enter to delete the infrastructure.</p>
+			<p>As you can see from the previous output, the example creates a resource group and a storage account, fetches an account key, and then uploads all of the images in <strong class="source-inline">./blobs</strong> to the cloud. Finally, the example prints out URIs for each of the images using shared access signatures. If you click on one of those URIs, you should be able to download the image we uploaded to the storage account.</p>
+			<p>What happens when you try to download <strong class="source-inline">img1.jpeg</strong> without the query string – for example, using the <strong class="source-inline">https://fallingrain.blob.core.windows.net/jd-imgs/img1.jpeg</strong> link? You should get an <a id="_idIndexMarker1522"/>access deni<a id="_idTextAnchor739"/>ed message. </p>
+			<p>Let's see how we can use Azure Storage to upload files and constrain access.</p>
+			<h3>Provisioning Azure Storage using Go</h3>
+			<p>In this example, we are going to<a id="_idIndexMarker1523"/> provision an Azure resource group and an Azure Storage<a id="_idIndexMarker1524"/> account. We are using abbreviated error-handling behavior to keep the code as concise as possible for illustrative purposes. As I said in the previous section, panic is not your friend. Please wrap and bubble your errors as appropriate.</p>
+			<p>Let's start with the entry point of Go <strong class="source-inline">run ./cmd/storage/main.go</strong>, and learn how to use Go to provision the storage account:</p>
+			<p class="source-code">func init() {</p>
+			<p class="source-code">     _ = godotenv.Load()</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     subscriptionID := MustGetenv("AZURE_SUBSCRIPTION_ID")</p>
+			<p class="source-code">     factory := mgmt.NewStorageFactory(subscriptionID)</p>
+			<p class="source-code">     fmt.Println("Staring to build Azure resources...")</p>
+			<p class="source-code">     stack := factory.CreateStorageStack(</p>
+			<p class="source-code">  context.Background(),</p>
+			<p class="source-code">  "southcentralus”,</p>
+			<p class="source-code">)</p>
+			<p class="source-code">     uploadBlobs(stack)</p>
+			<p class="source-code">     printSASUris(stack)</p>
+			<p class="source-code">     fmt.Println("Press enter to delete the infrastructure.")</p>
+			<p class="source-code">     reader := bufio.NewReader(os.Stdin)</p>
+			<p class="source-code">     _, _ = reader.ReadString('\n')</p>
+			<p class="source-code">     factory.DestroyStorageStack(context.Background(), stack)</p>
+			<p class="source-code">}</p>
+			<p>Similar to the VM infrastructure<a id="_idIndexMarker1525"/> example in the previous section, we create <strong class="source-inline">StorageFactory</strong> using <strong class="source-inline">NewStorageFactory()</strong> and then use it to create<a id="_idIndexMarker1526"/> and destroy the storage stack. In the middle, we call <strong class="source-inline">uploadBlobs()</strong> to upload the image files and <strong class="source-inline">printSASUris()</strong> to generate and print shared access signatures for each of the uploaded files.</p>
+			<p>Let's start by taking a look at how we provision the storage infrastructure:</p>
+			<p class="source-code">type StorageFactory struct {</p>
+			<p class="source-code">     subscriptionID string</p>
+			<p class="source-code">     cred           azcore.TokenCredential</p>
+			<p class="source-code">     groupsClient   *armresources.ResourceGroupsClient</p>
+			<p class="source-code">     storageClient  *armstorage.AccountsClient</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func NewStorageFactory(subscriptionID string) *StorageFactory {</p>
+			<p class="source-code">     cred := HandleErrWithResult(</p>
+			<p class="source-code">  azidentity. NewDefaultAzureCredential(nil),</p>
+			<p class="source-code">)</p>
+			<p class="source-code">     return &amp;StorageFactory{</p>
+			<p class="source-code">          cred:           cred,</p>
+			<p class="source-code">          subscriptionID: subscriptionID,</p>
+			<p class="source-code">          groupsClient:   BuildClient(subscriptionID, cred, armresources.NewResourceGroupsClient),</p>
+			<p class="source-code">          storageClient:  BuildClient(subscriptionID, cred, armstorage.NewAccountsClient),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>The storage factory<a id="_idIndexMarker1527"/> looks similar to <strong class="source-inline">VirtualMachineFactory</strong> from the previous<a id="_idIndexMarker1528"/> section. However, the storage factory only uses the resource group and storage clients.</p>
+			<p>Next, let's explore <strong class="source-inline">CreateStorageStack()</strong> to see how we create the Azure Storage account:</p>
+			<p class="source-code">func (sf *StorageFactory) CreateStorageStack(ctx context.Context, location string) *StorageStack {</p>
+			<p class="source-code">     stack := &amp;StorageStack{</p>
+			<p class="source-code">          name: haiku.Haikunate(),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     stack.ResourceGroup = sf.createResourceGroup(ctx, stack.name, location)</p>
+			<p class="source-code">     stack.Account = sf.createStorageAccount(ctx, stack.name, location)</p>
+			<p class="source-code">     stack.AccountKey = sf.getPrimaryAccountKey(ctx, stack)</p>
+			<p class="source-code">     return stack</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, we create a human-readable name for the stack, which we will use to name the resource group<a id="_idIndexMarker1529"/> and the storage account. We then populate the stack<a id="_idIndexMarker1530"/> fields with created resources.</p>
+			<p>I will not cover <strong class="source-inline">createResourceGroup()</strong>, as it was covered in the previous section. However, <strong class="source-inline">createStorageAccount()</strong> and <strong class="source-inline">getPrimaryAccountKey()</strong> are interesting. Let's explore what they do:</p>
+			<p class="source-code">// createStorageAccount creates an Azure Storage Account</p>
+			<p class="source-code">func (sf *StorageFactory) createStorageAccount(ctx context.Context, name, location string) armstorage.Account {</p>
+			<p class="source-code">     param := armstorage.AccountCreateParameters{</p>
+			<p class="source-code">          Location: to.Ptr(location),</p>
+			<p class="source-code">          Kind:     to.Ptr(armstorage.KindBlockBlobStorage),</p>
+			<p class="source-code">          SKU: &amp;armstorage.SKU{</p>
+			<p class="source-code">               Name: to.Ptr(armstorage.SKUNamePremiumLRS),</p>
+			<p class="source-code">               Tier: to.Ptr(armstorage.SKUTierPremium),</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     accountName := strings.Replace(name, "-", "", -1)</p>
+			<p class="source-code">     fmt.Printf("Building an Azure Storage Account named %q...\n", accountName)</p>
+			<p class="source-code">     poller, err := sf.storageClient.BeginCreate(ctx, name, accountName, param, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     res := HandleErrPoller(ctx, poller)</p>
+			<p class="source-code">     return res.Account</p>
+			<p class="source-code">}</p>
+			<p>In the preceding<a id="_idIndexMarker1531"/> code, <strong class="source-inline">createStorageAccount()</strong> creates a new block<a id="_idIndexMarker1532"/> blob, with premium tier performance, and a locally redundant<a id="_idIndexMarker1533"/> Azure Storage account. Block blobs (<a href="https://docs.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs#about-block-blobs">https://docs.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs#about-block-blobs</a>) are optimized for uploading large amounts of data and, as the name implies, are broken into blocks of arbitrary<a id="_idIndexMarker1534"/> size. Locally redundant storage (<a href="https://docs.microsoft.com/en-us/azure/storage/common/storage-redundancy#locally-redundant-storage">https://docs.microsoft.com/en-us/azure/storage/common/storage-redundancy#locally-redundant-storage</a>) means that each block is replicated 3 times within the same data center and is guaranteed to provide 99.999999999% (11 nines!) durability<a id="_idIndexMarker1535"/> over a given year. Finally, the premium tier (<a href="https://docs.microsoft.com/en-us/azure/storage/blobs/scalability-targets-premium-block-blobs">https://docs.microsoft.com/en-us/azure/storage/blobs/scalability-targets-premium-block-blobs</a>) of Azure Storage indicates that the storage<a id="_idIndexMarker1536"/> account will be optimized for applications that consistently<a id="_idIndexMarker1537"/> require low latency and high transaction throughput for block blob mutations. </p>
+			<p>Beyond the configuration of the storage account, provisioning is handled in a similar way to the rest of the resources we have provisioned thus far.</p>
+			<p>To generate shared access signatures for uploaded blobs, we need to acquire a storage account key that is provisioned when the storage account is created. Let's see how we can request the storage account keys:</p>
+			<p class="source-code">func (sf *StorageFactory) getPrimaryAccountKey(ctx context.Context, stack *StorageStack) *armstorage.AccountKey {</p>
+			<p class="source-code">     fmt.Printf("Fetching the Azure Storage Account shared key...\n")</p>
+			<p class="source-code">     res, err := sf.storageClient.ListKeys(ctx, stack.name, *stack.Account.Name, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     return res.Keys[0]</p>
+			<p class="source-code">}</p>
+			<p>In this code, we fetch the account keys by calling <strong class="source-inline">ListKeys</strong> on the storage client. We return the first account key returned.</p>
+			<p>Now that we have provisioned the storage infrastructure and fetched the storage account k<a id="_idTextAnchor740"/>ey, we are ready to use the storage service to upload files and provide constrained access to the files.</p>
+			<h3>Using Azure Storage</h3>
+			<p>Let's upload the files in <strong class="source-inline">./blobs</strong> to our storage<a id="_idIndexMarker1538"/> account with the <strong class="source-inline">uploadBlobs</strong> func:</p>
+			<p class="source-code">func uploadBlobs(stack *mgmt.StorageStack) {</p>
+			<p class="source-code">     serviceClient := stack.ServiceClient()</p>
+			<p class="source-code">     containerClient, err := serviceClient.NewContainerClient("jd-imgs")</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     fmt.Printf("Creating a new container \"jd-imgs\" in the Storage Account...\n")</p>
+			<p class="source-code">     _, err = containerClient.Create(context.Background(), nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     fmt.Printf("Reading all files ./blobs...\n")</p>
+			<p class="source-code">     files, err := ioutil.ReadDir("./blobs")</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     for _, file := range files {</p>
+			<p class="source-code">          fmt.Printf("Uploading file %q to container jd-imgs...\n", file.Name())</p>
+			<p class="source-code">          blobClient := HandleErrWithResult(containerClient.NewBlockBlobClient(file.Name()))</p>
+			<p class="source-code">          osFile := HandleErrWithResult(os.Open(path.Join("./blobs", file.Name())))</p>
+			<p class="source-code">          _ = HandleErrWithResult(blobClient.UploadFile(context.Background(), osFile, azblob.UploadOption{}))</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, we create a service<a id="_idIndexMarker1539"/> client to interact with the storage service client. With <strong class="source-inline">serviceClient</strong>, we can define a new storage container called <strong class="source-inline">jd-imgs</strong>. You can think of a storage container as an entity similar to a directory. After specifying the container, we call <strong class="source-inline">create</strong> to request the storage service to create the container. Once we have a container, we then iterate over each image in the <strong class="source-inline">./blobs</strong> directory and upload them using the block blob client. </p>
+			<p>Until this point, we have been using the Azure CLI identity as our credential for interacting with Azure services. However, when we instantiated <strong class="source-inline">serviceClient</strong>, we instead began using the Azure Storage account keys to interact with our storage account. Let's take a look at <strong class="source-inline">ServiceClient()</strong>:</p>
+			<p class="source-code">func (ss *StorageStack) ServiceClient() *azblob.ServiceClient {</p>
+			<p class="source-code">     cred := HandleErrWithResult(azblob.NewSharedKeyCredential(*ss.Account.Name, *ss.AccountKey.Value))</p>
+			<p class="source-code">     blobURI := *ss.Account.Properties.PrimaryEndpoints.Blob</p>
+			<p class="source-code">     client, err := azblob.NewServiceClientWithSharedKey(blobURI, cred, nil)</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     return client</p>
+			<p class="source-code">}</p>
+			<p>In the preceding code, we create a new credential using the storage account name and the value of the account key. We construct <strong class="source-inline">ServiceClient</strong>, using the blob endpoint for the storage account <a id="_idIndexMarker1540"/>and the newly constructed shared key credential. The shared key credential will be used for all clients that derive from the service client.</p>
+			<p>Now that we have uploaded the files as block blobs, let's see how we can create signed URIs to provide constrained access:</p>
+			<p class="source-code">func printSASUris(stack *mgmt.StorageStack) {</p>
+			<p class="source-code">     serviceClient := stack.ServiceClient()</p>
+			<p class="source-code">     containerClient, err := serviceClient.NewContainerClient("jd-imgs")</p>
+			<p class="source-code">     HandleErr(err)</p>
+			<p class="source-code">     fmt.Printf("\nGenerating readonly links to blobs that expire in 2 hours...\n")</p>
+			<p class="source-code">     files := HandleErrWithResult(ioutil.ReadDir("./blobs"))</p>
+			<p class="source-code">     for _, file := range files {</p>
+			<p class="source-code">          blobClient := HandleErrWithResult(containerClient.NewBlockBlobClient(file.Name()))</p>
+			<p class="source-code">          permissions := azblob.BlobSASPermissions{</p>
+			<p class="source-code">               Read: true,</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          now := time.Now().UTC()</p>
+			<p class="source-code">          sasQuery := HandleErrWithResult(blobClient.GetSASToken(permissions, now, now.Add(2*time.Hour)))</p>
+			<p class="source-code">          fmt.Println(blobClient.URL() + "?" + sasQuery.Encode())</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p>We construct <strong class="source-inline">ServiceClient</strong> and establish<a id="_idIndexMarker1541"/> a container client in the preceding code block. Then, we iterate over every file within the local <strong class="source-inline">./blobs</strong> directory and create a blob client.</p>
+			<p>The blob client has a helpful method called <strong class="source-inline">GetSASToken</strong>, which generates a shared access token given blob access permissions and a validity time span. In our case, we are granting read access that starts immediately and expires in 2 hours. To create a complete URI to access the blob, we need to combine the blob URL and the query string generated by the shared access token. We do that with <strong class="source-inline">blobClient.URL()</strong>, <strong class="source-inline">"?"</strong>, and <strong class="source-inline">sasQuery.Encode()</strong>. Now, anyone with the signed URI will have access to read the file.</p>
+			<p>In this final section, we built<a id="_idIndexMarker1542"/> and used cloud storage infrastructure to store files and provide constrained access to those files by using shared access signatures. We learned how to fetch account keys and use them to provide constrained access to storage resources. Using these skills, you can combine permissions and other constraints to tailor access to your needs. Providing constrained access in this way is a powerful tool. For example, you can create a write-only URI to a blob not yet created, pass the URI to a client, and then have them upload a file without having access to any other files in the storage account.</p>
+			<h1 id="_idParaDest-336"><a id="_idTextAnchor741"/>Summary</h1>
+			<p>Azure Storage is only one service out of hundreds that you can use to build applications in the cloud. Each cloud service provider has analogous storage services that operate in a similar way. The examples shown in this chapter are specific to Microsoft Azure, but they can be easily emulated for other clouds.</p>
+			<p>The Azure Storage example is useful for illustrating the separation between the management plane and the data plane of the cloud. If you look closely, you can observe a significant similarity in <strong class="bold">Create, Read, Update, and Delete</strong> (<strong class="bold">CRUD</strong>) resource operations using ARM in contrast to interacting with the Azure Storage service, container, and blob clients. Resource management is uniform within a cloud. The data plane for databases, storage services, and content delivery networks is rarely uniform and often exposed through purpose-built APIs.</p>
+			<p>In this chapter, we learned that the cloud is not just someone else's computer. The cloud is a planet-scale web of high-security data centers filled with computing, networking, and storage hardware. We also learned the fundamentals of identity, authentication, and authorization, with specifics drawn from Microsoft Azure. We briefly covered Azure RBAC and its relationship with AAD identities. Finally, we learned how to provision and use cloud resources using Microsoft Azure.</p>
+			<p>You should be able to take what you learned here and apply it to provisioning and using cloud services to achieve your goals. These skills were focused on Microsoft Azure, but the skills learned here are easily transferred to the AWS or Google clouds.</p>
+			<p>In the next chapter, we're going to explore what happens when software operates in less-than-perfect conditions. We will learn to design for chaos.</p>
+		</div>
+	</div></body></html>

@@ -1,0 +1,900 @@
+<html><head></head><body><div id="sbo-rt-content"><div id="_idContainer017">
+			<h1 id="_idParaDest-165"><a id="_idTextAnchor367"/>Chapter <a id="_idTextAnchor368"/>6: Interacting with Remote Data Sources</h1>
+			<p>In the last chapter, we talked about dealing with common data formats and showed how we can read and write data in those formats. But in that chapter, we were simply dealing with data that was accessible through a filesystem. </p>
+			<p>While the filesystem may actually have files that exist on remote<a id="_idIndexMarker533"/> devices through services such as the <strong class="bold">Network File System</strong> (<strong class="bold">NFS</strong>) or the <strong class="bold">Server Message Block</strong> (<strong class="bold">SMB</strong>), other remote data<a id="_idIndexMarker534"/> sources exist.</p>
+			<p>In this chapter, we will look at some common ways to send and receive data in remote data sources. This will focus<a id="_idIndexMarker535"/> on accessing data<a id="_idIndexMarker536"/> on remote systems using the <strong class="bold">Structured Query Language</strong> (<strong class="bold">SQL</strong>), <strong class="bold">REpresentational State Transfer</strong> (<strong class="bold">REST</strong>), and <strong class="bold">Google Remote Procedure Call</strong> (<strong class="bold">gRPC</strong>). You will learn how<a id="_idIndexMarker537"/> to access common SQL data stores, with a focus on PostgreSQL. We will also explore how <strong class="bold">Remote Procedure Call</strong> (<strong class="bold">RPC</strong>) services are created and queried<a id="_idIndexMarker538"/> using REST- and gRPC-style RPC methodologies.</p>
+			<p>With the skills you gain here, you will be able to connect and query data in a SQL database, add new entries to the database, request a remote action from a service, and gather information from a remote service.</p>
+			<p>We will cover the following topics in this chapter:</p>
+			<ul>
+				<li>Accessing SQL databases</li>
+				<li>Developing REST services and clients</li>
+				<li>Developing gRPC services and clients</li>
+			</ul>
+			<p>In the next section, we will dive into utilizing data in one of the oldest formats, <strong class="bold">Comma-Separated Values </strong>(<strong class="bold">CSV</strong>). </p>
+			<p>Let's get sta<a id="_idTextAnchor369"/>rted!</p>
+			<h1 id="_idParaDest-166"><a id="_idTextAnchor370"/>Technical requirements</h1>
+			<p>The code files for this chapter can be downloaded from <a href="https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/6/grpc">https://github.com/PacktPublishing/Go-for-DevOps/tree/rev0/chapter/6/grpc</a></p>
+			<h1 id="_idParaDest-167"><a id="_idTextAnchor371"/>Accessing SQL databases</h1>
+			<p>DevOps engineers commonly have a need to access<a id="_idIndexMarker539"/> data stored in database systems. <strong class="bold">SQL</strong> is a standard for communicating<a id="_idIndexMarker540"/> with database systems that a DevOps engineer will encounter in their day-to-day lives.</p>
+			<p>Go provides a standard library for interacting with SQL-based systems called <strong class="source-inline">database/sql</strong>. The interfaces provided<a id="_idIndexMarker541"/> by that package, with the addition of a database driver, allow a user to work with several different SQL databases.</p>
+			<p>In this section, we will look at how we can access a Postgres database to perform basic SQL operations using Go.</p>
+			<p class="callout-heading">Important Note</p>
+			<p class="callout">Examples in this section will require you to set up a Postgres database. This is beyond the scope of this book. This will not be a guide to SQL. Some basic SQL knowledge is required.</p>
+			<p>You can find information regarding<a id="_idIndexMarker542"/> how to install Postgres for your OS at <a href="https://www.postgresql.org/download/">https://www.postgresql.org/download/</a>. If you prefer to run Postgres in a local Docker<a id="_idIndexMarker543"/> container, you can find that information at <a href="https://hub.docker.com/_/postgres">https://hub.docker.com/_/postgres</a>.</p>
+			<h2 id="_idParaDest-168"><a id="_idTextAnchor372"/>Connecting to a Postgres database</h2>
+			<p>To connect to a Postgres<a id="_idIndexMarker544"/> database will require using a database driver for Postgres. The currently<a id="_idIndexMarker545"/> recommended third-party package is <strong class="source-inline">github.com/jackc/pgx</strong>. This package implements a SQL driver for <strong class="source-inline">database/sql</strong> and provides its own methods/types for Postgres-specific features.</p>
+			<p>The choice to use <strong class="source-inline">database/sql</strong> or Postgres-specific types will depend on whether you need to ensure compatibility between different databases. Using <strong class="source-inline">database/sql</strong> allows you to write functions that work on any SQL database, while using Postgres-specific features removes<a id="_idIndexMarker546"/> compatibility and makes migration to another database<a id="_idIndexMarker547"/> more difficult. We will discuss how to perform our examples using both methods.</p>
+			<p>Here is how to connect using a standard SQL package without extra Postgres features:</p>
+			<p class="source-code">/* </p>
+			<p class="source-code">dbURL might look like:</p>
+			<p class="source-code">"postgres://username:password@localhost:5432/database_name"</p>
+			<p class="source-code">*/</p>
+			<p class="source-code">conn, err := sql.Open("pgx", dbURL)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">     return fmt.Errorf("connect to db error: %s\n", err)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">defer conn.Close()</p>
+			<p class="source-code">ctx, cancel := context.WithTimeout(</p>
+			<p class="source-code">     context.Background(), </p>
+			<p class="source-code">     2 * time.Second</p>
+			<p class="source-code">)</p>
+			<p class="source-code">if err := conn.PingContext(ctx); err != nil {</p>
+			<p class="source-code">  return err</p>
+			<p class="source-code">}</p>
+			<p class="source-code">cancel()</p>
+			<p>Here, we open a connection to Postgres using the <strong class="source-inline">pgx</strong> driver that will be registered when you import the following package:</p>
+			<p class="source-code">_ "github.com/jackc/pgx/v4/stdlib"</p>
+			<p>This is an anonymous import, meaning we are not using <strong class="source-inline">stdlib</strong> directly. This is done when we want a <em class="italic">side effect</em>, such as when registering a driver with the <strong class="source-inline">database/sql</strong> package.</p>
+			<p>The <strong class="source-inline">Open()</strong> call doesn't test our<a id="_idIndexMarker548"/> connection. You will see <strong class="source-inline">conn.PingContext()</strong> to test that <a id="_idIndexMarker549"/>we will be able to make calls to the database.</p>
+			<p>When you want to use <strong class="source-inline">pgx-specific</strong> types for Postgres, the setup is slightly different, starting with a different package import:</p>
+			<p class="source-code">"github.com/jackc/pgx/v4/pgxpool"</p>
+			<p>To create that connection, type the following:</p>
+			<p class="source-code">conn, err := pgxpool.Connect(ctx, dbURL)</p>
+			<p class="source-code">if err != nil {</p>
+			<p class="source-code">     return fmt.Errorf("connect to db error: %s\n", err)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">defer conn.Close(ctx)</p>
+			<p>This uses a connection pool to connect to the database for performance. You will notice that we don't have a <strong class="source-inline">PingContext()</strong> call, as the native connection tests the connection as part of <strong class="source-inline">Connect()</strong>. </p>
+			<p>Now that you know how to connect to Postgres, let's look at how we can make queries.</p>
+			<h2 id="_idParaDest-169"><a id="_idTextAnchor373"/>Querying a Postgres database</h2>
+			<p>Let's consider making a call to your SQL database<a id="_idIndexMarker550"/> to fetch some information<a id="_idIndexMarker551"/> about a user that is held in a table.</p>
+			<p>Using the standard library, type the following:</p>
+			<p class="source-code">type UserRec struct {</p>
+			<p class="source-code">     User string</p>
+			<p class="source-code">     DisplayName string</p>
+			<p class="source-code">     ID int</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func GetUser(ctx context.Context, conn *sql.DB, id int) (UserRec, error) {</p>
+			<p class="source-code">     const query = `SELECT "User","DisplayName" FROM users WHERE "ID" = $1`</p>
+			<p class="source-code">     u := UserRec{ID: id}</p>
+			<p class="source-code">     err := conn.QueryRowContext(ctx, query, id).Scan(&amp;u)</p>
+			<p class="source-code">     return u, err</p>
+			<p class="source-code">}</p>
+			<p>This example<a id="_idIndexMarker552"/> does the<a id="_idIndexMarker553"/> following:</p>
+			<ul>
+				<li>Creates <strong class="source-inline">UserRec</strong> to store SQL data for a user</li>
+				<li>Creates a query statement called <strong class="source-inline">query</strong></li>
+				<li>Queries our database for a user with the requested ID</li>
+				<li>Returns <strong class="source-inline">UserRec</strong> and an error if we had one</li>
+			</ul>
+			<p>We can increase the efficiency of this example by using a prepared statement in an object instead of just a function:</p>
+			<p class="source-code">type Storage struct {</p>
+			<p class="source-code">     conn *sql.DB</p>
+			<p class="source-code">     getUserStmt *sql.Stmt</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func NewStorage(ctx context.Context, conn *sql.DB) *Storage</p>
+			<p class="source-code">{</p>
+			<p class="source-code">     return &amp;Storage{</p>
+			<p class="source-code">          getUserStmt: conn.PrepareContext(</p>
+			<p class="source-code">               ctx,</p>
+			<p class="source-code">               `SELECT "User","DisplayName" FROM users WHERE "ID" = $1`,</p>
+			<p class="source-code">          )</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *Storage) GetUser(ctx context.Context, id int) (UserRec, error) {</p>
+			<p class="source-code">     u := UserRec{ID: id}</p>
+			<p class="source-code">     err := s.getUserStmt.QueryRow(id).Scan(&amp;u)</p>
+			<p class="source-code">     return u, err</p>
+			<p class="source-code">}</p>
+			<p>This example<a id="_idIndexMarker554"/> does the <a id="_idIndexMarker555"/>following:</p>
+			<ul>
+				<li>Creates a reusable object</li>
+				<li>Stores <strong class="source-inline">*sql.Stmt</strong>, which increases the efficiency when doing repeated queries</li>
+				<li>Defines a <strong class="source-inline">NewStorage</strong> constructor that creates our object</li>
+			</ul>
+			<p>Because of the generic nature of using the standard library, in these examples, any implementation of <strong class="source-inline">*sql.DB</strong> could be used. Switching Postgres for MariaDB would work as long as MariaDB had the same table names and format.</p>
+			<p>If we use the Postgres-specific library, the same code is written like so:</p>
+			<p class="source-code">err = conn.QueryRow(ctx, query).Scan(&amp;u)</p>
+			<p class="source-code">return u, err</p>
+			<p>This implementation looks and works in a similar way to the standard library. But the <strong class="source-inline">conn</strong> object here is a different, non-interface <strong class="source-inline">pgxpool.Conn</strong> type and not <strong class="source-inline">sql.Conn</strong>. And while the functionality looks similar, the <strong class="source-inline">pgxpool.Conn</strong> object supports queries with Postgres-specific types and syntax, such as <strong class="source-inline">jsonb</strong>, that <strong class="source-inline">sql.Conn</strong> does not.</p>
+			<p>There is no need to use a prepared statement for non-transactions when using Postgres-specific calls. The call information is automatically cached. </p>
+			<p>The preceding example<a id="_idIndexMarker556"/> was simplistic in that we were pulling a specific<a id="_idIndexMarker557"/> entry. What if we wanted to also have a method to retrieve all users with IDs between two numbers? We could define this using the standard library:</p>
+			<p class="source-code">/* </p>
+			<p class="source-code">stmt contains `SELECT "User","DisplayName","ID" FROM users </p>
+			<p class="source-code">WHERE "ID" &gt;= $1 AND "ID" &lt; $2`</p>
+			<p class="source-code">*/</p>
+			<p class="source-code">func (s *Storage) UsersBetween(ctx context.Context, start, end int) ([]UserRec, error) {</p>
+			<p class="source-code">     recs := []UserRec{}</p>
+			<p class="source-code">     rows, err := s.usersBetweenStmt(ctx, start, end)</p>
+			<p class="source-code">     defer rows.Close()</p>
+			<p class="source-code">     for rows.Next() {</p>
+			<p class="source-code">          rec := UserRec{}</p>
+			<p class="source-code">          if err := rows.Scan(&amp;rec); err != nil {</p>
+			<p class="source-code">               return nil, err</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          recs = append(recs, rec)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return recs, nil</p>
+			<p class="source-code">}</p>
+			<p>The Postgres-specific syntax is the same; it just switches <strong class="source-inline">s.usersBetweenStmt()</strong> for <strong class="source-inline">conn.QueryRow()</strong>.</p>
+			<h2 id="_idParaDest-170"><a id="_idTextAnchor374"/>Null values</h2>
+			<p>SQL has a concept of null values<a id="_idIndexMarker558"/> for basic types such as Booleans, strings, and int32. Go doesn't have the<a id="_idIndexMarker559"/> convention; instead, it provides zero values for those types.</p>
+			<p>When SQL allows a column to have a null value, the standard library provides special null types in <strong class="source-inline">database/sql</strong>:</p>
+			<ul>
+				<li><strong class="source-inline">sql.NullBool</strong></li>
+				<li><strong class="source-inline">sql.NullByte</strong></li>
+				<li><strong class="source-inline">sql.NullFloat64</strong></li>
+				<li><strong class="source-inline">sql.NullInt16</strong></li>
+				<li><strong class="source-inline">sql.NullInt32</strong></li>
+				<li><strong class="source-inline">sql.NullInt64</strong></li>
+				<li><strong class="source-inline">sql.NullString</strong></li>
+				<li><strong class="source-inline">sql.NullTime</strong></li>
+			</ul>
+			<p>When you design your schema, it is better to use zero values instead of null values. But sometimes, you need to tell the difference between a value being set and the zero value. In those cases, you can use these special types in place of the standard type. </p>
+			<p>For example, if our <strong class="source-inline">UserRec</strong> could have a null <strong class="source-inline">DisplayName</strong>, we can change the <strong class="source-inline">string</strong> type to <strong class="source-inline">sql.NullString</strong>:</p>
+			<p class="source-code">type UserRec struct {</p>
+			<p class="source-code">     User string</p>
+			<p class="source-code">     DisplayName sql.NullString</p>
+			<p class="source-code">     ID int</p>
+			<p class="source-code">}</p>
+			<p>You can see an example of how<a id="_idIndexMarker560"/> the server sets these values depending on the value<a id="_idIndexMarker561"/> that the column holds for <strong class="source-inline">DisplayName</strong> here: <a href="https://go.dev/play/p/KOkYdhcjhdf">https://go.dev/play/p/KOkYdhcjhdf</a>.</p>
+			<h2 id="_idParaDest-171"><a id="_idTextAnchor375"/>Writing data to Postgres</h2>
+			<p>Writing data into a database<a id="_idIndexMarker562"/> is simple but requires some consideration of the syntax. The two major operations<a id="_idIndexMarker563"/> that a user wants when writing data are as follows:</p>
+			<ul>
+				<li>Updating an existing entry</li>
+				<li>Inserting a new entry</li>
+			</ul>
+			<p>In standard SQL, you cannot do an <em class="italic">update entry if it exists; insert if not</em>. As this is a common operation, each database<a id="_idIndexMarker564"/> offers some way to do this with its own special syntax. When using the standard library, you must choose between doing an update or an insert. If you do not know whether the entry exists, you will need to use a transaction, which we will detail in a bit.</p>
+			<p>Doing an update or insert is simply using a different SQL syntax and the <strong class="source-inline">ExecContext()</strong> call:</p>
+			<p class="source-code">func (s *Storage) AddUser(ctx context.Context, u UserRec) error {</p>
+			<p class="source-code">     _, err := s.addUserStmt.ExecContext(</p>
+			<p class="source-code">          ctx,</p>
+			<p class="source-code">          u.User,</p>
+			<p class="source-code">          u.DisplayName,</p>
+			<p class="source-code">          u.ID,</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *Storage) UpdateDisplayName(ctx context.Context, id int, name string) error {</p>
+			<p class="source-code">     _, err := s.updateDisplayName.ExecContext(</p>
+			<p class="source-code">          ctx,</p>
+			<p class="source-code">          name,</p>
+			<p class="source-code">          id,</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p>In this example, we have<a id="_idIndexMarker565"/> added two<a id="_idIndexMarker566"/> methods:</p>
+			<ul>
+				<li><strong class="source-inline">AddUser()</strong> adds a new <a id="_idIndexMarker567"/>user into the system.</li>
+				<li><strong class="source-inline">UpdateDisplayName()</strong> updates the display name of a user with a specific ID.</li>
+				<li>Both use the <strong class="source-inline">sql.Stmt</strong> type, which would be a field in the object, similar to <strong class="source-inline">getUserStmt</strong>.</li>
+			</ul>
+			<p>The major difference when implementing using the Postgres-native package is the method name that is called and the lack of a prepared statement. Implementing <strong class="source-inline">AddUser()</strong> would look like the following:</p>
+			<p class="source-code">func (s *Storage) AddUser(ctx context.Context, u UserRec) error {</p>
+			<p class="source-code">     const stmt = `INSERT INTO users (User,DisplayName,ID)</p>
+			<p class="source-code">     VALUES ($1, $2, $3)`</p>
+			<p class="source-code">     _, err := s.conn.Exec(</p>
+			<p class="source-code">          ctx, </p>
+			<p class="source-code">          stmt, </p>
+			<p class="source-code">          u.User, </p>
+			<p class="source-code">          u.DisplayName, </p>
+			<p class="source-code">          u.ID,</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">    return err </p>
+			<p class="source-code">}</p>
+			<p>Sometimes, it is not enough to just do a read<a id="_idIndexMarker568"/> or a write to the database. Sometimes, we need to do multiple actions<a id="_idIndexMarker569"/> atomically and treat them as a single<a id="_idIndexMarker570"/> action. So, in the next section, we will talk about how to do this with transactions.</p>
+			<h2 id="_idParaDest-172"><a id="_idTextAnchor376"/>Transactions</h2>
+			<p>Transactions provide a sequence of SQL operations<a id="_idIndexMarker571"/> that are executed on the server <a id="_idIndexMarker572"/>as one piece of work. This is commonly used to provide some type of atomic operation where a read and a write are required or to extract data on a read before doing a write.</p>
+			<p>Transactions are easy to create in Go. Let's create an <strong class="source-inline">AddOrUpdateUser()</strong> call that will look to see whether a user exists before adding or updating our data:</p>
+			<p class="source-code">func (s *Storage) AddOrUpdateUser(ctx context.Context, u UserRec) (err error) {</p>
+			<p class="source-code">     const (</p>
+			<p class="source-code">          getStmt = `SELECT "ID" FROM users WHERE "User" = $1`</p>
+			<p class="source-code">          insertStmt = `INSERT INTO users (User,DisplayName,ID)</p>
+			<p class="source-code">          VALUES ($1, $2, $3)`</p>
+			<p class="source-code">          updateStmt = `UPDATE "users" SET "User" = $1,</p>
+			<p class="source-code">          "DisplayName" = $2 WHERE "ID" = 3`</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     tx, err := s.conn.BeginTx(ctx, &amp;sql.TxOptions{Isolation: sql.LevelSerializable})</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">           return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     defer func() {</p>
+			<p class="source-code">          if err != nil {</p>
+			<p class="source-code">               tx.Rollback()</p>
+			<p class="source-code">               return</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          err = tx.Commit()</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     _, err := tx.QueryRowContext(ctx, getStmt, u.User)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          if err == sql.ErrNoRows {</p>
+			<p class="source-code">               _, err = tx.ExecContext(ctx, insertStmt, u.User, u.DisplayName, u.ID)</p>
+			<p class="source-code">               if err != nil {</p>
+			<p class="source-code">                    return err</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     _, err = tx.ExecContext(ctx, updateStmt, u.User, u.DisplayName, u.ID))</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p>This code<a id="_idIndexMarker573"/> does the following:</p>
+			<ul>
+				<li>Creates a transaction<a id="_idIndexMarker574"/> with an isolation level of <strong class="source-inline">LevelSerializable</strong></li>
+				<li>Uses a <strong class="source-inline">defer</strong> statement<a id="_idIndexMarker575"/> to determine whether we had an error:<ul><li>If we did, we roll back the entire transaction.</li><li>If not, we attempt to commit the transaction.</li></ul></li>
+				<li>Queries to find whether the user exists:<ul><li>It determines this by checking the error type.</li><li>If the error is <strong class="source-inline">sql.ErrNoRows</strong>, we did not find the user.</li><li>If the error is anything else, it was a system error.</li></ul></li>
+				<li>Executes an insert statement if we didn't find the user</li>
+				<li>Executes an update statement if we did find the user</li>
+			</ul>
+			<p>The keys to a transaction are the following:</p>
+			<ul>
+				<li><strong class="source-inline">conn.BeginTx</strong>, which starts the transaction</li>
+				<li><strong class="source-inline">tx.Commit()</strong>, which commits our changes</li>
+				<li><strong class="source-inline">tx.Rollback()</strong>, which reverts our changes</li>
+			</ul>
+			<p>A <strong class="source-inline">defer</strong> statement is an excellent way to handle either <strong class="source-inline">Commit()</strong> or <strong class="source-inline">Rollback()</strong> once the transaction has been created. It ensures that when the function ends, either one or the other is executed. </p>
+			<p>The isolation level is important for a transaction as it affects the performance and reliability of your system. Go provides multiple levels of isolation; however, not all database systems will support all levels of isolation.</p>
+			<p>You can read more<a id="_idIndexMarker576"/> about isolation levels here: <a href="https://en.wikipedia.org/wiki/Isolation_(database_systems)#Isolation_levels">https://en.wikipedia.org/wiki/Isolation_(database_systems)#Isolation_levels</a>.</p>
+			<h2 id="_idParaDest-173"><a id="_idTextAnchor377"/>Postgres-specific types</h2>
+			<p>So far in our examples, we have shown you how to use both the standard library and Postgres-specific objects<a id="_idIndexMarker577"/> to interact with Postgres. But we haven't really shown<a id="_idIndexMarker578"/> a compelling reason to use Postgres objects.</p>
+			<p>Postgres objects shine when you need to use types or capabilities that aren't a part of the SQL standard. Let's rewrite our transaction example, but instead of storing data across standard columns, let's have our Postgres database only have two columns:</p>
+			<ul>
+				<li>An ID of the <strong class="source-inline">int</strong> type</li>
+				<li>Data of the <strong class="source-inline">jsonb</strong> type</li>
+			</ul>
+			<p><strong class="source-inline">jsonb</strong> is not part of the SQL standard and cannot be implemented with the standard SQL library. <strong class="source-inline">jsonb</strong> can greatly simplify your life, as it allows you to store JSON data while querying using JSON fields:</p>
+			<p class="source-code">func (s *Storage) AddOrUpdateUser(ctx context.Context, u UserRec) (err error) {</p>
+			<p class="source-code">     const (</p>
+			<p class="source-code">          getStmt = `SELECT "ID" FROM "users" WHERE "ID" = $1`</p>
+			<p class="source-code">          updateStmt = `UPDATE "users" SET "Data" = $1 WHERE "ID" = $2`</p>
+			<p class="source-code">          addStmt = `INSERT INTO "users" (ID,Data) VALUES ($1, $2)`</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     tx, err := conn.BeginTx(</p>
+			<p class="source-code">          ctx , </p>
+			<p class="source-code">          pgx.TxOptions{</p>
+			<p class="source-code">               IsoLevel: pgx.Serializable,</p>
+			<p class="source-code">               AccessMode: pgx.ReadWrite,</p>
+			<p class="source-code">               DeferableMode: pgx.NotDeferrable,</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     defer func() {</p>
+			<p class="source-code">          if err != nil {</p>
+			<p class="source-code">               tx.Rollback()</p>
+			<p class="source-code">               return</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          err = tx.Commit()</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     _, err := tx.QueryRow(ctx, getUserStmt, u.ID)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          if err == sql.ErrNoRows {</p>
+			<p class="source-code">               _, err = tx.ExecContext(ctx, insertStmt, u.ID, u)</p>
+			<p class="source-code">               if err != nil {</p>
+			<p class="source-code">                    return err</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     _, err = tx.Exec(ctx, updateStmt, u.ID, u)</p>
+			<p class="source-code">     return err</p>
+			<p class="source-code">}</p>
+			<p>This example is different in a few ways:</p>
+			<ul>
+				<li>It has additional <strong class="source-inline">AccessMode</strong> and <strong class="source-inline">DeferableMode</strong> parameters.</li>
+				<li>We can pass our object, <strong class="source-inline">UserRec</strong>, as our <strong class="source-inline">Data</strong> <strong class="source-inline">jsonb</strong> column. </li>
+			</ul>
+			<p>The access and deferable modes<a id="_idIndexMarker579"/> add extra constraints that are not available directly<a id="_idIndexMarker580"/> with the standard library.</p>
+			<p>Using <strong class="source-inline">jsonb</strong> is a boon. Now, we can do searches on our tables with <strong class="source-inline">WHERE</strong> clauses that can filter on the <strong class="source-inline">jsonb</strong> field values. </p>
+			<p>You will also notice that <strong class="source-inline">pgx</strong> is smart enough to know our column type and automatically convert our <strong class="source-inline">UserRec</strong> into JSON.</p>
+			<p>If you'd like to know<a id="_idIndexMarker581"/> more about Postgres value types, you can visit <a href="https://www.postgresql.org/docs/9.5/datatype.html">https://www.postgresql.org/docs/9.5/datatype.html</a>.</p>
+			<p>If you'd like to know more about <strong class="source-inline">jsonb</strong> and functions<a id="_idIndexMarker582"/> to access its values, visit <a href="https://www.postgresql.org/docs/9.5/functions-json.html">https:/<span id="_idTextAnchor378"/>/www.postgresql.org/docs/9.5/functions-json.html</a>.</p>
+			<h2 id="_idParaDest-174"><a id="_idTextAnchor379"/>Other options</h2>
+			<p>Besides the standard library<a id="_idIndexMarker583"/> and database-specific packages are <strong class="bold">Object-Relational Mappings</strong> (<strong class="bold">ORMs</strong>). ORMs are a popular model for managing data between your services and data storage.</p>
+			<p>Go's most popular<a id="_idIndexMarker584"/> ORM is called <strong class="bold">GORM</strong>, which can be found<a id="_idIndexMarker585"/> here: <a href="https://gorm.io/index.html">https://gorm.io/index.html</a>.</p>
+			<p>Another popular framework that also includes support for REST and web services is Beego, whic<a id="_idTextAnchor380"/>h you can find here: <a href="https://github.com/beego/beego">https://github.com/beego/beego</a>.</p>
+			<h2 id="_idParaDest-175"><a id="_idTextAnchor381"/>Storage abstractions</h2>
+			<p>Many developers are tempted<a id="_idIndexMarker586"/> to use storage systems directly in their code, passing around<a id="_idIndexMarker587"/> a connection to a database. This is not optimal in that it can cause problems when you need to do the following:</p>
+			<ul>
+				<li>Add caching layers before storage access.</li>
+				<li>Migrate to a new storage system for your service.</li>
+			</ul>
+			<p>Abstracting storage behind an internal <strong class="bold">Application Programming Interface</strong> (<strong class="bold">API</strong>) of interfaces will allow you to change storage layers<a id="_idIndexMarker588"/> later by simply implementing the interfaces with the new backend. You can then plug in the new backend at any time.</p>
+			<p>A simple example of this might be adding an interface for getting user data:</p>
+			<p class="source-code">type UserStorage interface {</p>
+			<p class="source-code">     User(ctx context.Context, id string) (UserRec, error)</p>
+			<p class="source-code">     AddUser(ctx context.Context, u UserRec) error</p>
+			<p class="source-code">     UpdateDisplayName(ctx context.Context, id string, name string) error</p>
+			<p class="source-code">}</p>
+			<p>This interface allows you to implement your storage backend using Postgres, local files, SQLite, Azure Cosmos DB, in-memory data structures, or any other storage medium. </p>
+			<p>This has the benefit of allowing migration from one storage medium to another by plugging in a new implementation. As a side benefit, you can decouple tests from using a database. Instead, most tests can use an in-memory data structure. This allows you to test your functionality without bringing up and tearing down infrastructure, which would be necessary with a real database. </p>
+			<p>Adding a cache layer becomes a simple exercise of writing a <strong class="source-inline">UserStorage</strong> implementation that calls the cache on reads and when not found calls your data store implementation. You can replace the original and everything keeps working.</p>
+			<p>Note that everything described here for abstraction behind an interface applies to access to service data. A SQL API should only be used for your application to store and read data. Other services should use a stable RPC interface. This provides the same type of abstraction, allowing<a id="_idIndexMarker589"/> you to move data backends<a id="_idIndexMarker590"/> without migrating users.</p>
+			<h2 id="_idParaDest-176"><a id="_idTextAnchor382"/>Case study – data migration of an orchestration system – Google</h2>
+			<p>One of the systems I was involved<a id="_idIndexMarker591"/> with during my tenure at Google was an orchestration system for automating network changes. The system received automation instructions and executed them against various targets. These operations might involve pushing files via <strong class="bold">Secure File Transfer Protocol</strong> (<strong class="bold">SFTP</strong>), interacting with network routers, updating<a id="_idIndexMarker592"/> authoritative data stores, or running state verifications. </p>
+			<p>With operations, it is critical that data representing the state of a workflow is always up to date. This includes not only the currently running workflows but also the states of previous workflows, which are used to create new workflows.</p>
+			<p>To ease our operational burden, we wanted to move the storage system for workflows from Bigtable to Spanner. Bigtable required a more complicated setup to handle failover to a backup cell when problems occurred, while Spanner was designed to handle this as part of the system design. This removed the need for us to intervene when cells had problems.</p>
+			<p>The storage layer was hidden behind a storage interface. Storage was initialized in our <strong class="source-inline">main()</strong> and passed around to other modules that required it. This meant that we could replace the storage layer with a new implementation.</p>
+			<p>We implemented a new storage interface that wrote data to both Bigtable and Spanner while reading from them both, using the latest data stamp and updating the records if needed.</p>
+			<p>This allowed us to operate using both data stores while our historical data was being transferred. Once synchronization was complete, we moved our binaries to a version that only had a Spanner implementation. Our migration was complete with no service downtime while thousands of critical operations were running.</p>
+			<p>So far in this chapter, we have learned about how to use <strong class="source-inline">database/sql</strong> to access generic data stores and Postgres specifically. We learned how to read and write to Postgres and implement transactions. The benefits of using <strong class="source-inline">database/sql</strong> versus a database-specific library such as <strong class="source-inline">pgx</strong> were discussed. And finally, we showed how hiding your implementations behind interface<a id="_idIndexMarker593"/> abstractions can allow you to change storage backends more easily and test code relying on storage hermetically. </p>
+			<p>Next, w<a id="_idTextAnchor383"/>e will look into accessing RPC services using REST or gRPC. </p>
+			<h1 id="_idParaDest-177"><a id="_idTextAnchor384"/>Developing REST services and clients</h1>
+			<p>Before the web and distributed<a id="_idIndexMarker594"/> systems that now permeate the cloud space, standards<a id="_idIndexMarker595"/> for communicating between systems were not in widespread<a id="_idIndexMarker596"/> use. This communication is often called an RPC. This simply means that a program on one machine has a method to call a function running on a different machine and receive any output.</p>
+			<p>Monolithic applications were the norm and servers tended to either be silo'd per application and vertically scaled or were run as jobs on larger, more specialized hardware from companies such as IBM, Sun, SGI, or Cray. When systems did need to communicate with each other, they tended to use their own custom wire formats, such as what you would see with Microsoft SQL Server. </p>
+			<p>With the web defining the internet of the 2000s, large monolithic systems could not provide the compute power behind services such as Google Search or Facebook at any reasonable cost point. To power these services, companies needed to treat large collections of standard PCs as a single system. Where a single system could communicate between processes using Unix sockets or shared memory calls, companies needed common and secure ways to communicate between processes running on different machines.</p>
+			<p>As HTTP became the de facto standard for communication between systems, RPC mechanisms of today use some form of HTTP for data transport. This allows the RPC to transit systems more easily, such as load balancers, and easily utilize security standards, such as <strong class="bold">Transport Layer Security</strong> (<strong class="bold">TLS</strong>). It also means that as the HTTP<a id="_idIndexMarker597"/> transport is upgraded, these RPC frameworks can leverage the hard work of hundreds if not thousands of engineers.</p>
+			<p>In this section, we are going to talk about one of the most popular RPC mechanisms, REST. REST uses HTTP calls and whatever messaging format y<a id="_idTextAnchor385"/>ou want, although the majority<a id="_idIndexMarker598"/> of cases use JSON<a id="_idIndexMarker599"/> for messaging. </p>
+			<h2 id="_idParaDest-178"><a id="_idTextAnchor386"/>REST for RPCs</h2>
+			<p>Writing REST clients in Go<a id="_idIndexMarker600"/> is fairly simple. Chances<a id="_idIndexMarker601"/> are that if you have been developing applications in the last 10 years, you have either used a REST client or written one. Cloud APIs for services such as Google Cloud Platform's Cloud Spanner, Microsoft's Azure Data Explorer, or Amazon DynamoDB use REST to communicate with the services via their client libraries.</p>
+			<p>REST clients can do<a id="_idIndexMarker602"/> the following:</p>
+			<ul>
+				<li>Use <strong class="source-inline">GET</strong>, <strong class="source-inline">POST</strong>, <strong class="source-inline">PATCH</strong>, or any other type of HTTP method.</li>
+				<li>Support any serialization format (although this is normally JSON).</li>
+				<li>Allow for data streaming.</li>
+				<li>Support query variables.</li>
+				<li>Support multiple versions of an API using URL standards.</li>
+			</ul>
+			<p>REST in Go also has the luxury of not requiring any framework to implement on the server side. Everything that is required lives in the standard library.</p>
+			<h3>Writing a REST client </h3>
+			<p>Let's write a simple REST client<a id="_idIndexMarker603"/> that accesses a server and receives a <strong class="bold">Quote of the Day</strong>  (<strong class="bold">QOTD</strong>). To do this, the server<a id="_idIndexMarker604"/> has the following endpoint using <strong class="source-inline">POST</strong> – <strong class="source-inline">/v1/qotd</strong>.</p>
+			<p>First, let's define the message we need to send to the server:</p>
+			<p class="source-code">type getReq struct {</p>
+			<p class="source-code">     Author string `json:"author"`</p>
+			<p class="source-code">}</p>
+			<p class="source-code">type getResp struct {</p>
+			<p class="source-code">     Quote string `json:"quote"`</p>
+			<p class="source-code">     Error *Error `json:"error"`</p>
+			<p class="source-code">}</p>
+			<p>Let's talk about<a id="_idIndexMarker605"/> what each of these does:</p>
+			<ul>
+				<li><strong class="source-inline">getReq</strong> details the arguments to the server's <strong class="source-inline">/v1/qotd</strong> function call.</li>
+				<li><strong class="source-inline">getResp</strong> is what we expect as a return from the server's function call.</li>
+			</ul>
+			<p>We are using field tags to allow conversion from lowercase keys into our public variables that are capitalized. For the <strong class="source-inline">encoding/json</strong> package to see these values for serialization, they must be public. Private fields will not be serializable:</p>
+			<p class="source-code">type Error struct {</p>
+			<p class="source-code">     Code ErrCode</p>
+			<p class="source-code">     Msg string</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (e *Error) Error() string {</p>
+			<p class="source-code">     return fmt.Errorf("(code %v): %s", e.Code, e.Msg)</p>
+			<p class="source-code">}</p>
+			<p>This defines a custom error type. This way, we can store error codes to return to the user. This code is defined next to our response object, but it isn't used until much later in the code we are defining.</p>
+			<p>Let's now define a QOTD client and a constructor that does some basic checks on the address and creates an HTTP client to allow us to send data to the server:</p>
+			<p class="source-code">type QOTD struct {</p>
+			<p class="source-code">     addr string</p>
+			<p class="source-code">     client *http.Client</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New(addr string) (*QOTD, error) {</p>
+			<p class="source-code">     if _, _, err := net.SplitHostPort(addr); err != nil {</p>
+			<p class="source-code">          return nil, err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return &amp;QOTD{addr: addr, client: &amp;http.Client{}}</p>
+			<p class="source-code">}</p>
+			<p>The next step is to make a generic function<a id="_idIndexMarker606"/> for making REST calls. Because REST is so open-ended, it is hard to make one that can handle any type of REST call. A best practice to use when writing REST servers is to only support the <strong class="source-inline">POST</strong> method; never use query variables and simple URLs. However, in practice, you will deal with a wide variety of REST call types if you don't control the service:</p>
+			<p class="source-code">func (q *QOTD) restCall(ctx context.Context, endpoint string, req, resp interface{}) error {</p>
+			<p class="source-code">     if _, ok := ctx.Deadline(); !ok {</p>
+			<p class="source-code">          var cancel context.CancelFunc</p>
+			<p class="source-code">          ctx, cancel = context.WithDeadline(ctx, 2 * time.Second)</p>
+			<p class="source-code">          defer cancel()</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     b, err := json.Marshal(req)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     hReq, err := http.NewRequestWithContext(</p>
+			<p class="source-code">          ctx, </p>
+			<p class="source-code">          http.POST, </p>
+			<p class="source-code">          endpoint,</p>
+			<p class="source-code">          bytes.NewBuffer(b), </p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     resp, err := q.client.Do(hReq)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     b, err := io.ReadAll(resp.Body)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return json.Unmarshal(b, resp)</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Checks<a id="_idIndexMarker607"/> our context for a deadline:<ul><li>If it has one, it is honored</li><li>If not, a default one is set</li><li><strong class="source-inline">cancel()</strong> is called after the call is done</li></ul></li>
+				<li>Marshals a request into JSON.</li>
+				<li>Creates a new <strong class="source-inline">*http.Request</strong> that does the following:<ul><li>Uses the <strong class="source-inline">POST</strong> method</li><li>Talks to an endpoint</li><li>Has <strong class="source-inline">io.Reader</strong> storing the JSON request</li></ul></li>
+				<li>Uses the client to send a request and get a response.</li>
+				<li>Retrieves the response from the body of <strong class="source-inline">http.Response</strong>.</li>
+				<li>Unmarshals JSON into the response object.</li>
+			</ul>
+			<p>You will notice<a id="_idIndexMarker608"/> that <strong class="source-inline">req</strong> and <strong class="source-inline">resp</strong> are both <strong class="source-inline">interface{}</strong>. This allows us to use this routine with any struct that will represent a JSON request or response. </p>
+			<p>Now, we will use that in a method that gets a QOTD by an author:</p>
+			<p class="source-code">func (q *QOTD) Get(ctx context.Context, author string) (string, error) {</p>
+			<p class="source-code">     const endpoint = `/v1/qotd`</p>
+			<p class="source-code">     resp := getResp{}</p>
+			<p class="source-code">     err := q.restCall(ctx, path.Join(q.addr, endpoint), getReq{Author: author}), &amp;resp)</p>
+			<p class="source-code">     switch {</p>
+			<p class="source-code">     case err != nil:</p>
+			<p class="source-code">          return "", err</p>
+			<p class="source-code">     case resp.Error != nil:</p>
+			<p class="source-code">          return "", resp.Error</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return resp.Quote, nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Defines an endpoint for our <strong class="source-inline">get</strong> function on the server.</li>
+				<li>Calls our <strong class="source-inline">restCall()</strong> method, which does the following:<ul><li>Uses <strong class="source-inline">path.Join()</strong> to unite our server address and URL endpoint.</li><li>Creates a <strong class="source-inline">getReq</strong> object as the <strong class="source-inline">req</strong> argument of <strong class="source-inline">restCall()</strong>.</li><li>Reads the response into our <strong class="source-inline">resp</strong> response object.</li><li>If <strong class="source-inline">*http.Client</strong> returns an error, we return that error.</li><li>If <strong class="source-inline">resp.Error</strong> is set, we return it.</li></ul></li>
+				<li>Returns the response's quote.</li>
+			</ul>
+			<p>To see this running now, you can go here: <a href="https://play.golang.org/p/Th0PxpglnXw">https://play.golang.org/p/Th0PxpglnXw</a>.</p>
+			<p>We have shown<a id="_idIndexMarker609"/> how to make a base REST client here using HTTP <strong class="source-inline">POST</strong> calls and JSON. However, we have only scratched the surface of making a REST client. You may need to add authentication<a id="_idIndexMarker610"/> to the header in the form of a <strong class="bold">JSON Web Token</strong> (<strong class="bold">JWT</strong>). This used HTTP and not HTTPS, so there was no transport security. We did not try to use compression such as Deflate or Gzip. </p>
+			<p>While using <strong class="source-inline">http.Client</strong> is easy to do, you may want a more intelligent wrapper that handles many of these features for you. One that is worth looking a<a id="_idTextAnchor387"/>t would be <strong class="source-inline">resty</strong>, which can be found here: <a href="https://github.com/go-resty/resty">https://github.com/go-resty/resty</a>.</p>
+			<h3>Writing a REST service </h3>
+			<p>Now that we have<a id="_idIndexMarker611"/> a client written, let's write a REST service endpoint that can receive the request and send the user the output:</p>
+			<p class="source-code">type server struct {</p>
+			<p class="source-code">     serv *http.Server</p>
+			<p class="source-code">     quotes map[string][]string</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Creates the server <strong class="source-inline">struct</strong>, <strong class="source-inline">which</strong> will act as our server</li>
+				<li>Uses <strong class="source-inline">*http.Server</strong> to server HTTP content</li>
+				<li>Has <strong class="source-inline">quotes</strong>, which stores authors as keys and values that are a slice of quotes</li>
+			</ul>
+			<p>Now, we need a constructor:</p>
+			<p class="source-code">func newServer(port int) (*server, error) {</p>
+			<p class="source-code">     s := &amp;server{</p>
+			<p class="source-code">          serv: &amp;http.Server{</p>
+			<p class="source-code">               Addr: ":" + strconv.Itoa(port),</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">          quotes: map[string][]string{</p>
+			<p class="source-code">               // Add quotes here</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     mux := http.NewServeMux()</p>
+			<p class="source-code">     mux.HandleFunc(`/qotd/v1/get`, s.qotdGet)</p>
+			<p class="source-code">     // The muxer implements http.Handler </p>
+			<p class="source-code">     // and we assign it for our server’s URL handling.</p>
+			<p class="source-code">     s.serv.Handler = mux</p>
+			<p class="source-code">     return s, nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (s *server) start() error {</p>
+			<p class="source-code">     return s.serv.ListenAndServe()</p>
+			<p class="source-code">}</p>
+			<p>This code<a id="_idIndexMarker612"/> does the following:</p>
+			<ul>
+				<li>Creates a <strong class="source-inline">newServer</strong> constructor:<ul><li>This has an argument of <strong class="source-inline">port</strong>, which is the port to run the server on.</li></ul></li>
+				<li>Creates a <strong class="source-inline">server</strong> instance:<ul><li>Makes an instance of <strong class="source-inline">*http.Server</strong> running at <strong class="source-inline">:[port]</strong></li><li>Populates our <strong class="source-inline">quotes map</strong></li></ul></li>
+				<li>Adds <strong class="source-inline">*http.ServeMux</strong> to map URLs to methods.<p class="callout-heading">Note </p><p class="callout">We will create the <strong class="source-inline">qotdGet</strong> method in a moment.</p></li>
+				<li>Creates a method<a id="_idIndexMarker613"/> called <strong class="source-inline">start()</strong> that will start our HTTP server.</li>
+			</ul>
+			<p><strong class="source-inline">*http.ServeMux</strong> implements the <strong class="source-inline">http.Handler</strong> interface that is used by <strong class="source-inline">*http.Server</strong>. <strong class="source-inline">ServeMux</strong> uses pattern matching to determine which method is called for which URL. You can read about pattern-matching<a id="_idIndexMarker614"/> syntax here: <a href="https://pkg.go.dev/net/http#ServeMux">https://pkg.go.dev/net/http#ServeMux</a>.</p>
+			<p>Now, let's create the method to answer our REST endpoint:</p>
+			<p class="source-code">func (s *server) qotdGet(w http.ResponseWriter, r *http.Request) {</p>
+			<p class="source-code">     req := getReq{}</p>
+			<p class="source-code">     if err := req.fromReader(r.Body); err != nil {</p>
+			<p class="source-code">          http.Error(w, err.Error(), http.StatusBadRequest)</p>
+			<p class="source-code">          return</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     var quotes []string</p>
+			<p class="source-code">     if req.Author == "" {</p>
+			<p class="source-code">          // Map access is random, this will randomly choose a            	          // set of quotes from an author.</p>
+			<p class="source-code">          for _, quotes = range s.quotes {</p>
+			<p class="source-code">               break</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     } else {</p>
+			<p class="source-code">          var ok bool</p>
+			<p class="source-code">          quotes, ok = s.quotes[req.Author]</p>
+			<p class="source-code">          if !ok {</p>
+			<p class="source-code">               b, err := json.Marshal(</p>
+			<p class="source-code">                    getResp{</p>
+			<p class="source-code">                         Error: &amp;Error{</p>
+			<p class="source-code">                              Code: UnknownAuthor,</p>
+			<p class="source-code">                              Msg:  fmt.Sprintf("Author %q was not found", req.Author),</p>
+			<p class="source-code">                        },</p>
+			<p class="source-code">                    },</p>
+			<p class="source-code">               )</p>
+			<p class="source-code">               if err != nil {</p>
+			<p class="source-code">                    http.Error(w, err.Error(), http.StatusBadRequest)</p>
+			<p class="source-code">                    return</p>
+			<p class="source-code">               }</p>
+			<p class="source-code">               w.Write(b)</p>
+			<p class="source-code">               return</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     i := rand.Intn(len(quotes))</p>
+			<p class="source-code">     b, err := json.Marshal(getResp{Quote: quotes[i]})</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          http.Error(w, err.Error(), http.StatusBadRequest)</p>
+			<p class="source-code">          return</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     w.Write(b)</p>
+			<p class="source-code">     return</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Implements the <strong class="source-inline">http.Handler</strong> interface.</li>
+				<li>Reads the HTTP request<a id="_idIndexMarker615"/> body and marshals it to our <strong class="source-inline">getReq</strong>:<ul><li>This uses HTTP error codes with <strong class="source-inline">http.Error()</strong> if the request was bad</li></ul></li>
+				<li>If the request did not contain an "author," randomly chooses an author's quotes.</li>
+				<li>Otherwise, finds the author and retrieves their quotes:<ul><li>If that author did not exist, responds with <strong class="source-inline">getResp</strong> containing an error</li></ul></li>
+				<li>Randomly chooses a quote and returns it to the client.</li>
+			</ul>
+			<p>Now, we have a REST endpoint that can answer our client's RPCs. You can see this code running here: <a href="https://play.golang.org/p/Th0PxpglnXw">https://play.golang.org/p/Th0PxpglnXw</a>.</p>
+			<p>This just scratches the surface of building a REST service. You can build authentication and compression on top of this, performance tracing, and so on</p>
+			<p>To help with bootstrapping features and removing some boilerplate, here are a few third-party packages that might be helpful:</p>
+			<ul>
+				<li>Gin: <a href="https://github.com/gin-gonic/gin">https://github.com/gin-gonic/gin</a>:<ul><li>A REST<a id="_idIndexMarker616"/> example: <a href="https://golang.org/doc/tutorial/web-service-gin">https://golang.org/doc/tutorial/web-service-gin</a></li></ul></li>
+				<li>Revel: <a href="https://revel.github.io">https://revel.github.io</a></li>
+			</ul>
+			<p>Now that we<a id="_idIndexMarker617"/> have talked about using REST for RPCs, let's take a look <a id="_idTextAnchor388"/>at the faster alternative that is being<a id="_idIndexMarker618"/> adopted by large companies everywhere, gRPC.</p>
+			<h1 id="_idParaDest-179"><a id="_idTextAnchor389"/>Developing gRPC services and clients</h1>
+			<p>gRPC provides an entire<a id="_idIndexMarker619"/> framework for RPCs based on HTTP and utilizing Google's protocol<a id="_idIndexMarker620"/> buffer format, a binary format that can convert into JSON but provides both a schema and, in many cases, a 10x performance improvement over JSON. </p>
+			<p>There are other formats in this space, such as Apache's Thrift, Cap'n Proto, and Google's FlatBuffers. However, these are not as popular and well supported, or satisfy a particular niche, while also being hard to use.</p>
+			<p>gRPC, like REST, is a client/server framework for making RPC calls. Where gRPC differs is that it prefers a binary<a id="_idIndexMarker621"/> message format called <strong class="bold">protocol buffers</strong> (<strong class="bold">proto</strong> for short). </p>
+			<p>This format has a schema stored in a <strong class="source-inline">.proto</strong> file that is used to generate the client, server, and messages in a native library for the language of your choice using a compiler. When a proto message is marshaled for transport on the wire, the binary representation will be the same for all languages. </p>
+			<p>Let's talk more about protocol buffers, gRPC's message format of choice.</p>
+			<h2 id="_idParaDest-180"><a id="_idTextAnchor390"/>Protocol buffers</h2>
+			<p>Protocol buffers define RPC messages<a id="_idIndexMarker622"/> and services in one location and can generate a library for every language with the proto compiler. Protocol buffers have the following advantages:</p>
+			<ul>
+				<li>They write once and generate for every language.</li>
+				<li>Messages can be converted to JSON as well as binary.</li>
+				<li>gRPC can use a reverse proxy to provide REST endpoints, which is great for web apps.</li>
+				<li>Binary protocol buffers are smaller and can encode/decode at 10x the rate of JSON.</li>
+			</ul>
+			<p>However, protocol buffers<a id="_idIndexMarker623"/> do have some negatives:</p>
+			<ul>
+				<li>You must regenerate the messages on any change to the <strong class="source-inline">.proto</strong> file to get the changes.</li>
+				<li>Google's standard proto compiler is painful and confusing to use.</li>
+				<li>JavaScript does not have native support for gRPC, even though it supports protocol buffers.</li>
+			</ul>
+			<p>Tooling can help with some of the negatives, and we<a id="_idIndexMarker624"/> will be using the new <strong class="bold">Buf</strong> tools, <a href="https://buf.build">https://buf.build</a>, to help with proto generation.</p>
+			<p>Let's take a look at what a protocol buffer <strong class="source-inline">.proto</strong> file looks like for a QOTD service:</p>
+			<p class="source-code">syntax = "proto3";</p>
+			<p class="source-code">package qotd;</p>
+			<p class="source-code">option go_package = "github.com/[repo]/proto/qotd";</p>
+			<p class="source-code">message GetReq {</p>
+			<p class="source-code">        string author = 1;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">message GetResp {</p>
+			<p class="source-code">        string author = 1;</p>
+			<p class="source-code">        string quote = 2;</p>
+			<p class="source-code">}</p>
+			<p class="source-code">service QOTD {</p>
+			<p class="source-code">   rpc GetQOTD(GetReq) returns (GetResp) {};</p>
+			<p class="source-code">}</p>
+			<p>The <strong class="source-inline">syntax</strong> keyword defines which version<a id="_idIndexMarker625"/> of the proto language we are using. The most common version is <strong class="source-inline">proto3</strong>, the third iteration of the language. All three have the same wire format but have different feature sets and generate different language packages.</p>
+			<p><strong class="source-inline">package</strong> defines the proto package name, which allows this protocol buffer to be imported by another package. We have put <strong class="source-inline">[repo]</strong> as a placeholder to represent the GitHub repository. </p>
+			<p><strong class="source-inline">go_package</strong> defines the package name specifically when generating Go files. While this is marked as <strong class="source-inline">option</strong>, it is not optional when compiling for Go.</p>
+			<p><strong class="source-inline">message</strong> defines a new message type, which in Go is generated as <strong class="source-inline">struct</strong>. Entries inside <strong class="source-inline">message</strong> detail the fields. <strong class="source-inline">string author = 1</strong> creates a field in <strong class="source-inline">struct</strong> <strong class="source-inline">GetReq</strong> called <strong class="source-inline">Author</strong> of the <strong class="source-inline">string</strong> type. <strong class="source-inline">1</strong> is the field<a id="_idIndexMarker626"/> position in the proto. You cannot have repeated field numbers in a message, a field number should never change, and a field should not be removed (although it can be deprecated). </p>
+			<p><strong class="source-inline">service</strong> defines a gRPC service with one RPC endpoint, <strong class="source-inline">GetQOTD</strong>. This call receives <strong class="source-inline">GetReq</strong> and returns <strong class="source-inline">GetResp</strong>.</p>
+			<p>Now that we have defined this protocol buffer file, we can use a proto compiler to generate packages for languages we are interested in. This will include all of our messages and the code needed to use the gRPC client and server.</p>
+			<p>Let's look at generating the Go packages from the protocol buffer file.</p>
+			<h2 id="_idParaDest-181"><a id="_idTextAnchor391"/>Stating the prerequisites</h2>
+			<p>To use protocol buffers<a id="_idIndexMarker627"/> in this tutorial, you will need to install the following:</p>
+			<ul>
+				<li>The protocol<a id="_idIndexMarker628"/> buffer compiler: <a href="https://grpc.io/docs/protoc-installation/">https://grpc.io/docs/protoc-installation/</a></li>
+				<li>The Go plugins<a id="_idIndexMarker629"/> for the compiler: <a href="https://grpc.io/docs/languages/go/quickstart/">https://grpc.io/docs/languages/go/quickstart/</a></li>
+				<li>The Buf<a id="_idIndexMarker630"/> tooling: <a href="https://docs.buf.build/installation">https://docs.buf.build/installation</a></li>
+			</ul>
+			<p>With these installed, you will be able to generate code for C++ and Go. Other languages require additional plugins.</p>
+			<h2 id="_idParaDest-182"><a id="_idTextAnchor392"/>Generating your packages</h2>
+			<p>The first file we need<a id="_idIndexMarker631"/> to create is the <strong class="source-inline">buf.yaml</strong> file. We can generate the <strong class="source-inline">buf.yaml</strong> file inside the <strong class="source-inline">proto</strong> directory by entering it and issuing the following command:</p>
+			<p class="source-code">buf config init</p>
+			<p>This should generate a file that has the following content:</p>
+			<p class="source-code">version: v1</p>
+			<p class="source-code">lint:</p>
+			<p class="source-code">  use:</p>
+			<p class="source-code">    - DEFAULT</p>
+			<p class="source-code">breaking:</p>
+			<p class="source-code">  use:</p>
+			<p class="source-code">    - FILE</p>
+			<p>Next, we need a file that tells us what output to generate. Create a file called <strong class="source-inline">buf.gen.yaml</strong> and give it the following contents:</p>
+			<p class="source-code">version: v1</p>
+			<p class="source-code">plugins:</p>
+			<p class="source-code">  - name: go</p>
+			<p class="source-code">    out: ./</p>
+			<p class="source-code">    opt:</p>
+			<p class="source-code">      - paths=source_relative</p>
+			<p class="source-code">  - name: go-grpc</p>
+			<p class="source-code">    out: ./</p>
+			<p class="source-code">    opt:</p>
+			<p class="source-code">      - paths=source_relative</p>
+			<p>This indicates that we should<a id="_idIndexMarker632"/> generate our <strong class="source-inline">go</strong> and <strong class="source-inline">go-grpc</strong> files in the same directory as our <strong class="source-inline">.proto</strong> file.</p>
+			<p>Now, we should test that our proto will build. We can do this by issuing the following command:</p>
+			<p class="source-code">buf build</p>
+			<p>If there is no output, then our proto file should compile. Otherwise, we will get a list of errors that we need to fix.</p>
+			<p>Finally, let's generate our proto files:</p>
+			<p class="source-code">buf generate</p>
+			<p>If you named the proto file <strong class="source-inline">qotd.proto</strong>, this should generate the following:</p>
+			<ul>
+				<li><strong class="source-inline">qotd.pb.go</strong>, which will contain all your messages</li>
+				<li><strong class="source-inline">qotd_grpc.pb.go</strong>, which will contain all the gRPC stubs</li>
+			</ul>
+			<p>Now that we have our proto package, let's build a client.</p>
+			<h2 id="_idParaDest-183"><a id="_idTextAnchor393"/>Writing a gRPC client</h2>
+			<p>In the root folder<a id="_idIndexMarker633"/> of your repository, let's create two directories:</p>
+			<ul>
+				<li><strong class="source-inline">client/</strong>, which will hold our client code</li>
+				<li><strong class="source-inline">internal/server/</strong>, which will hold our server code</li>
+			</ul>
+			<p>Now, let's create a <strong class="source-inline">client/client.go</strong> file with the following:</p>
+			<p class="source-code">package client</p>
+			<p class="source-code">import (</p>
+			<p class="source-code">        "context"</p>
+			<p class="source-code">        "time"</p>
+			<p class="source-code">        "google.golang.org/grpc"</p>
+			<p class="source-code">        pb "[repo]/grpc/proto"</p>
+			<p class="source-code">)</p>
+			<p class="source-code">type Client struct {</p>
+			<p class="source-code">        client pb.QOTDClient</p>
+			<p class="source-code">        conn   *grpc.ClientConn</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New(addr string) (*Client, error) {</p>
+			<p class="source-code">        conn, err := grpc.Dial(addr, grpc.WithInsecure())</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">                return nil, err</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        return &amp;Client{</p>
+			<p class="source-code">                client: pb.NewQOTDClient(conn),</p>
+			<p class="source-code">                conn: conn,</p>
+			<p class="source-code">        }, nil</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (c *Client) QOTD(ctx context.Context, wantAuthor string) (author, quote string, err error) {</p>
+			<p class="source-code">        if _, ok := ctx.Deadline(); !ok {</p>
+			<p class="source-code">                var cancel context.CancelFunc</p>
+			<p class="source-code">                ctx, cancel = context.WithTimeout(ctx, 2 * time.Second)</p>
+			<p class="source-code">                defer cancel()</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        resp, err := c.client.GetQOTD(ctx, &amp;pb.GetReq{Author: wantAuthor})</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">                return "", "", err</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        return resp.Author, resp.Quote, nil</p>
+			<p class="source-code">}</p>
+			<p>This is a simple wrapper around the generated<a id="_idIndexMarker634"/> client with our connection to the server established in our <strong class="source-inline">New()</strong> constructor:</p>
+			<ul>
+				<li><strong class="source-inline">grpc.Dial()</strong> connects to the server's address:<ul><li><strong class="source-inline">grpc.WithInsecure()</strong> allows us to not use TLS. (In real services, you need to use TLS!)</li></ul></li>
+				<li><strong class="source-inline">pb.NewQOTDClient()</strong> takes a gRPC connection and returns our generated client.</li>
+				<li><strong class="source-inline">QOTD()</strong> uses the client to make a call defined in our <strong class="source-inline">GetQOTD()</strong> proto:<ul><li>This defines a timeout if one was not defined. The server receives this timeout.</li><li>This uses the generated client to call the server.</li></ul></li>
+			</ul>
+			<p>Creating a wrapper to use as a client isn't strictly required. Many developers prefer to have the user directly interact with the service using the generated client. </p>
+			<p>In our opinion, this is fine for simple clients. More complicated clients generally should ease the burden by either moving logic<a id="_idIndexMarker635"/> to the server or having custom client wrappers that are more language-friendly.</p>
+			<p>Now that we have defined a client, let's create our server package.</p>
+			<h2 id="_idParaDest-184"><a id="_idTextAnchor394"/>Writing a gRPC server</h2>
+			<p>Let's create<a id="_idIndexMarker636"/> a server file at <strong class="source-inline">internal/server/server.go</strong>.</p>
+			<p>Now, let's add the following content:</p>
+			<p class="source-code">package server</p>
+			<p class="source-code">import (</p>
+			<p class="source-code">        "context"</p>
+			<p class="source-code">        "fmt"</p>
+			<p class="source-code">        "math/rand"</p>
+			<p class="source-code">        "net"</p>
+			<p class="source-code">        "sync"</p>
+			<p class="source-code">        "google.golang.org/grpc"</p>
+			<p class="source-code">        "google.golang.org/grpc/codes"</p>
+			<p class="source-code">        "google.golang.org/grpc/status"</p>
+			<p class="source-code">        </p>
+			<p class="source-code">        pb "[repo]/grpc/proto"</p>
+			<p class="source-code">)</p>
+			<p class="source-code">type API struct {</p>
+			<p class="source-code">     pb.UnimplementedQOTDServer</p>
+			<p class="source-code">     addr string</p>
+			<p class="source-code">     quotes map[string][]string</p>
+			<p class="source-code">     mu sync.Mutex</p>
+			<p class="source-code">     grpcServer *grpc.Server</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func New(addr string) (*API, error) {</p>
+			<p class="source-code">     var opts []grpc.ServerOption</p>
+			<p class="source-code">     a := &amp;API{</p>
+			<p class="source-code">          addr: addr,</p>
+			<p class="source-code">          quotes: map[string][]string{</p>
+			<p class="source-code">               // Insert your quote mappings here</p>
+			<p class="source-code">          },</p>
+			<p class="source-code">          grpcServer: grpc.NewServer(opts...),</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     a.grpcServer.RegisterService(&amp;pb.QOTD_ServiceDesc, a)</p>
+			<p class="source-code">     return a, nil</p>
+			<p class="source-code">}</p>
+			<p>This code<a id="_idIndexMarker637"/> does the following:</p>
+			<ul>
+				<li>Defines our API server:<ul><li><strong class="source-inline">pb.UnimplementedQOTDServer</strong> is a generated interface that contains all the methods that our server must implement. This is required.</li><li><strong class="source-inline">addr</strong> is the address our server will run on.</li><li><strong class="source-inline">quotes</strong> contains quotes the server is storing.</li></ul></li>
+				<li>Defines a <strong class="source-inline">New()</strong> constructor:<ul><li>This creates an instance of our <strong class="source-inline">API</strong> server.</li><li>This registers the instance with our <strong class="source-inline">grpcServer</strong>.</li></ul></li>
+			</ul>
+			<p>Now, let's add methods<a id="_idIndexMarker638"/> to start and stop our <strong class="source-inline">API</strong> server:</p>
+			<p class="source-code">func (a *API) Start() error {</p>
+			<p class="source-code">     a.mu.Lock()</p>
+			<p class="source-code">     defer a.mu.Unlock()</p>
+			<p class="source-code">     lis, err := net.Listen("tcp", a.addr)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          return err</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return a.grpcServer.Serve(lis)</p>
+			<p class="source-code">}</p>
+			<p class="source-code">func (a *API) Stop() {</p>
+			<p class="source-code">     a.mu.Lock()</p>
+			<p class="source-code">     defer a.mu.Unlock()</p>
+			<p class="source-code">     a.grpcServer.Stop()</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Defines <strong class="source-inline">Start()</strong> to start our<a id="_idIndexMarker639"/> server, which does the following:<ul><li>Uses <strong class="source-inline">Mutex</strong> to prevent stops and starts concurrently</li><li>Creates a TCP listener on the address passed in <strong class="source-inline">New()</strong></li><li>Starts the gRPC server using our listener</li></ul></li>
+				<li>Defines <strong class="source-inline">Stop()</strong> to stop our server, which does the following:<ul><li>Uses <strong class="source-inline">Mutex</strong> to prevent stops and starts concurrently</li><li>Tells the gRPC server to stop gracefully</li></ul></li>
+			</ul>
+			<p>Now, let's implement<a id="_idIndexMarker640"/> the <strong class="source-inline">GetQOTD()</strong> method:</p>
+			<p class="source-code">func (a *API) GetQOTD(ctx context.Context, req *pb.GetReq) (*pb.GetResp, error) {</p>
+			<p class="source-code">     var (</p>
+			<p class="source-code">          author string</p>
+			<p class="source-code">          quotes []string</p>
+			<p class="source-code">     )</p>
+			<p class="source-code">     if req.Author == "" {</p>
+			<p class="source-code">          for author, quotes = range s.quotes {</p>
+			<p class="source-code">               break</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     } else {</p>
+			<p class="source-code">          author = req.Author</p>
+			<p class="source-code">          var ok bool</p>
+			<p class="source-code">          quotes, ok = s.quotes[req.Author]</p>
+			<p class="source-code">          if !ok {</p>
+			<p class="source-code">               return nil, status.Error(</p>
+			<p class="source-code">                    codes.NotFound, </p>
+			<p class="source-code">                    fmt.Sprintf("author %q not found", req.author),</p>
+			<p class="source-code">               )</p>
+			<p class="source-code">          }</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     return &amp;pb.GetResp{</p>
+			<p class="source-code">          Author: author, </p>
+			<p class="source-code">          Quote: quotes[rand.Intn(len(quotes))],</p>
+			<p class="source-code">     }, nil</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Defines the <strong class="source-inline">GetQOTD()</strong> method that the client will call</li>
+				<li>Includes similar logic to our REST server</li>
+				<li>Uses gRPC's error type defined in the <strong class="source-inline">google.golang.org/grpc/status</strong> package to return gRPC er<a id="_idTextAnchor395"/>ror codes</li>
+			</ul>
+			<p>Now that we have<a id="_idIndexMarker641"/> our client and server packages, let's create a server binary to run our service.</p>
+			<h2 id="_idParaDest-185"><a id="_idTextAnchor396"/>Creating a server binary</h2>
+			<p>Create a file called <strong class="source-inline">qotd.go</strong> that will<a id="_idIndexMarker642"/> hold our server's <strong class="source-inline">main()</strong> function:</p>
+			<p class="source-code">package main</p>
+			<p class="source-code">import (</p>
+			<p class="source-code">     "flag"</p>
+			<p class="source-code">     "log"</p>
+			<p class="source-code">     "github.com/[repo]/internal/server"</p>
+			<p class="source-code">     pb "[repo]/proto"</p>
+			<p class="source-code">)</p>
+			<p class="source-code">var addr = flag.String("addr", "127.0.0.1:80", "The address to run on.")</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">     flag.Parse()</p>
+			<p class="source-code">     s, err := server.New(*addr)</p>
+			<p class="source-code">     if err != nil {</p>
+			<p class="source-code">          panic(err)</p>
+			<p class="source-code">     }</p>
+			<p class="source-code">     done := make(chan error, 1)</p>
+			<p class="source-code">     log.Println("Starting server at: ", *addr)</p>
+			<p class="source-code">     go func() {</p>
+			<p class="source-code">          defer close(done)</p>
+			<p class="source-code">          done &lt;-s.Start()</p>
+			<p class="source-code">     }()</p>
+			<p class="source-code">     err &lt;- done</p>
+			<p class="source-code">     log.Println("Server exited with error: ", err)</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Creates a flag, <strong class="source-inline">addr</strong>, that the caller passes<a id="_idIndexMarker643"/> to set the address that the server runs on.</li>
+				<li>Creates an instance of our server.</li>
+				<li>Writes that we are starting the server.</li>
+				<li>Starts the server.</li>
+				<li>If the server exists, the error is printed to the screen:<ul><li>This might be something saying the port is already in use.</li></ul></li>
+			</ul>
+			<p>You can run this binary by using this command:</p>
+			<p class="source-code">go run qotd.go --addr="127.0.0.1:2562"</p>
+			<p>If you do not pass the <strong class="source-inline">--addr</strong> flag, this will default to <strong class="source-inline">127.0.0.1:80</strong>.</p>
+			<p>You should see the following on yo<a id="_idTextAnchor397"/>ur screen:</p>
+			<p class="source-code">Starting server at: 127.0.0.1:2562</p>
+			<p>Now, let's create<a id="_idIndexMarker644"/> a binary that uses the client to fetch a QOTD.</p>
+			<h2 id="_idParaDest-186"><a id="_idTextAnchor398"/>Creating a client binary</h2>
+			<p>Create a file called <strong class="source-inline">client/bin/qotd.go</strong>. Then, add<a id="_idIndexMarker645"/> the following:</p>
+			<p class="source-code">package main</p>
+			<p class="source-code">import (</p>
+			<p class="source-code">        "context"</p>
+			<p class="source-code">        "flag"</p>
+			<p class="source-code">        "fmt"</p>
+			<p class="source-code">        "github.com/devopsforgo/book/book/code/1/4/grpc/client"</p>
+			<p class="source-code">)</p>
+			<p class="source-code">var (</p>
+			<p class="source-code">        addr   = flag.String("addr", "127.0.0.1:80", "The address of the server.")</p>
+			<p class="source-code">        author = flag.String("author", "", "The author whose quote to get")</p>
+			<p class="source-code">)</p>
+			<p class="source-code">func main() {</p>
+			<p class="source-code">        flag.Parse()</p>
+			<p class="source-code">        c, err := client.New(*addr)</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">                panic(err)</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        a, q, err := c.QOTD(context.Background(), *author)</p>
+			<p class="source-code">        if err != nil {</p>
+			<p class="source-code">                panic(err)</p>
+			<p class="source-code">        }</p>
+			<p class="source-code">        fmt.Println("Author: ", a)</p>
+			<p class="source-code">        fmt.Printf("Quote of the Day: %q\n", q)</p>
+			<p class="source-code">}</p>
+			<p>This code does the following:</p>
+			<ul>
+				<li>Sets up a flag<a id="_idIndexMarker646"/> for the address of the server</li>
+				<li>Sets up a flag for the author of the quote you want</li>
+				<li>Creates a new instance of <strong class="source-inline">client.QOTD</strong></li>
+				<li>Calls the server using the <strong class="source-inline">QOTD()</strong>client method</li>
+				<li>Prints the results or an error to the terminal</li>
+			</ul>
+			<p>You can run this binary by using this command:</p>
+			<p class="source-code">go run qotd.go --addr="127.0.0.1:2562"</p>
+			<p>This will contact the server running at this address. If you are running the server at a different address, you will need to change this to match.</p>
+			<p>If you do not pass the <strong class="source-inline">--author</strong> flag, this randomly chooses an author.</p>
+			<p>You should see the following on your screen:</p>
+			<p class="source-code">Author: [some author]</p>
+			<p class="source-code">Quote: [some quote]</p>
+			<p>Now we've seen how to use gRPC to make<a id="_idTextAnchor399"/> a simple client and server application. But this is just the beginning<a id="_idIndexMarker647"/> of the features available to you in gRPC.</p>
+			<h3>We are just scratching the surface</h3>
+			<p>gRPC is a key piece of infrastructure for cloud technology such as Kubernetes. It was built after years of experience with Stubby, Google's internal predecessor. We have only scratched the surface of what gRPC can do. Here<a id="_idIndexMarker648"/> are some additional features:</p>
+			<ul>
+				<li>Running a gRPC gateway to export REST endpoints</li>
+				<li>Providing interceptors that can deal with security and other needs</li>
+				<li>Providing streaming data</li>
+				<li>TLS support</li>
+				<li>Metadata and trailers for extra information</li>
+				<li>Client-side server load balancing</li>
+			</ul>
+			<p>Here are just a few of the big companies that have made the switch:</p>
+			<ul>
+				<li>Square</li>
+				<li>Netflix</li>
+				<li>IBM</li>
+				<li>CoreOS</li>
+				<li>Docker</li>
+				<li>CockroachDB</li>
+				<li>Cisco</li>
+				<li>Juniper Networ<a id="_idTextAnchor400"/>ks</li>
+				<li>Spotify</li>
+				<li>Zalando</li>
+				<li>Dropbox</li>
+			</ul>
+			<p>Let's talk a little about<a id="_idIndexMarker649"/> how best to provide REST or gRPC services inside your company.</p>
+			<h2 id="_idParaDest-187"><a id="_idTextAnchor401"/>Company-standard RPC clients and servers</h2>
+			<p>One of the keys to Google's tech stack success<a id="_idIndexMarker650"/> has been a consolidation around technologies. While there is certainly a lot of duplication<a id="_idIndexMarker651"/> in technology, Google standardizes on certain software and infrastructure components. Inside Google, it is rare to see a client/server not using Stubby (Google's internal gRPC).</p>
+			<p>The libraries that engineers use for RPC are written to work the same in every language. In recent years, there have been pushes by <strong class="bold">Site Reliability Engineering</strong> (<strong class="bold">SRE</strong>) organizations to have wrappers<a id="_idIndexMarker652"/> around Stubby that offer a breadth of features and best practices to prevent every team from reinventing the wheel. This includes features such as the following:</p>
+			<ul>
+				<li>Authentication</li>
+				<li>Compression handling</li>
+				<li>Distributed service rate limiting</li>
+				<li>Retries with backoff (or circuit breaking)</li>
+			</ul>
+			<p>This removes a lot of threats to infrastructure by having clients retrying without any backoffs, removing the cost of teams figuring out a security model, and allowing fixes to these items to be done by experts. Changes to these libraries benefit everyone and lower the cost of discovering already-made services.</p>
+			<p>As a DevOps engineer or SRE who likely carries a pager, pushing for standardization in your RPC layer can provide innumerable benefits, such as not being paged!</p>
+			<p>While choice is often seen as a good thing, having limited choices can allow development teams and operators to continue to focus on their product and not infrastructure, which is key in having robust products.</p>
+			<p>If you decide on providing a REST framework, here are a few recommended<a id="_idIndexMarker653"/> practices:</p>
+			<ul>
+				<li>Only use <strong class="source-inline">POST</strong>.</li>
+				<li>Do not use query variables.</li>
+				<li>Use JSON only.</li>
+				<li>Have all arguments inside your request.</li>
+			</ul>
+			<p>This will greatly reduce the needed code within your framework.</p>
+			<p>In this section, we learned what RPC services are and how to write clients using two popular methods, REST and gRPC. You also learned how REST has a looser set of guidelines while gRPC prefers<a id="_idIndexMarker654"/> schema types and generates the components<a id="_idIndexMarker655"/> required to use the system. </p>
+			<h1 id="_idParaDest-188"><a id="_idTextAnchor402"/>Summary</h1>
+			<p>This ends our chapter on interacting with remote data sources. We looked at how to connect to SQL databases with examples using Postgres. We looked at what RPCs are and talked about the two most popular types of RPC services, REST and gRPC. Finally, we have written servers and clients for both frameworks.</p>
+			<p>This chapter has given you the ability to connect to the most popular databases and cloud services to get and retrieve data. Now you can write your own RPC services to develop cloud applications.</p>
+			<p>In the next chapter, we will utilize this knowledge to build tooling that controls jobs on remote machines.</p>
+			<p>So, without further ado, let's jump into how to write command-line tools.</p>
+		</div>
+	</div></body></html>

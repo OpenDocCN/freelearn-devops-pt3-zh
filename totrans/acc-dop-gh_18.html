@@ -1,0 +1,334 @@
+<html><head></head><body>
+		<div id="_idContainer215">
+			<h1 id="_idParaDest-313"><em class="italic"><a id="_idTextAnchor313"/>Chapter 15</em>: Securing Your Deployments</h1>
+			<p>In this chapter, we'll talk about securing your complete deployment and release pipeline beyond code and dependencies, to be able to deliver your software in a fast but secure and compliant way to secure environments and meet regulatory requirements.</p>
+			<p>We will cover the following main topics in this chapter:</p>
+			<ul>
+				<li>Container and infrastructure security scanning</li>
+				<li>Automating the infrastructure change process</li>
+				<li>Source code and infrastructure integrity</li>
+				<li>Dynamic application security testing</li>
+				<li>Security hardening your release pipeline</li>
+			</ul>
+			<h1 id="_idParaDest-314"><a id="_idTextAnchor314"/>Container and infrastructure security scanning</h1>
+			<p>One of the most prominent hacks in the last years was <strong class="bold">SolarWinds</strong>, a software company <a id="_idIndexMarker1012"/>that provides system management tools for network and infrastructure monitoring. Attackers managed to introduce a backdoor <a id="_idIndexMarker1013"/>in the <strong class="bold">Orion</strong> software that got rolled out to over 30,000 clients and compromised them using this backdoor. Among the clients were the Department of Homeland Security and the Department of Treasury (<em class="italic">Oladimeji S., Kerner S. M., 2021</em>).</p>
+			<p>The SolarWinds attack<a id="_idIndexMarker1014"/> is considered a software supply chain attack, and this is true for the customers of Orion that installed the compromised version. But the attack on Orion was far more sophisticated than just an update of an infected dependency; the attacker gained access to the SolarWinds network and managed to install a malware called <strong class="bold">Sunspot</strong> on the<a id="_idIndexMarker1015"/> SolarWinds build servers. Sunspot inserted the backdoor <strong class="bold">Sunburst</strong> into the <a id="_idIndexMarker1016"/>software builds of Orion by replacing a source file without tracing any build failures or other suspicious outputs (<em class="italic">Eckels S., Smith J., &amp; Ballenthin W., 2020</em>).</p>
+			<p>The attack<a id="_idIndexMarker1017"/> shows how deadly insider attacks are if your network is breached, and how important it is to secure your complete assembly line – not just the code, dependencies, and development environment. Build servers and all other systems included in the production of software must be kept secure.</p>
+			<h2 id="_idParaDest-315"><a id="_idTextAnchor315"/>Container scanning</h2>
+			<p>Containers play an<a id="_idIndexMarker1018"/> important part in every infrastructure today. They have a lot of advantages over classical <strong class="bold">virtual machines</strong> (<strong class="bold">VMs</strong>), but they also have their disadvantages. Containers need a new operational culture and existing processes, and practices might not be directly applicable (see <em class="italic">Souppaya M., Morello J., &amp; Scarfone K., 2017</em>).</p>
+			<p>Containers consist of<a id="_idIndexMarker1019"/> many different layers, and like software dependencies, these layers can introduce vulnerabilities. To<a id="_idIndexMarker1020"/> detect these, you can use so-called <strong class="bold">container vulnerability analysis</strong> (<strong class="bold">CVA</strong>), also known <a id="_idIndexMarker1021"/>as <strong class="bold">container security analysis</strong> (<strong class="bold">CSA</strong>).</p>
+			<p>GitHub does not have a built-in CVA tool, but nearly all solutions integrate very well into GitHub.</p>
+			<p>A very<a id="_idIndexMarker1022"/> popular open source vulnerability scanner for container images and <a id="_idIndexMarker1023"/>filesystems is <strong class="bold">grype</strong> (<a href="https://github.com/anchore/grype/">https://github.com/anchore/grype/</a>) from Anchore (<a href="https://anchore.com/opensource/">https://anchore.com/opensource/</a>). It's really easy to integrate it into your GitHub Actions workflow:</p>
+			<pre class="source-code">- name: Anchore Container Scan</pre>
+			<pre class="source-code">  uses: anchore/scan-action@v3.2.0</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}</pre>
+			<pre class="source-code">    debug: true</pre>
+			<p>Another example of a CVA<a id="_idIndexMarker1024"/> scanner is <strong class="bold">Clair</strong> (<a href="https://github.com/quay/clair">https://github.com/quay/clair</a>), also an open source solution for static analysis of vulnerabilities in Docker <a id="_idIndexMarker1025"/>and <strong class="bold">Open Container Initiative</strong> (<strong class="bold">OCI</strong>) containers. Clair can run as a container and store the scanning results in a Postgres database. See <a href="https://quay.github.io/clair/">https://quay.github.io/clair/</a> for the complete documentation.</p>
+			<p>There are commercial container scanners that are normally part of more holistic security platforms. One<a id="_idIndexMarker1026"/> example is <strong class="bold">Container Security</strong> from <strong class="bold">Aqua</strong> (<a href="https://www.aquasec.com/products/container-security/">https://www.aquasec.com/products/container-security/</a>). The <strong class="bold">Aqua Platform</strong> (<a href="https://www.aquasec.com/aqua-cloud-native-security-platform/">https://www.aquasec.com/aqua-cloud-native-security-platform/</a>) is a<a id="_idIndexMarker1027"/> cloud-native security platform for containerized, serverless, and VM-based applications. Aqua runs either as a SaaS or as a self-hosted edition.</p>
+			<p>Another example <a id="_idIndexMarker1028"/>is <strong class="bold">WhiteSource</strong> (<a href="https://www.whitesourcesoftware.com/solution-for-containers/)">https://www.whitesourcesoftware.com/solution-for-containers/)</a>. They have the <strong class="bold">GP Security Scan</strong> Action in the<a id="_idIndexMarker1029"/> GitHub marketplace to scan<a id="_idIndexMarker1030"/> images before pushing them to GitHub packages (<a href="https://github.com/marketplace/actions/gp-security-scan">https://github.com/marketplace/actions/gp-security-scan</a>).</p>
+			<p>Both are great solutions, but as they are not cheap and have a big overlap with GitHub's advanced security, I'll not cover them in more detail here.</p>
+			<h2 id="_idParaDest-316"><a id="_idTextAnchor316"/>Infrastructure policies</h2>
+			<p>Not everything <a id="_idIndexMarker1031"/>infrastructure-related are containers. There are far more things to consider from a security perspective, especially in the cloud.</p>
+			<p>If you are using cloud providers, it's worth looking at their security portfolio. Microsoft Azure, for example, contains <a id="_idIndexMarker1032"/>Microsoft <strong class="bold">Defender for Cloud</strong>, a <strong class="bold">cloud security posture management</strong> (<strong class="bold">CSPM</strong>) tool to protect workloads across multi-cloud and hybrid environments and to find weak spots across your cloud configuration (<a href="https://azure.microsoft.com/en-us/services/defender-for-cloud">https://azure.microsoft.com/en-us/services/defender-for-cloud</a>). It supports Microsoft Azure, AWS, Google Cloud Platform, and on-premises workloads (using Azure Arc). Some of the capabilities in Microsoft Defender for Cloud are free for Microsoft Azure – but not all.</p>
+			<p>Microsoft Azure also<a id="_idIndexMarker1033"/> contains <strong class="bold">Azure Policy</strong> (<a href="https://docs.microsoft.com/en-us/azure/governance/policy/">https://docs.microsoft.com/en-us/azure/governance/policy/</a>), a service that helps you to enforce standards and assess compliance. It allows you to define certain rules as policy definitions and evaluate these policies on demand. This example is in a GitHub Action workflow that runs every morning at 8 am:</p>
+			<pre class="source-code">on:</pre>
+			<pre class="source-code">  schedule:</pre>
+			<pre class="source-code">    - cron:  '0 8 * * *'</pre>
+			<pre class="source-code">jobs:</pre>
+			<pre class="source-code">  assess-policy-compliance:</pre>
+			<pre class="source-code">    runs-on: ubuntu-latest</pre>
+			<pre class="source-code">    steps:</pre>
+			<pre class="source-code">    - name: Login to Azure</pre>
+			<pre class="source-code">      uses: azure/login@v1</pre>
+			<pre class="source-code">      with:</pre>
+			<pre class="source-code">        creds: ${{secrets.AZURE_CREDENTIALS}}</pre>
+			<pre class="source-code">    - name: Check for resource compliance</pre>
+			<pre class="source-code">      uses: azure/policy-compliance-scan@v0</pre>
+			<pre class="source-code">      with:</pre>
+			<pre class="source-code">        scopes: |</pre>
+			<pre class="source-code">          /subscriptions/<strong class="bold">&lt;subscription id&gt;</strong></pre>
+			<pre class="source-code">          /subscriptions/<strong class="bold">&lt;...&gt;</strong></pre>
+			<p>Together <a id="_idIndexMarker1034"/>with the AI-powered <strong class="bold">security information and event management</strong> (<strong class="bold">SIEM</strong>) system<a id="_idIndexMarker1035"/> called <strong class="bold">Microsoft Sentinel</strong> (<a href="https://azure.microsoft.com/en-us/services/microsoft-sentinel">https://azure.microsoft.com/en-us/services/microsoft-sentinel</a>), this is a very powerful security toolchain. But whether it makes sense for you depends a lot on your setup. If your primary cloud provider is not Azure, your decision for CSPM and SIEM might look completely different, and the <strong class="bold">AWS Security Hub</strong> would make more sense for you.</p>
+			<p>A great open source tool to<a id="_idIndexMarker1036"/> secure <strong class="bold">Infrastructure as Code</strong> (<strong class="bold">IaC</strong>) is <strong class="bold">Checkov</strong> (<a href="https://github.com/bridgecrewio/checkov">https://github.com/bridgecrewio/checkov</a>) – a static code analysis tool that scans cloud infrastructure provisioned using <strong class="bold">Terraform</strong>, <strong class="bold">Terraform plan</strong>, <strong class="bold">CloudFormation</strong>, <strong class="bold">AWS Serverless Application Model</strong> (<strong class="bold">SAM</strong>), <strong class="bold">Kubernetes</strong>, <strong class="bold">Dockerfile</strong>, <strong class="bold">Serverless</strong>, or <strong class="bold">ARM templates</strong>, and detects security and compliance misconfigurations. It comes with over 1,000 built-in policies for the different platforms. It is really easy to use in GitHub, just use<a id="_idIndexMarker1037"/> the <strong class="bold">Checkov GitHub Action</strong> (<a href="https://github.com/marketplace/actions/checkov-github-action">https://github.com/marketplace/actions/checkov-github-action</a>) in your workflow and point it to the directory<a id="_idIndexMarker1038"/> that contains your infrastructure:</p>
+			<pre class="source-code">- name: Checkov GitHub Action</pre>
+			<pre class="source-code">  uses: bridgecrewio/checkov-action@master</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">    directory: .</pre>
+			<pre class="source-code">    output_format: sarif</pre>
+			<p>The action supports SARIF output and can be integrated into GitHub's advanced security:</p>
+			<pre class="source-code">- name: Upload SARIF file</pre>
+			<pre class="source-code">  uses: github/codeql-action/upload-sarif@v1</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">    sarif_file: results.sarif</pre>
+			<pre class="source-code">  if: always()</pre>
+			<p>The results <a id="_idIndexMarker1039"/>show up under <strong class="bold">Security</strong> | <strong class="bold">Code scanning</strong> alerts (see <em class="italic">Figure 15.1</em>):</p>
+			<div>
+				<div id="_idContainer202" class="IMG---Figure">
+					<img src="image/B17827_15_001.jpg" alt="Figure 15.1 – Checkov results in GitHub&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.1 – Checkov results in GitHub</p>
+			<p>Checkov<a id="_idIndexMarker1040"/> is great to check your IaC, but it does not check your infrastructure for changes. But if you have a solution such as Terraform or ARM, you can regularly run a validation in a workflow to check that nothing has changed.</p>
+			<h1 id="_idParaDest-317"><a id="_idTextAnchor317"/>Automate the infrastructure change process</h1>
+			<p>Most <a id="_idIndexMarker1041"/>IT organizations have a change management process in place to reduce operations and security risks. Most companies follow <a id="_idIndexMarker1042"/>the <strong class="bold">Information Technology Infrastructure Library</strong> (<strong class="bold">ITIL</strong>). In ITIL, you have a <strong class="bold">Request for Change</strong> (<strong class="bold">RFC)</strong> that has to<a id="_idIndexMarker1043"/> be approved by a <strong class="bold">Change-Advisory Board</strong> (<strong class="bold">CAB</strong>). The problem is<a id="_idIndexMarker1044"/> that approvals by a CAB are related to a bad software delivery performance (see <em class="italic">Forsgren N., Humble, J., &amp; Kim, G., 2018</em>).</p>
+			<p>From a security standpoint, <strong class="bold">change management</strong> and <strong class="bold">segregation of duties</strong> are important, and they are often also<a id="_idIndexMarker1045"/> required for compliance. The key is again to rethink the underlying <a id="_idIndexMarker1046"/>principles in a DevOps way.</p>
+			<p>With IaC and fully automated deployment, there is a complete audit trail for all infrastructure changes. If you have full control over the process, the best thing to do is to set up the CAB as <strong class="source-inline">CODEOWNERS</strong> for IaC files and do the approvals in pull requests. For simple standard changes on the application layer (for example, containers in a Kubernetes cluster), a peer review might be enough. For infrastructure changes on deeper levels with effects on networks, firewalls, or secrets, the number of reviewers will increase, and you can add specialists accordingly. These files normally also reside in other repositories and do not affect the developer velocity and slow down your releases.</p>
+			<p>If you are bound to a corporate process, this might not be so easy. In this case, you have to try to recategorize your changes to get most of them pre-approved and use peer reviews and automated checks for these changes for security reasons. Then, automate the process for higher-risk changes so that the information for the CAB is as complete and correct as possible to come to a fast approval (see <em class="italic">Kim G., Humble J., Debois P. &amp; Willis J., 2016, Part VI</em>, <a href="B17827_23_Epub.xhtml#_idTextAnchor417"><em class="italic">Chapter 23</em></a>).</p>
+			<h1 id="_idParaDest-318"><a id="_idTextAnchor318"/>Source code and infrastructure integrity</h1>
+			<p>In manufacturing, it's a normal practice to provide<a id="_idIndexMarker1047"/> a <strong class="bold">bill of materials</strong> (<strong class="bold">BOM</strong>) for a production order. A BOM is a list of raw materials, subassemblies, intermediate assemblies, subcomponents, and parts that have been used to manufacture the end product.</p>
+			<p>The same thing exists for <a id="_idIndexMarker1048"/>software: the <strong class="bold">software bill of materials</strong> (<strong class="bold">SBOM</strong>), but it is still less common.</p>
+			<h2 id="_idParaDest-319"><a id="_idTextAnchor319"/>The SBOM</h2>
+			<p>If you have a <a id="_idIndexMarker1049"/>close look at software supply chain attacks such as the <strong class="bold">event-stream incident</strong> (see <em class="italic">Thomas Claburn, 2018</em>), you'll find that they inject <a id="_idIndexMarker1050"/>malicious code in a release, so the source code in GitHub did not match the files that were included in the <strong class="source-inline">npm</strong> package. An SBOM can help here with the forensic and it can be used to compare the hashes of different versions.</p>
+			<p>In the <strong class="bold">SolarWinds attack</strong> (see the <em class="italic">Crowdstrike blog, 2021</em>) dependencies were not tempered. Instead, there<a id="_idIndexMarker1051"/> was an additional process running that manipulated the file system during the execution of <strong class="source-inline">MsBuild.exe</strong>. To help prevent and investigate these kinds of attacks, you'll have to extend the SBOM to include details for all tools included in the build process and all the running processes on the build machine.</p>
+			<p>There are different<a id="_idIndexMarker1052"/> common formats for SBOM:</p>
+			<ul>
+				<li><strong class="bold">Software Package Data Exchange</strong> (<strong class="bold">SPDX</strong>): SPDX is <a id="_idIndexMarker1053"/>an open standard for SBOM with origins in the Linux <a id="_idIndexMarker1054"/>Foundation. Its origin was license compliance, but it also contains copyrights, security references, and other metadata. SPDX was recently approved as ISO/IEC standard (<em class="italic">ISO/IEC 5962:2021</em>), and it fulfills the NTIA's <em class="italic">Minimum Elements For a Software Bill of Materials</em>.</li>
+				<li><strong class="bold">CycloneDX</strong> (<strong class="bold">CDX</strong>): CDX is a <a id="_idIndexMarker1055"/>lightweight open source format with origins in the <strong class="bold">OWASP</strong> community. It is <a id="_idIndexMarker1056"/>optimized for integrating SBOM generation into a release pipeline. </li>
+				<li><strong class="bold">Software Identification</strong> (<strong class="bold">SWID</strong>) tags: SWID is an ISO/IEC industry standard (<em class="italic">ISO/IEC 19770-2</em>) used by<a id="_idIndexMarker1057"/> various commercial software<a id="_idIndexMarker1058"/> publishers. It supports automation of software inventory, assessment of software vulnerabilities on machines, detection of missing patches, targeting of configuration checklist assessments, software integrity checking, installation and execution <a id="_idIndexMarker1059"/>whitelists/blacklists, and other security and operational use cases. It is a good format for doing the inventory of the software installed on your build machines.</li>
+			</ul>
+			<p>There are <a id="_idIndexMarker1060"/>different tools and use cases for each format. <strong class="bold">SPDX</strong> is generated by <strong class="bold">syft</strong>. You can use the <strong class="bold">Anchore SBOM Action</strong> (see <a href="https://github.com/marketplace/actions/anchore-sbom-action">https://github.com/marketplace/actions/anchore-sbom-action</a>) to generate an SPDX SBOM for a Docker or OCI container:</p>
+			<pre class="source-code">      - name: Anchore SBOM Action</pre>
+			<pre class="source-code">        uses: anchore/sbom-action@v0.6.0</pre>
+			<pre class="source-code">        with:</pre>
+			<pre class="source-code">          path: .</pre>
+			<pre class="source-code">          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}</pre>
+			<pre class="source-code">          registry-username: ${{ github.actor }}</pre>
+			<pre class="source-code">          registry-password: ${{ secrets.GITHUB_TOKEN }}</pre>
+			<p>The <a id="_idIndexMarker1061"/>SBOM is being uploaded as a workflow artifact (see <em class="italic">Figure 15.2</em>):</p>
+			<div>
+				<div id="_idContainer203" class="IMG---Figure">
+					<img src="image/B17827_15_002.jpg" alt="Figure 15.2 – SPDX SBOM uploaded as a build artifact&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.2 – SPDX SBOM uploaded as a build artifact</p>
+			<p><strong class="bold">FOSSology</strong> (<a href="https://github.com/fossology/fossology">https://github.com/fossology/fossology</a>) is an <a id="_idIndexMarker1062"/>open source license compliance solution that also uses SPDX.</p>
+			<p><strong class="bold">CDX</strong> (<a href="https://cyclonedx.org/">https://cyclonedx.org/</a>) is<a id="_idIndexMarker1063"/> more focused on application security. There are versions for <strong class="bold">Node.js</strong>, <strong class="bold">.NET</strong>, <strong class="bold">Python</strong>, <strong class="bold">PHP</strong>, and <strong class="bold">Go</strong> in the marketplace, but many more languages are supported using CLI or other package managers (such as <strong class="bold">Java</strong>, <strong class="bold">Maven</strong>, and <strong class="bold">Conan</strong>). The usage is simple. Here is an example of the action for <strong class="source-inline">.NET</strong>:</p>
+			<pre class="source-code">- name: CycloneDX .NET Generate SBOM</pre>
+			<pre class="source-code">  uses: CycloneDX/gh-dotnet-generate-sbom@v1.0.1</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">    path: ./CycloneDX.sln</pre>
+			<pre class="source-code">    github-bearer-token: ${{ secrets.GITHUB_TOKEN }}</pre>
+			<p>The<a id="_idIndexMarker1064"/> SBOM does not get uploaded automatically, unlike the Anchore action; you would have to do that manually:</p>
+			<pre class="source-code">    - name: Upload a Build Artifact</pre>
+			<pre class="source-code">      uses: actions/upload-artifact@v2.3.1</pre>
+			<pre class="source-code">      with:</pre>
+			<pre class="source-code">        path: bom.xml</pre>
+			<p>CDX is also used<a id="_idIndexMarker1065"/> in <strong class="bold">OWASP Dependency Track</strong> (see <a href="https://github.com/DependencyTrack/dependency-track">https://github.com/DependencyTrack/dependency-track</a>) – a component analysis platform that you can run as a container or in Kubernetes. You can upload the SBOM directly into your <strong class="source-inline">DependencyTrack</strong> instance:</p>
+			<pre class="source-code">uses: DependencyTrack/gh-upload-sbom@v1.0.0</pre>
+			<pre class="source-code">with:</pre>
+			<pre class="source-code">  serverhostname: '<strong class="bold">your-instance.org</strong>'</pre>
+			<pre class="source-code">  apikey: ${{ secrets.<strong class="bold">DEPENDENCYTRACK_APIKEY</strong> }}</pre>
+			<pre class="source-code">  projectname: '<strong class="bold">Your Project Name</strong>'</pre>
+			<pre class="source-code">  projectversion: '<strong class="bold">main</strong>'</pre>
+			<p>SWID tags<a id="_idIndexMarker1066"/> are more used in <strong class="bold">Software Asset Management</strong> (<strong class="bold">SAM</strong>) solutions such as snow (<a href="https://www.snowsoftware.com/">https://www.snowsoftware.com/</a>), <strong class="bold">Microsoft System Center</strong>, or <strong class="bold">ServiceNow ITOM</strong>. CDX <a id="_idIndexMarker1067"/>and SPDX can use SWID tags if they <a id="_idIndexMarker1068"/>are present. </p>
+			<p>If you want to learn more <a id="_idIndexMarker1069"/>about SBOM, see <a href="https://www.ntia.gov/sbom">https://www.ntia.gov/sbom</a>.</p>
+			<p>If you are working completely on GitHub Enterprise Cloud and use the hosted runners, SBOM is not so important. All the relevant data is connected on GitHub anyway. But, if you are on GitHub Enterprise Server, have self-hosted runners, and other commercial software in your release pipeline that is not consumed by public package managers, an SBOM for all your releases can help to detect vulnerabilities, license issues, and help with the forensic in case of an incident.</p>
+			<h2 id="_idParaDest-320"><a id="_idTextAnchor320"/>Signing your commits</h2>
+			<p>A discussion I often have is whether you <a id="_idIndexMarker1070"/>should sign all your commits or not. Git is very powerful and gives you the possibility to alter existing commits. But this also means that the author of a commit is not necessarily the one that is committing the code. A commit has two fields: <strong class="source-inline">author</strong> and <strong class="source-inline">committer</strong>. Both fields get set to the values of <strong class="source-inline">user.name</strong> and <strong class="source-inline">user.email</strong> from <strong class="source-inline">git config</strong> plus a timestamp. If you rebase, for example, the committer changes to the current value, but the author stays the same. Both fields have absolutely nothing to do with the authentication to GitHub.</p>
+			<p>You can look up the <a id="_idIndexMarker1071"/>email address of <strong class="bold">Linus Torvalds</strong> in the Linux repository, configure your local Git repository to use this email address, and commit it to your repository. The commit will appear as if the author was Linus (see <em class="italic">Figure 15.3</em>):</p>
+			<div>
+				<div id="_idContainer204" class="IMG---Figure">
+					<img src="image/B17827_15_003.jpg" alt="Figure 15.3 – A commit's author information is completely decoupled from the authentication&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.3 – A commit's author information is completely decoupled from the authentication</p>
+			<p>The link in the profile picture will also work and redirect you to the correct profile page. But the commit does not have a <strong class="source-inline">Verified</strong> badge unlike commits that you perform on the server either by modifying a file in the web UI or by using a pull request to merge your changes on the server. The verified badge shows that the commit was signed with a <strong class="bold">GNU Privacy Guard</strong> (<strong class="bold">GPG</strong>) key<a id="_idIndexMarker1072"/> that contains a verified email address of your account (see <em class="italic">Figure 15.4</em>):</p>
+			<div>
+				<div id="_idContainer205" class="IMG---Figure">
+					<img src="image/B17827_15_004.jpg" alt="Figure 15.4 – Signed commits have a verified badge on GitHub&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.4 – Signed commits have a verified badge on GitHub</p>
+			<p>You can create a <a id="_idIndexMarker1073"/>GPG key locally and sign your commits with it (<strong class="source-inline">git commit -S</strong>). You are, of course, completely free to set a name and email address in the key, they just must match the email and user configured in <strong class="source-inline">git config</strong>. The signature is valid as long as you don't modify the commit (see <em class="italic">Figure 15.5</em>):</p>
+			<div>
+				<div id="_idContainer206" class="IMG---Figure">
+					<img src="image/B17827_15_005.jpg" alt="Figure 15.5 – Locally signed commits are valid if email and name match&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.5 – Locally signed commits are valid if email and name match</p>
+			<p>But even if you upload the <strong class="bold">Pretty Good Privacy</strong> (<strong class="bold">PGP</strong>) key<a id="_idIndexMarker1074"/> to your GitHub profile (<a href="https://github.com/settings/gpg/new">https://github.com/settings/gpg/new</a>), the commit will not be verified, as GitHub looks in the profile with the verified email address for the key (see <em class="italic">Figure 15.6</em>):</p>
+			<div>
+				<div id="_idContainer207" class="IMG---Figure">
+					<img src="image/B17827_15_006.jpg" alt="Figure 15.6 – Signed commits from another user are not verified&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.6 – Signed commits from another user are not verified</p>
+			<p>Does this mean you must sign all your commits locally? I believe not. The problem is that enforcing developers to sign all commits will slow you down. Many IDEs and tools do not support signing. Keeping the keys in sync, dealing with multiple email addresses – everything becomes more painful. It might work very well if all your developers work on corporate devices with the same email address. But this is normally not the case. People work remotely, on different machines, and in different environments, and they work on the same machine on open source software with a different email than on corporate code. The benefit is just not worth it. If an attacker has push permissions to your repository, the last thing you worry about is a faked email address.</p>
+			<p>What <a id="_idIndexMarker1075"/>I recommend is the following:</p>
+			<ul>
+				<li>Pick a workflow that relies on <strong class="bold">pull requests</strong> and <strong class="source-inline">merge</strong>, <strong class="source-inline">squash</strong>, or <strong class="source-inline">rebase</strong> the changes on the server so that they get signed by default.</li>
+				<li>If you need to ensure integrity for releases, sign your tags (<strong class="source-inline">git tag -S</strong>). Since Git is an SHA-1 or SHA-256-based tree, signing a tag will ensure that all parent commits have not been modified.</li>
+			</ul>
+			<p>Instead of requiring your developers to sign all commits locally and slow your team down, invest in signing your code during the build process to ensure that nobody tampers with your files after the build process.</p>
+			<h2 id="_idParaDest-321"><a id="_idTextAnchor321"/>Signing your code</h2>
+			<p>Signing your binaries is <a id="_idIndexMarker1076"/>called <strong class="bold">code signing</strong>, even if you sign the binaries and not the code. You need a certificate from a trusted authority to do this. How you sign your code during the build process depends a lot on your language and how it gets compiled.</p>
+			<p>To sign your Apple XCode applications in GitHub Actions, you can use this documentation to install the <strong class="source-inline">base64</strong> encoded certificate and publishing profile during your build: <a href="https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development">https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development</a>. Don't forget to clean this up on self-hosted runners that are shared with other teams. On GitHub-hosted runners, every build gets a clean environment anyway.</p>
+			<p>Depending on your code signing solution, you can find multiple actions in the marketplace for Authenticode and <strong class="source-inline">signtool.exe</strong>. But as all signing solutions are command-line based, you can pass your signing certificate to your workflow using the <strong class="source-inline">secret</strong> context as in the example for Apple.</p>
+			<h1 id="_idParaDest-322"><a id="_idTextAnchor322"/>Dynamic application security testing</h1>
+			<p>To harden your application security, you can integrate <strong class="bold">dynamic application security testing</strong> (<strong class="bold">DAST</strong>) into your<a id="_idIndexMarker1077"/> release workflow. DAST is black-box testing that simulates a real-world attack on the running application.</p>
+			<p>There are many commercial tools and SaaS solutions (such as <strong class="bold">Burp Suit</strong> from <strong class="bold">PortSwigger</strong> or <strong class="bold">WhiteHat Sentinel</strong>) but it's outside the scope of this book to analyze them.</p>
+			<p>There are also some open source solutions. One example is the <strong class="bold">Zed Attack Proxy</strong> (<strong class="bold">ZAP</strong>) (<a href="https://www.zaproxy.org/">https://www.zaproxy.org/</a>) from <a id="_idIndexMarker1078"/>OWASP. It's a stand-alone application that runs on Windows, macOS, and Linux (see <a href="https://www.zaproxy.org/download/">https://www.zaproxy.org/download/</a>) and can be used to attack web applications. The application allows you to analyze a web application, intercept and modify traffic, and run an attack using the ZAP Spider against the website or parts of it (see <em class="italic">Figure 15.7</em>):</p>
+			<div>
+				<div id="_idContainer208" class="IMG---Figure">
+					<img src="image/B17827_15_007.jpg" alt="Figure 15.7 – The OWASP ZAP application&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.7 – The OWASP ZAP application</p>
+			<p>OWASP ZAP<a id="_idIndexMarker1079"/> launches a browser and uses a <strong class="bold">heads-up display</strong> (<strong class="bold">HUD</strong>) to display controls on top of the website. You can use these controls to analyze the site, run attacks using the spider, or intercept requests without leaving the application (see <em class="italic">Figure 15.8</em>):</p>
+			<div>
+				<div id="_idContainer209" class="IMG---Figure">
+					<img src="image/B17827_15_008.jpg" alt="Figure 15.8 – The HUD displays controls on the website being attacked&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.8 – The HUD displays controls on the website being attacked</p>
+			<p>Even if you<a id="_idIndexMarker1080"/> are not a pen tester, as a web developer, it should be easy to get started and learn how to attack your site using OWASP ZAP. But to shift left security, you should integrate the scan into your workflow. OWASP ZAP has three Actions in the GitHub marketplace (see <em class="italic">Figure 15.9</em>):</p>
+			<div>
+				<div id="_idContainer210" class="IMG---Figure">
+					<img src="image/B17827_15_009.jpg" alt="Figure 15.9 – Available OWASP ZAP Actions in the GitHub marketplace&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.9 – Available OWASP ZAP Actions in the GitHub marketplace</p>
+			<p>The <strong class="bold">Baseline Scan</strong> is faster <a id="_idIndexMarker1081"/>than the <strong class="bold">Full Scan</strong>. The <strong class="bold">API Scan</strong> can be used to scan an <strong class="bold">OpenAPI</strong>, <strong class="bold">SOAP</strong>, or <strong class="bold">GraphQL</strong> API. The usage of the Actions is straightforward:</p>
+			<pre class="source-code">- name: OWASP ZAP Full Scan</pre>
+			<pre class="source-code">  uses: zaproxy/action-full-scan@v0.3.0</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">    target: ${{ env.TARGET_URL }}</pre>
+			<p>The action uses <strong class="source-inline">GITHUB_TOKEN</strong> to write the results to a GitHub Issue. It also adds a report as a build artifact. The<a id="_idIndexMarker1082"/> report is available as HTML, JSON, or Markdown (see <em class="italic">Figure 15.10</em>):</p>
+			<div>
+				<div id="_idContainer211" class="IMG---Figure">
+					<img src="image/B17827_15_010.jpg" alt="Figure 15.10 – Findings from OWASP ZAP scan&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.10 – Findings from OWASP ZAP scan</p>
+			<p>Of course, this is<a id="_idIndexMarker1083"/> just suitable for web applications. There are other DAST tools used for other scenarios. But the example shows how easy it can be included in your pipeline. Most DAST tools are command-line tools or containers, or they already have integration such as OWASP ZAP.</p>
+			<h1 id="_idParaDest-323"><a id="_idTextAnchor323"/>Security hardening your release pipeline</h1>
+			<p>CI/CD pipelines are complex and have a big surface to attack. Basically, release pipelines are remote code execution <a id="_idIndexMarker1084"/>environments and should be treated like this with caution (see <em class="italic">Haymore A., Smart I., Gazdag V., Natesan D., &amp; Fernick J., 2022</em> for some attack examples).</p>
+			<p>Model your pipelines with caution and follow best practices, especially when you are building highly customized ones. It's better to ask for external help than to be sorry if it is too late.</p>
+			<h2 id="_idParaDest-324"><a id="_idTextAnchor324"/>Secure your runners</h2>
+			<p>If you use GitHub-hosted<a id="_idIndexMarker1085"/> runners, it's their job to keep them safe. The runners are ephemeral, and every execution starts in a clean state. But you execute code that can access your resources in GitHub, including secrets. Make sure to security-harden your GitHub Actions (see the <em class="italic">Secure your Actions</em> section) and limit permissions for <strong class="source-inline">GitHub_TOKEN</strong> (workflows should run with the least-possible privileges).</p>
+			<p>Self-hosted runners<a id="_idIndexMarker1086"/> run in your environment, and you are responsible for keeping them safe! Here are some rules you should follow:</p>
+			<ul>
+				<li>Never use self-hosted runners for <strong class="bold">public repositories</strong>.</li>
+				<li>Make your runners <strong class="bold">ephemeral</strong> (or at least clean up after each run and don't leave artifacts on disk or in memory).</li>
+				<li>Keep your images <strong class="bold">lean</strong> and <strong class="bold">patched</strong> (only install the tools you need and keep everything up to date).</li>
+				<li>Don't have <strong class="bold">universal runners</strong> for all teams and technologies. Keep the images separated and specialized.</li>
+				<li>Keep runners in an <strong class="bold">isolated network</strong> (only allow runners to access the resources they need).</li>
+				<li>Only run <strong class="bold">secure Actions</strong>.</li>
+				<li>Include the runners in your <strong class="bold">security monitoring</strong> and check for unusual processes or network activity.</li>
+			</ul>
+			<p>The best solution is to have a dynamically scaling environment (for example, a Kubernetes service) and run ephemeral runners with lean and patched images.</p>
+			<p>See <a href="B17827_07_Epub.xhtml#_idTextAnchor175"><em class="italic">Chapter 7</em></a>, <em class="italic">Running Your Workflows</em>, for details on self-hosted and hosted runners.</p>
+			<h2 id="_idParaDest-325"><a id="_idTextAnchor325"/>Secure your Actions</h2>
+			<p>GitHub Actions are very<a id="_idIndexMarker1087"/> useful, but they are code you execute and grant access to your resources. You should be very careful what actions you use, especially in self-hosted runners. Actions from trusted sources, such as GitHub, Microsoft, AWS, or Google, are not the problems. But even they accept pull requests, so there is still a chance a vulnerability might slip through. Best practices for Actions are as follows:</p>
+			<ul>
+				<li>Always <strong class="bold">review the code</strong> of the Action. Also, look at the <strong class="bold">owner</strong>, number of contributors, number and dates of commits, number of stars, and all these kinds of indicators to see that the Action belongs to a healthy community. </li>
+				<li>Always reference an Action by the explicit <strong class="bold">commit SHA</strong>. The SHA is immutable, whereas tags and branches might be modified and lead to new code getting executed by you without your knowledge.</li>
+				<li>If you are working with forks, <strong class="bold">require approval</strong> for all outside collaborators and not just first-time contributors.</li>
+				<li>Use <strong class="bold">Dependabot</strong> to keep your actions up to date.</li>
+			</ul>
+			<p>If you are self-hosting your runners, you should even be more restrictive and limit the actions that can be used. There are two possibilities:</p>
+			<ul>
+				<li><strong class="bold">Allow local actions only</strong> and create a fork from the action you have analyzed and reference the fork. This is extra work but gives you full control over the actions you use. You can add the actions to a local marketplace for easier discoverability (see <em class="italic">Rob Bos, 2022</em>).</li>
+				<li><strong class="bold">Allow select actions</strong> from GitHub and a list of specific allowed actions (<strong class="bold">whitelist</strong>). You can use wildcards to allow all actions from the same owner (for example, <strong class="source-inline">Azure/*</strong>). This option is less secure than option 1, but it is also less effort to maintain.</li>
+			</ul>
+			<p>You can configure these options as enterprise policies or for each organization.</p>
+			<p>Actions are code from other people that you execute in your environment. They are dependencies that can break your ability to ship and introduce vulnerabilities. Ensure that your policies find the <a id="_idIndexMarker1088"/>best balance for your needs between velocity and security.</p>
+			<h2 id="_idParaDest-326"><a id="_idTextAnchor326"/>Secure your environments</h2>
+			<p>Use <strong class="bold">environment protection rules</strong> with <strong class="bold">required reviewers</strong> to approve releases before they get <a id="_idIndexMarker1089"/>deployed to an environment (see <strong class="bold">staged deployments</strong> in <a href="B17827_09_Epub.xhtml#_idTextAnchor216"><em class="italic">Chapter 9</em></a>, <em class="italic">Deploy to Any Platform</em>). This ensures that a release was reviewed before accessing the secrets of the environment and executing code.</p>
+			<p>Combine it with <strong class="bold">branch protection</strong> and <strong class="bold">code owners</strong> (see <a href="B17827_03_Epub.xhtml#_idTextAnchor081"><em class="italic">Chapter 3</em></a>, <em class="italic">Teamwork and Collaborative Development</em>) by only allowing certain branches into your environment. This way, you are sure that necessary automated tests and approvals from code owners are in place when approving the deployment.</p>
+			<h2 id="_idParaDest-327"><a id="_idTextAnchor327"/>Use tokens when possible</h2>
+			<p>Instead of using credentials <a id="_idIndexMarker1090"/>stored as secrets to connect to a cloud provider – such as Azure, AWS, GCP, or HashiCorp – you can use <strong class="bold">OpenID Connect</strong> (<strong class="bold">OIDC</strong>). OIDC <a id="_idIndexMarker1091"/>will exchange short-lived tokens to authenticate instead of credentials. Your cloud provider also needs to support OIDC on their end.</p>
+			<p>Using OIDC, you don't have to store cloud credentials in GitHub, you have more granular control over what resources the workflow can access, and you have rotating, short-lived tokens that will expire after the workflow run. </p>
+			<p><em class="italic">Figure 15.11</em> shows an overview of how OIDC works:</p>
+			<div>
+				<div id="_idContainer212" class="IMG---Figure">
+					<img src="image/B17827_15_011.jpg" alt="Figure 15.11 – OIDC integration with a cloud provider&#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.11 – OIDC integration with a cloud provider</p>
+			<p>The steps are as follows:</p>
+			<ol>
+				<li value="1">Create an <strong class="bold">OIDC trust</strong> between your cloud provider and GitHub. Limit the trust to an organization and repository and further limit access to an environment, branch, or pull request.</li>
+				<li>The GitHub OIDC provider <strong class="bold">auto-generates a JSON Web Token</strong> during a workflow run. The token contains multiple claims to establish a secure and verifiable identity for the specific workflow job.</li>
+				<li>The cloud provider validates the claims and provides a <strong class="bold">short-lived access token</strong> that is available only for the lifetime of the job.</li>
+				<li>The access token is used to access resources that the identity has access to.</li>
+			</ol>
+			<p>You can use the <a id="_idIndexMarker1092"/>identity to directly access resources, or you can use it to get credentials from a secure vault (such as <strong class="bold">Azure Key Vault</strong> or <strong class="bold">HashiCorp Vault</strong>). This way, you can safely connect to services that do not support OIDC and automated secret rotation using the vault.</p>
+			<p>In GitHub, you can find instructions on configuring OIDC for AWS, Azure, and GDP (see <a href="https://docs.github.com/en/actions/deployment/security-hardening-your-deployments">https://docs.github.com/en/actions/deployment/security-hardening-your-deployments</a>). The steps are straightforward. In Azure, for example, you create an app registration in <strong class="bold">Azure Active Directory</strong> (<strong class="bold">AAD</strong>):</p>
+			<p class="source-code">$ az ad app create --display-name AccelerateDevOps</p>
+			<p>Then, create a service principal using the app ID from the registration output:</p>
+			<p class="source-code">$ az ad sp create --id &lt;<strong class="bold">appId</strong>&gt;</p>
+			<p>Then, you can open the app registration in AAD and add the OIDC trust under <strong class="bold">Certificates &amp; secrets</strong> | <strong class="bold">Federated credentials</strong> | <strong class="bold">Add a credential</strong>. Fill out the form, as in <em class="italic">Figure 15.12</em>:</p>
+			<p class="figure-caption"><img src="image/B17827_15_012.png" alt="Figure 15.12 – Creating the OIDC trust for an app registration&#13;&#10;"/></p>
+			<p class="figure-caption">Figure 15.12 – Creating the OIDC trust for an app registration</p>
+			<p>Then, assign the <a id="_idIndexMarker1093"/>service principal a role on the subscription level. Open the subscription in the portal. Under <strong class="bold">Access control (IAM)</strong> | <strong class="bold">Role assignment</strong> | <strong class="bold">Add</strong> | <strong class="bold">Add role assignment</strong>, follow the wizard. Select a role (for example, <strong class="bold">Contributor</strong>) and click <strong class="bold">Next</strong>. Select <strong class="bold">User, group, or service principal</strong> and select the service principal you created earlier.</p>
+			<p>In GitHub, your workflow needs <strong class="source-inline">write</strong> permissions for <strong class="source-inline">id-token</strong>:</p>
+			<pre class="source-code">permissions:</pre>
+			<pre class="source-code">      id-token: write</pre>
+			<pre class="source-code">      contents: read</pre>
+			<p>In the Azure Login Action, use the client ID (<strong class="source-inline">appId</strong>), tenant ID, and subscription ID to retrieve the token from Azure:</p>
+			<pre class="source-code">- name: 'Az CLI login'</pre>
+			<pre class="source-code">  uses: azure/login@v1</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">      client-id: ${{ secrets.AZURE_CLIENT_ID }}</pre>
+			<pre class="source-code">      tenant-id: ${{ secrets.AZURE_TENANT_ID }}</pre>
+			<pre class="source-code">      subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}</pre>
+			<p>After that, you can use the <strong class="bold">Azure CLI</strong> to access resources:</p>
+			<pre class="source-code">- run: az account show</pre>
+			<p>You can also work <a id="_idIndexMarker1094"/>with other Azure Actions and remove the authentication part, in this example, the publishing profile. They will use the access token form provided by the login action:</p>
+			<pre class="source-code">- name: Run Azure webapp deploy action using OIDC</pre>
+			<pre class="source-code">  uses: azure/webapps-deploy@v2</pre>
+			<pre class="source-code">  with:</pre>
+			<pre class="source-code">    app-name: ${{ env.APPNAME }}</pre>
+			<pre class="source-code">    slot-name: Production</pre>
+			<pre class="source-code">    package: website</pre>
+			<p>Every cloud provider is <a id="_idTextAnchor328"/><a id="_idTextAnchor329"/>different, but the documentation should get you up and running quickly: <a href="https://docs.github.com/en/actions/deployment/security-hardening-your-deployments">https://docs.github.com/en/actions/deployment/security-hardening-your-deployments</a>.</p>
+			<h2 id="_idParaDest-328"><a id="_idTextAnchor330"/>Collect security telemetry</h2>
+			<p>To secure your <a id="_idIndexMarker1095"/>entire pipeline from code to production, you need real-time insights on all levels. There are different monitoring solutions on different layers (see <em class="italic">Figure 15.13</em>):</p>
+			<div>
+				<div id="_idContainer214" class="IMG---Figure">
+					<img src="image/B17827_15_013.jpg" alt="Figure 15.13 – The different layers of monitoring &#13;&#10;"/>
+				</div>
+			</div>
+			<p class="figure-caption">Figure 15.13 – The different layers of monitoring </p>
+			<p>All these layers should<a id="_idIndexMarker1096"/> report their data to your SIEM system to perform analytics and use AI to detect anomalies. Many organizations collect data on different levels but forget to include it in the monitoring due to different responsibilities. To security harden your releases, you should consider the following:</p>
+			<ul>
+				<li>Include <strong class="bold">all monitoring sources</strong> and events in your SIEM solution.</li>
+				<li>Monitor the <strong class="bold">entire pipeline</strong> including your agents and test environments. Include all processes and network activity.</li>
+				<li><strong class="bold">Log deployment events</strong> with the according version. If new processes are suddenly running or ports are opened after a deployment, you want to be able to associate these changes with this deployment to facilitate forensics.</li>
+				<li>Collect <strong class="bold">real-time application security data</strong> and display it on the dashboard of your engineers. This could include <strong class="bold">abnormal program termination</strong>, <strong class="bold">SQL injection</strong> attempts, <strong class="bold">Cross-site scripting</strong> (<strong class="bold">XSS</strong>) attempts, <strong class="bold">failed logins</strong> (<strong class="bold">brute force attacks</strong>), or <strong class="bold">DDoS attacks</strong>, but it depends a lot on your product. To detect SQL injection or XSS, you have to include extra logging before encoding user input if the input contains suspicious characters or elements.</li>
+			</ul>
+			<p>The best way to create awareness is to see that the threat is real.</p>
+			<h1 id="_idParaDest-329"><a id="_idTextAnchor331"/>Case study</h1>
+			<p>Until now, <strong class="bold">Tailwind Gears</strong> has<a id="_idIndexMarker1097"/> paid an external company to perform <strong class="bold">security reviews</strong> of the architecture, help with <strong class="bold">threat modelling</strong> and a <strong class="bold">risk analysis</strong>, and perform security testing before major releases. They have never been breached and most of the investments so far went into network security. But now leveraging more and more cloud services, they've already been aware that they must do something to be able to <strong class="bold">detect</strong>, <strong class="bold">respond</strong>, and <strong class="bold">recover</strong>.</p>
+			<p>The IT department already started to use <strong class="bold">Splunk</strong> as their <strong class="bold">SIEM</strong> and <strong class="bold">ITIM</strong> solution and integrate more and more sources that feed data, but until now, the IT department could not be certain whether they would really detect an ongoing attack in real-time. Tailwind Gears decides to change the way they deal with security. They talk to their security partner, and they plan the first <strong class="bold">red team / blue team</strong> simulation. The scenario is an <strong class="bold">inside attacker</strong> to the web application of our DevOps pilot teams.</p>
+			<p>The simulation takes 3 days and the red team wins by finding two ways to compromise production:</p>
+			<ul>
+				<li>A <strong class="bold">spear phishing</strong> attack on a few developers in another team is successful and reveals the credentials of one of the developers. Using <strong class="bold">BloodHound</strong>, they find out that the developer has access to the former Jenkins server that now runs the GitHub Actions runner and has not yet been ported to the Kubernetes solution completely. The server does not have MFA enabled and <strong class="bold">mimikatz</strong> allows to capture the credentials of a test account. The test account has access to a test environment, and they can capture credentials of an admin account there that allows data extraction of the staging environment (that counts as production in the game).</li>
+				<li>Since all developers have read access to all repositories, an analysis of the dependencies of the web application shows a dependency that is vulnerable to XSS and has not been patched yet. The component is a search control and allows the red team with the help of a frontend developer of another team to execute scripts in the context of other users. They open an issue in an internal GitHub repository and use the GitHub API to post a comment to the issue on each execution as proof.</li>
+			</ul>
+			<p>The simulation results in many backlog items that will be addressed over the next weeks. Some things do not concern our DevOps teams, such as enabling MFA for all internal systems or regularly executing phishing simulations to create awareness among employees.</p>
+			<p>But many items also<a id="_idIndexMarker1098"/> concern the teams. Tailwind Gears decides to bake security into the development process. This includes <strong class="bold">secret scanning</strong>, <strong class="bold">dependency management</strong> with Dependabot, and <strong class="bold">code scanning</strong>. </p>
+			<p>The team will also work together with the IT department to securely harden the release pipeline by moving the build server to Kubernetes, implementing <strong class="bold">security logging</strong> in the entire pipeline, and using <strong class="bold">OpenID Connect</strong> and a secure <strong class="bold">Key Vault</strong> for secret handling.</p>
+			<p>Everyone is looking forward to the next red team/blue team simulation in 3 months.</p>
+			<h1 id="_idParaDest-330"><a id="_idTextAnchor332"/>Summary</h1>
+			<p>In this chapter, you've learned how to secure your release pipeline and deployments by scanning containers and IaC, ensuring consistency of code and configuration, and security-hardening the complete pipeline.</p>
+			<p>In the next chapter, we'll talk about the impact of your software architecture on your software delivery performance.</p>
+			<h1 id="_idParaDest-331"><a id="_idTextAnchor333"/>Further reading</h1>
+			<p>These are the references from this chapter that you can also use to get more information on the topics:</p>
+			<ul>
+				<li>Kim G., Humble J., Debois P. &amp; Willis J. (2016). <em class="italic">The DevOps Handbook: How to Create World-Class Agility, Reliability, and Security in Technology Organizations</em> (1st ed.). IT Revolution Press</li>
+				<li>Forsgren N., Humble, J., &amp; Kim, G. (2018). <em class="italic">Accelerate: The Science of Lean Software and DevOps: Building and Scaling High Performing Technology Organizations</em> (1st ed.) [E-book]. IT Revolution Press.</li>
+				<li>Oladimeji S., Kerner S. M. (2021). <em class="italic">SolarWinds hack explained: Everything you need to know</em>. <a href="https://whatis.techtarget.com/feature/SolarWinds-hack-explained-Everything-you-need-to-know">https://whatis.techtarget.com/feature/SolarWinds-hack-explained-Everything-you-need-to-know</a></li>
+				<li>Sudhakar Ramakrishna (2021). <em class="italic">New Findings From Our Investigation of SUNBURST</em>. <a href="https://orangematter.solarwinds.com/2021/01/11/new-findings-from-our-investigation-of-sunburst/">https://orangematter.solarwinds.com/2021/01/11/new-findings-from-our-investigation-of-sunburst/</a></li>
+				<li>Crowdstrike blog (2021). <em class="italic">SUNSPOT: An Implant in the Build Process</em>. <a href="https://www.crowdstrike.com/blog/sunspot-malware-technical-analysis/">https://www.crowdstrike.com/blog/sunspot-malware-technical-analysis/</a></li>
+				<li>Eckels S., Smith J. &amp; Ballenthin W. (2020). <em class="italic">SUNBURST Additional Technical Details</em>. <a href="https://www.mandiant.com/resources/sunburst-additional-technical-details">https://www.mandiant.com/resources/sunburst-additional-technical-details</a></li>
+				<li>Souppaya M., Morello J., &amp; Scarfone K. (2017). <em class="italic">Application Container Security Guide</em>: <a href="https://doi.org/10.6028/NIST.SP.800-190">https://doi.org/10.6028/NIST.SP.800-190</a></li>
+				<li>National Telecommunications and Information Administration (NTIA), <em class="italic">Software Bill of Materials</em>:<a href=" https://www.ntia.gov/sbom"> https://www.ntia.gov/sbom</a></li>
+				<li>Thomas Claburn (2018). <em class="italic">Check your repos... Crypto-coin-stealing code sneaks into fairly popular NPM lib (2m downloads per week)</em>: <a href="https://www.theregister.com/2018/11/26/npm_repo_bitcoin_stealer/">https://www.theregister.com/2018/11/26/npm_repo_bitcoin_stealer/</a></li>
+				<li>Haymore A., Smart I., Gazdag V., Natesan D., &amp; Fernick J. (2022). <em class="italic">10 real-world stories of how we've compromised CI/CD pipelines</em>: <a href="https://research.nccgroup.com/2022/01/13/10-real-world-stories-of-how-weve-compromised-ci-cd-pipelines/">https://research.nccgroup.com/2022/01/13/10-real-world-stories-of-how-weve-compromised-ci-cd-pipelines/</a></li>
+				<li>Rob Bos (2022). <em class="italic">Setup an internal GitHub Actions Marketplace</em>: <a href="https://devopsjournal.io/blog/2021/10/14/GitHub-Actions-Internal-Marketplace.html">https://devopsjournal.io/blog/2021/10/14/GitHub-Actions-Internal-Marketplace.html</a></li>
+			</ul>
+		</div>
+	</body></html>

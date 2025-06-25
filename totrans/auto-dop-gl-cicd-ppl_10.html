@@ -1,0 +1,255 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer116">
+			<h1 id="_idParaDest-239" class="chapter-number"><a id="_idTextAnchor250"/>10</h1>
+			<h1 id="_idParaDest-240"><a id="_idTextAnchor251"/>Extending the Reach of CI/CD Pipelines</h1>
+			<p>In this chapter, we aim to extend the reach of CI/CD pipelines into common automation use cases. By the end of this chapter, you should have an idea of what’s possible with CI/CD pipelines. You’ll see that they are not necessarily just for build and deployment tasks, but also automation tasks, which make the job of an engineer easier, repeatable, and more reliable. CI/CD pipelines are always meant to ease the burden of work on an engineer so that they can focus on more novel and <span class="No-Break">important tasks.</span></p>
+			<p>The following topics will be covered in <span class="No-Break">this chapter:</span></p>
+			<ul>
+				<li>Using CI/CD pipelines to spot <span class="No-Break">performance problems</span></li>
+				<li>Integrating third-party tools into your <span class="No-Break">CI/CD pipelines</span></li>
+				<li>Using CI/CD pipelines for developing <span class="No-Break">mobile apps</span></li>
+			</ul>
+			<h1 id="_idParaDest-241"><a id="_idTextAnchor252"/>Using CI/CD pipelines to spot performance problems</h1>
+			<p>There is no better time to do performance testing than during an automated CI/CD pipeline. With performance tests, you want them to be routine and against a stable unchanging environment or deployment. If you run performance tests against an environment or deployment that <a id="_idIndexMarker725"/>constantly changes, you will not have reliable results. Without reliable results, the entire notion of performance tests goes out the window. You want to understand how your changes affect your performance; without stable results, you can’t infer <span class="No-Break">that understanding.</span></p>
+			<p>With GitLab, there are multiple ways to run performance tests. For web or API-based deployments, GitLab includes a native performance tool that will cover in this chapter and go over its integration. However, you, the end user, can take this a step further and cover more metrics such as CPU/memory/storage usage in a CI/CD pipeline. We will not be covering how to collect these metrics in this chapter since that is unique to every user’s environment. However, we strongly recommend that you capture these metrics as part of your <span class="No-Break">CI/CD pipeline.</span></p>
+			<p>GitLab’s native integrated performance testing tool for API and web-based deployments will check numerous metrics <a id="_idIndexMarker726"/>for active deployment. Some of those metrics include page load time, first page paint time, and total blocking time. In a merge request (pictured in the following screenshot) you can see how your code changes will impact the performance of the <span class="No-Break">web/API deployment:</span></p>
+			<div>
+				<div id="_idContainer112" class="IMG---Figure">
+					<img src="image/B18073_10_1.jpg" alt="Figure 10.1: Performance metrics view in a merge request" width="1250" height="576"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.1: Performance metrics view in a merge request</p>
+			<p class="callout-heading">Always double-check your testing criteria</p>
+			<p class="callout">Your testing results are going to be directly dependent on your testing criteria, test settings, and environments. You should always question if your testing criteria, settings, and environments are accurate. You should never assume they are accurate. If they are not accurate, your test results will never <span class="No-Break">be accurate.</span></p>
+			<h2 id="_idParaDest-242"><a id="_idTextAnchor253"/>How to integrate browser performance testing</h2>
+			<p>Integrating browser<a id="_idIndexMarker727"/> performance testing is quite easy – you just need to include the GitLab templates as part of your CI/CD pipeline and then instruct GitLab where your API or web deployment can be accessed. See the <span class="No-Break">following</span><span class="No-Break"><a id="_idIndexMarker728"/></span><span class="No-Break"> example.</span></p>
+			<pre class="source-code">
+include:
+  - template: Verify/Browser-Performance.gitlab-ci.yml
+browser_performance:
+  variables:
+    URL: https://myWebOrApiURL.local/</pre>
+			<p>With the preceding job template, we’re invoking the <strong class="source-inline">browser_performance:</strong> templates from GitLab. Then, we’re overwriting the <strong class="source-inline">URL</strong> variable of the job. This URL is what tells the Performance Testing Suite where to reach out and scan our application for performance. With this configuration, GitLab will check our application and report the results back to our <span class="No-Break">merge request.</span></p>
+			<h2 id="_idParaDest-243"><a id="_idTextAnchor254"/>How to integrate load performance testing with k6</h2>
+			<p>The second type of testing that is <a id="_idIndexMarker729"/>used in GitLab CI/CD by default is load testing with a tool named k6, provided by the company Grafana. GitLab provides a template for running this tool as part of your CI/CD pipeline as well. However, there is an <a id="_idIndexMarker730"/>additional step of creating and specifying a k6 configuration file to run a proper k6 <span class="No-Break">load test.</span></p>
+			<p>We’re going to go over this process here. Before we do, note that you should never run these load tests in production. Production load tests should run on an identical non-production environment. To get accurate load testing results, the load testing tool should be the only item communicating with your environment. Without further ado, let’s integrate load testing. Add the following code to your <strong class="source-inline">.</strong><span class="No-Break"><strong class="source-inline">gitlab-ci.yml</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="source-code">
+include:
+  - template: Verify/Load-Performance-Testing.gitlab-ci.yml
+load_performance:
+  variables:
+    K6_TEST_FILE: '&lt;PATH TO FILE&gt;' #.gitlab/tests/k6.js</pre>
+			<p>The preceding code will execute k6 as part of our pipeline. However, now, we need to inform k6 how to test our application and provide GitLab with a test file to run. We’re going to assume that this file lives at the<strong class="source-inline">.gitlab/test/k6.js</strong> path. We’re going to walk through how to <a id="_idIndexMarker731"/>build <span class="No-Break">this file.</span></p>
+			<p>The following code is <a id="_idIndexMarker732"/>going to load the libraries and functions that will affect our load test. Without these, the remainder of our load test file will fail. Next, we’re going to add <span class="No-Break">our settings:</span></p>
+			<pre class="source-code">
+import { check, group, sleep } from 'k6';
+import http from 'k6/http';</pre>
+			<p>The following code is going to define the options for our test. For 5 minutes, we’re going to ramp up to 100 users accessing the website. Then, we’re going to hold at 100 users for 10 minutes. Finally, over 5 minutes, we’re going to ramp down to 0 users. That means this test will run for 20 minutes <span class="No-Break">in total:</span></p>
+			<pre class="source-code">
+export const options = {
+  stages: [
+    { duration: '5m', target: 100 },
+    { duration: '10m', target: 100 },
+    { duration: '5m', target: 0 },
+  ],
+  thresholds: {
+    'http_req_duration': ['p(99)&lt;1500']
+  },
+};</pre>
+			<p>Then, we must set the threshold for failure. We want to see 99% of all requests respond within 1,500 milliseconds. Anything outside that will fail. Next, we’re going to execute the actual <span class="No-Break">load test.</span></p>
+			<p>The following code will execute our performance tests using k6 against our website. With this file now being successfully built, we can execute our pipeline and have repeatable <span class="No-Break">load tests:</span></p>
+			<pre class="source-code">
+export default() =&gt; {
+  const myResponse = http.get('&lt;MY URL or ENV VAR&gt;').json();
+  check(myResponse, { 'retrieved url: (obj) =&gt; obj.length &gt; 0 });
+  sleep(1);
+};</pre>
+			<p>With the performance testing <a id="_idIndexMarker733"/>set up, we’re going to shift our focus to how to utilize feature flags to enable <a id="_idIndexMarker734"/>and disable parts of our application <span class="No-Break">after deployment.</span></p>
+			<h2 id="_idParaDest-244"><a id="_idTextAnchor255"/>Using feature flags to allow business-driven release decisions</h2>
+			<p>GitLab comes with the ability to set up feature flags in the UI. It is based on the <em class="italic">third-party</em> <strong class="source-inline">unleash</strong> library. Once you set up the feature flags in the GitLab UI, you will need to set up your application to<a id="_idIndexMarker735"/> communicate with GitLab to check for feature flags. We’ll cover examples of both of these steps, but GitLab does not do this for you: it is up to your application developers to do <span class="No-Break">this work.</span></p>
+			<p>Once the feature flags have been configured in the UI, an API call from the application is necessary to check the flag and change the logic of the application accordingly. Let’s walk through how to set up the feature flags in <span class="No-Break">the UI:</span></p>
+			<ol>
+				<li>In a project, open the navigation pane on the left-hand side. Click <strong class="bold">Deployments</strong> | <strong class="bold">Feature Flags</strong>. This will take you to the main feature flag section. In the top right, click <strong class="bold">New feature flag</strong>. This will take you to a <span class="No-Break">new view:</span></li>
+			</ol>
+			<div>
+				<div id="_idContainer113" class="IMG---Figure">
+					<img src="image/B18073_10_2.jpg" alt="Figure 10.2: Feature Flags in GitLab’s navigation pane" width="457" height="496"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.2: Feature Flags in GitLab’s navigation pane</p>
+			<ol>
+				<li value="2">You will be <a id="_idIndexMarker736"/>presented with a form. Fill it out and plan your strategies accordingly. You can set multiple strategies based on environments, user lists, and user IDs, and assign percentages to different groups. Once submitted, it will look <span class="No-Break">like this:</span></li>
+			</ol>
+			<div>
+				<div id="_idContainer114" class="IMG---Figure">
+					<img src="image/B18073_10_3.jpg" alt="Figure 10.3: Main feature flag view" width="968" height="639"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.3: Main feature flag view</p>
+			<ol>
+				<li value="3">Feature flags are<a id="_idIndexMarker737"/> exceptionally powerful when launching new features. By placing a new feature behind a feature flag, you can turn off part of your application by toggling a flag. This can help prevent a rollback of a release or an emergency <span class="No-Break">support ticket:</span></li>
+			</ol>
+			<div>
+				<div id="_idContainer115" class="IMG---Figure">
+					<img src="image/B18073_10_4.jpg" alt="Figure 10.4: Feature Flags detail view" width="1072" height="158"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 10.4: Feature Flags detail view</p>
+			<p>In <span class="No-Break"><em class="italic">Figure 10</em></span><em class="italic">.4</em>, you can see the presence of our newly created feature flag. On the left-hand side, under <strong class="bold">Status</strong>, you<a id="_idIndexMarker738"/> can see a checkbox, which is used to enable or disable <span class="No-Break">this flag.</span></p>
+			<h2 id="_idParaDest-245"><a id="_idTextAnchor256"/>How to configure your application for feature flags</h2>
+			<p>In this section, we’re <a id="_idIndexMarker739"/>going to cover a single use case for checking feature flags in an application. The following is a Ruby code sample that will check for feature flags and toggle a code path based on the flag that is set. Your team’s application developers will need to set up their applications based on their toolchains and <span class="No-Break">language usage:</span></p>
+			<pre class="source-code">
+require 'unleash'
+require 'unleash/context'
+unleash = Unleash::Client.new({
+  url: 'http://gitlab.com/api/v4/feature_flags/unleash/42',
+  app_name: 'production',
+  instance_id: '29QmjsW6KngPR5JNPMWx'
+})
+unleash_context = Unleash::Context.new
+unleash_context.user_id = "123"
+if unleash.is_enabled?("my_feature_name", unleash_context)
+  puts "Feature enabled"
+else
+  puts "Feature disabled!"
+end</pre>
+			<p>In this Ruby example, you begin by setting the GitLab information, including the URL of the GitLab instance, the app’s name (corresponding to the environment in GitLab), and the instance ID (the numeric ID of your <span class="No-Break">GitLab project).</span></p>
+			<p>The <strong class="source-inline">user_id</strong> parameter is an example of passing information to GitLab. In this example, we’re passing a user ID that GitLab will match with your feature flag strategy if configured. The next<a id="_idIndexMarker740"/> step is invoking <strong class="source-inline">unclear.is_enabled</strong>, which accepts a feature name as a variable, then reaches out to GitLab to determine if you are in the group that has the flag enabled. Then, the code path that is enabled will <span class="No-Break">be executed.</span></p>
+			<p>Now that we’ve covered the usage and purpose of feature flags, we’re going to work on how to integrate third-party tools into your <span class="No-Break">CI/CD pipelines.</span></p>
+			<h1 id="_idParaDest-246"><a id="_idTextAnchor257"/>Integrating third-party tools into your CI/CD pipelines</h1>
+			<p>In this section, we’re going to <a id="_idIndexMarker741"/>cover how to integrate third-party tools into a CI/CD pipeline. The preferred method to integrate a third-party tool into a CI/CD <a id="_idIndexMarker742"/>pipeline is to containerize it, create a CI/CD job that uses that container, and then invoke our tool as part of that job. In many cases, this is a requirement and is the first step in setting up <span class="No-Break">an integration.</span></p>
+			<p class="callout-heading">Tool format expectations</p>
+			<p class="callout">This section is based on the belief that the tool you want to integrate is already compiled and ready to be integrated into your pipeline. In the event it is not, you can add CI jobs before those mentioned here to compile or assemble the tool. Then, you can invoke the CI jobs and steps in <span class="No-Break">this section.</span></p>
+			<h2 id="_idParaDest-247"><a id="_idTextAnchor258"/>Creating our tool container’s Dockerfile</h2>
+			<p>In the previous chapter, we<a id="_idIndexMarker743"/> discussed how to build purpose-built containers. We’re going to use that method here to integrate your tool. If you haven’t read the <em class="italic">Securing and accelerating jobs with purpose-built containers</em> section of the previous chapter yet, we highly recommend that you read it first and then <span class="No-Break">come back.</span></p>
+			<p>The first step in this process is to set up a new GitLab project for your tool and container. Once you have this set up, commit the binaries, configuration, and other files you wish to be placed in the container. The next step is building the container and placing those items inside of it. Create a Dockerfile in your repository and add the following sample code. <strong class="source-inline">$mybinary</strong> is a placeholder for your binary’s filename; <strong class="source-inline">myTool</strong> will be your <span class="No-Break">tool’s name.</span></p>
+			<p>As shown in the following code, we have created a new container derived from <strong class="source-inline">alpine:3.13.0</strong>. We updated the container, then created a directory for our tool. After that directory was created, we added all the files in our repository to that folder, permissioned them with<a id="_idIndexMarker744"/> a wide permission, and set our binary <span class="No-Break">as executable:</span></p>
+			<pre class="source-code">
+FROM alpine:3.13.0
+RUN apk update &amp;&amp; mkdir /opt/myTool
+ADD . /opt/myTool
+RUN chmod 777 -R /opt/myTool &amp;&amp; chmod +x /opt/myTool/$mybinary
+USER 1001
+CMD ["echo", "This is a purpose-built container. It is meant to be used in a pipeline and not executed."]</pre>
+			<p>This is a simplified example of how to integrate a third-party tool. You should always customize the permission’s values to the least privilege necessary to run your tool. You should also only put the files required for your tool to run in the container. For this example, we’re casting a wide net and including everything, as well as <span class="No-Break">wide permissions.</span></p>
+			<h2 id="_idParaDest-248"><a id="_idTextAnchor259"/>Automating our container’s build</h2>
+			<p>Now that we have a Dockerfile, we want to build the container. As a bonus, we’re also going to turn on container <a id="_idIndexMarker745"/>scanning. Create a <strong class="source-inline">.gitlab-ci.yml</strong> file in your repository if you haven’t already. We’re going to populate that <strong class="source-inline">.gitlab-ci.yml</strong> file with the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+Container_Build:
+  stage: build
+  image: docker:20.10:16
+  services:
+    - docker:20.10:16-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_VERIFY: 0
+  script:
+    - docker login -u $CI_REGISTRY_USER –p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - docker push $CI_REGISTRY_IMAGE:latest</pre>
+			<p class="callout-heading">Avoiding a pipeline run on every commit</p>
+			<p class="callout">When making multiple pipeline changes, you may not want to kick off a pipeline run every time you make a change. If you start your commit message with <strong class="source-inline">[CI SKIP]</strong>, GitLab will not start a pipeline for <span class="No-Break">that commit.</span></p>
+			<p>The preceding code is the<a id="_idIndexMarker746"/> most basic example of a Docker-in-Docker build. First, we utilize <strong class="source-inline">image: docker:20.10.16</strong> to define the version of Docker we want to build against. Then, we define the Docker service we want to build with – that is, the <strong class="source-inline">dind</strong> container. Next, we set the <strong class="source-inline">DOCKER_HOST</strong> and <strong class="source-inline">DOCKER_TLS_VERIFY</strong> variables so that the Docker and <strong class="source-inline">dind</strong> containers can talk to each other. Finally, we invoke the <strong class="source-inline">docker build</strong> command to build our container, and the <strong class="source-inline">docker push</strong> command<a id="_idIndexMarker747"/> to upload it to GitLab’s <span class="No-Break">container registry.</span></p>
+			<p class="callout-heading">GitLab Runner requirements for Docker</p>
+			<p class="callout">Building a Docker container typically requires the usage of a GitLab Runner capable of doing Docker-in-Docker container builds. GitLab.com shared Runners come with this capability preconfigured. If you’re using a self-hosted Runner, you may need to reconfigure it. Refer to the GitLab documentation for how to <span class="No-Break">achieve this.</span></p>
+			<h2 id="_idParaDest-249"><a id="_idTextAnchor260"/>Container scanning</h2>
+			<p>GitLab offers container scanning as <a id="_idIndexMarker748"/>part of the container-building process. We want to take advantage of this to identify any dependency or other vulnerabilities with our container. Enabling this is simple: you need to have a test stage defined in your <strong class="source-inline">.gitlab-ci.yml</strong> file. Then, simply add the following code block to the top of your <strong class="source-inline">.</strong><span class="No-Break"><strong class="source-inline">gitlab-ci.yml</strong></span><span class="No-Break"> file:</span></p>
+			<pre class="source-code">
+include:
+  - template: Jobs/Container-Scanning.gitlab-ci.yml</pre>
+			<h2 id="_idParaDest-250"><a id="_idTextAnchor261"/>Invoking the third-party tool</h2>
+			<p>At this point, we should have a <a id="_idIndexMarker749"/>container with our third-party tool built, scanned, and placed inside the GitLab container registry. All that is left now is to invoke our tool. We can do this by creating a CI/CD job that’s pointing to our container and calling our executable in <span class="No-Break">the container:</span></p>
+			<pre class="source-code">
+Test_Job:
+  stage: test
+  image: path/to/my/container
+  script:
+    - /opt/myTool/$myBinary</pre>
+			<p>So far, we’ve walked through how to build a container with tools, how to scan a container, and how to invoke that tool via a CI/CD job. This is a basic example to show you the art of what is possible. With this process, you can clone third-party tools, custom scripts, custom configurations, or whatever else you want to include as part of your <span class="No-Break">CI/CD pipeline.</span></p>
+			<p>There are major benefits to doing this. For example, any container that runs as part of a CI/CD pipeline has access to the GitLab API and GitLab repository. This means you can run a CI/CD job as<a id="_idIndexMarker750"/> part of your pipeline for something such as metrics collection or configuration verification as well. CI/CD jobs built in this way can automate <span class="No-Break">almost anything.</span></p>
+			<p>If you build and containerize a custom tool, be sure to share it with <span class="No-Break">the community.</span></p>
+			<p>In the next section, we’re going to discuss how to build mobile applications using GitLab CI/CD <span class="No-Break">and Fastlane.</span></p>
+			<h1 id="_idParaDest-251"><a id="_idTextAnchor262"/>Using CI/CD pipelines for developing mobile apps</h1>
+			<p>In this section, we’re going to discuss how to set up CI/CD pipelines in GitLab for mobile application development. There are many<a id="_idIndexMarker751"/> benefits to automating the mobile development process at the packaging stage, most notably the fact that packaging a mobile application involves multiple certificates, entitlements, and configuration files, which take a substantial amount of time to assemble when <a id="_idIndexMarker752"/>packaging an application. In addition to that, the testing process around mobile applications can be manual and tedious. By automating things such as screenshots across multiple devices, we can shave hours off a <span class="No-Break">developer’s workload.</span></p>
+			<p>This section assumes you have all the requirements listed next configured and working already. We’re not going to cover how to do mobile development, but rather how to automate your mobile development practices using Fastlane <span class="No-Break">and GitLab.</span></p>
+			<h2 id="_idParaDest-252"><a id="_idTextAnchor263"/>Requirements</h2>
+			<p>For this section, you will need <a id="_idIndexMarker753"/><span class="No-Break">the following:</span></p>
+			<ul>
+				<li>A macOS device or VM running the latest version of OS X, with <span class="No-Break">Fastlane installed</span></li>
+				<li>GitLab Runner installed on your <span class="No-Break">macOS device</span></li>
+				<li>An Apple <span class="No-Break">developer account</span></li>
+				<li>A Google <span class="No-Break">developer account</span></li>
+				<li>An application that can be built successfully on your <span class="No-Break">macOS device</span></li>
+			</ul>
+			<p class="callout-heading">Read this before proceeding</p>
+			<p class="callout">If you can’t meet these requirements, you should stop here until you can. This guide assumes you have a working, provisioned macOS device. It also assumes you can build a mobile application on <span class="No-Break">the device.</span></p>
+			<h2 id="_idParaDest-253"><a id="_idTextAnchor264"/>Fastlane</h2>
+			<p>In this chapter, we’re going to be utilizing the Fastlane CLI tool to automate our tests, builds, and deployments. Fastlane is a tool that works with both Android and iOS build processes. It is an opensource tool that can be<a id="_idIndexMarker754"/> installed for <a id="_idIndexMarker755"/>free on macOS and Windows platforms. You can read more about it in the Fastlane documentation located <span class="No-Break">at </span><a href="https://docs.fastlane.tools/getting-started/ios/setup/"><span class="No-Break">https://docs.fastlane.tools/getting-started/ios/setup/</span></a><span class="No-Break">.</span></p>
+			<p>We’re going to assume you have Fastlane installed on your machine. If not, please refer to the Fastlane documentation linked previously for your platform. The first step in this process is to open your mobile application project and create a Fastlane configuration file named <strong class="source-inline">Fastfile</strong>. Fastfile is the primary configuration file used by Fastlane. We’re going to make our Fastfile look <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+lane :beta do
+  build_app(Scheme: "MyApp") # For iOS
+  gradle( task: 'assemble', build_type: 'Release') # For Android
+end</pre>
+			<p>To build our mobile application for both iOS and Android, we simply need to run the <strong class="source-inline">fastlane beta</strong> command. Assuming your iOS and Android applications can already be built on the macOS device, this command should automate their building. We can put this into a GitLab CI file <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+"Build Mobile Applications":
+  stage: build
+  tags:
+    - my-osx-runner
+  script:
+    - fastlane beta</pre>
+			<p>This GitLab CI job will automate the Fastlane process via GitLab pipelines. We are leveraging the <strong class="source-inline">tags:</strong> keyword to <a id="_idIndexMarker756"/>ensure that this build happens on a specific macOS device. Without this<a id="_idIndexMarker757"/> keyword, the build could happen on any <span class="No-Break">GitLab Runner.</span></p>
+			<h2 id="_idParaDest-254"><a id="_idTextAnchor265"/>Fastlane – deployment</h2>
+			<p>You can deploy your mobile<a id="_idIndexMarker758"/> application to the Android and Apple stores. However, you will need to set up all mobile <a id="_idIndexMarker759"/>certificates for production use before setting up Fastlane. When those certificates expire, someone will need to update them on the macOS device. Nevertheless, if they have been set up, you can modify your <strong class="source-inline">Fastfile</strong> <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+lane :appstore do
+  sync_code_signing(type: "appstore")
+  build_app(scheme: "MyApp")
+  upload_to_app_store
+end
+lane :playstore do
+  gradle(task: 'assemble', build_type: 'Release')
+  upload_to_play_store
+end</pre>
+			<p>The preceding additions to your Fastfile will build your application and release it to the respective app stores. You<a id="_idIndexMarker760"/> simply need to run the <strong class="source-inline">Fastlane appstore</strong> and <strong class="source-inline">Fastlane playstore</strong> commands. A<a id="_idIndexMarker761"/> corresponding GitLab CI/CD configuration file would look <span class="No-Break">like this:</span></p>
+			<pre class="source-code">
+"Deliver Mobile Applications":
+  stage: release
+  tags:
+    - my-osx-runner
+  script:
+    - fastlane appstore
+    - fastlane playstore</pre>
+			<h2 id="_idParaDest-255"><a id="_idTextAnchor266"/>Fastlane – automated testing</h2>
+			<p>Assuming you have unit tests set up for your projects <a id="_idIndexMarker762"/>already, Fastlane can automate those as well. It does not automatically <a id="_idIndexMarker763"/>set up the tests, but if you have them built as part of your project’s configuration, Fastlane can invoke them. This process is similar to every step before – we begin with Fastfile modifications, as seen in the <span class="No-Break">following example:</span></p>
+			<pre class="source-code">
+lane :iosTest do
+  run_tests( devices: ["iPhone 6s", "iPad Air"], scheme: "MyAppTests")
+end
+lane :androidTests do
+  gradle(task: "test")
+end</pre>
+			<p>Just like before, we can amend our GitLab CI/CD configuration file to add automated testing <span class="No-Break">as well:</span></p>
+			<pre class="source-code">
+"Test Mobile Applications":
+  stage: test
+  tags:
+    - my-osx-runner
+  script:
+    - fastlane iOSTests
+    - fastlane androidTests</pre>
+			<p>At times, using Fastlane may <a id="_idIndexMarker764"/>feel like you’re cheating. Once you have an established mobile project on a device, Fastlane can take it from there. Mobile development before Fastlane <a id="_idIndexMarker765"/>was a tedious and manual process. CI/CD pipelines were filled with a large amount of code and logic to make a build happen and then <span class="No-Break">be deployed.</span></p>
+			<p>In this section, we discussed how to build a Fastfile to configure Fastlane, how to run Fastlane commands, and, most importantly, how to add them to a GitLab CI/CD configuration file. We’ve said it before, but in closing, it’s worth repeating: Fastlane and automating mobile development with GitLab CI/CD pipelines is best suited for a macOS device that is already provisioned and set up to build a mobile application. Start there, and then use GitLab CI and Fastlane to handle <span class="No-Break">the rest.</span></p>
+			<h1 id="_idParaDest-256"><a id="_idTextAnchor267"/>Summary</h1>
+			<p>In this chapter, we covered the benefits of including performance checks inside your CI/CD pipeline. We also covered how to include GitLab’s native performance testing tools. Following that, we covered the benefits of feature flags and how they can protect your deployments and prevent time-consuming rollbacks. Then, we moved on to integrating third-party tools as part of your CI/CD pipeline and how to containerize them for use. Finally, we walked through how to automate the creation and deployment of mobile applications <span class="No-Break">using Fastlane.</span></p>
+			<p>In the next chapter, we’re going to cover an end-to-end example that leverages everything you’ve learned about in <span class="No-Break">this book.</span></p>
+		</div>
+		<div>
+			<div id="_idContainer117" class="IMG---Figure">
+			</div>
+		</div>
+	</div>
+</div>
+</body></html>
