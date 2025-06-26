@@ -1,6 +1,6 @@
 
 
-# 用于编排的 Bolt
+# 第十二章：用于编排的 Bolt
 
 在本章中，我们将介绍**Bolt**和 Puppet Enterprise 的**orchestrator**。我们将展示 Bolt 是 Puppet 用于临时编排的工具，能够处理不适合 Puppet 基于状态强制执行模型的工作。我们将讨论如何配置它以连接具有不同传输机制和凭证的客户端，并执行简单命令和上传文件。此外，我们将展示如何通过 Bolt 运行**tasks**，这些任务可以是多种语言的单一操作脚本，而**plans**则允许通过逻辑和变量在 Puppet 或 YAML 语言中编写任务组合。我们还将探讨项目目录结构，允许存储和共享 Bolt 内容。这将与如何使用**Puppet Enterprise Cloud Deployment Module**（**PECDM**）**Bolt 项目**作为示例，将计划和任务存储在 Puppet 模块中进行比较。接着，我们将展示如何通过插件扩展 Bolt，从其他来源动态加载信息。我们还将展示如何将 Bolt 与 Puppet 直接结合使用，应用清单块，连接到 PuppetDB，并使用 Hiera。
 

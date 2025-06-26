@@ -1,6 +1,6 @@
 
 
-# 使用 Opsgenie 警报进行升级
+# 第十二章：使用 Opsgenie 警报进行升级
 
 作为 Atlassian Open DevOps 套件的一部分，您还可以访问 Opsgenie。Opsgenie 是一款独立的产品，允许团队管理警报、事件和事件升级。它通常由使用 **Jira Service Management** 的代理使用，但它也适用于需要参与解决生产问题的软件团队。软件团队可以利用 Opsgenie 的强大功能，管理对已部署到生产环境中的系统发生的警报和事件。
 

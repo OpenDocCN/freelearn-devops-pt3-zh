@@ -1,6 +1,6 @@
 
 
-# 利用 Docker 和 Kubernetes 进行高级配置
+# 第九章：利用 Docker 和 Kubernetes 进行高级配置
 
 在上一章中，我们探讨了通过 Bitbucket Pipelines 实现持续部署，并使用各种技术平台进行操作。然而，我们将 Docker 和 Kubernetes 部署的讨论留到现在。Bitbucket Pipelines 可以利用容器作为其构建环境、构建包，甚至作为运行器来执行流水线操作。在上述每种情况下，您可以使用公共镜像或创建并使用私有镜像。
 

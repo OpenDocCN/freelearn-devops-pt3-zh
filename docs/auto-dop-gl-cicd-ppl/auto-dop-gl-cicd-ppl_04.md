@@ -1,6 +1,6 @@
 
 
-# 理解 GitLab 的 CI/CD 管道结构
+# 第四章：理解 GitLab 的 CI/CD 管道结构
 
 到现在为止，你已经掌握了足够的 Git 和 GitLab 概念，能够理解开发者如何在 **软件开发生命周期**（**SDLC**）的 **Create** 阶段，使用这些工具创建、审查和存储代码。你也已经了解了在 **Create** 阶段之后紧接着的 **Verify**、**Package** 和 **Release** 阶段所带来的一些问题。现在，是时候深入了解本书的核心内容了：GitLab 的 CI/CD 管道如何帮助解决那些 Verify、Package 和 Release 阶段的问题。
 

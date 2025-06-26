@@ -1,6 +1,6 @@
 
 
-# Puppet Enterprise 简要概述
+# 第十四章：Puppet Enterprise 简要概述
 
 本章将概述**Puppet Enterprise**，它是什么以及与**开源 Puppet**相比提供了哪些功能。尽管本书的作者是 Puppet 员工，但本章并非强行推销，而是介绍如何有效地使用 Puppet Enterprise。它将介绍 Puppet 平台中的额外企业控制台服务，展示代码部署、编排服务、RBAC、Web 控制台以及其他各种服务如何自动配置并协同工作。这将有助于理解 Puppet Enterprise 与开源 Puppet 的区别，以及在开源 Puppet 中需要手动创建的预配置和内建功能。将重点介绍支持的架构模式，帮助理解如何使用 Puppet Enterprise 包装和模块自动部署这些模式，从而部署和扩展 Puppet 基础设施。还将讨论一些相关项目和集成，以及它们如何融入 Puppet Enterprise 环境。
 

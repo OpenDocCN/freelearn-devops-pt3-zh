@@ -1,6 +1,6 @@
 
 
-# 使用 Bitbucket Pipelines 部署
+# 第八章：使用 Bitbucket Pipelines 部署
 
 在了解 Bitbucket Pipelines 的过程中，我们从 `bitbucket-pipelines.yml` 文件的概念开始。
 

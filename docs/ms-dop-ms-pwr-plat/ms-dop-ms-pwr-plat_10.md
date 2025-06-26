@@ -1,6 +1,6 @@
 
 
-# 在 Power Platform 中启用专业开发人员扩展性
+# 第十章：在 Power Platform 中启用专业开发人员扩展性
 
 本章重点介绍了 Power Platform 为专业开发人员提供的能力，以扩展在 Power Platform 上构建的业务解决方案的体验。 我们将探讨 Power Platform 如何确保这些扩展选项与 ALM/DevOps 流程的顺利集成，以支持这些组件的软件开发生命周期。 这些组件。
 

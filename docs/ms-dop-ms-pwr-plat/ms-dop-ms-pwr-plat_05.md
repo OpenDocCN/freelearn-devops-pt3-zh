@@ -1,6 +1,6 @@
 
 
-# 通过 DevOps 工具简化 Power Platform 开发
+# 第五章：通过 DevOps 工具简化 Power Platform 开发
 
 在上一章中，我们使用服务主体创建了第一个 Power Platform 管道，将我们的解决方案从一个环境部署到另一个环境。 本章介绍了可以帮助我们简化 Power Platform 开发过程的专业开发 DevOps 工具。 第一个工具是 `clone`， `push`， `pull`， `checkout`等。 我们还将探索如何在 Git 仓库中管理 Power Platform 解决方案的纯文件和文件夹，以及如何通过命令行进行拉取请求和合并。 然后，我们将学习如何将 Power Platform 管道连接到这些 Git 仓库。 我们将花时间介绍 **Power Platform CLI** (**PAC CLI**)，它 允许我们在任何脚本语言中与 Power Platform 解决方案进行交互。 我们还将学习如何在 **YAML** (即 **Yet Another Markup Language**) 格式中创建 Azure DevOps 服务管道，并 理解 YAML 规范及相关方法，如变量、参数和任务。 我们还将了解 Microsoft 为 Power Platform 解决方案提供的构建任务。 最后，我们将学习 如何使用 **GitHub Copilot**，一个 AI 驱动的代码补全工具，可以帮助我们更高效地编写代码 。
 

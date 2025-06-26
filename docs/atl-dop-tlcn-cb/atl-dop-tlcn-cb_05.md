@@ -1,6 +1,6 @@
 
 
-# 理解 Bitbucket 和 Bitbucket Pipelines
+# 第五章：理解 Bitbucket 和 Bitbucket Pipelines
 
 Bitbucket 是 Atlassian 的**源代码管理**（**SCM**）解决方案，帮助开发人员对源代码进行版本控制。Bitbucket 与 Jira 紧密集成，允许开发人员协作编写代码并与利益相关者共享状态。Bitbucket 不仅仅存储和跟踪变更，它还提供了一个强大的部署系统，称为**Bitbucket Pipelines**。通过 Pipelines，开发人员可以轻松地构建并将代码部署到不同的环境。此外，**runners** 是执行构建和部署的机器。Bitbucket Pipelines 可以使用其 runners 来执行管道任务，根据执行所需的时间与月度预算进行计费，或者开发人员可以定义自托管的 runners，使用他们自己的基础设施来执行任务。
 

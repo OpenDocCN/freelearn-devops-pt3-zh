@@ -1,6 +1,6 @@
 
 
-# 开始使用 Microsoft Power Platform
+# 第二章：开始使用 Microsoft Power Platform
 
 **Microsoft Power Platform**，作为多年来被公认为领先的企业低代码应用平台，是一种帮助组织实现业务流程数字化的技术。 在本章节中，我们将为你提供 Microsoft Power Platform 的概述，并帮助你理解为什么每位专业软件开发人员或业务用户都应该掌握这项低代码/无代码 应用平台的技能。
 

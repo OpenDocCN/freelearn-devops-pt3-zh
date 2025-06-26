@@ -1,6 +1,6 @@
 
 
-# 管理高级 Kubernetes 资源
+# 第六章：管理高级 Kubernetes 资源
 
 在上一章中，我们介绍了 Kubernetes 及其需求，并讨论了如何使用 MiniKube 和 KinD 启动 Kubernetes 集群。接着，我们查看了 `Pod` 资源，讨论了如何创建和管理 Pods，如何排查问题，并如何通过探针确保应用程序的可靠性，还探讨了多容器设计模式，以理解 Kubernetes 为什么使用 Pods 而不是容器。我们还了解了 `Secrets` 和 `ConfigMaps`。
 

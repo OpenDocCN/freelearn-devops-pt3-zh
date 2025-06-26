@@ -1,6 +1,6 @@
 
 
-# 探索 Microsoft Power Platform 中的 ALM 和 DevOps
+# 第三章：探索 Microsoft Power Platform 中的 ALM 和 DevOps
 
 Microsoft Power Platform 使用户能够以更简单、更快捷的方式创建业务应用程序，这对于任何人来说都是具有吸引力的，无论其开发技能如何。 一旦我们超越了个人生产力应用程序的创建，并开始自动化具体的业务流程，我们就需要开始规划如何为这些新构建的应用程序设置最佳的生命周期模型，以便在 组织中进行管理。
 

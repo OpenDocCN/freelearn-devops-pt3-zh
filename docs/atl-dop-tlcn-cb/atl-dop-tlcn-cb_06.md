@@ -1,6 +1,6 @@
 
 
-# 扩展和执行 Bitbucket Pipelines
+# 第六章：扩展和执行 Bitbucket Pipelines
 
 在 *第五章*中，我们首先介绍了 **Bitbucket Cloud**，这是一个基于云的 **源代码管理**（**SCM**）工具，来自 Atlassian，其中包括 **Bitbucket Pipelines**。Bitbucket Pipelines 支持 **持续集成** 和 **部署**，源代码在提交后会自动进行构建、测试和部署。
 

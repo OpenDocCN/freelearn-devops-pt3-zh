@@ -1,4 +1,4 @@
-# *第十六章*：模拟测试
+# 第十六章：模拟测试
 
 AWS 认证云从业者考试是一个 90 分钟的多选多答题型考试。AWS 收取 100 美元的报名费用，报名可以通过他们的网站[`www.aws.training/certification`](https://www.aws.training/certification)。考试可以在多个国家的测试中心进行，或者可以在家在线参加。
 

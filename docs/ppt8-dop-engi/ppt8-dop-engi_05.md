@@ -1,6 +1,6 @@
 
 
-# Facts 和 Functions（函数）
+# 第五章：Facts 和 Functions（函数）
 
 本章将讲解 facts（事实）。我们将展示 Facter 工具如何收集它们以显示系统配置文件，如何与 Facter 交互，以及如何在 Puppet 代码中使用它们。我们还将介绍如何将自定义和外部的 facts 添加到提供的核心 facts 中，以便收集更多特定于用户的 facts。
 
