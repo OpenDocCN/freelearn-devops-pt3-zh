@@ -1,6 +1,6 @@
-# BurpSuite 秘籍第二版
+# Atlassian DevOps 工具链秘籍
 
-> 原文：[`annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216`](https://annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216)
+> 原文：[`annas-archive.org/md5/64bf7cd6c3359a09ef842c176aff0fda`](https://annas-archive.org/md5/64bf7cd6c3359a09ef842c176aff0fda)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 

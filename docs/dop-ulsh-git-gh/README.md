@@ -1,6 +1,6 @@
-# BurpSuite 秘籍第二版
+# Git 和 Github DevOps 潜能释放
 
-> 原文：[`annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216`](https://annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216)
+> 原文：[`annas-archive.org/md5/49af0d85218130f9ed5d5bc40351ac10`](https://annas-archive.org/md5/49af0d85218130f9ed5d5bc40351ac10)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 

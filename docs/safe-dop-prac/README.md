@@ -1,6 +1,6 @@
-# BurpSuite 秘籍第二版
+# Salesfoce DevOps 指南
 
-> 原文：[`annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216`](https://annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216)
+> 原文：[`annas-archive.org/md5/ec167da03c90d6a18edd50835461d337`](https://annas-archive.org/md5/ec167da03c90d6a18edd50835461d337)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 

@@ -1,6 +1,6 @@
-# BurpSuite 秘籍第二版
+# DevOps 职业手册
 
-> 原文：[`annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216`](https://annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216)
+> 原文：[`annas-archive.org/md5/0aad6a88152c489fe7798439bba3953f`](https://annas-archive.org/md5/0aad6a88152c489fe7798439bba3953f)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 

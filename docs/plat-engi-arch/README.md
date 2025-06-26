@@ -1,6 +1,6 @@
-# BurpSuite 秘籍第二版
+# 架构师的平台工程
 
-> 原文：[`annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216`](https://annas-archive.org/md5/ac8636ca42d7bb48c9364852fd6f1216)
+> 原文：[`annas-archive.org/md5/ec641f51414ac10506c7857d2f65c8f4`](https://annas-archive.org/md5/ec641f51414ac10506c7857d2f65c8f4)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 
