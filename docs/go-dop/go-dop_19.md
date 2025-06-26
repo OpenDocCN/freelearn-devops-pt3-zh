@@ -642,7 +642,7 @@ message Block {
 }
 message Job {
      string name = 1;
-     map<string, string> args = 2;
+     map args = 2;
 }
 ```
 

@@ -266,7 +266,7 @@ filelog 操作符定义了一系列用于处理日志文件的步骤。初始步
       # Parse CRI-O format
       - type: regex_parser
         id: parser-crio
-        regex: '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
+        regex: '^(?P<time>[^ Z]+) (?Pstdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
         output: extract_metadata_from_filepath
         timestamp:
           parse_from: time
@@ -275,7 +275,7 @@ filelog 操作符定义了一系列用于处理日志文件的步骤。初始步
       # Parse CRI-Containerd format
       - type: regex_parser
         id: parser-containerd
-        regex: '^(?P<time>[^ ^Z]+Z) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
+        regex: '^(?P<time>[^ ^Z]+Z) (?Pstdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
         output: extract_metadata_from_filepath
         timestamp:
           parse_from: time
